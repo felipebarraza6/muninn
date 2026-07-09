@@ -1,0 +1,244 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+/* Huginn design system — dark surface with mint accent. */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap");
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Use semantic tokens — never hardcode colors in components.
+ */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-deep: var(--primary-deep);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-soft: var(--destructive-soft);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-soft: var(--warning-soft);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-info-soft: var(--info-soft);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --color-bubble-patient: var(--bubble-patient);
+  --color-bubble-patient-foreground: var(--bubble-patient-foreground);
+  --color-bubble-ai: var(--bubble-ai);
+  --color-bubble-ai-foreground: var(--bubble-ai-foreground);
+  --color-bubble-human: var(--bubble-human);
+  --color-bubble-human-foreground: var(--bubble-human-foreground);
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.24), 0 1px 3px rgb(0 0 0 / 0.28);
+  --shadow-pop: 0 4px 14px rgb(45 212 191 / 0.14), 0 1px 2px rgb(0 0 0 / 0.25);
+}
+
+/*
+ * Huginn brand palette
+ *   Background  #000000
+ *   Elevated    #05080f
+ *   Surface     rgba(255,255,255,0.03)
+ *   Primary     #2dd4bf (mint)
+ *   Text        #f0f0f0
+ *   Muted       rgba(240,240,240,0.45)
+ */
+
+:root {
+  --radius: 0.625rem;
+
+  /* Canvas: pure black */
+  --background: #000000;
+  --foreground: #f0f0f0;
+
+  --card: rgba(255, 255, 255, 0.03);
+  --card-foreground: #f0f0f0;
+
+  --popover: #05080f;
+  --popover-foreground: #f0f0f0;
+
+  /* Primary: mint green */
+  --primary: #2dd4bf;
+  --primary-foreground: #000000;
+  --primary-soft: rgba(45, 212, 191, 0.12);
+  --primary-glow: rgba(45, 212, 191, 0.18);
+  --primary-deep: #0d9488;
+
+  --secondary: rgba(255, 255, 255, 0.06);
+  --secondary-foreground: #f0f0f0;
+
+  --muted: rgba(255, 255, 255, 0.06);
+  --muted-foreground: rgba(240, 240, 240, 0.45);
+
+  --accent: rgba(45, 212, 191, 0.10);
+  --accent-foreground: #f0f0f0;
+
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --destructive-soft: rgba(239, 68, 68, 0.15);
+
+  --success: #2dd4bf;
+  --success-foreground: #000000;
+  --success-soft: rgba(45, 212, 191, 0.15);
+
+  --warning: #f59e0b;
+  --warning-foreground: #000000;
+  --warning-soft: rgba(245, 158, 11, 0.15);
+
+  --info: #6366f1;
+  --info-foreground: #ffffff;
+  --info-soft: rgba(99, 102, 241, 0.15);
+
+  --border: rgba(255, 255, 255, 0.06);
+  --input: rgba(255, 255, 255, 0.06);
+  --ring: rgba(45, 212, 191, 0.4);
+
+  /* Charts: mint-led */
+  --chart-1: #2dd4bf;
+  --chart-2: #14b8a6;
+  --chart-3: #6366f1;
+  --chart-4: #f59e0b;
+  --chart-5: rgba(255, 255, 255, 0.7);
+
+  /* Sidebar: black surface */
+  --sidebar: #000000;
+  --sidebar-foreground: #f0f0f0;
+  --sidebar-primary: #2dd4bf;
+  --sidebar-primary-foreground: #000000;
+  --sidebar-accent: rgba(45, 212, 191, 0.10);
+  --sidebar-accent-foreground: #f0f0f0;
+  --sidebar-border: rgba(255, 255, 255, 0.06);
+  --sidebar-ring: rgba(45, 212, 191, 0.4);
+
+  --bubble-patient: rgba(255, 255, 255, 0.05);
+  --bubble-patient-foreground: #f0f0f0;
+  --bubble-ai: rgba(45, 212, 191, 0.12);
+  --bubble-ai-foreground: #f0f0f0;
+  --bubble-human: rgba(99, 102, 241, 0.18);
+  --bubble-human-foreground: #f0f0f0;
+}
+
+.dark {
+  /* Huginn is dark by default. */
+  --background: #000000;
+  --foreground: #f0f0f0;
+  --card: rgba(255, 255, 255, 0.03);
+  --card-foreground: #f0f0f0;
+  --popover: #05080f;
+  --popover-foreground: #f0f0f0;
+  --primary: #2dd4bf;
+  --primary-foreground: #000000;
+  --primary-soft: rgba(45, 212, 191, 0.12);
+  --primary-glow: rgba(45, 212, 191, 0.18);
+  --primary-deep: #0d9488;
+  --secondary: rgba(255, 255, 255, 0.06);
+  --secondary-foreground: #f0f0f0;
+  --muted: rgba(255, 255, 255, 0.06);
+  --muted-foreground: rgba(240, 240, 240, 0.45);
+  --accent: rgba(45, 212, 191, 0.10);
+  --accent-foreground: #f0f0f0;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --destructive-soft: rgba(239, 68, 68, 0.15);
+  --success: #2dd4bf;
+  --success-foreground: #000000;
+  --success-soft: rgba(45, 212, 191, 0.15);
+  --warning: #f59e0b;
+  --warning-foreground: #000000;
+  --warning-soft: rgba(245, 158, 11, 0.15);
+  --info: #6366f1;
+  --info-foreground: #ffffff;
+  --info-soft: rgba(99, 102, 241, 0.15);
+  --border: rgba(255, 255, 255, 0.06);
+  --input: rgba(255, 255, 255, 0.06);
+  --ring: rgba(45, 212, 191, 0.4);
+  --chart-1: #2dd4bf;
+  --chart-2: #14b8a6;
+  --chart-3: #6366f1;
+  --chart-4: #f59e0b;
+  --chart-5: rgba(255, 255, 255, 0.7);
+  --sidebar: #000000;
+  --sidebar-foreground: #f0f0f0;
+  --sidebar-primary: #2dd4bf;
+  --sidebar-primary-foreground: #000000;
+  --sidebar-accent: rgba(45, 212, 191, 0.10);
+  --sidebar-accent-foreground: #f0f0f0;
+  --sidebar-border: rgba(255, 255, 255, 0.06);
+  --sidebar-ring: rgba(45, 212, 191, 0.4);
+  --bubble-patient: rgba(255, 255, 255, 0.05);
+  --bubble-patient-foreground: #f0f0f0;
+  --bubble-ai: rgba(45, 212, 191, 0.12);
+  --bubble-ai-foreground: #f0f0f0;
+  --bubble-human: rgba(99, 102, 241, 0.18);
+  --bubble-human-foreground: #f0f0f0;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html,
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  .font-display {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
+  }
+}

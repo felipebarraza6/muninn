@@ -1,0 +1,98 @@
+export const ENDPOINTS = {
+  auth: {
+    login: "/accounts/users/login_complete/",
+    logout: "/accounts/users/logout/",
+    me: "/accounts/users/me/",
+    myProfile: "/accounts/users/my-profile/",
+  },
+  branches: {
+    list: "/branches/",
+    myBranches: "/branches/my-branches/",
+  },
+  campaigns: {
+    list: "/campaigns/",
+    detail: (id: string) => `/campaigns/${id}/`,
+    patients: (id: string) => `/campaigns/${id}/patients/`,
+    results: (id: string) => `/campaigns/${id}/results/`,
+    changeStatus: (id: string) => `/campaigns/${id}/change_status/`,
+    duplicate: (id: string) => `/campaigns/${id}/duplicate/`,
+    aggregates: "/campaigns/aggregates/",
+    hints: "/campaigns/hints/",
+  },
+  patients: {
+    list: "/customers/clients/",
+    detail: (id: string) => `/customers/clients/${id}/`,
+  },
+  conversations: {
+    list: "/ai-agents/conversations/",
+    detail: (id: string) => `/ai-agents/conversations/${id}/`,
+    messages: (id: string) => `/ai-agents/conversations/${id}/messages/`,
+    chat: (id: string) => `/ai-agents/conversations/${id}/chat/`,
+    takeControl: (id: string) => `/ai-agents/conversations/${id}/take_control/`,
+    escalate: (id: string) => `/ai-agents/conversations/${id}/escalate/`,
+  },
+  unifiedConversations: {
+    list: "/ai-agents/unified-conversations/",
+    messages: (id: string) => `/ai-agents/unified-conversations/${id}/messages/`,
+    reply: (id: string) => `/ai-agents/unified-conversations/${id}/reply/`,
+    takeControl: (id: string) => `/ai-agents/unified-conversations/${id}/take_control/`,
+    setStatus: (id: string) => `/ai-agents/unified-conversations/${id}/set_status/`,
+  },
+  opportunities: {
+    list: "/services/contracts/",
+    detail: (id: string) => `/services/contracts/${id}/`,
+    changeStage: (id: string) => `/services/contracts/${id}/change_stage/`,
+    markRecovered: (id: string) => `/services/contracts/${id}/mark_recovered/`,
+    markLost: (id: string) => `/services/contracts/${id}/mark_lost/`,
+    followUp: (id: string) => `/services/contracts/${id}/follow_up/`,
+    assign: (id: string) => `/services/contracts/${id}/assign/`,
+  },
+  analytics: {
+    clinicDashboard: "/analytics/dashboard/clinic-dashboard/",
+    dashboard: "/analytics/dashboard/complete/",
+  },
+  config: {
+    shared: "/shared/config/",
+    unified: "/unified-config/configs/",
+  },
+  integrations: {
+    list: "/ai-agents/external-apis/",
+    detail: (id: string) => `/ai-agents/external-apis/${id}/`,
+    status: (id: string) => `/ai-agents/external-apis/${id}/status/`,
+  },
+  functions: {
+    list: "/ai-agents/agent-functions/",
+    detail: (id: string) => `/ai-agents/agent-functions/${id}/`,
+  },
+  channels: {
+    list: "/ai-agents/channels/",
+    detail: (id: string) => `/ai-agents/channels/${id}/`,
+    sendMessage: (id: string) => `/ai-agents/channels/${id}/send_message/`,
+    regenerateSecret: (id: string) => `/ai-agents/channels/${id}/regenerate_secret/`,
+  },
+  agents: {
+    list: "/ai-agents/agents/",
+    detail: (id: string) => `/ai-agents/agents/${id}/`,
+    default: "/ai-agents/agents/default/",
+    byApp: "/ai-agents/agents/by_app/",
+    testLLM: (id: string) => `/ai-agents/agents/${id}/test_llm/`,
+    planLimits: "/ai-agents/agents/plan_limits/",
+  },
+  knowledge: {
+    list: "/ai-agents/knowledge/",
+    detail: (id: string) => `/ai-agents/knowledge/${id}/`,
+    search: "/ai-agents/knowledge/search/",
+    index: (id: string) => `/ai-agents/knowledge/${id}/index/`,
+    unindex: (id: string) => `/ai-agents/knowledge/${id}/unindex/`,
+    bulkIndex: "/ai-agents/knowledge/bulk_index/",
+    bulkCreate: "/ai-agents/knowledge/bulk_create/",
+    parseSpreadsheet: "/ai-agents/knowledge/parse_spreadsheet/",
+  },
+  services: {
+    list: "/services/services/",
+  },
+  scheduling: {
+    dashboardSummary: "/scheduling/admin/dashboard/summary/",
+    bookings: "/scheduling/admin/bookings/",
+  },
+} as const;
