@@ -1,0 +1,94 @@
+# Huginn
+
+Frontend de agentes IA especializados con estilo dark premium. Inspirado en dashboards modernos, con acento mint y foco en claridad visual.
+
+## 🚀 Demo
+
+Desplegado como aplicación estática. Compila a `dist/` listo para FTP, Cloudflare Pages, Vercel o cualquier CDN.
+
+## 🛠 Stack
+
+- **React 19** + **TypeScript**
+- **Vite**
+- **Tailwind CSS 4**
+- **Radix UI** + **shadcn/ui**
+- **React Router 6**
+- **TanStack Query**
+- **Axios**
+
+## ✨ Características
+
+- 🎨 Tema visual dark premium: fondo negro `#000000`, superficies elevadas `#05080f`, acento mint `#2dd4bf`.
+- 🤖 Chat global con selector de agente (estilo cambio de modelo IA).
+- 💬 Historial de conversaciones internas con archivado/restauración.
+- 📊 Dashboard de agentes, conversaciones y canales.
+- 📱 Sidebar responsive y experiencia mobile cuidada.
+- 🔐 Login integrado con backend mediante cookie HttpOnly.
+
+## 📦 Requisitos
+
+- [Bun](https://bun.sh/) (recomendado) o Node.js 20+
+
+## 🚀 Cómo empezar
+
+```bash
+# Clonar el repo
+git clone https://github.com/felipebarraza6/huginn.git
+cd huginn
+
+# Instalar dependencias
+bun install
+
+# Levantar en desarrollo
+bun run dev
+```
+
+El servidor Vite levanta por defecto en `http://localhost:3001`.
+
+## 🧞 Scripts
+
+| Comando         | Descripción                          |
+|-----------------|--------------------------------------|
+| `bun run dev`   | Servidor de desarrollo con hot reload |
+| `bun run build` | Build de producción en `dist/`       |
+| `bun run lint`  | Revisar código con ESLint            |
+| `bun run format`| Formatear con Prettier               |
+
+## 🏗 Estructura
+
+```
+src/
+├── api/           # Cliente HTTP, endpoints y hooks
+├── components/    # Componentes reutilizables y UI
+│   └── ui/        # Componentes shadcn/ui
+├── hooks/         # Hooks custom
+├── lib/           # Utilidades y storage
+├── routes/        # Rutas de React Router
+└── styles.css     # Variables de tema Huginn
+```
+
+## 🎨 Sistema de diseño
+
+- **Fondo:** `#000000`
+- **Superficies:** `rgba(255, 255, 255, 0.03)`
+- **Superficies elevadas:** `#05080f`
+- **Bordes:** `rgba(255, 255, 255, 0.06)`
+- **Acento:** `#2dd4bf`
+- **Texto principal:** `#f0f0f0`
+- **Tipografía:** Inter
+
+## 🌐 API
+
+La app consume una API Django/DRF. En desarrollo el proxy de Vite redirige `/api` al backend configurado en `vite.config.ts`.
+
+## 📤 Deploy
+
+```bash
+bun run build
+```
+
+Sube el contenido de `dist/` a tu hosting estático.
+
+## 📝 Licencia
+
+Proyecto privado — Uso interno.
