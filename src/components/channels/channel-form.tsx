@@ -93,7 +93,7 @@ export function ChannelForm({ channel, onCancel, onSaved }: ChannelFormProps) {
       name,
       channel_type: channelType,
       provider,
-      agent: agentId ? Number(agentId) : null,
+      assigned_agent: agentId ? Number(agentId) : null,
       is_active: isActive,
       config: parsedConfig,
     };

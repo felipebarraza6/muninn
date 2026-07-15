@@ -2,8 +2,8 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Loader2, MessageSquare, Copy, Check } from "lucide-react";
-import { useChannel } from "@/api/hooks/useChannels";
+import { ArrowLeft, Loader2, MessageSquare, Copy, Check, RefreshCw } from "lucide-react";
+import { useChannel, useRegenerateChannelSecret } from "@/api/hooks/useChannels";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -83,7 +83,8 @@ function CopyButton({ text }: { text: string }) {
 export default function ChannelDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { data: channel, isLoading, error } = useChannel(id);
+  const { data: channel, isLoading, error, refetch } = useChannel(id);
+  const regenerate = useRegenerateChannelSecret();
 
   if (isLoading) {
     return (
@@ -135,6 +136,27 @@ export default function ChannelDetailPage() {
             {channel.assigned_agent_name ?? "Sin agente"}
           </p>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={regenerate.isPending}
+          onClick={() =>
+            regenerate.mutate(channel.id, {
+              onSuccess: () => {
+                toast.success("Secret regenerado");
+                refetch();
+              },
+              onError: () => toast.error("No se pudo regenerar"),
+            })
+          }
+        >
+          {regenerate.isPending ? (
+            <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+          ) : (
+            <RefreshCw className="h-4 w-4 mr-1.5" />
+          )}
+          Regenerar secret
+        </Button>
       </header>
 
       <Card>

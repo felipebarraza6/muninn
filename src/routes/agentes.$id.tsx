@@ -13,9 +13,11 @@ import {
   MessageSquare,
   Pencil,
   FlaskConical,
+  Wrench,
 } from "lucide-react";
 import { useAgent, useTestAgentLLM } from "@/api/hooks/useAgents";
 import { AgentKnowledgePanel } from "@/components/agents/agent-knowledge-panel";
+import { AgentToolsPanel } from "@/components/agents/agent-tools-panel";
 import { AgentForm } from "@/components/agents/agent-form";
 import { toast } from "sonner";
 
@@ -132,6 +134,9 @@ export default function AgentDetailPage() {
           <TabsTrigger value="knowledge" className="gap-1.5">
             <BookOpen className="h-4 w-4" /> Entrenamiento
           </TabsTrigger>
+          <TabsTrigger value="tools" className="gap-1.5">
+            <Wrench className="h-4 w-4" /> Herramientas
+          </TabsTrigger>
           <TabsTrigger value="test" className="gap-1.5">
             <FlaskConical className="h-4 w-4" /> Test LLM
           </TabsTrigger>
@@ -187,6 +192,10 @@ export default function AgentDetailPage() {
 
         <TabsContent value="knowledge" className="mt-4">
           <AgentKnowledgePanel agentId={id!} />
+        </TabsContent>
+
+        <TabsContent value="tools" className="mt-4">
+          <AgentToolsPanel agentId={id!} />
         </TabsContent>
 
         <TabsContent value="test" className="mt-4 space-y-4">

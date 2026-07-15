@@ -62,16 +62,22 @@ export const ENDPOINTS = {
     list: "/ai-agents/external-apis/",
     detail: (id: string) => `/ai-agents/external-apis/${id}/`,
     status: (id: string) => `/ai-agents/external-apis/${id}/status/`,
+    testConnection: (id: string) => `/ai-agents/external-apis/${id}/test_connection/`,
   },
   functions: {
     list: "/ai-agents/agent-functions/",
     detail: (id: string) => `/ai-agents/agent-functions/${id}/`,
+    execute: (id: string) => `/ai-agents/agent-functions/${id}/execute/`,
+    logs: "/ai-agents/function-execution-logs/",
   },
   channels: {
     list: "/ai-agents/channels/",
     detail: (id: string) => `/ai-agents/channels/${id}/`,
+    catalog: "/ai-agents/channels/catalog/",
     sendMessage: (id: string) => `/ai-agents/channels/${id}/send_message/`,
     regenerateSecret: (id: string) => `/ai-agents/channels/${id}/regenerate_secret/`,
+    simulate: (id: string) => `/ai-agents/channels/${id}/simulate/`,
+    sessions: (id: string) => `/ai-agents/channels/${id}/sessions/`,
   },
   agents: {
     list: "/ai-agents/agents/",

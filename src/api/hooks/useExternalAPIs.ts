@@ -1,5 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
-import { GET, normalizeListResponse } from "../client";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { GET, POST, PATCH, DELETE, normalizeListResponse } from "../client";
 import { ENDPOINTS } from "../endpoints/index";
 
 const QUERY_KEY = ["ai-agents", "external-apis"];
@@ -44,6 +44,49 @@ export function useExternalAPI(id: string | undefined) {
   return useQuery({
     queryKey: [...QUERY_KEY, id],
     queryFn: () => GET<ExternalAPI>(ENDPOINTS.integrations.detail(id!)),
+    enabled: !!id,
+  });
+}
+
+export function useCreateExternalAPI() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Partial<ExternalAPI>) =>
+      POST<ExternalAPI>(ENDPOINTS.integrations.list, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEY }),
+  });
+}
+
+export function useUpdateExternalAPI() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<ExternalAPI> }) =>
+      PATCH<ExternalAPI>(ENDPOINTS.integrations.detail(id), data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEY }),
+  });
+}
+
+export function useDeleteExternalAPI() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => DELETE(ENDPOINTS.integrations.detail(id)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEY }),
+  });
+}
+
+export function useTestExternalAPI() {
+  return useMutation({
+    mutationFn: (id: string) =>
+      POST<{ ok?: boolean; status?: string; detail?: string }>(
+        ENDPOINTS.integrations.testConnection(id),
+      ),
+  });
+}
+
+export function useExternalAPIStatus(id: string | undefined) {
+  return useQuery({
+    queryKey: [...QUERY_KEY, id, "status"],
+    queryFn: () => GET<Record<string, unknown>>(ENDPOINTS.integrations.status(id!)),
     enabled: !!id,
   });
 }
