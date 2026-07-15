@@ -19,6 +19,9 @@ dist-ssr
 .env.*
 !.env.example
 
+# OpenAPI generado completo (usar bun run generate:api-types)
+src/api/generated/schema.ts
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

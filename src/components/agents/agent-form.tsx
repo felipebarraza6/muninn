@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,6 +17,8 @@ import {
 import { Slider } from "@/components/ui/slider";
 import { useCreateAgent, useUpdateAgent, type Agent } from "@/api/hooks/useAgents";
 import { useLlmModels, useLlmProviders } from "@/api/hooks/useLlm";
+import { agentFormSchema, type AgentFormValues } from "@/lib/schemas/agent";
+import { PromptEditor } from "@/components/editors/PromptEditor";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 
@@ -32,66 +36,63 @@ const AGENT_TYPES = [
   { value: "general", label: "General" },
 ];
 
+function toDefaults(agent?: Agent | null): AgentFormValues {
+  return {
+    name: agent?.name ?? "",
+    agent_type: agent?.agent_type ?? "general",
+    system_prompt: agent?.system_prompt ?? "",
+    welcome_message: agent?.welcome_message ?? "",
+    llm_provider: agent?.llm_provider ? String(agent.llm_provider) : null,
+    llm_model: agent?.llm_model ? String(agent.llm_model) : null,
+    temperature: agent?.temperature ?? 0.7,
+    max_tokens: agent?.max_tokens ?? 1024,
+    use_rag: agent?.use_rag ?? false,
+    rag_top_k: agent?.rag_top_k ?? 5,
+    embedding_model: agent?.embedding_model ?? "",
+    semantic_weight: agent?.semantic_weight ?? 0.7,
+    use_semantic_search: agent?.use_semantic_search ?? true,
+    is_active: agent?.is_active ?? true,
+  };
+}
+
 export function AgentForm({ agent, onCancel, onSaved }: AgentFormProps) {
   const create = useCreateAgent();
   const update = useUpdateAgent();
   const isEditing = !!agent;
 
-  const [name, setName] = useState(agent?.name ?? "");
-  const [agentType, setAgentType] = useState(agent?.agent_type ?? "general");
-  const [systemPrompt, setSystemPrompt] = useState(agent?.system_prompt ?? "");
-  const [welcomeMessage, setWelcomeMessage] = useState(agent?.welcome_message ?? "");
-  const [providerId, setProviderId] = useState(
-    agent?.llm_provider ? String(agent.llm_provider) : "",
-  );
-  const [modelId, setModelId] = useState(agent?.llm_model ? String(agent.llm_model) : "");
-  const [temperature, setTemperature] = useState(agent?.temperature ?? 0.7);
-  const [maxTokens, setMaxTokens] = useState(agent?.max_tokens ?? 1024);
-  const [useRag, setUseRag] = useState(agent?.use_rag ?? false);
-  const [ragTopK, setRagTopK] = useState(agent?.rag_top_k ?? 5);
-  const [embeddingModel, setEmbeddingModel] = useState(agent?.embedding_model ?? "");
-  const [semanticWeight, setSemanticWeight] = useState(agent?.semantic_weight ?? 0.7);
-  const [useSemanticSearch, setUseSemanticSearch] = useState(agent?.use_semantic_search ?? true);
-  const [isActive, setIsActive] = useState(agent?.is_active ?? true);
+  const form = useForm<AgentFormValues>({
+    resolver: zodResolver(agentFormSchema),
+    defaultValues: toDefaults(agent),
+  });
+
+  const providerId = form.watch("llm_provider");
+  const useRag = form.watch("use_rag");
+  const temperature = form.watch("temperature");
+  const semanticWeight = form.watch("semantic_weight");
 
   const { data: providers = [] } = useLlmProviders();
   const { data: models = [] } = useLlmModels(providerId || null);
 
   useEffect(() => {
-    if (!agent) return;
-    setName(agent.name ?? "");
-    setAgentType(agent.agent_type ?? "general");
-    setSystemPrompt(agent.system_prompt ?? "");
-    setWelcomeMessage(agent.welcome_message ?? "");
-    setProviderId(agent.llm_provider ? String(agent.llm_provider) : "");
-    setModelId(agent.llm_model ? String(agent.llm_model) : "");
-    setTemperature(agent.temperature ?? 0.7);
-    setMaxTokens(agent.max_tokens ?? 1024);
-    setUseRag(agent.use_rag ?? false);
-    setRagTopK(agent.rag_top_k ?? 5);
-    setEmbeddingModel(agent.embedding_model ?? "");
-    setSemanticWeight(agent.semantic_weight ?? 0.7);
-    setUseSemanticSearch(agent.use_semantic_search ?? true);
-    setIsActive(agent.is_active ?? true);
-  }, [agent]);
+    form.reset(toDefaults(agent));
+  }, [agent, form]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const onSubmit = form.handleSubmit((values) => {
     const payload: Partial<Agent> = {
-      name,
-      agent_type: agentType,
-      system_prompt: systemPrompt,
-      welcome_message: welcomeMessage || undefined,
-      llm_provider: providerId || null,
-      llm_model: modelId || null,
-      temperature,
-      max_tokens: maxTokens,
-      use_rag: useRag,
-      rag_top_k: ragTopK,
-      embedding_model: embeddingModel || undefined,
-      semantic_weight: semanticWeight,
-      use_semantic_search: useSemanticSearch,
-      is_active: isActive,
+      name: values.name,
+      agent_type: values.agent_type,
+      system_prompt: values.system_prompt,
+      welcome_message: values.welcome_message || undefined,
+      llm_provider: values.llm_provider || null,
+      llm_model: values.llm_model || null,
+      temperature: values.temperature,
+      max_tokens: values.max_tokens,
+      use_rag: values.use_rag,
+      rag_top_k: values.rag_top_k,
+      embedding_model: values.embedding_model || undefined,
+      semantic_weight: values.semantic_weight,
+      use_semantic_search: values.use_semantic_search,
+      is_active: values.is_active,
     };
 
     if (isEditing && agent) {
@@ -114,7 +115,7 @@ export function AgentForm({ agent, onCancel, onSaved }: AgentFormProps) {
         onError: () => toast.error("Error al crear el agente"),
       });
     }
-  };
+  });
 
   const isPending = create.isPending || update.isPending;
 
@@ -122,92 +123,111 @@ export function AgentForm({ agent, onCancel, onSaved }: AgentFormProps) {
     <Card>
       <CardHeader>
         <CardTitle className="text-base">{isEditing ? "Editar agente" : "Nuevo agente"}</CardTitle>
-        <CardDescription>Modelo, prompt, RAG y comportamiento del agente.</CardDescription>
+        <CardDescription>Modelo, prompt (CodeMirror), RAG y comportamiento.</CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={onSubmit} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="name">Nombre</Label>
-              <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required />
+              <Input id="name" {...form.register("name")} />
+              {form.formState.errors.name && (
+                <p className="text-xs text-destructive">{form.formState.errors.name.message}</p>
+              )}
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="type">Tipo</Label>
-              <Select value={agentType} onValueChange={setAgentType}>
-                <SelectTrigger id="type">
-                  <SelectValue placeholder="Selecciona un tipo" />
-                </SelectTrigger>
-                <SelectContent>
-                  {AGENT_TYPES.map((t) => (
-                    <SelectItem key={t.value} value={t.value}>
-                      {t.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Tipo</Label>
+              <Controller
+                control={form.control}
+                name="agent_type"
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {AGENT_TYPES.map((t) => (
+                        <SelectItem key={t.value} value={t.value}>
+                          {t.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="provider">Proveedor LLM</Label>
-              <Select
-                value={providerId}
-                onValueChange={(v) => {
-                  setProviderId(v);
-                  setModelId("");
-                }}
-              >
-                <SelectTrigger id="provider">
-                  <SelectValue placeholder="Selecciona proveedor" />
-                </SelectTrigger>
-                <SelectContent>
-                  {providers.map((p) => (
-                    <SelectItem key={String(p.id)} value={String(p.id)}>
-                      {p.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Proveedor LLM</Label>
+              <Controller
+                control={form.control}
+                name="llm_provider"
+                render={({ field }) => (
+                  <Select
+                    value={field.value ?? ""}
+                    onValueChange={(v) => {
+                      field.onChange(v);
+                      form.setValue("llm_model", null);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecciona proveedor" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {providers.map((p) => (
+                        <SelectItem key={String(p.id)} value={String(p.id)}>
+                          {p.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
             </div>
 
             <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="model">Modelo</Label>
-              <Select value={modelId} onValueChange={setModelId} disabled={!providerId}>
-                <SelectTrigger id="model">
-                  <SelectValue placeholder="Selecciona modelo" />
-                </SelectTrigger>
-                <SelectContent>
-                  {models.map((m) => (
-                    <SelectItem key={String(m.id)} value={String(m.id)}>
-                      {m.name}
-                      {m.model_id ? ` (${m.model_id})` : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Modelo</Label>
+              <Controller
+                control={form.control}
+                name="llm_model"
+                render={({ field }) => (
+                  <Select
+                    value={field.value ?? ""}
+                    onValueChange={field.onChange}
+                    disabled={!providerId}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecciona modelo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {models.map((m) => (
+                        <SelectItem key={String(m.id)} value={String(m.id)}>
+                          {m.name}
+                          {m.model_id ? ` (${m.model_id})` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="prompt">Instrucciones del sistema</Label>
-            <Textarea
-              id="prompt"
-              rows={5}
-              value={systemPrompt}
-              onChange={(e) => setSystemPrompt(e.target.value)}
-              placeholder="Instrucciones del sistema para el agente..."
-              className="font-mono text-sm"
+            <Label>Instrucciones del sistema</Label>
+            <Controller
+              control={form.control}
+              name="system_prompt"
+              render={({ field }) => (
+                <PromptEditor value={field.value ?? ""} onChange={field.onChange} />
+              )}
             />
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="welcome">Mensaje de bienvenida</Label>
-            <Textarea
-              id="welcome"
-              rows={2}
-              value={welcomeMessage}
-              onChange={(e) => setWelcomeMessage(e.target.value)}
-            />
+            <Textarea id="welcome" rows={2} {...form.register("welcome_message")} />
           </div>
 
           <div className="space-y-2">
@@ -215,12 +235,18 @@ export function AgentForm({ agent, onCancel, onSaved }: AgentFormProps) {
               <Label>Temperatura</Label>
               <span className="text-xs text-muted-foreground">{temperature.toFixed(2)}</span>
             </div>
-            <Slider
-              value={[temperature]}
-              onValueChange={(v) => setTemperature(v[0])}
-              min={0}
-              max={2}
-              step={0.05}
+            <Controller
+              control={form.control}
+              name="temperature"
+              render={({ field }) => (
+                <Slider
+                  value={[field.value]}
+                  onValueChange={(v) => field.onChange(v[0])}
+                  min={0}
+                  max={2}
+                  step={0.05}
+                />
+              )}
             />
           </div>
 
@@ -229,64 +255,63 @@ export function AgentForm({ agent, onCancel, onSaved }: AgentFormProps) {
             <Input
               id="maxTokens"
               type="number"
-              value={maxTokens}
-              onChange={(e) => setMaxTokens(Number(e.target.value))}
-              min={1}
-              max={8192}
+              {...form.register("max_tokens", { valueAsNumber: true })}
             />
           </div>
 
           <div className="flex items-center justify-between rounded-lg border p-3">
             <div className="space-y-0.5">
-              <Label htmlFor="useRag">Usar conocimiento (RAG)</Label>
+              <Label>Usar conocimiento (RAG)</Label>
               <p className="text-xs text-muted-foreground">
                 El agente podrá consultar documentos indexados.
               </p>
             </div>
-            <Switch id="useRag" checked={useRag} onCheckedChange={setUseRag} />
+            <Controller
+              control={form.control}
+              name="use_rag"
+              render={({ field }) => (
+                <Switch checked={field.value} onCheckedChange={field.onChange} />
+              )}
+            />
           </div>
 
           {useRag && (
             <div className="grid gap-4 sm:grid-cols-2 rounded-lg border p-3">
               <div className="space-y-2">
-                <Label htmlFor="ragTopK">Top K fragmentos</Label>
-                <Input
-                  id="ragTopK"
-                  type="number"
-                  min={1}
-                  max={50}
-                  value={ragTopK}
-                  onChange={(e) => setRagTopK(Number(e.target.value))}
-                />
+                <Label>Top K</Label>
+                <Input type="number" {...form.register("rag_top_k", { valueAsNumber: true })} />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="embedding">Modelo de embeddings</Label>
-                <Input
-                  id="embedding"
-                  value={embeddingModel}
-                  onChange={(e) => setEmbeddingModel(e.target.value)}
-                  placeholder="text-embedding-3-small"
-                />
+                <Label>Embedding</Label>
+                <Input {...form.register("embedding_model")} placeholder="text-embedding-3-small" />
               </div>
               <div className="space-y-2 sm:col-span-2">
                 <div className="flex items-center justify-between">
                   <Label>Peso semántico</Label>
                   <span className="text-xs text-muted-foreground">{semanticWeight.toFixed(2)}</span>
                 </div>
-                <Slider
-                  value={[semanticWeight]}
-                  onValueChange={(v) => setSemanticWeight(v[0])}
-                  min={0}
-                  max={1}
-                  step={0.05}
+                <Controller
+                  control={form.control}
+                  name="semantic_weight"
+                  render={({ field }) => (
+                    <Slider
+                      value={[field.value]}
+                      onValueChange={(v) => field.onChange(v[0])}
+                      min={0}
+                      max={1}
+                      step={0.05}
+                    />
+                  )}
                 />
               </div>
               <div className="flex items-center justify-between rounded-lg border p-3 sm:col-span-2">
-                <Label htmlFor="semantic">Búsqueda semántica</Label>
-                <Switch
-                  id="semantic"
-                  checked={useSemanticSearch}
-                  onCheckedChange={setUseSemanticSearch}
+                <Label>Búsqueda semántica</Label>
+                <Controller
+                  control={form.control}
+                  name="use_semantic_search"
+                  render={({ field }) => (
+                    <Switch checked={field.value} onCheckedChange={field.onChange} />
+                  )}
                 />
               </div>
             </div>
@@ -294,12 +319,18 @@ export function AgentForm({ agent, onCancel, onSaved }: AgentFormProps) {
 
           <div className="flex items-center justify-between rounded-lg border p-3">
             <div className="space-y-0.5">
-              <Label htmlFor="isActive">Activo</Label>
+              <Label>Activo</Label>
               <p className="text-xs text-muted-foreground">
                 Determina si el agente puede atender conversaciones.
               </p>
             </div>
-            <Switch id="isActive" checked={isActive} onCheckedChange={setIsActive} />
+            <Controller
+              control={form.control}
+              name="is_active"
+              render={({ field }) => (
+                <Switch checked={field.value} onCheckedChange={field.onChange} />
+              )}
+            />
           </div>
 
           <div className="flex items-center justify-end gap-2 pt-2">
