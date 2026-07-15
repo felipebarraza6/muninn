@@ -74,7 +74,6 @@ function getPageMeta(pathname: string): PageMeta {
 function PageHeader() {
   const { pathname } = useLocation();
   const meta = getPageMeta(pathname);
-  const { data: theme } = useBranchTheme();
   const user = getStoredUser();
 
   return (
