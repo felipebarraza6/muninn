@@ -5,7 +5,13 @@ import { ENDPOINTS } from "../endpoints/index";
 import { getActiveBranchId, onBranchChange } from "@/lib/branchStorage";
 import { getStoredBranches } from "@/lib/authSession";
 import { applyResolvedBranchTheme, type BranchThemeLike } from "@/lib/applyBranchTheme";
-import { resolveEffectiveTheme } from "@/lib/branchThemeDefaults";
+import { resolveEffectiveTheme, MUNINN_DEFAULT_THEME } from "@/lib/branchThemeDefaults";
+import {
+  flattenPublicLoginTheme,
+  hasUsablePublicBranding,
+  type PublicLoginThemeResponse,
+} from "@/lib/publicLoginTheme";
+import { loginContextFromPublicTheme, persistLoginPortalContext } from "@/lib/loginContext";
 
 export type BranchTheme = BranchThemeLike & {
   id?: number;
@@ -33,6 +39,35 @@ function resolveBranchLabel(
     if (fromSession) return fromSession;
   }
   return apiTheme?.app_name || null;
+}
+
+/**
+ * Flujo preferido de resolve:
+ * 1. by-host (dominio custom)
+ * 2. si falla y hay slug → public-login-theme/{slug}
+ * 3. si falla → null (Muninn default)
+ */
+export async function resolvePublicLoginTheme(
+  slug?: string | null,
+): Promise<PublicLoginThemeResponse | null> {
+  // 1) Dominio custom (Host)
+  try {
+    return await GET<PublicLoginThemeResponse>(ENDPOINTS.branches.publicLoginThemeByHost);
+  } catch {
+    // 404 u otro → seguir con slug / default
+  }
+
+  // 2) /login/{slug} → Branch o Org (incluye fallback branch→org)
+  if (slug) {
+    try {
+      return await GET<PublicLoginThemeResponse>(ENDPOINTS.branches.publicLoginTheme(slug));
+    } catch {
+      // 404 → login genérico Muninn
+    }
+  }
+
+  // 3) Theme base Muninn
+  return null;
 }
 
 export function useBranchTheme(branchIdOverride?: string | null) {
@@ -84,29 +119,61 @@ export function useBranchTheme(branchIdOverride?: string | null) {
   };
 }
 
-export function usePublicLoginTheme(slug: string | undefined) {
+/**
+ * Resuelve branding de login: by-host → slug → Muninn.
+ * Persiste contexto portal para post-login (X-Branch-ID).
+ */
+export function useResolvePublicLoginTheme(slug?: string | null) {
+  const host = typeof window !== "undefined" ? window.location.host : "";
+
   const query = useQuery({
-    queryKey: ["branches", "public-login-theme", slug],
-    queryFn: () => GET<BranchTheme>(ENDPOINTS.branches.publicLoginTheme(slug!)),
-    enabled: Boolean(slug),
+    queryKey: ["branches", "public-login-theme", "resolve", host, slug ?? ""],
+    queryFn: () => resolvePublicLoginTheme(slug),
+    enabled: typeof window !== "undefined",
     staleTime: 10 * 60 * 1000,
-    retry: 1,
+    retry: false,
   });
 
+  const raw = query.data ?? null;
+  const flat = useMemo(() => (raw ? flattenPublicLoginTheme(raw) : null), [raw]);
+  const isAppDefault = !raw || !hasUsablePublicBranding(raw);
+
   const effectiveTheme = useMemo(() => {
-    if (!query.data) return undefined;
-    return resolveEffectiveTheme(query.data, query.data.app_name || slug);
-  }, [query.data, slug]);
+    if (isAppDefault) {
+      return resolveEffectiveTheme(null, null);
+    }
+    return resolveEffectiveTheme(flat as BranchThemeLike, flat?.app_name || slug);
+  }, [flat, isAppDefault, slug]);
 
   useEffect(() => {
-    if (query.data) {
-      applyResolvedBranchTheme(query.data, query.data.app_name || slug);
+    if (query.isLoading) return;
+
+    const ctx = loginContextFromPublicTheme(raw, { host, slug });
+    persistLoginPortalContext(ctx);
+
+    if (isAppDefault) {
+      applyResolvedBranchTheme({ ...MUNINN_DEFAULT_THEME }, "Muninn");
+      return;
     }
-  }, [query.data, slug]);
+    if (flat) {
+      applyResolvedBranchTheme(flat as BranchThemeLike, flat.app_name || slug);
+    }
+  }, [query.isLoading, raw, flat, isAppDefault, host, slug]);
 
   return {
     ...query,
-    data: effectiveTheme ?? query.data,
-    rawTheme: query.data,
+    raw,
+    flat,
+    scope: raw?.scope ?? (isAppDefault ? ("app" as const) : undefined),
+    isAppDefault,
+    data: effectiveTheme,
+    stores: raw?.stores ?? [],
+    branchId: raw?.branch_id != null ? String(raw.branch_id) : null,
+    organizationId: raw?.organization_id != null ? String(raw.organization_id) : null,
   };
+}
+
+/** @deprecated Preferir useResolvePublicLoginTheme */
+export function usePublicLoginTheme(slug: string | undefined) {
+  return useResolvePublicLoginTheme(slug);
 }

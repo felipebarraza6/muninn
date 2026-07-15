@@ -70,10 +70,7 @@ export function BranchSwitcher({ compact = false }: BranchSwitcherProps) {
   }
 
   return (
-    <div className={cn("flex items-center gap-1.5 min-w-0", compact && "w-full max-w-[180px]")}>
-      {!compact && (
-        <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0 hidden sm:block" />
-      )}
+    <div className={cn("min-w-0", compact && "w-full max-w-[180px]")}>
       <Select
         value={value}
         onValueChange={(next) => {
@@ -84,15 +81,25 @@ export function BranchSwitcher({ compact = false }: BranchSwitcherProps) {
       >
         <SelectTrigger
           className={cn(
-            "h-9 border-border bg-muted text-xs shadow-none focus:ring-1 focus:ring-ring",
-            compact ? "w-full min-w-0 px-2.5" : "w-[140px] sm:w-[200px]",
+            "h-9 gap-2 border-border bg-muted text-xs shadow-none focus:ring-1 focus:ring-ring",
+            compact ? "w-full min-w-0 px-2.5" : "w-[160px] sm:w-[220px]",
           )}
         >
+          <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" aria-hidden />
           <SelectValue placeholder="Sucursal" />
         </SelectTrigger>
-        <SelectContent>
-          {options.map((b) => (
-            <SelectItem key={String(b.value)} value={String(b.value)}>
+        <SelectContent className="min-w-[var(--radix-select-trigger-width)] p-1.5">
+          {options.map((b, index) => (
+            <SelectItem
+              key={String(b.value)}
+              value={String(b.value)}
+              className={cn(
+                "rounded-md border border-border/70 bg-muted/30 px-2.5 py-2.5 text-xs",
+                "cursor-pointer focus:bg-accent focus:text-accent-foreground",
+                "data-[state=checked]:border-primary/45 data-[state=checked]:bg-primary/10",
+                index > 0 && "mt-1.5",
+              )}
+            >
               {b.label}
             </SelectItem>
           ))}

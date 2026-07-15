@@ -50,7 +50,7 @@ export default function HomePage() {
   const summaryItems: SummaryItem[] = [
     {
       key: "agents",
-      label: "Agentes IA",
+      label: "Agentes",
       count: agents.filter((a) => a.is_active).length,
       icon: Bot,
       href: "/agentes",
@@ -107,9 +107,7 @@ export default function HomePage() {
     >
       <header>
         <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">Inicio</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Resumen de tu operación con agentes IA.
-        </p>
+        <p className="text-sm text-muted-foreground mt-1">Resumen de tu operación con agentes.</p>
       </header>
 
       <section className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">

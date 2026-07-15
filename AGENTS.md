@@ -1,4 +1,4 @@
-# Huginn — Frontend Agentes IA
+# Muninn — Frontend Agentes
 
 ## Stack
 

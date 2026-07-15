@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useBranchTheme } from "@/api/hooks/useBranchTheme";
 import { resolveThemeLogo } from "@/lib/applyBranchTheme";
-import { HuginnBrand } from "@/components/brand/HuginnBrand";
+import { MuninnBrand } from "@/components/brand/MuninnBrand";
 import { isSuperAdmin } from "@/lib/authGuards";
 
 type IconComponent = React.ComponentType<{ className?: string; strokeWidth?: number }>;
@@ -122,7 +122,7 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
       <SidebarHeader className="border-b border-sidebar-border group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:!px-0 group-data-[collapsible=icon]:!py-2">
-        <HuginnBrand
+        <MuninnBrand
           to="/"
           onClick={handleNavClick}
           branchLabel={theme?.app_name}

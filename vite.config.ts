@@ -32,6 +32,18 @@ export default defineConfig(({ mode }) => {
           target: devApiProxy,
           changeOrigin: true,
           secure: false,
+          configure: (proxy) => {
+            // by-host lee HTTP_HOST: reinyecta el Host del SPA (custom domain local).
+            proxy.on("proxyReq", (proxyReq, req) => {
+              const url = req.url || "";
+              if (!url.includes("public-login-theme/by-host")) return;
+              const originalHost = req.headers.host;
+              if (originalHost) {
+                proxyReq.setHeader("Host", originalHost);
+                proxyReq.setHeader("X-Forwarded-Host", originalHost);
+              }
+            });
+          },
         },
       },
     },

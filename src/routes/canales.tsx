@@ -6,7 +6,7 @@ export default function Canales() {
       <header>
         <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">Canales</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Revisa los puntos de contacto que tus agentes IA atenderán.
+          Revisa los puntos de contacto que tus agentes atenderán.
         </p>
       </header>
 

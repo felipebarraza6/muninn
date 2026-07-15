@@ -1,6 +1,6 @@
-# Huginn
+# Muninn
 
-Frontend de agentes IA especializados con estilo dark premium. Inspirado en dashboards modernos, con acento mint y foco en claridad visual.
+Frontend de agentes especializados con estilo dark premium. Inspirado en dashboards modernos, con acento mint y foco en claridad visual.
 
 ## Demo
 
@@ -67,7 +67,7 @@ src/
 ├── hooks/         # Hooks custom
 ├── lib/           # Utilidades y storage
 ├── routes/        # Rutas de React Router
-└── styles.css     # Variables de tema Huginn
+└── styles.css     # Variables de tema Muninn
 ```
 
 ## Sistema de diseño

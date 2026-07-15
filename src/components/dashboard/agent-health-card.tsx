@@ -61,7 +61,7 @@ export function AgentHealthCard({
               <div className="text-sm font-semibold">
                 {activeAgent
                   ? `${activeAgent.name} · ${activeAgent.is_active ? "activo" : "inactivo"}`
-                  : "Tu agente IA · sin agentes activos"}
+                  : "Tu agente · sin agentes activos"}
               </div>
               <div className="text-xs text-muted-foreground">
                 {activeConversations} conversaciones activas

@@ -29,6 +29,7 @@ import AdminSucursalesPage from "./routes/admin.sucursales";
 import AdminUsuariosPage from "./routes/admin.usuarios";
 import { RequireAuth, RedirectIfAuthenticated } from "./components/auth/RequireAuth";
 import { RequireSuperAdmin } from "./components/auth/RequireSuperAdmin";
+import { ThemeProvider } from "./components/theme/ThemeProvider";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -132,9 +133,11 @@ export default function App() {
   return (
     <HelmetProvider>
       <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
-          <AppRoutes />
-        </BrowserRouter>
+        <ThemeProvider>
+          <BrowserRouter>
+            <AppRoutes />
+          </BrowserRouter>
+        </ThemeProvider>
       </QueryClientProvider>
     </HelmetProvider>
   );

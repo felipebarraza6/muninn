@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { logout } from "@/api/hooks/useAuth";
 import { BranchSwitcher } from "@/components/branch/BranchSwitcher";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { useBranchTheme } from "@/api/hooks/useBranchTheme";
 import { getStoredUser } from "@/lib/authSession";
 
@@ -105,6 +106,8 @@ function PageHeader() {
         <div className="hidden sm:block">
           <BranchSwitcher />
         </div>
+
+        <ThemeToggle />
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

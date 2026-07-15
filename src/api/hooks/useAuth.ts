@@ -3,6 +3,11 @@ import { POST, GET, apiClient } from "../client";
 import { ENDPOINTS } from "../endpoints/index";
 import { setActiveBranchId, syncBranchId } from "@/lib/branchStorage";
 import { clearSession, persistSession } from "@/lib/authSession";
+import {
+  clearLoginPortalContext,
+  getLoginPortalContext,
+  type LoginPortalContext,
+} from "@/lib/loginContext";
 
 export interface LoginCredentials {
   email: string;
@@ -57,19 +62,67 @@ export interface LoginCompleteResponse {
   message?: string;
 }
 
-function selectDefaultBranch(user: User, branches: BranchAssignment[]) {
+function pickFromContext(
+  branches: BranchAssignment[],
+  ctx: LoginPortalContext | null,
+  isSuperuser: boolean,
+): boolean {
+  if (!ctx || ctx.scope === "app") return false;
+
+  const accessible = (id: string | number) =>
+    branches.some((b) => String(b.branch_id) === String(id) && b.is_active !== false);
+
+  // Login de tienda (o fallback branch→org con branch_id).
+  if (ctx.branchId && (isSuperuser || accessible(ctx.branchId))) {
+    setActiveBranchId(ctx.branchId, true, isSuperuser);
+    return true;
+  }
+
+  // Portal org: preferir stores del branding que el usuario pueda ver.
+  if (ctx.scope === "organization" && ctx.stores.length > 0) {
+    const overlap = ctx.stores
+      .map((s) => String(s.id))
+      .filter((id) => isSuperuser || accessible(id));
+
+    if (overlap.length >= 1) {
+      setActiveBranchId(overlap[0], true, isSuperuser);
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Elige sucursal activa tras login:
+ * 1) contexto del portal (branch_id / stores de org)
+ * 2) única asignación
+ * 3) sync previa / primera activa
+ */
+export function selectDefaultBranch(user: User, branches: BranchAssignment[]) {
+  const ctx = getLoginPortalContext();
+  if (pickFromContext(branches, ctx, user.is_superuser)) {
+    clearLoginPortalContext();
+    return;
+  }
+
   if (branches.length === 1) {
     setActiveBranchId(branches[0].branch_id, true, user.is_superuser);
+    clearLoginPortalContext();
     return;
   }
 
   const existing = syncBranchId();
-  if (existing) return;
+  if (existing) {
+    clearLoginPortalContext();
+    return;
+  }
 
   const firstActive = branches.find((b) => b.is_active);
   if (firstActive) {
     setActiveBranchId(firstActive.branch_id, true, user.is_superuser);
   }
+  clearLoginPortalContext();
 }
 
 export function useLogin() {
@@ -105,6 +158,7 @@ export async function logout() {
     // Si el logout en backend falla, igual limpiamos sesión local.
   }
   clearSession();
+  clearLoginPortalContext();
   localStorage.removeItem("activeBranchId");
   sessionStorage.removeItem("activeBranchId");
   window.location.href = "/login";

@@ -126,7 +126,7 @@ export function ChannelForm({ channel, onCancel, onSaved }: ChannelFormProps) {
     <Card>
       <CardHeader>
         <CardTitle className="text-base">{isEditing ? "Editar canal" : "Nuevo canal"}</CardTitle>
-        <CardDescription>Configura un punto de contacto para tus agentes IA.</CardDescription>
+        <CardDescription>Configura un punto de contacto para tus agentes.</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">

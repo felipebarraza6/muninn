@@ -23,6 +23,21 @@ export interface AdminBranch {
   is_active?: boolean;
   primary_color?: string | null;
   login_slug?: string | null;
+  organization?: number | string | null;
+  organization_name?: string | null;
+}
+
+export interface Organization {
+  id: number | string;
+  name: string;
+  business_name?: string | null;
+  dni?: string | null;
+  owner?: number | string | null;
+  owner_email?: string | null;
+  max_branches?: number;
+  is_active?: boolean;
+  stores_count?: number;
+  can_add_store?: boolean;
 }
 
 export interface BranchRole {
@@ -31,6 +46,13 @@ export interface BranchRole {
   name?: string;
   branch?: number | string;
 }
+
+/** Roles estándar si la API no devuelve definiciones para la sucursal. */
+export const FALLBACK_BRANCH_ROLES: BranchRole[] = [
+  { id: "EMPLOYEE", code: "EMPLOYEE", name: "Empleado" },
+  { id: "ADMIN_LOCAL", code: "ADMIN_LOCAL", name: "Administrador local" },
+  { id: "OWNER", code: "OWNER", name: "Propietario" },
+];
 
 export interface BranchUserAssignment {
   id: number | string;
@@ -152,11 +174,27 @@ export function useUpdateBranch() {
 export function useBranchRoles(branchId?: string | number | null) {
   return useQuery({
     queryKey: ["branches", "roles", branchId],
-    queryFn: () =>
-      GET<BranchRole[] | { results: BranchRole[] }>(ENDPOINTS.branches.roles, {
-        params: branchId ? { branch: branchId } : undefined,
-      }).then((data) => normalizeListResponse<BranchRole>(data)),
+    queryFn: async () => {
+      if (!branchId) return [];
+      const data = await GET<BranchRole[] | { results: BranchRole[] }>(ENDPOINTS.branches.roles, {
+        // El ViewSet filtra por request.branch (header), no por query.
+        headers: { "x-branch-id": String(branchId) },
+      });
+      const list = normalizeListResponse<BranchRole>(data);
+      return list.length > 0 ? list : FALLBACK_BRANCH_ROLES;
+    },
     enabled: Boolean(branchId),
+    staleTime: 60_000,
+  });
+}
+
+export function useOrganizations() {
+  return useQuery({
+    queryKey: ["branches", "organizations"],
+    queryFn: () =>
+      GET<Organization[] | { results: Organization[] }>(ENDPOINTS.branches.organizations).then(
+        (data) => normalizeListResponse<Organization>(data),
+      ),
     staleTime: 60_000,
   });
 }
@@ -180,7 +218,10 @@ export function useCreateBranchUser() {
       branch: string | number;
       role_definition: string | number;
       is_active?: boolean;
-    }) => POST<BranchUserAssignment>(ENDPOINTS.branches.users, data),
+    }) =>
+      POST<BranchUserAssignment>(ENDPOINTS.branches.users, data, {
+        headers: { "x-branch-id": String(data.branch) },
+      }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["branches", "users"] }),
   });
 }

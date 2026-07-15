@@ -1,29 +1,32 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Loader2 } from "lucide-react";
 import { useLogin } from "@/api/hooks/useAuth";
-import { usePublicLoginTheme } from "@/api/hooks/useBranchTheme";
+import { useResolvePublicLoginTheme } from "@/api/hooks/useBranchTheme";
 import { resolveThemeLogo } from "@/lib/applyBranchTheme";
-import huginnLogo from "@/assets/huginn-logo.png";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { MuninnBrand } from "@/components/brand/MuninnBrand";
 
 export default function Login() {
   const navigate = useNavigate();
   const { slug: slugParam } = useParams<{ slug?: string }>();
   const [searchParams] = useSearchParams();
   const slug = slugParam || searchParams.get("slug") || undefined;
-  const { data: publicTheme, isLoading: themeLoading } = usePublicLoginTheme(slug);
+
+  const {
+    data: publicTheme,
+    flat,
+    scope,
+    isAppDefault,
+    stores,
+    isLoading: themeLoading,
+  } = useResolvePublicLoginTheme(slug);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -43,32 +46,79 @@ export default function Login() {
     ? (login.error as { friendlyMessage?: string }).friendlyMessage || "Error al iniciar sesión"
     : null;
 
-  const logo = resolveThemeLogo(publicTheme) || huginnLogo;
-  const title = publicTheme?.app_name || "Huginn";
+  const branchLogo = resolveThemeLogo(publicTheme);
+  const brandLabel = useMemo(() => {
+    if (isAppDefault) return undefined;
+    return (
+      flat?.app_name ||
+      flat?.organization_name ||
+      flat?.branch_name ||
+      publicTheme?.app_name ||
+      undefined
+    );
+  }, [isAppDefault, flat, publicTheme?.app_name]);
+
   const subtitle =
+    flat?.login_subtitle ||
+    flat?.subtitle ||
+    flat?.login_welcome_message ||
+    flat?.welcome_message ||
     publicTheme?.login_subtitle ||
     publicTheme?.subtitle ||
     publicTheme?.login_welcome_message ||
     publicTheme?.welcome_message ||
-    "Accede a tu panel de agentes";
+    (isAppDefault
+      ? "Accede a tu panel de agentes"
+      : scope === "organization"
+        ? "Portal de organización — elige tu sucursal tras entrar"
+        : "Accede a tu panel");
+
+  const showPortalHint = !isAppDefault && (scope === "organization" || scope === "branch");
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
+    <div className="relative flex min-h-screen flex-col items-center justify-center bg-background p-4">
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
+
       <Card className="w-full max-w-sm border border-border/50 bg-card/80 backdrop-blur">
-        <CardHeader className="space-y-6 text-center">
+        <CardHeader className="space-y-5 text-center">
           <div className="flex justify-center">
-            {themeLoading && slug ? (
+            {themeLoading ? (
               <Loader2 className="h-10 w-10 animate-spin text-muted-foreground" />
             ) : (
-              <img src={logo} alt={title} className="h-24 w-24 object-contain rounded-xl" />
+              <MuninnBrand
+                branchLabel={brandLabel}
+                tagline={flat?.tagline || publicTheme?.tagline || undefined}
+                branchLogoUrl={isAppDefault ? null : branchLogo}
+                className="justify-center scale-110"
+              />
             )}
           </div>
-          <div>
-            <CardTitle className="text-2xl font-bold tracking-tight">{title}</CardTitle>
+          <div className="space-y-2">
             <CardDescription className="text-muted-foreground">{subtitle}</CardDescription>
-            {!slug && (
-              <p className="text-[10px] text-muted-foreground/70 mt-2 uppercase tracking-wider">
-                Powered by Huginn
+            {showPortalHint && (
+              <div className="flex justify-center gap-1.5 flex-wrap">
+                {scope === "organization" && (
+                  <Badge variant="secondary" className="text-[10px]">
+                    Organización
+                  </Badge>
+                )}
+                {scope === "branch" && (
+                  <Badge variant="secondary" className="text-[10px]">
+                    Sucursal
+                  </Badge>
+                )}
+                {flat?.fallback_from_branch_slug && (
+                  <Badge variant="outline" className="text-[10px]">
+                    Branding org
+                  </Badge>
+                )}
+              </div>
+            )}
+            {scope === "organization" && stores.length > 0 && (
+              <p className="text-[11px] text-muted-foreground">
+                {stores.length} sucursal{stores.length === 1 ? "" : "es"} en este portal
               </p>
             )}
           </div>
@@ -132,6 +182,10 @@ export default function Login() {
           </CardFooter>
         </form>
       </Card>
+
+      <p className="mt-6 text-[10px] uppercase tracking-wider text-muted-foreground/70">
+        Powered by felipebarraza6
+      </p>
     </div>
   );
 }

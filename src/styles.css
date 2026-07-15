@@ -2,10 +2,11 @@
 @source "../src";
 @import "tw-animate-css";
 
-/* Huginn design system — dark surface with mint accent. */
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap");
+/* Muninn design system — mint accent; light/dark via `.dark` class.
+ * Inter se carga desde index.html (<link>) — @import url() no puede ir tras Tailwind. */
 
-@custom-variant dark (&:is(.dark *));
+/* Manual dark mode — https://tailwindcss.com/docs/dark-mode */
+@custom-variant dark (&:where(.dark, .dark *));
 
 /*
  * Use semantic tokens — never hardcode colors in components.
@@ -76,129 +77,141 @@
   --color-bubble-human: var(--bubble-human);
   --color-bubble-human-foreground: var(--bubble-human-foreground);
 
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.06), 0 1px 3px rgb(0 0 0 / 0.08);
+  --shadow-pop: 0 4px 14px rgb(45 212 191 / 0.14), 0 1px 2px rgb(0 0 0 / 0.08);
+}
+
+.dark {
   --shadow-card: 0 1px 2px rgb(0 0 0 / 0.24), 0 1px 3px rgb(0 0 0 / 0.28);
   --shadow-pop: 0 4px 14px rgb(45 212 191 / 0.14), 0 1px 2px rgb(0 0 0 / 0.25);
 }
 
 /*
- * Huginn brand palette — shell siempre dark, primary sólido.
- * Soft/accent = tint opaco (sin rgba en hovers).
- *   Background  #000000
- *   Card        #0a0a0a
- *   Muted       #141414
- *   Primary     #2dd4bf
- *   Text        #f0f0f0
+ * Light (default) + Dark (`.dark` on <html>).
+ * Primary mint #2dd4bf se mantiene; applyBranchTheme solo clava primary.
  */
 
 :root {
   --radius: 0.625rem;
 
-  --background: #000000;
-  --foreground: #f0f0f0;
+  --background: #fafafa;
+  --foreground: #0a0a0a;
 
-  --card: #0a0a0a;
-  --card-foreground: #f0f0f0;
+  --card: #ffffff;
+  --card-foreground: #0a0a0a;
 
-  --popover: #0a0a0a;
-  --popover-foreground: #f0f0f0;
+  --popover: #ffffff;
+  --popover-foreground: #0a0a0a;
 
-  --primary: #2dd4bf;
-  --primary-foreground: #000000;
-  --primary-soft: #061e1b;
-  --primary-glow: #28bfac;
-  --primary-deep: #0d9488;
+  --primary: #0d9488;
+  --primary-foreground: #ffffff;
+  --primary-soft: #ccfbf1;
+  --primary-glow: #0f766e;
+  --primary-deep: #0f766e;
 
-  --secondary: #141414;
-  --secondary-foreground: #f0f0f0;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #18181b;
 
-  --muted: #141414;
-  --muted-foreground: #a3a3a3;
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
 
-  --accent: #072421;
-  --accent-foreground: #f0f0f0;
+  --accent: #ecfdf5;
+  --accent-foreground: #134e4a;
 
-  --destructive: #ef4444;
+  --destructive: #dc2626;
   --destructive-foreground: #ffffff;
-  --destructive-soft: #3a1212;
+  --destructive-soft: #fee2e2;
 
-  --success: #2dd4bf;
-  --success-foreground: #000000;
-  --success-soft: #061e1b;
+  --success: #0d9488;
+  --success-foreground: #ffffff;
+  --success-soft: #ccfbf1;
 
-  --warning: #f59e0b;
-  --warning-foreground: #000000;
-  --warning-soft: #2a1a04;
+  --warning: #d97706;
+  --warning-foreground: #ffffff;
+  --warning-soft: #fef3c7;
 
-  --info: #6366f1;
+  --info: #4f46e5;
   --info-foreground: #ffffff;
-  --info-soft: #161645;
+  --info-soft: #e0e7ff;
 
-  --border: #1f1f1f;
-  --input: #1f1f1f;
-  --ring: #14675e;
+  --border: #e4e4e7;
+  --input: #e4e4e7;
+  --ring: #5eead4;
 
-  --chart-1: #2dd4bf;
+  --chart-1: #0d9488;
   --chart-2: #14b8a6;
   --chart-3: #6366f1;
   --chart-4: #f59e0b;
-  --chart-5: #a3a3a3;
+  --chart-5: #a1a1aa;
 
-  --sidebar: #000000;
-  --sidebar-foreground: #f0f0f0;
-  --sidebar-primary: #2dd4bf;
-  --sidebar-primary-foreground: #000000;
-  --sidebar-accent: #072421;
-  --sidebar-accent-foreground: #f0f0f0;
-  --sidebar-border: #1f1f1f;
-  --sidebar-ring: #14675e;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #0a0a0a;
+  --sidebar-primary: #0d9488;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #ecfdf5;
+  --sidebar-accent-foreground: #134e4a;
+  --sidebar-border: #e4e4e7;
+  --sidebar-ring: #5eead4;
 
-  --bubble-patient: #141414;
-  --bubble-patient-foreground: #f0f0f0;
-  --bubble-ai: #061e1b;
-  --bubble-ai-foreground: #f0f0f0;
-  --bubble-human: #161645;
-  --bubble-human-foreground: #f0f0f0;
+  --bubble-patient: #f4f4f5;
+  --bubble-patient-foreground: #0a0a0a;
+  --bubble-ai: #ccfbf1;
+  --bubble-ai-foreground: #134e4a;
+  --bubble-human: #e0e7ff;
+  --bubble-human-foreground: #1e1b4b;
 }
 
 .dark {
-  /* Huginn: dark fijo; applyBranchTheme solo clava primary. */
   --background: #000000;
   --foreground: #f0f0f0;
+
   --card: #0a0a0a;
   --card-foreground: #f0f0f0;
+
   --popover: #0a0a0a;
   --popover-foreground: #f0f0f0;
+
   --primary: #2dd4bf;
   --primary-foreground: #000000;
   --primary-soft: #061e1b;
   --primary-glow: #28bfac;
   --primary-deep: #0d9488;
+
   --secondary: #141414;
   --secondary-foreground: #f0f0f0;
+
   --muted: #141414;
   --muted-foreground: #a3a3a3;
+
   --accent: #072421;
   --accent-foreground: #f0f0f0;
+
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
   --destructive-soft: #3a1212;
+
   --success: #2dd4bf;
   --success-foreground: #000000;
   --success-soft: #061e1b;
+
   --warning: #f59e0b;
   --warning-foreground: #000000;
   --warning-soft: #2a1a04;
+
   --info: #6366f1;
   --info-foreground: #ffffff;
   --info-soft: #161645;
+
   --border: #1f1f1f;
   --input: #1f1f1f;
   --ring: #14675e;
+
   --chart-1: #2dd4bf;
   --chart-2: #14b8a6;
   --chart-3: #6366f1;
   --chart-4: #f59e0b;
   --chart-5: #a3a3a3;
+
   --sidebar: #000000;
   --sidebar-foreground: #f0f0f0;
   --sidebar-primary: #2dd4bf;
@@ -207,6 +220,7 @@
   --sidebar-accent-foreground: #f0f0f0;
   --sidebar-border: #1f1f1f;
   --sidebar-ring: #14675e;
+
   --bubble-patient: #141414;
   --bubble-patient-foreground: #f0f0f0;
   --bubble-ai: #061e1b;

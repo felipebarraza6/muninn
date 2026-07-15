@@ -1,7 +1,7 @@
-import { useState } from "react";
-import { Copy, KeyRound, Loader2, Pencil, Plus, RefreshCw, UserPlus, Users } from "lucide-react";
+import { startTransition, useDeferredValue, useMemo, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { Copy, KeyRound, Loader2, Pencil, Plus, RefreshCw, Trash2, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,35 +13,83 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Table, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
-  useCreateAdminUser,
+  useAssignUserToBranch,
+  useCreateAndAssignUser,
   useAdminUsers,
+  useDeleteAdminUser,
   useGenerateUserPassword,
   useUpdateAdminUser,
   type AdminUser,
 } from "@/api/hooks/useUsers";
 import {
+  FALLBACK_BRANCH_ROLES,
   useAdminBranches,
   useBranchRoles,
   useBranchUsers,
-  useCreateBranchUser,
+  useDeleteBranchUser,
+  useMyBranchesSelect,
+  useOrganizations,
 } from "@/api/hooks/useBranches";
-import {
-  AdminMotionItem,
-  AdminMotionList,
-  AdminPageMotion,
-} from "@/components/admin/AdminPageMotion";
+import { AdminMotionItem, AdminPageMotion } from "@/components/admin/AdminPageMotion";
+import { isSuperAdmin } from "@/lib/authGuards";
 import { copyToClipboard, generateMemorablePassword } from "@/lib/password";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
+const ALL = "all";
+
+const tableBodyVariants = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: { staggerChildren: 0.028, delayChildren: 0.04 },
+  },
+  exit: {
+    opacity: 0,
+    transition: { duration: 0.12, ease: "easeIn" as const },
+  },
+};
+
+const tableRowVariants = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: { duration: 0.18, ease: "easeOut" as const },
+  },
+};
+
+function displayName(u: AdminUser) {
+  const name = [u.first_name, u.last_name].filter(Boolean).join(" ").trim();
+  return name || u.username || u.email;
+}
+
 export default function AdminUsuariosPage() {
-  const { data: users = [], isLoading } = useAdminUsers();
+  const canCreateRoot = isSuperAdmin();
+  const reduceMotion = useReducedMotion();
+  const { data: myBranches = [] } = useMyBranchesSelect();
+  const { data: adminBranches = [] } = useAdminBranches();
+  const { data: organizations = [] } = useOrganizations();
   const { data: assignments = [] } = useBranchUsers();
-  const { data: branches = [] } = useAdminBranches();
-  const createUser = useCreateAdminUser();
+
+  const [branchFilter, setBranchFilter] = useState(ALL);
+  const [orgFilter, setOrgFilter] = useState(ALL);
+  const [search, setSearch] = useState("");
+  const deferredSearch = useDeferredValue(search);
+  const searchPending = search !== deferredSearch;
+
+  const { data: users = [], isLoading: usersLoading } = useAdminUsers();
+
+  const createUser = useCreateAndAssignUser();
   const updateUser = useUpdateAdminUser();
-  const createAssignment = useCreateBranchUser();
+  const deleteUser = useDeleteAdminUser();
+  const assignUser = useAssignUserToBranch();
+  const deleteAssignment = useDeleteBranchUser();
   const generatePassword = useGenerateUserPassword();
+
+  const [resettingId, setResettingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<AdminUser | null>(null);
@@ -49,20 +97,99 @@ export default function AdminUsuariosPage() {
   const [username, setUsername] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [dni, setDni] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(true);
   const [active, setActive] = useState(true);
-  const [superuser, setSuperuser] = useState(false);
+  const [isRoot, setIsRoot] = useState(false);
+  const [createBranchId, setCreateBranchId] = useState("");
+  const [createRoleCode, setCreateRoleCode] = useState("");
 
   const [assignOpen, setAssignOpen] = useState(false);
-  const [assignUserId, setAssignUserId] = useState<string>("");
-  const [assignBranchId, setAssignBranchId] = useState<string>("");
-  const { data: roles = [] } = useBranchRoles(assignBranchId || null);
-  const [assignRoleId, setAssignRoleId] = useState<string>("");
+  const [assignUserId, setAssignUserId] = useState("");
+  const [assignBranchId, setAssignBranchId] = useState("");
+  const [assignRoleCode, setAssignRoleCode] = useState("");
+
+  const roleBranchId = open && !editing ? createBranchId : assignBranchId;
+  const { data: roles = FALLBACK_BRANCH_ROLES } = useBranchRoles(roleBranchId || null);
 
   const [revealOpen, setRevealOpen] = useState(false);
   const [revealedPassword, setRevealedPassword] = useState("");
   const [revealedUserLabel, setRevealedUserLabel] = useState("");
+
+  /** Sucursales visibles: switcher (multi-branch) + admin list (Root). */
+  const branchOptions = useMemo(() => {
+    const map = new Map<string, { id: string; label: string; orgId?: string; orgName?: string }>();
+
+    for (const b of myBranches) {
+      map.set(String(b.value), {
+        id: String(b.value),
+        label: b.label,
+      });
+    }
+
+    for (const b of adminBranches) {
+      const id = String(b.id);
+      const prev = map.get(id);
+      map.set(id, {
+        id,
+        label: prev?.label || b.business_name || b.fantasy_name || `Sucursal ${id}`,
+        orgId: b.organization != null ? String(b.organization) : prev?.orgId,
+        orgName: b.organization_name || prev?.orgName,
+      });
+    }
+
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [myBranches, adminBranches]);
+
+  const branchMeta = useMemo(() => {
+    const map = new Map(branchOptions.map((b) => [b.id, b]));
+    return map;
+  }, [branchOptions]);
+
+  const assignmentsByUser = useMemo(() => {
+    const map = new Map<string, typeof assignments>();
+    for (const a of assignments) {
+      if (a.is_active === false) continue;
+      const key = String(a.user);
+      const list = map.get(key) ?? [];
+      list.push(a);
+      map.set(key, list);
+    }
+    return map;
+  }, [assignments]);
+
+  const filteredUsers = useMemo(() => {
+    const q = deferredSearch.trim().toLowerCase();
+
+    return users.filter((u) => {
+      if (q) {
+        const haystack = [u.email, u.username, u.first_name, u.last_name, u.dni]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+
+      const userAssignments = assignmentsByUser.get(String(u.id)) ?? [];
+
+      if (branchFilter !== ALL) {
+        const inBranch = userAssignments.some((a) => String(a.branch) === branchFilter);
+        if (!inBranch) return false;
+      }
+
+      if (orgFilter !== ALL) {
+        const inOrg = userAssignments.some(
+          (a) => branchMeta.get(String(a.branch))?.orgId === orgFilter,
+        );
+        if (!inOrg) return false;
+      }
+
+      return true;
+    });
+  }, [users, deferredSearch, branchFilter, orgFilter, assignmentsByUser, branchMeta]);
+
+  const tableContentKey = `${branchFilter}|${orgFilter}|${deferredSearch.trim().toLowerCase()}`;
 
   const openCreate = () => {
     setEditing(null);
@@ -70,10 +197,13 @@ export default function AdminUsuariosPage() {
     setUsername("");
     setFirstName("");
     setLastName("");
+    setDni("");
     setPassword(generateMemorablePassword());
     setShowPassword(true);
     setActive(true);
-    setSuperuser(false);
+    setIsRoot(false);
+    setCreateBranchId(branchFilter !== ALL ? branchFilter : "");
+    setCreateRoleCode("");
     setOpen(true);
   };
 
@@ -83,10 +213,13 @@ export default function AdminUsuariosPage() {
     setUsername(u.username || "");
     setFirstName(u.first_name || "");
     setLastName(u.last_name || "");
+    setDni(u.dni || "");
     setPassword("");
     setShowPassword(false);
     setActive(u.is_active !== false);
-    setSuperuser(Boolean(u.is_superuser));
+    setIsRoot(Boolean(u.is_superuser));
+    setCreateBranchId("");
+    setCreateRoleCode("");
     setOpen(true);
   };
 
@@ -97,6 +230,7 @@ export default function AdminUsuariosPage() {
   };
 
   const handleResetPassword = (u: AdminUser) => {
+    setResettingId(String(u.id));
     generatePassword.mutate(u.id, {
       onSuccess: (data) => {
         setRevealedPassword(data.new_password);
@@ -108,6 +242,24 @@ export default function AdminUsuariosPage() {
         toast.error(
           (e as { friendlyMessage?: string }).friendlyMessage || "No se pudo generar la contraseña",
         ),
+      onSettled: () => setResettingId(null),
+    });
+  };
+
+  const handleDelete = (u: AdminUser) => {
+    if (
+      !window.confirm(
+        `¿Desactivar a ${displayName(u)}?\nQuedará inactivo (soft delete); no se borra de la base.`,
+      )
+    ) {
+      return;
+    }
+    setDeletingId(String(u.id));
+    deleteUser.mutate(u.id, {
+      onSuccess: () => toast.success("Usuario desactivado"),
+      onError: (e) =>
+        toast.error((e as { friendlyMessage?: string }).friendlyMessage || "No se pudo desactivar"),
+      onSettled: () => setDeletingId(null),
     });
   };
 
@@ -116,19 +268,25 @@ export default function AdminUsuariosPage() {
       toast.error("Email requerido");
       return;
     }
-    const payload: Partial<AdminUser> & { password?: string } = {
-      email: email.trim(),
-      username: username.trim() || email.trim(),
-      first_name: firstName.trim(),
-      last_name: lastName.trim(),
-      is_active: active,
-      is_superuser: superuser,
-    };
-    if (password.trim()) payload.password = password.trim();
+    if (!dni.trim()) {
+      toast.error("RUT / DNI requerido (formato 12.345.678-9)");
+      return;
+    }
 
     if (editing) {
       updateUser.mutate(
-        { id: editing.id, data: payload },
+        {
+          id: editing.id,
+          data: {
+            email: email.trim(),
+            username: username.trim() || email.trim(),
+            first_name: firstName.trim(),
+            last_name: lastName.trim(),
+            dni: dni.trim(),
+            is_active: active,
+            ...(password.trim() ? { password: password.trim() } : {}),
+          },
+        },
         {
           onSuccess: () => {
             toast.success("Usuario actualizado");
@@ -138,38 +296,66 @@ export default function AdminUsuariosPage() {
             toast.error((e as { friendlyMessage?: string }).friendlyMessage || "Error"),
         },
       );
-    } else {
-      if (!password.trim()) {
-        toast.error("Password requerido al crear");
-        return;
-      }
-      createUser.mutate(payload, {
-        onSuccess: () => {
-          toast.success("Usuario creado — guarda la contraseña");
+      return;
+    }
+
+    if (!password.trim()) {
+      toast.error("Contraseña requerida");
+      return;
+    }
+    if (!isRoot && (!createBranchId || !createRoleCode)) {
+      toast.error("Elige sucursal y rol (o marca Root)");
+      return;
+    }
+
+    createUser.mutate(
+      {
+        user_data: {
+          email: email.trim(),
+          username: username.trim() || undefined,
+          password: password.trim(),
+          first_name: firstName.trim() || undefined,
+          last_name: lastName.trim() || undefined,
+          dni: dni.trim(),
+          is_superuser: canCreateRoot && isRoot,
+        },
+        branch_assignment: isRoot
+          ? null
+          : {
+              branch_id: createBranchId,
+              role: createRoleCode,
+              is_active: true,
+            },
+      },
+      {
+        onSuccess: (res) => {
+          toast.success(res.message || "Usuario creado — guarda la contraseña");
           setOpen(false);
+          if (createBranchId) setBranchFilter(String(createBranchId));
         },
         onError: (e) =>
           toast.error((e as { friendlyMessage?: string }).friendlyMessage || "Error al crear"),
-      });
-    }
+      },
+    );
   };
 
   const saveAssign = () => {
-    if (!assignUserId || !assignBranchId || !assignRoleId) {
+    if (!assignUserId || !assignBranchId || !assignRoleCode) {
       toast.error("Usuario, sucursal y rol son requeridos");
       return;
     }
-    createAssignment.mutate(
+    assignUser.mutate(
       {
-        user: assignUserId,
-        branch: assignBranchId,
-        role_definition: assignRoleId,
+        user_id: assignUserId,
+        branch_id: assignBranchId,
+        role: assignRoleCode,
         is_active: true,
       },
       {
         onSuccess: () => {
-          toast.success("Asignación creada");
+          toast.success("Usuario asignado a la sucursal");
           setAssignOpen(false);
+          setBranchFilter(String(assignBranchId));
         },
         onError: (e) =>
           toast.error(
@@ -180,7 +366,16 @@ export default function AdminUsuariosPage() {
     );
   };
 
-  if (isLoading) {
+  const removeAssignment = (assignmentId: string | number, label: string) => {
+    if (!window.confirm(`¿Quitar acceso a ${label}?`)) return;
+    deleteAssignment.mutate(assignmentId, {
+      onSuccess: () => toast.success("Acceso removido"),
+      onError: (e) =>
+        toast.error((e as { friendlyMessage?: string }).friendlyMessage || "No se pudo remover"),
+    });
+  };
+
+  if (usersLoading) {
     return (
       <div className="px-4 md:px-6 lg:px-8 py-6 flex justify-center min-h-[400px]">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -195,7 +390,7 @@ export default function AdminUsuariosPage() {
           <div>
             <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">Usuarios</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Gestión de cuentas y asignaciones a sucursales.
+              Cuentas con acceso a sucursales{organizations.length > 0 ? " y organizaciones" : ""}.
             </p>
           </div>
           <div className="flex gap-2">
@@ -204,8 +399,8 @@ export default function AdminUsuariosPage() {
               variant="outline"
               onClick={() => {
                 setAssignUserId("");
-                setAssignBranchId("");
-                setAssignRoleId("");
+                setAssignBranchId(branchFilter !== ALL ? branchFilter : "");
+                setAssignRoleCode("");
                 setAssignOpen(true);
               }}
             >
@@ -218,103 +413,229 @@ export default function AdminUsuariosPage() {
         </header>
       </AdminMotionItem>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <AdminMotionItem>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Cuentas</CardTitle>
-              <CardDescription>{users.length} usuarios</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <AdminMotionList className="space-y-2">
-                {users.map((u) => (
-                  <AdminMotionItem key={String(u.id)}>
-                    <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="h-9 w-9 rounded-lg bg-primary-soft text-primary flex items-center justify-center shrink-0">
-                          <Users className="h-5 w-5" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-medium text-sm truncate">
-                              {u.first_name || u.username || u.email}
-                            </span>
-                            {u.is_superuser && <Badge className="text-[10px]">Superadmin</Badge>}
-                            <Badge
-                              variant={u.is_active !== false ? "default" : "secondary"}
-                              className="text-[10px]"
-                            >
-                              {u.is_active !== false ? "Activo" : "Off"}
-                            </Badge>
-                          </div>
-                          <div className="text-[11px] text-muted-foreground truncate">
-                            {u.email}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex gap-1 shrink-0">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-8 w-8"
-                          title="Reiniciar contraseña"
-                          disabled={generatePassword.isPending}
-                          onClick={() => handleResetPassword(u)}
-                        >
-                          <KeyRound className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-8 w-8"
-                          onClick={() => openEdit(u)}
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-                  </AdminMotionItem>
+      <AdminMotionItem>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Buscar</Label>
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Email, nombre…"
+              className="w-[200px]"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Sucursal</Label>
+            <Select
+              value={branchFilter}
+              onValueChange={(v) => startTransition(() => setBranchFilter(v))}
+            >
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Todas" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>Todas</SelectItem>
+                {branchOptions.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>
+                    {b.label}
+                  </SelectItem>
                 ))}
-              </AdminMotionList>
-            </CardContent>
-          </Card>
-        </AdminMotionItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {organizations.length > 0 && (
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Organización</Label>
+              <Select
+                value={orgFilter}
+                onValueChange={(v) => startTransition(() => setOrgFilter(v))}
+              >
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="Todas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>Todas</SelectItem>
+                  {organizations.map((o) => (
+                    <SelectItem key={String(o.id)} value={String(o.id)}>
+                      {o.name || o.business_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          <span className="text-xs text-muted-foreground pb-2">
+            {filteredUsers.length} usuario{filteredUsers.length === 1 ? "" : "s"}
+          </span>
+        </div>
+      </AdminMotionItem>
 
-        <AdminMotionItem>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Asignaciones</CardTitle>
-              <CardDescription>
-                BranchUser activos (filtrados por branch del header si aplica).
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <AdminMotionList className="space-y-2">
-                {assignments.length === 0 && (
-                  <p className="text-sm text-muted-foreground py-8 text-center">
-                    Sin asignaciones.
-                  </p>
+      <AdminMotionItem>
+        <div
+          className={cn(
+            "rounded-lg border border-border overflow-hidden transition-opacity duration-150",
+            searchPending && "opacity-70",
+          )}
+        >
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Usuario</TableHead>
+                <TableHead className="hidden md:table-cell">RUT</TableHead>
+                <TableHead>Sucursales</TableHead>
+                <TableHead className="hidden lg:table-cell">Organización</TableHead>
+                <TableHead>Estado</TableHead>
+                <TableHead className="text-right w-[140px]">Acciones</TableHead>
+              </TableRow>
+            </TableHeader>
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.tbody
+                key={tableContentKey}
+                className="[&_tr:last-child]:border-0"
+                variants={reduceMotion ? undefined : tableBodyVariants}
+                initial={reduceMotion ? false : "hidden"}
+                animate="show"
+                exit={reduceMotion ? undefined : "exit"}
+              >
+                {filteredUsers.length === 0 ? (
+                  <motion.tr
+                    variants={reduceMotion ? undefined : tableRowVariants}
+                    className="border-b transition-colors"
+                  >
+                    <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                      No hay usuarios con esos filtros.
+                    </TableCell>
+                  </motion.tr>
+                ) : (
+                  filteredUsers.map((u) => {
+                    const userAssignments = assignmentsByUser.get(String(u.id)) ?? [];
+                    const orgs = [
+                      ...new Set(
+                        userAssignments
+                          .map((a) => branchMeta.get(String(a.branch))?.orgName)
+                          .filter(Boolean),
+                      ),
+                    ] as string[];
+
+                    return (
+                      <motion.tr
+                        key={String(u.id)}
+                        variants={reduceMotion ? undefined : tableRowVariants}
+                        className="border-b transition-colors hover:bg-muted/50"
+                      >
+                        <TableCell>
+                          <div className="min-w-0 space-y-0.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-medium truncate">{displayName(u)}</span>
+                              {u.is_superuser && (
+                                <Badge variant="secondary" className="text-[10px]">
+                                  Root
+                                </Badge>
+                              )}
+                              {u.is_multi_branch && (
+                                <Badge variant="outline" className="text-[10px]">
+                                  Multi
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="text-xs text-muted-foreground truncate">{u.email}</div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell text-xs text-muted-foreground font-mono">
+                          {u.dni || "—"}
+                        </TableCell>
+                        <TableCell>
+                          {userAssignments.length === 0 ? (
+                            <span className="text-xs text-muted-foreground">
+                              {u.is_superuser ? "Global" : "Sin asignación"}
+                            </span>
+                          ) : (
+                            <div className="flex flex-wrap gap-1 max-w-[280px]">
+                              {userAssignments.map((a) => {
+                                const label = `${a.branch_name || branchMeta.get(String(a.branch))?.label || a.branch}${
+                                  a.role_name || a.role_code
+                                    ? ` · ${a.role_name || a.role_code}`
+                                    : ""
+                                }`;
+                                return (
+                                  <button
+                                    key={String(a.id)}
+                                    type="button"
+                                    title="Quitar acceso"
+                                    onClick={() => removeAssignment(a.id, label)}
+                                    className="text-[11px] text-muted-foreground border border-border/80 rounded px-1.5 py-0.5 hover:border-destructive/50 hover:text-destructive transition-colors"
+                                  >
+                                    {label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
+                          {orgs.length > 0 ? orgs.join(", ") : "—"}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={u.is_active !== false ? "default" : "outline"}
+                            className="text-[10px]"
+                          >
+                            {u.is_active !== false ? "Activo" : "Inactivo"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="inline-flex gap-0.5">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8"
+                              title="Reiniciar contraseña"
+                              disabled={resettingId === String(u.id)}
+                              onClick={() => handleResetPassword(u)}
+                            >
+                              {resettingId === String(u.id) ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <KeyRound className="h-3.5 w-3.5" />
+                              )}
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8"
+                              title="Editar"
+                              onClick={() => openEdit(u)}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 text-destructive"
+                              title="Desactivar"
+                              disabled={deletingId === String(u.id)}
+                              onClick={() => handleDelete(u)}
+                            >
+                              {deletingId === String(u.id) ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-3.5 w-3.5" />
+                              )}
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </motion.tr>
+                    );
+                  })
                 )}
-                {assignments.map((a) => (
-                  <AdminMotionItem key={String(a.id)}>
-                    <div className="rounded-lg border p-3 text-sm">
-                      <div className="font-medium truncate">
-                        {a.user_name || a.user_email || a.user}
-                      </div>
-                      <div className="text-[11px] text-muted-foreground">
-                        {a.branch_name || a.branch} · {a.role_name || a.role_code || "rol"}
-                      </div>
-                    </div>
-                  </AdminMotionItem>
-                ))}
-              </AdminMotionList>
-            </CardContent>
-          </Card>
-        </AdminMotionItem>
-      </div>
+              </motion.tbody>
+            </AnimatePresence>
+          </Table>
+        </div>
+      </AdminMotionItem>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editing ? "Editar usuario" : "Nuevo usuario"}</DialogTitle>
           </DialogHeader>
@@ -324,7 +645,7 @@ export default function AdminUsuariosPage() {
               <Input value={email} onChange={(e) => setEmail(e.target.value)} type="email" />
             </div>
             <div>
-              <Label>Username</Label>
+              <Label>Username (opcional)</Label>
               <Input value={username} onChange={(e) => setUsername(e.target.value)} />
             </div>
             <div className="grid grid-cols-2 gap-2">
@@ -338,69 +659,148 @@ export default function AdminUsuariosPage() {
               </div>
             </div>
             <div>
-              <Label>{editing ? "Password (opcional)" : "Password"}</Label>
-              <div className="flex gap-2">
-                <Input
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="new-password"
-                  className="font-mono text-sm"
-                />
-                {!editing && (
-                  <>
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="outline"
-                      title="Generar"
-                      onClick={() => {
-                        setPassword(generateMemorablePassword());
-                        setShowPassword(true);
-                      }}
-                    >
-                      <RefreshCw className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="outline"
-                      title="Copiar"
-                      disabled={!password}
-                      onClick={() => handleCopyPassword(password)}
-                    >
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                  </>
-                )}
-              </div>
-              {!editing && (
+              <Label>RUT / DNI</Label>
+              <Input
+                value={dni}
+                onChange={(e) => setDni(e.target.value)}
+                placeholder="12.345.678-9"
+                className="font-mono"
+              />
+            </div>
+            {!editing && (
+              <div>
+                <Label>Password</Label>
+                <div className="flex gap-2">
+                  <Input
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    autoComplete="new-password"
+                    className="font-mono text-sm"
+                  />
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="outline"
+                    title="Generar"
+                    onClick={() => {
+                      setPassword(generateMemorablePassword());
+                      setShowPassword(true);
+                    }}
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="outline"
+                    title="Copiar"
+                    disabled={!password}
+                    onClick={() => handleCopyPassword(password)}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
                 <p className="text-[11px] text-muted-foreground mt-1">
                   Contraseña generada automáticamente — guárdala ahora.
                 </p>
-              )}
-            </div>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={active}
-                onChange={(e) => setActive(e.target.checked)}
-              />
-              Activo
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={superuser}
-                onChange={(e) => setSuperuser(e.target.checked)}
-              />
-              Superadmin
-            </label>
+              </div>
+            )}
+            {editing && (
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={active}
+                  onChange={(e) => setActive(e.target.checked)}
+                />
+                Activo
+              </label>
+            )}
+            {!editing && canCreateRoot && (
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={isRoot}
+                  onChange={(e) => {
+                    setIsRoot(e.target.checked);
+                    if (e.target.checked) {
+                      setCreateBranchId("");
+                      setCreateRoleCode("");
+                    }
+                  }}
+                />
+                Root (acceso global, sin sucursal)
+              </label>
+            )}
+            {!editing && !isRoot && (
+              <>
+                <div>
+                  <Label>Sucursal</Label>
+                  <Select
+                    value={createBranchId}
+                    onValueChange={(v) => {
+                      setCreateBranchId(v);
+                      setCreateRoleCode("");
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue
+                        placeholder={
+                          branchOptions.length === 0
+                            ? "Sin sucursales disponibles"
+                            : "Selecciona sucursal"
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {branchOptions.map((b) => (
+                        <SelectItem key={b.id} value={b.id}>
+                          {b.label}
+                          {b.orgName ? ` · ${b.orgName}` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {branchOptions.length === 0 && (
+                    <p className="text-[11px] text-destructive mt-1">
+                      No hay sucursales en tu contexto. Revisa permisos o el selector del header.
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <Label>Rol en la sucursal</Label>
+                  <Select
+                    value={createRoleCode}
+                    onValueChange={setCreateRoleCode}
+                    disabled={!createBranchId}
+                  >
+                    <SelectTrigger>
+                      <SelectValue
+                        placeholder={createBranchId ? "Selecciona rol" : "Primero sucursal"}
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(roles.length ? roles : FALLBACK_BRANCH_ROLES).map((r) => {
+                        const code = r.code || String(r.id);
+                        return (
+                          <SelectItem key={code} value={code}>
+                            {r.name || code}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
             <Button
               className="w-full"
               onClick={saveUser}
               disabled={createUser.isPending || updateUser.isPending}
             >
+              {createUser.isPending || updateUser.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : null}
               Guardar
             </Button>
           </div>
@@ -413,6 +813,9 @@ export default function AdminUsuariosPage() {
             <DialogTitle>Asignar a sucursal</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Define en qué sucursal puede trabajar el usuario y con qué rol.
+            </p>
             <div>
               <Label>Usuario</Label>
               <Select value={assignUserId} onValueChange={setAssignUserId}>
@@ -434,16 +837,17 @@ export default function AdminUsuariosPage() {
                 value={assignBranchId}
                 onValueChange={(v) => {
                   setAssignBranchId(v);
-                  setAssignRoleId("");
+                  setAssignRoleCode("");
                 }}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Selecciona" />
                 </SelectTrigger>
                 <SelectContent>
-                  {branches.map((b) => (
-                    <SelectItem key={String(b.id)} value={String(b.id)}>
-                      {b.business_name}
+                  {branchOptions.map((b) => (
+                    <SelectItem key={b.id} value={b.id}>
+                      {b.label}
+                      {b.orgName ? ` · ${b.orgName}` : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -452,8 +856,8 @@ export default function AdminUsuariosPage() {
             <div>
               <Label>Rol</Label>
               <Select
-                value={assignRoleId}
-                onValueChange={setAssignRoleId}
+                value={assignRoleCode}
+                onValueChange={setAssignRoleCode}
                 disabled={!assignBranchId}
               >
                 <SelectTrigger>
@@ -462,15 +866,18 @@ export default function AdminUsuariosPage() {
                   />
                 </SelectTrigger>
                 <SelectContent>
-                  {roles.map((r) => (
-                    <SelectItem key={String(r.id)} value={String(r.id)}>
-                      {r.name || r.code || String(r.id)}
-                    </SelectItem>
-                  ))}
+                  {(roles.length ? roles : FALLBACK_BRANCH_ROLES).map((r) => {
+                    const code = r.code || String(r.id);
+                    return (
+                      <SelectItem key={code} value={code}>
+                        {r.name || code}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>
-            <Button className="w-full" onClick={saveAssign} disabled={createAssignment.isPending}>
+            <Button className="w-full" onClick={saveAssign} disabled={assignUser.isPending}>
               Asignar
             </Button>
           </div>
