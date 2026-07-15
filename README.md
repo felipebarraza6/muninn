@@ -2,11 +2,11 @@
 
 Frontend de agentes IA especializados con estilo dark premium. Inspirado en dashboards modernos, con acento mint y foco en claridad visual.
 
-## 🚀 Demo
+## Demo
 
-Desplegado como aplicación estática. Compila a `dist/` listo para FTP, Cloudflare Pages, Vercel o cualquier CDN.
+Desplegado como aplicación estática. Compila a `dist/` listo para FTP u otro hosting estático.
 
-## 🛠 Stack
+## Stack
 
 - **React 19** + **TypeScript**
 - **Vite**
@@ -16,20 +16,20 @@ Desplegado como aplicación estática. Compila a `dist/` listo para FTP, Cloudfl
 - **TanStack Query**
 - **Axios**
 
-## ✨ Características
+## Características
 
-- 🎨 Tema visual dark premium: fondo negro `#000000`, superficies elevadas `#05080f`, acento mint `#2dd4bf`.
-- 🤖 Chat global con selector de agente (estilo cambio de modelo IA).
-- 💬 Historial de conversaciones internas con archivado/restauración.
-- 📊 Dashboard de agentes, conversaciones y canales.
-- 📱 Sidebar responsive y experiencia mobile cuidada.
-- 🔐 Login integrado con backend mediante cookie HttpOnly.
+- Tema visual dark premium: fondo negro `#000000`, superficies elevadas `#05080f`, acento mint `#2dd4bf`.
+- Chat global con selector de agente (estilo cambio de modelo IA).
+- Historial de conversaciones internas con archivado/restauración.
+- Dashboard de agentes, conversaciones y canales.
+- Sidebar responsive y experiencia mobile cuidada.
+- Login integrado con backend mediante Token en `localStorage` (`Authorization: Token …`).
 
-## 📦 Requisitos
+## Requisitos
 
 - [Bun](https://bun.sh/) (recomendado) o Node.js 20+
 
-## 🚀 Cómo empezar
+## Cómo empezar
 
 ```bash
 # Clonar el repo
@@ -39,22 +39,25 @@ cd huginn
 # Instalar dependencias
 bun install
 
-# Levantar en desarrollo
+# Opcional: copiar variables de ejemplo
+cp .env.example .env.local
+
+# Levantar en desarrollo (API local vía proxy /api → localhost:8000)
 bun run dev
 ```
 
 El servidor Vite levanta por defecto en `http://localhost:3001`.
 
-## 🧞 Scripts
+## Scripts
 
-| Comando         | Descripción                          |
-|-----------------|--------------------------------------|
-| `bun run dev`   | Servidor de desarrollo con hot reload |
-| `bun run build` | Build de producción en `dist/`       |
-| `bun run lint`  | Revisar código con ESLint            |
-| `bun run format`| Formatear con Prettier               |
+| Comando          | Descripción                           |
+|------------------|---------------------------------------|
+| `bun run dev`    | Servidor de desarrollo con hot reload |
+| `bun run build`  | Build de producción en `dist/`        |
+| `bun run lint`   | Revisar código con ESLint             |
+| `bun run format` | Formatear con Prettier                |
 
-## 🏗 Estructura
+## Estructura
 
 ```
 src/
@@ -67,7 +70,7 @@ src/
 └── styles.css     # Variables de tema Huginn
 ```
 
-## 🎨 Sistema de diseño
+## Sistema de diseño
 
 - **Fondo:** `#000000`
 - **Superficies:** `rgba(255, 255, 255, 0.03)`
@@ -77,18 +80,29 @@ src/
 - **Texto principal:** `#f0f0f0`
 - **Tipografía:** Inter
 
-## 🌐 API
+## API
 
-La app consume una API Django/DRF. En desarrollo el proxy de Vite redirige `/api` al backend configurado en `vite.config.ts`.
+La app consume una API Django/DRF.
 
-## 📤 Deploy
+- **Desarrollo:** proxy Vite `/api` → `http://localhost:8000` (configurable con `VITE_DEV_API_PROXY`).
+- **Producción / preview:** `VITE_API_URL` (inyectada en build; en CD puede variar por dominio).
+
+Ver `.env.example`.
+
+## Ramas y CI
+
+- `dev`: trabajo diario
+- `production`: releases tras CI en verde
+- GitHub Actions corre `lint` + `build` en pushes y PRs a esas ramas
+
+## Deploy
 
 ```bash
 bun run build
 ```
 
-Sube el contenido de `dist/` a tu hosting estático.
+Sube el contenido de `dist/` a tu hosting estático. El CD por FTP (varios dominios / APIs) se configurará en una fase posterior.
 
-## 📝 Licencia
+## Licencia
 
 Proyecto privado — Uso interno.
