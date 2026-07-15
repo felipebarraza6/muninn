@@ -114,5 +114,31 @@ export function applyBranchTheme(theme: BranchThemeLike | null | undefined): voi
 }
 
 export function resolveThemeLogo(theme: BranchThemeLike | null | undefined): string | null {
-  return theme?.logo_url || theme?.logo || null;
+  if (!theme) return null;
+
+  const branding = theme.branding as Record<string, unknown> | undefined;
+  const raw =
+    theme.logo_url ||
+    theme.logo ||
+    (typeof branding?.logo_url === "string" ? branding.logo_url : null) ||
+    (typeof branding?.logo === "string" ? branding.logo : null) ||
+    null;
+
+  if (!raw || typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+
+  // Paths relativos del media de Django → absolutos contra el host de API
+  if (trimmed.startsWith("/")) {
+    const api =
+      import.meta.env.VITE_API_URL?.replace(/\/api\/?$/, "") ||
+      (import.meta.env.DEV ? "" : "https://api.agenciapatagoniachile.com");
+    // En DEV el proxy Vite no sirve /media; apuntar al backend local
+    const origin = import.meta.env.DEV
+      ? (import.meta.env.VITE_DEV_API_PROXY || "http://localhost:8000").replace(/\/$/, "")
+      : api.replace(/\/$/, "");
+    return `${origin}${trimmed}`;
+  }
+
+  return trimmed;
 }

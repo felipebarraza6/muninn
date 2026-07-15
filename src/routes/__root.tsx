@@ -14,6 +14,7 @@ import {
 import { logout } from "@/api/hooks/useAuth";
 import { BranchSwitcher } from "@/components/branch/BranchSwitcher";
 import { useBranchTheme } from "@/api/hooks/useBranchTheme";
+import { resolveThemeLogo } from "@/lib/applyBranchTheme";
 import { getStoredUser } from "@/lib/authSession";
 import { HuginnBrand } from "@/components/brand/HuginnBrand";
 
@@ -75,6 +76,8 @@ function PageHeader() {
   const { pathname } = useLocation();
   const meta = getPageMeta(pathname);
   const user = getStoredUser();
+  const { data: theme } = useBranchTheme();
+  const branchLogo = resolveThemeLogo(theme);
 
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b bg-card/95 backdrop-blur px-3 md:px-5">
@@ -112,7 +115,7 @@ function PageHeader() {
       </div>
 
       <div className="sm:hidden absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2">
-        <HuginnBrand compact to="/" />
+        <HuginnBrand compact to="/" branchLabel={theme?.app_name} branchLogoUrl={branchLogo} />
       </div>
 
       <div className="ml-auto flex items-center gap-2">
