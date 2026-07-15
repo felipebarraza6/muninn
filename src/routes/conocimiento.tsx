@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { BookOpen, Loader2, Plus, RefreshCw, Trash2, Upload } from "lucide-react";
+import { BookOpen, FileSpreadsheet, Loader2, Plus, RefreshCw, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -25,6 +25,7 @@ import {
   type KnowledgeType,
 } from "@/api/hooks/useKnowledge";
 import { KnowledgeContentViewer } from "@/components/agents/knowledge-content-viewer";
+import { SpreadsheetImportDialog } from "@/components/knowledge/SpreadsheetImportDialog";
 import { toast } from "sonner";
 
 const TYPES: { value: KnowledgeType; label: string }[] = [
@@ -48,6 +49,7 @@ export default function Conocimiento() {
 
   const [q, setQ] = useState("");
   const [creating, setCreating] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [knowledgeType, setKnowledgeType] = useState<KnowledgeType>("DOCUMENT");
@@ -115,6 +117,9 @@ export default function Conocimiento() {
               }}
             >
               <Upload className="h-4 w-4 mr-1.5" /> Indexar pendientes
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
+              <FileSpreadsheet className="h-4 w-4 mr-1.5" /> Excel / CSV
             </Button>
             <Button size="sm" onClick={() => setCreating(true)}>
               <Plus className="h-4 w-4 mr-1.5" /> Nuevo
@@ -270,6 +275,12 @@ export default function Conocimiento() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <SpreadsheetImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onImported={() => refetch()}
+      />
     </div>
   );
 }

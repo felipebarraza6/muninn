@@ -127,18 +127,46 @@ export function useUnindexKnowledge() {
   });
 }
 
+export interface SpreadsheetParseRow {
+  title: string;
+  content: string;
+  knowledge_type?: KnowledgeType | string;
+  tags?: string[];
+}
+
+export interface SpreadsheetParseResponse {
+  rows: SpreadsheetParseRow[];
+  count: number;
+  error?: string;
+}
+
+export function useParseSpreadsheet() {
+  return useMutation({
+    mutationFn: (file: File) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      return apiClient
+        .post<SpreadsheetParseResponse>(ENDPOINTS.knowledge.parseSpreadsheet, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        })
+        .then((r) => r.data);
+    },
+  });
+}
+
 export function useBulkCreateKnowledge() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (payload: {
       items: Partial<AgentKnowledge>[];
       index?: boolean;
-      assign_to_agent?: string;
+      assign_to_agent?: string | number;
     }) =>
-      POST<{ created: AgentKnowledge[]; errors?: unknown[] }>(
-        ENDPOINTS.knowledge.bulkCreate,
-        payload,
-      ),
+      POST<{
+        created: AgentKnowledge[];
+        count?: number;
+        errors?: unknown[];
+      }>(ENDPOINTS.knowledge.bulkCreate, payload),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: QUERY_KEY }),
   });
 }
@@ -149,17 +177,5 @@ export function useBulkIndexKnowledge() {
     mutationFn: (ids: string[]) =>
       POST<{ total: number; tasks: string[] }>(ENDPOINTS.knowledge.bulkIndex, { ids }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: QUERY_KEY }),
-  });
-}
-
-export function useParseSpreadsheet() {
-  return useMutation({
-    mutationFn: (file: File) => {
-      const formData = new FormData();
-      formData.append("file", file);
-      return apiClient
-        .post<unknown[]>(ENDPOINTS.knowledge.parseSpreadsheet, formData)
-        .then((r) => r.data);
-    },
   });
 }

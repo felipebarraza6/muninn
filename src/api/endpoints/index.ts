@@ -8,6 +8,7 @@ export const ENDPOINTS = {
   branches: {
     list: "/branches/",
     myBranches: "/branches/my-branches/",
+    myBranchesSelect: "/branches/my-branches-select/",
     myDefaultTheme: "/branches/my-default-branch-theme/",
     themeConfig: (id: string | number) => `/branches/${id}/theme-config/`,
     publicLoginTheme: (slug: string) => `/branches/public-login-theme/${slug}/`,

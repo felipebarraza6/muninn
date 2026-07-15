@@ -9,6 +9,7 @@ import {
   XCircle,
   BookOpen,
   Search,
+  FileSpreadsheet,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -16,8 +17,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useAgent, useUpdateAgent } from "@/api/hooks/useAgents";
-import { useKnowledgeList, type KnowledgeType } from "@/api/hooks/useKnowledge";
+import { useKnowledgeCatalog, type KnowledgeType } from "@/api/hooks/useKnowledge";
 import { KnowledgeContentViewer } from "./knowledge-content-viewer";
+import { SpreadsheetImportDialog } from "@/components/knowledge/SpreadsheetImportDialog";
 import { toast } from "sonner";
 
 interface AgentKnowledgePanelProps {
@@ -49,11 +51,16 @@ const KNOWLEDGE_TYPE_ICON: Record<KnowledgeType, typeof FileText> = {
 };
 
 export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
-  const { data: agent, isLoading: isLoadingAgent } = useAgent(agentId);
-  const { data: searchData, isLoading: isLoadingKnowledge } = useKnowledgeList({ top_k: 100 });
+  const { data: agent, isLoading: isLoadingAgent, refetch: refetchAgent } = useAgent(agentId);
+  const {
+    data: catalog = [],
+    isLoading: isLoadingKnowledge,
+    refetch: refetchCatalog,
+  } = useKnowledgeCatalog();
   const updateAgent = useUpdateAgent();
   const [search, setSearch] = useState("");
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
+  const [importOpen, setImportOpen] = useState(false);
 
   if (isLoadingAgent || isLoadingKnowledge) {
     return (
@@ -66,11 +73,29 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
   if (!agent?.use_rag) {
     return (
       <Card>
-        <CardContent className="p-6">
+        <CardContent className="p-6 space-y-3">
           <div className="text-sm text-muted-foreground">
-            El RAG está desactivado para este agente, por lo que no consulta documentos de
-            conocimiento.
+            El RAG está desactivado para este agente. Actívalo para asignar documentos y tablas.
           </div>
+          <Button
+            size="sm"
+            disabled={updateAgent.isPending}
+            onClick={() =>
+              updateAgent.mutate(
+                { id: agentId, data: { use_rag: true, rag_top_k: agent?.rag_top_k ?? 5 } },
+                {
+                  onSuccess: () => {
+                    toast.success("RAG activado");
+                    refetchAgent();
+                  },
+                  onError: () => toast.error("No se pudo activar RAG"),
+                },
+              )
+            }
+          >
+            {updateAgent.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Activar conocimiento (RAG)
+          </Button>
         </CardContent>
       </Card>
     );
@@ -78,12 +103,13 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
 
   const assignedIds = new Set(
     (agent.knowledge_documents ?? []).map((d) =>
-      typeof d === "string" ? d : String((d as { id?: string | number }).id),
+      typeof d === "string" || typeof d === "number"
+        ? String(d)
+        : String((d as { id?: string | number }).id),
     ),
   );
 
-  const allDocs = searchData?.results ?? [];
-  const filteredDocs = allDocs.filter((doc) => {
+  const filteredDocs = catalog.filter((doc) => {
     const term = search.trim().toLowerCase();
     if (!term) return true;
     return (
@@ -109,6 +135,7 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
       {
         onSuccess: () => {
           toast.success(assigned ? "Documento desasignado" : "Documento asignado al agente");
+          refetchAgent();
         },
         onError: () => {
           toast.error("No se pudo actualizar la asignación");
@@ -127,12 +154,16 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Base de conocimiento</CardTitle>
-          <CardDescription>
-            Documentos disponibles para entrenar este agente. Marca los que quieres que use en sus
-            respuestas.
-          </CardDescription>
+        <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+          <div>
+            <CardTitle className="text-base">Base de conocimiento</CardTitle>
+            <CardDescription>
+              Asigna documentos o tablas. Importa Excel/CSV para cargar datos tabulares.
+            </CardDescription>
+          </div>
+          <Button size="sm" variant="outline" onClick={() => setImportOpen(true)}>
+            <FileSpreadsheet className="h-4 w-4 mr-1.5" /> Excel / CSV
+          </Button>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="relative">
@@ -152,7 +183,7 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
               ) : (
                 <div className="flex flex-col items-center gap-2">
                   <BookOpen className="h-8 w-8 opacity-40" />
-                  <span>No hay documentos de conocimiento en esta sucursal.</span>
+                  <span>No hay documentos. Importa un Excel o créalos en Conocimiento.</span>
                 </div>
               )}
             </div>
@@ -216,7 +247,7 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
                   </label>
                   <div className="shrink-0">
                     <KnowledgeContentViewer
-                      knowledgeId={doc.id}
+                      knowledgeId={String(doc.id)}
                       title={doc.title}
                       knowledgeType={doc.knowledge_type}
                     />
@@ -227,6 +258,16 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
           </div>
         </CardContent>
       </Card>
+
+      <SpreadsheetImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        assignToAgentId={agentId}
+        onImported={() => {
+          refetchCatalog();
+          refetchAgent();
+        }}
+      />
     </div>
   );
 }
