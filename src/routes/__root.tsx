@@ -2,7 +2,7 @@ import { Outlet, useLocation, Link } from "react-router-dom";
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Toaster } from "@/components/ui/sonner";
-import { ChevronRight, Download, ArrowRight, LogOut, User } from "lucide-react";
+import { ChevronRight, LogOut, User } from "lucide-react";
 import huginnMark from "@/assets/huginn-mark.png";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -13,37 +13,54 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { logout } from "@/api/hooks/useAuth";
+import { BranchSwitcher } from "@/components/branch/BranchSwitcher";
+import { useBranchTheme } from "@/api/hooks/useBranchTheme";
+import { resolveThemeLogo } from "@/lib/applyBranchTheme";
+import { getStoredUser } from "@/lib/authSession";
 
 type PageMeta = {
   title: string;
   breadcrumb: { label: string; to?: string }[];
-  action?: { label: string; to: string; icon?: React.ComponentType<{ className?: string }> };
 };
 
 function getPageMeta(pathname: string): PageMeta {
   if (pathname === "/") {
     return { title: "Inicio", breadcrumb: [{ label: "Inicio" }] };
   }
-  if (pathname.startsWith("/conversaciones")) {
-    return { title: "", breadcrumb: [] };
-  }
-  if (pathname.startsWith("/oportunidades")) {
+  if (pathname.startsWith("/agentes")) {
     return {
-      title: "Oportunidades",
-      breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Oportunidades" }],
+      title: "Agentes",
+      breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Agentes" }],
     };
   }
-  if (pathname.startsWith("/campanas")) {
+  if (pathname.startsWith("/canales")) {
     return {
-      title: "Campañas",
-      breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Campañas" }],
+      title: "Canales",
+      breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Canales" }],
     };
   }
-  if (pathname.startsWith("/reportes")) {
+  if (pathname.startsWith("/conocimiento")) {
     return {
-      title: "Reportes",
-      breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Reportes" }],
-      action: { label: "Exportar", to: "/reportes", icon: Download },
+      title: "Conocimiento",
+      breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Conocimiento" }],
+    };
+  }
+  if (pathname.startsWith("/apis")) {
+    return {
+      title: "APIs externas",
+      breadcrumb: [{ label: "Inicio", to: "/" }, { label: "APIs" }],
+    };
+  }
+  if (pathname.startsWith("/funciones")) {
+    return {
+      title: "Funciones",
+      breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Funciones" }],
+    };
+  }
+  if (pathname.startsWith("/chat")) {
+    return {
+      title: "Chat",
+      breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Chat" }],
     };
   }
   if (pathname.startsWith("/configuracion")) {
@@ -52,19 +69,15 @@ function getPageMeta(pathname: string): PageMeta {
       breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Configuración" }],
     };
   }
-  if (pathname.startsWith("/metricas")) {
-    return {
-      title: "Métricas",
-      breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Métricas" }],
-    };
-  }
   return { title: "", breadcrumb: [] };
 }
 
 function PageHeader() {
   const { pathname } = useLocation();
   const meta = getPageMeta(pathname);
-  const ActionIcon = meta.action?.icon;
+  const { data: theme } = useBranchTheme();
+  const branchLogo = resolveThemeLogo(theme);
+  const user = getStoredUser();
 
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b bg-card/95 backdrop-blur px-3 md:px-5">
@@ -105,44 +118,32 @@ function PageHeader() {
         to="/"
         className="sm:hidden absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2"
       >
-        <img src={huginnMark} alt="Huginn" className="h-6 w-auto object-contain" />
+        <img
+          src={branchLogo || huginnMark}
+          alt={theme?.app_name || "Huginn"}
+          className="h-6 w-auto object-contain"
+        />
       </Link>
 
       <div className="ml-auto flex items-center gap-2">
-        {meta.action && (
-          <>
-            <Button asChild size="sm" className="hidden sm:inline-flex group">
-              <Link to={meta.action.to}>
-                {ActionIcon && <ActionIcon className="h-3.5 w-3.5 mr-1.5" />}
-                {meta.action.label}
-                <ArrowRight
-                  className="h-3.5 w-3.5 ml-1.5 transition-transform group-hover:translate-x-0.5"
-                  strokeWidth={2}
-                />
-              </Link>
-            </Button>
-            <Button
-              asChild
-              size="icon"
-              className="h-8 w-8 sm:hidden"
-              aria-label={meta.action.label}
-            >
-              <Link to={meta.action.to}>{ActionIcon && <ActionIcon className="h-4 w-4" />}</Link>
-            </Button>
-          </>
-        )}
+        <BranchSwitcher />
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full">
               <Avatar className="h-8 w-8">
                 <AvatarFallback className="bg-primary-deep text-primary-foreground text-[11px] font-semibold">
-                  <User className="h-4 w-4" />
+                  {user?.first_name?.[0] || user?.username?.[0] || <User className="h-4 w-4" />}
                 </AvatarFallback>
               </Avatar>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-44">
+          <DropdownMenuContent align="end" className="w-48">
+            {user && (
+              <div className="px-2 py-1.5 text-xs text-muted-foreground truncate">
+                {user.full_name || user.email}
+              </div>
+            )}
             <DropdownMenuItem onClick={logout}>
               <LogOut className="h-3.5 w-3.5 mr-2" /> Cerrar sesión
             </DropdownMenuItem>
@@ -154,6 +155,9 @@ function PageHeader() {
 }
 
 export default function RootLayout() {
+  // Aplica theme de la sucursal activa en toda la shell
+  useBranchTheme();
+
   return (
     <SidebarProvider>
       <div className="flex min-h-screen w-full bg-background">

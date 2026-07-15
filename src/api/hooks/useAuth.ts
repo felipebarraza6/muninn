@@ -2,6 +2,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { POST, GET, apiClient } from "../client";
 import { ENDPOINTS } from "../endpoints/index";
 import { setActiveBranchId, syncBranchId } from "@/lib/branchStorage";
+import { clearSession, persistSession } from "@/lib/authSession";
 
 export interface LoginCredentials {
   email: string;
@@ -18,7 +19,7 @@ export interface BranchAssignment {
   role_display: string;
   is_active: boolean;
   assigned_at: string;
-  owner: {
+  owner?: {
     id: number;
     username: string;
     full_name: string;
@@ -40,31 +41,31 @@ export interface User {
   branch_assignments: BranchAssignment[];
 }
 
+export interface AuthPermissions {
+  user_role: string;
+  enabled_apps: string[];
+  read_only_apps: string[];
+  disabled_apps: string[];
+}
+
+/** Respuesta real de login_complete (más rica que UserModel en OpenAPI). */
 export interface LoginCompleteResponse {
   user: User;
   branches: BranchAssignment[];
-  permissions: {
-    user_role: string;
-    enabled_apps: string[];
-    read_only_apps: string[];
-    disabled_apps: string[];
-  };
+  permissions: AuthPermissions;
   token: string;
-  message: string;
+  message?: string;
 }
 
 function selectDefaultBranch(user: User, branches: BranchAssignment[]) {
-  // Si hay una sola sucursal, seleccionarla automáticamente.
   if (branches.length === 1) {
     setActiveBranchId(branches[0].branch_id, true, user.is_superuser);
     return;
   }
 
-  // Si hay varias, intentar restaurar la última usada.
   const existing = syncBranchId();
   if (existing) return;
 
-  // Como fallback, seleccionar la primera sucursal activa.
   const firstActive = branches.find((b) => b.is_active);
   if (firstActive) {
     setActiveBranchId(firstActive.branch_id, true, user.is_superuser);
@@ -76,9 +77,14 @@ export function useLogin() {
     mutationFn: (credentials: LoginCredentials) =>
       POST<LoginCompleteResponse>(ENDPOINTS.auth.login, credentials),
     onSuccess: (data) => {
-      localStorage.setItem("user", JSON.stringify(data.user));
-      localStorage.setItem("token", data.token);
-      selectDefaultBranch(data.user, data.branches ?? data.user.branch_assignments ?? []);
+      const branches = data.branches ?? data.user.branch_assignments ?? [];
+      persistSession({
+        token: data.token,
+        user: data.user,
+        branches,
+        permissions: data.permissions as unknown as Record<string, unknown>,
+      });
+      selectDefaultBranch(data.user, branches);
     },
   });
 }
@@ -98,8 +104,7 @@ export async function logout() {
   } catch {
     // Si el logout en backend falla, igual limpiamos sesión local.
   }
-  localStorage.removeItem("token");
-  localStorage.removeItem("user");
+  clearSession();
   localStorage.removeItem("activeBranchId");
   sessionStorage.removeItem("activeBranchId");
   window.location.href = "/login";

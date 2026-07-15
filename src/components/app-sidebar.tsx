@@ -1,15 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import {
-  Home,
-  Sparkles,
-  MessageSquare,
-  MessageCircle,
-  Megaphone,
-  Bot,
-  Share2,
-  Globe,
-  FunctionSquare,
-} from "lucide-react";
+import { Home, MessageCircle, Bot, Share2, Globe, FunctionSquare, BookOpen } from "lucide-react";
 import huginnMark from "@/assets/huginn-mark.png";
 import {
   Sidebar,
@@ -24,31 +14,8 @@ import {
   SidebarFooter,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { Badge } from "@/components/ui/badge";
-import { useUnifiedConversations } from "@/api/hooks/useUnifiedConversations";
-
-function useConversationBadge(): { mine: number; ai: number } {
-  const { data = [] } = useUnifiedConversations();
-  let mine = 0;
-  let ai = 0;
-  for (const c of data) {
-    const status = (c.status || "").toLowerCase();
-    if (
-      status === "closed" ||
-      status === "inactive" ||
-      status === "spam" ||
-      c.source === "internal"
-    ) {
-      continue;
-    }
-    if (c.is_waiting_human || status === "waiting_human" || status === "requires_human") {
-      mine++;
-    } else {
-      ai++;
-    }
-  }
-  return { mine, ai };
-}
+import { useBranchTheme } from "@/api/hooks/useBranchTheme";
+import { resolveThemeLogo } from "@/lib/applyBranchTheme";
 
 type IconComponent = React.ComponentType<{ className?: string; strokeWidth?: number }>;
 
@@ -57,36 +24,24 @@ type MenuItem = {
   url: string;
   icon: IconComponent;
   exact?: boolean;
-  comingSoon?: boolean;
-  badge?: string;
 };
 
+/** Scope Agent Studio: solo dominio agentes (sin ERP/campañas). */
 const baseItems: MenuItem[] = [
   { title: "Inicio", url: "/", icon: Home, exact: true },
-  { title: "Chat", url: "/chat", icon: MessageCircle },
-  { title: "Oportunidades", url: "/oportunidades", icon: Sparkles, comingSoon: true },
-  { title: "Conversaciones", url: "/conversaciones", icon: MessageSquare },
-  { title: "Campañas", url: "/campanas", icon: Megaphone, comingSoon: true },
   { title: "Agentes", url: "/agentes", icon: Bot },
   { title: "Canales", url: "/canales", icon: Share2 },
+  { title: "Conocimiento", url: "/conocimiento", icon: BookOpen },
   { title: "APIs externas", url: "/apis", icon: Globe },
   { title: "Funciones", url: "/funciones", icon: FunctionSquare },
+  { title: "Chat", url: "/chat", icon: MessageCircle },
 ];
 
 export function AppSidebar() {
   const { pathname } = useLocation();
   const { isMobile, setOpenMobile } = useSidebar();
-  const { mine, ai } = useConversationBadge();
-
-  const items = baseItems
-    .filter((item) => !item.comingSoon)
-    .map((item) => {
-      if (item.title === "Conversaciones") {
-        const badge = mine > 0 ? String(mine) : ai > 0 ? String(ai) : undefined;
-        return { ...item, badge };
-      }
-      return item;
-    });
+  const { data: theme } = useBranchTheme();
+  const branchLogo = resolveThemeLogo(theme);
 
   const isActive = (url: string, exact?: boolean) =>
     exact ? pathname === url : pathname === url || pathname.startsWith(url + "/");
@@ -100,14 +55,16 @@ export function AppSidebar() {
       <SidebarHeader className="border-b border-sidebar-border">
         <Link to="/" className="flex items-center gap-2.5 px-2 py-2.5" onClick={handleNavClick}>
           <img
-            src={huginnMark}
-            alt="Huginn"
+            src={branchLogo || huginnMark}
+            alt={theme?.app_name || "Huginn"}
             className="h-8 w-8 shrink-0 object-contain rounded-md"
           />
           <div className="flex flex-col leading-tight group-data-[collapsible=icon]:hidden min-w-0">
-            <span className="text-[15px] font-semibold tracking-tight text-foreground">HUGINN</span>
-            <span className="text-[9.5px] text-muted-foreground mt-0.5 tracking-[0.12em] uppercase">
-              Agentes IA
+            <span className="text-[15px] font-semibold tracking-tight text-foreground">
+              {theme?.app_name || "HUGINN"}
+            </span>
+            <span className="text-[9.5px] text-muted-foreground mt-0.5 tracking-[0.12em] uppercase truncate">
+              {theme?.tagline || "Agentes IA"}
             </span>
           </div>
         </Link>
@@ -116,11 +73,11 @@ export function AppSidebar() {
       <SidebarContent className="pt-2">
         <SidebarGroup>
           <SidebarGroupLabel className="text-[10.5px] font-semibold tracking-wider uppercase text-muted-foreground/80">
-            Plataforma
+            Studio
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {items.map((item) => {
+              {baseItems.map((item) => {
                 const active = isActive(item.url, item.exact);
                 return (
                   <SidebarMenuItem key={item.url}>
@@ -140,14 +97,6 @@ export function AppSidebar() {
                           strokeWidth={1.75}
                         />
                         <span className="flex-1">{item.title}</span>
-                        {item.badge && (
-                          <Badge
-                            variant="secondary"
-                            className="h-5 px-1.5 text-[10px] rounded-full bg-destructive/10 text-destructive border-0 group-data-[collapsible=icon]:hidden"
-                          >
-                            {item.badge}
-                          </Badge>
-                        )}
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
