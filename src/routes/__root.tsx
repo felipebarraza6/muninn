@@ -3,7 +3,6 @@ import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/s
 import { AppSidebar } from "@/components/app-sidebar";
 import { Toaster } from "@/components/ui/sonner";
 import { ChevronRight, LogOut, User } from "lucide-react";
-import huginnMark from "@/assets/huginn-mark.png";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -15,8 +14,8 @@ import {
 import { logout } from "@/api/hooks/useAuth";
 import { BranchSwitcher } from "@/components/branch/BranchSwitcher";
 import { useBranchTheme } from "@/api/hooks/useBranchTheme";
-import { resolveThemeLogo } from "@/lib/applyBranchTheme";
 import { getStoredUser } from "@/lib/authSession";
+import { HuginnBrand } from "@/components/brand/HuginnBrand";
 
 type PageMeta = {
   title: string;
@@ -76,7 +75,6 @@ function PageHeader() {
   const { pathname } = useLocation();
   const meta = getPageMeta(pathname);
   const { data: theme } = useBranchTheme();
-  const branchLogo = resolveThemeLogo(theme);
   const user = getStoredUser();
 
   return (
@@ -114,16 +112,9 @@ function PageHeader() {
         )}
       </div>
 
-      <Link
-        to="/"
-        className="sm:hidden absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2"
-      >
-        <img
-          src={branchLogo || huginnMark}
-          alt={theme?.app_name || "Huginn"}
-          className="h-6 w-auto object-contain"
-        />
-      </Link>
+      <div className="sm:hidden absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2">
+        <HuginnBrand compact to="/" />
+      </div>
 
       <div className="ml-auto flex items-center gap-2">
         <BranchSwitcher />

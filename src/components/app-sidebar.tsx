@@ -1,6 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
 import { Home, MessageCircle, Bot, Share2, Globe, FunctionSquare, BookOpen } from "lucide-react";
-import huginnMark from "@/assets/huginn-mark.png";
 import {
   Sidebar,
   SidebarContent,
@@ -16,6 +15,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useBranchTheme } from "@/api/hooks/useBranchTheme";
 import { resolveThemeLogo } from "@/lib/applyBranchTheme";
+import { HuginnBrand } from "@/components/brand/HuginnBrand";
 
 type IconComponent = React.ComponentType<{ className?: string; strokeWidth?: number }>;
 
@@ -53,21 +53,14 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
       <SidebarHeader className="border-b border-sidebar-border">
-        <Link to="/" className="flex items-center gap-2.5 px-2 py-2.5" onClick={handleNavClick}>
-          <img
-            src={branchLogo || huginnMark}
-            alt={theme?.app_name || "Huginn"}
-            className="h-8 w-8 shrink-0 object-contain rounded-md"
-          />
-          <div className="flex flex-col leading-tight group-data-[collapsible=icon]:hidden min-w-0">
-            <span className="text-[15px] font-semibold tracking-tight text-foreground">
-              {theme?.app_name || "HUGINN"}
-            </span>
-            <span className="text-[9.5px] text-muted-foreground mt-0.5 tracking-[0.12em] uppercase truncate">
-              {theme?.tagline || "Agentes IA"}
-            </span>
-          </div>
-        </Link>
+        <HuginnBrand
+          to="/"
+          onClick={handleNavClick}
+          branchLabel={theme?.app_name}
+          tagline={theme?.tagline}
+          branchLogoUrl={branchLogo}
+          className="px-2 py-2.5"
+        />
       </SidebarHeader>
 
       <SidebarContent className="pt-2">
