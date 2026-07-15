@@ -45,6 +45,18 @@ export interface KnowledgeSearchResult {
   score: number;
 }
 
+export function useKnowledgeCatalog(filters?: { page_size?: number }) {
+  return useQuery({
+    queryKey: [...QUERY_KEY, "list", filters],
+    queryFn: () =>
+      GET<AgentKnowledge[] | { count: number; results: AgentKnowledge[] }>(
+        ENDPOINTS.knowledge.list,
+        { params: { page_size: filters?.page_size ?? 100 } },
+      ).then((data) => normalizeListResponse<AgentKnowledge>(data)),
+    staleTime: 30_000,
+  });
+}
+
 export function useKnowledgeList(filters?: { source_app?: string; q?: string; top_k?: number }) {
   return useQuery({
     queryKey: [...QUERY_KEY, "search", filters],
@@ -95,6 +107,14 @@ export function useIndexKnowledge() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => POST<AgentKnowledge>(ENDPOINTS.knowledge.index(id)),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: QUERY_KEY }),
+  });
+}
+
+export function useReindexKnowledge() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => POST<AgentKnowledge>(ENDPOINTS.knowledge.reindex(id)),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: QUERY_KEY }),
   });
 }

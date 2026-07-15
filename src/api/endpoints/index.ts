@@ -94,6 +94,7 @@ export const ENDPOINTS = {
     detail: (id: string) => `/ai-agents/knowledge/${id}/`,
     search: "/ai-agents/knowledge/search/",
     index: (id: string) => `/ai-agents/knowledge/${id}/index/`,
+    reindex: (id: string) => `/ai-agents/knowledge/${id}/reindex/`,
     unindex: (id: string) => `/ai-agents/knowledge/${id}/unindex/`,
     bulkIndex: "/ai-agents/knowledge/bulk_index/",
     bulkCreate: "/ai-agents/knowledge/bulk_create/",
