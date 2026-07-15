@@ -1,5 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
-import { GET, normalizeListResponse } from "../client";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { DELETE, GET, PATCH, POST, normalizeListResponse } from "../client";
 import { ENDPOINTS } from "../endpoints/index";
 import { getStoredBranches } from "@/lib/authSession";
 import type { BranchAssignment } from "./useAuth";
@@ -10,6 +10,39 @@ export interface BranchSelectOption {
   label: string;
   role_code?: string | null;
   is_all_option?: boolean;
+}
+
+export interface AdminBranch {
+  id: number | string;
+  business_name: string;
+  fantasy_name?: string | null;
+  commercial_business?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  custom_domain?: string | null;
+  is_active?: boolean;
+  primary_color?: string | null;
+  login_slug?: string | null;
+}
+
+export interface BranchRole {
+  id: number | string;
+  code?: string;
+  name?: string;
+  branch?: number | string;
+}
+
+export interface BranchUserAssignment {
+  id: number | string;
+  user: number | string;
+  user_name?: string;
+  user_email?: string;
+  branch: number | string;
+  branch_name?: string;
+  role_definition?: number | string;
+  role_code?: string;
+  role_name?: string;
+  is_active?: boolean;
 }
 
 function normalizeSelectOptions(raw: unknown): BranchSelectOption[] {
@@ -77,5 +110,85 @@ export function useMyBranchesSelect() {
     },
     enabled: typeof window !== "undefined" && isAuthenticated(),
     staleTime: 60_000,
+  });
+}
+
+const BRANCHES_KEY = ["branches", "admin-list"];
+
+export function useAdminBranches() {
+  return useQuery({
+    queryKey: BRANCHES_KEY,
+    queryFn: () =>
+      GET<AdminBranch[] | { results: AdminBranch[] }>(ENDPOINTS.branches.list).then((data) =>
+        normalizeListResponse<AdminBranch>(data),
+      ),
+    staleTime: 30_000,
+  });
+}
+
+export function useCreateBranch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Partial<AdminBranch>) => POST<AdminBranch>(ENDPOINTS.branches.list, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: BRANCHES_KEY });
+      qc.invalidateQueries({ queryKey: ["branches", "my-branches-select"] });
+    },
+  });
+}
+
+export function useUpdateBranch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string | number; data: Partial<AdminBranch> }) =>
+      PATCH<AdminBranch>(ENDPOINTS.branches.detail(id), data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: BRANCHES_KEY });
+      qc.invalidateQueries({ queryKey: ["branches", "my-branches-select"] });
+    },
+  });
+}
+
+export function useBranchRoles(branchId?: string | number | null) {
+  return useQuery({
+    queryKey: ["branches", "roles", branchId],
+    queryFn: () =>
+      GET<BranchRole[] | { results: BranchRole[] }>(ENDPOINTS.branches.roles, {
+        params: branchId ? { branch: branchId } : undefined,
+      }).then((data) => normalizeListResponse<BranchRole>(data)),
+    enabled: Boolean(branchId),
+    staleTime: 60_000,
+  });
+}
+
+export function useBranchUsers() {
+  return useQuery({
+    queryKey: ["branches", "users"],
+    queryFn: () =>
+      GET<BranchUserAssignment[] | { results: BranchUserAssignment[] }>(
+        ENDPOINTS.branches.users,
+      ).then((data) => normalizeListResponse<BranchUserAssignment>(data)),
+    staleTime: 30_000,
+  });
+}
+
+export function useCreateBranchUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: {
+      user: string | number;
+      branch: string | number;
+      role_definition: string | number;
+      is_active?: boolean;
+    }) => POST<BranchUserAssignment>(ENDPOINTS.branches.users, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["branches", "users"] }),
+  });
+}
+
+export function useDeleteBranchUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string | number) => DELETE(ENDPOINTS.branches.userDetail(id)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["branches", "users"] }),
   });
 }

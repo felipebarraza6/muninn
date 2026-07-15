@@ -36,11 +36,13 @@ export function HuginnBrand({
     <>
       <span
         className={cn(
-          "relative flex shrink-0 items-center justify-center overflow-hidden rounded-lg border shadow-[0_0_0_1px_rgba(45,212,191,0.08)]",
+          "relative flex shrink-0 items-center justify-center overflow-hidden rounded-lg border",
           showBranchLogo
-            ? "border-border/60 bg-secondary/50 p-1"
+            ? "border-border bg-secondary p-0.5"
             : "border-primary/35 bg-primary/15",
           compact ? "h-8 w-8" : "h-9 w-9",
+          // Sidebar icon mode: 3rem rail → mark 32px centered, sin corte
+          "group-data-[collapsible=icon]:!h-8 group-data-[collapsible=icon]:!w-8",
         )}
       >
         {showBranchLogo ? (
@@ -58,6 +60,7 @@ export function HuginnBrand({
             className={cn(
               "object-contain brightness-0 invert opacity-95",
               compact ? "h-5 w-5" : "h-6 w-6",
+              "group-data-[collapsible=icon]:!h-5 group-data-[collapsible=icon]:!w-5",
             )}
           />
         )}
@@ -81,7 +84,11 @@ export function HuginnBrand({
       <Link
         to={to}
         onClick={onClick}
-        className={cn("flex items-center gap-2.5 min-w-0", className)}
+        className={cn(
+          "flex items-center gap-2.5 min-w-0",
+          "group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:px-0",
+          className,
+        )}
         aria-label={`Huginn — ${subtitle}`}
       >
         {content}
@@ -89,5 +96,15 @@ export function HuginnBrand({
     );
   }
 
-  return <div className={cn("flex items-center gap-2.5 min-w-0", className)}>{content}</div>;
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-2.5 min-w-0",
+        "group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:px-0",
+        className,
+      )}
+    >
+      {content}
+    </div>
+  );
 }

@@ -90,15 +90,19 @@ interface AgentChatCoreProps {
   agentId: string;
   showBackLink?: boolean;
   backTo?: string;
+  /** Cuando el core vive dentro de /chat (ya hay header de agente). */
+  fillParent?: boolean;
 }
 
 export function AgentChatCore({
   agentId,
   showBackLink = true,
   backTo = "/agentes",
+  fillParent = false,
 }: AgentChatCoreProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const conversationIdFromUrl = searchParams.get("conversation");
+  const agentIdFromUrl = searchParams.get("agent");
 
   const { data: agent, isLoading: agentLoading, error: agentError } = useAgent(agentId);
   const { data: allConversations = [], isLoading: conversationsLoading } =
@@ -115,8 +119,29 @@ export function AgentChatCore({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [historyTab, setHistoryTab] = useState<"active" | "archived">("active");
   const initializedRef = useRef(false);
+  const skipAutoSelectRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastRemoteMessagesRef = useRef<string>("");
+
+  const mergeSearchParams = useCallback(
+    (updates: Record<string, string | null>) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (agentIdFromUrl || agentId) {
+            next.set("agent", agentIdFromUrl || agentId);
+          }
+          for (const [key, value] of Object.entries(updates)) {
+            if (value == null || value === "") next.delete(key);
+            else next.set(key, value);
+          }
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [agentId, agentIdFromUrl, setSearchParams],
+  );
 
   const agentConversations = useMemo(
     () =>
@@ -158,10 +183,19 @@ export function AgentChatCore({
 
   useEffect(() => {
     initializedRef.current = false;
+    skipAutoSelectRef.current = false;
     setConversationId(conversationIdFromUrl);
     setMessages([]);
     setCreateError(null);
-  }, [agentId, conversationIdFromUrl]);
+    // Solo reset fuerte al cambiar de agente; conversation synca en otro effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- conversationIdFromUrl se aplica abajo
+  }, [agentId]);
+
+  useEffect(() => {
+    if (conversationIdFromUrl) {
+      setConversationId(conversationIdFromUrl);
+    }
+  }, [conversationIdFromUrl]);
 
   useEffect(() => {
     if (!remoteMessages) return;
@@ -177,7 +211,7 @@ export function AgentChatCore({
   }, [messages, sendMessage.isPending]);
 
   const doCreateConversation = useCallback(() => {
-    if (!agent || !agentId) return;
+    if (!agent || !agentId || isCreating) return;
     setIsCreating(true);
     setCreateError(null);
     createConversation.mutate(
@@ -188,11 +222,11 @@ export function AgentChatCore({
       },
       {
         onSuccess: (data) => {
-          setConversationId(String(data.id));
-          setSearchParams({ conversation: String(data.id) }, { replace: true });
+          const id = String(data.id);
+          setConversationId(id);
+          mergeSearchParams({ conversation: id });
           if (agent.welcome_message) {
-            setMessages((prev) => [
-              ...prev,
+            setMessages([
               {
                 id: makeId("welcome"),
                 role: "agent",
@@ -200,21 +234,27 @@ export function AgentChatCore({
                 created: new Date().toISOString(),
               },
             ]);
+          } else {
+            setMessages([]);
           }
           setIsCreating(false);
+          skipAutoSelectRef.current = false;
         },
         onError: (err) => {
           const detail = (err as { friendlyMessage?: string })?.friendlyMessage;
           setCreateError(detail || "No se pudo iniciar la conversación");
           setIsCreating(false);
+          skipAutoSelectRef.current = false;
         },
       },
     );
-  }, [agent, createConversation, agentId, setSearchParams]);
+  }, [agent, createConversation, agentId, isCreating, mergeSearchParams]);
 
   useEffect(() => {
     if (agentLoading || !agent || initializedRef.current || conversationsLoading) return;
     initializedRef.current = true;
+
+    if (skipAutoSelectRef.current) return;
 
     if (conversationIdFromUrl) {
       setConversationId(conversationIdFromUrl);
@@ -224,15 +264,21 @@ export function AgentChatCore({
     const lastActive = activeAgentConversations[0];
     if (lastActive) {
       setConversationId(String(lastActive.id));
-      setSearchParams({ conversation: String(lastActive.id) }, { replace: true });
+      mergeSearchParams({ conversation: String(lastActive.id) });
+      return;
     }
+
+    // Sin conversación activa → crear una automáticamente
+    skipAutoSelectRef.current = true;
+    doCreateConversation();
   }, [
     agentLoading,
     agent,
     conversationsLoading,
     conversationIdFromUrl,
     activeAgentConversations,
-    setSearchParams,
+    mergeSearchParams,
+    doCreateConversation,
   ]);
 
   const handleSend = async (e?: React.FormEvent) => {
@@ -275,18 +321,20 @@ export function AgentChatCore({
   };
 
   const handleNewConversation = () => {
-    if (!agent) return;
-    initializedRef.current = false;
+    if (!agent || isCreating) return;
+    skipAutoSelectRef.current = true;
+    initializedRef.current = true;
     setConversationId(null);
     setMessages([]);
     setCreateError(null);
-    setSearchParams({}, { replace: true });
+    mergeSearchParams({ conversation: null });
     doCreateConversation();
   };
 
   const handleSelectConversation = (convId: string) => {
+    skipAutoSelectRef.current = false;
     setConversationId(convId);
-    setSearchParams({ conversation: convId }, { replace: true });
+    mergeSearchParams({ conversation: convId });
     setSidebarOpen(false);
   };
 
@@ -298,9 +346,10 @@ export function AgentChatCore({
         onSuccess: () => {
           toast.success(isArchiving ? "Conversación archivada" : "Conversación restaurada");
           if (String(convId) === conversationId && isArchiving) {
+            skipAutoSelectRef.current = true;
             setConversationId(null);
             setMessages([]);
-            setSearchParams({}, { replace: true });
+            mergeSearchParams({ conversation: null });
             doCreateConversation();
           }
         },
@@ -330,11 +379,16 @@ export function AgentChatCore({
     changeConversationStatus(conversationId, "ARCHIVED");
   };
 
-  const isReady = Boolean(agent?.is_active);
+  const isReady = Boolean(agent?.is_active && (agent?.llm_model || agent?.llm_model_name));
+  const shellClass = fillParent
+    ? "h-full w-full bg-background text-foreground flex flex-col overflow-hidden"
+    : "h-[calc(100dvh-3.5rem)] w-full bg-background text-foreground flex flex-col overflow-hidden";
 
   if (agentLoading) {
     return (
-      <div className="h-[calc(100dvh-3.5rem)] w-full bg-background flex items-center justify-center">
+      <div
+        className={`${fillParent ? "h-full" : "h-[calc(100dvh-3.5rem)]"} w-full bg-background flex items-center justify-center`}
+      >
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
@@ -342,7 +396,9 @@ export function AgentChatCore({
 
   if (agentError || !agent) {
     return (
-      <div className="h-[calc(100dvh-3.5rem)] w-full bg-background flex flex-col items-center justify-center gap-4 px-6">
+      <div
+        className={`${fillParent ? "h-full" : "h-[calc(100dvh-3.5rem)]"} w-full bg-background flex flex-col items-center justify-center gap-4 px-6`}
+      >
         <p className="text-destructive text-center">No se pudo cargar el agente.</p>
         <Button asChild variant="outline">
           <Link to={backTo}>
@@ -354,7 +410,7 @@ export function AgentChatCore({
   }
 
   return (
-    <div className="h-[calc(100dvh-3.5rem)] w-full bg-background text-foreground flex flex-col overflow-hidden">
+    <div className={shellClass}>
       <header className="border-b border-border/50 bg-card/50 backdrop-blur px-4 py-3 flex items-center gap-3 shrink-0">
         {showBackLink && (
           <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" asChild>
@@ -371,9 +427,29 @@ export function AgentChatCore({
         <div className="flex-1 min-w-0">
           <div className="font-medium text-sm truncate">{agent.name}</div>
           <div className="text-xs text-muted-foreground truncate">
-            {isReady ? "Listo para conversar" : "Sin modelo de lenguaje configurado"}
+            {isReady
+              ? "Listo para conversar"
+              : agent?.is_active
+                ? "Sin modelo de lenguaje configurado"
+                : "Agente inactivo"}
           </div>
         </div>
+
+        <Button
+          variant="outline"
+          size="sm"
+          className="shrink-0 gap-1.5"
+          onClick={handleNewConversation}
+          disabled={isCreating}
+          title="Nueva conversación"
+        >
+          {isCreating ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <MessageSquarePlus className="h-3.5 w-3.5" />
+          )}
+          <span className="hidden sm:inline">Nueva</span>
+        </Button>
 
         <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
           <SheetTrigger asChild>
@@ -520,14 +596,34 @@ export function AgentChatCore({
               <Skeleton className="h-16 w-3/4" />
               <Skeleton className="h-12 w-2/3 ml-auto" />
             </div>
+          ) : !conversationId && !isCreating ? (
+            <div className="flex flex-col items-center justify-center text-center py-16 gap-4">
+              <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
+                <MessageSquarePlus className="h-8 w-8 text-primary" />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold mb-2">Sin conversación</h2>
+                <p className="text-muted-foreground max-w-md text-sm">
+                  Inicia un chat nuevo con {agent.name} para empezar a escribir.
+                </p>
+              </div>
+              <Button onClick={handleNewConversation} disabled={isCreating}>
+                <MessageSquarePlus className="h-4 w-4 mr-1.5" />
+                Nueva conversación
+              </Button>
+            </div>
           ) : messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center text-center py-16">
               <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
                 <Bot className="h-8 w-8 text-primary" />
               </div>
-              <h2 className="text-xl font-semibold mb-2">¿Qué necesitas?</h2>
+              <h2 className="text-xl font-semibold mb-2">
+                {isCreating ? "Iniciando conversación…" : "¿Qué necesitas?"}
+              </h2>
               <p className="text-muted-foreground max-w-md">
-                Escribe tu consulta y {agent.name} te ayudará con lo que necesites.
+                {isCreating
+                  ? "Creando un chat nuevo…"
+                  : `Escribe tu consulta y ${agent.name} te ayudará con lo que necesites.`}
               </p>
             </div>
           ) : (

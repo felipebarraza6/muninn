@@ -10,8 +10,14 @@ import { getStoredUser } from "@/lib/authSession";
 import { getActiveBranchId, setActiveBranchId, onBranchChange } from "@/lib/branchStorage";
 import { useMyBranchesSelect } from "@/api/hooks/useBranches";
 import { Building2, Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-export function BranchSwitcher() {
+interface BranchSwitcherProps {
+  /** Versión angosta para header móvil. */
+  compact?: boolean;
+}
+
+export function BranchSwitcher({ compact = false }: BranchSwitcherProps) {
   const user = getStoredUser();
   const { data: options = [], isLoading, isError } = useMyBranchesSelect();
   const [value, setValue] = useState(() => getActiveBranchId() ?? "");
@@ -33,9 +39,14 @@ export function BranchSwitcher() {
 
   if (isLoading) {
     return (
-      <div className="flex h-8 items-center gap-1.5 rounded-md border border-border/50 bg-secondary/40 px-2 text-xs text-muted-foreground">
-        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        <span className="hidden sm:inline">Sucursales…</span>
+      <div
+        className={cn(
+          "flex h-9 items-center gap-1.5 rounded-md border border-border bg-muted px-2.5 text-xs text-muted-foreground",
+          compact ? "max-w-[160px]" : "",
+        )}
+      >
+        <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
+        {!compact && <span className="hidden sm:inline">Sucursales…</span>}
       </div>
     );
   }
@@ -43,7 +54,9 @@ export function BranchSwitcher() {
   if (options.length === 0) {
     return (
       <div
-        className="flex h-8 max-w-[180px] items-center gap-1.5 rounded-md border border-warning/40 bg-warning-soft/30 px-2 text-[11px] text-warning-foreground"
+        className={cn(
+          "flex h-9 max-w-[160px] items-center gap-1.5 rounded-md border border-warning/40 bg-muted px-2.5 text-[11px] text-warning-foreground",
+        )}
         title={
           isError
             ? "No se pudieron cargar sucursales"
@@ -57,8 +70,10 @@ export function BranchSwitcher() {
   }
 
   return (
-    <div className="flex items-center gap-1.5 min-w-0">
-      <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0 hidden sm:block" />
+    <div className={cn("flex items-center gap-1.5 min-w-0", compact && "w-full max-w-[180px]")}>
+      {!compact && (
+        <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0 hidden sm:block" />
+      )}
       <Select
         value={value}
         onValueChange={(next) => {
@@ -67,7 +82,12 @@ export function BranchSwitcher() {
           window.location.reload();
         }}
       >
-        <SelectTrigger className="h-8 w-[140px] sm:w-[200px] text-xs border-border/50 bg-secondary/40">
+        <SelectTrigger
+          className={cn(
+            "h-9 border-border bg-muted text-xs shadow-none focus:ring-1 focus:ring-ring",
+            compact ? "w-full min-w-0 px-2.5" : "w-[140px] sm:w-[200px]",
+          )}
+        >
           <SelectValue placeholder="Sucursal" />
         </SelectTrigger>
         <SelectContent>

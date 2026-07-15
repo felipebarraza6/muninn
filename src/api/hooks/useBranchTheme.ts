@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { GET } from "../client";
 import { ENDPOINTS } from "../endpoints/index";
 import { getActiveBranchId, onBranchChange } from "@/lib/branchStorage";
-import { applyBranchTheme, resetHuginnTheme, type BranchThemeLike } from "@/lib/applyBranchTheme";
+import { getStoredBranches } from "@/lib/authSession";
+import { applyResolvedBranchTheme, type BranchThemeLike } from "@/lib/applyBranchTheme";
+import { resolveEffectiveTheme } from "@/lib/branchThemeDefaults";
 
 export type BranchTheme = BranchThemeLike & {
   id?: number;
@@ -18,6 +20,19 @@ function useActiveBranchIdState() {
     return onBranchChange((id) => setBranchId(id));
   }, []);
   return branchId;
+}
+
+/** Label de la sucursal activa (sesión o app_name del theme). */
+function resolveBranchLabel(
+  branchId: string | null,
+  apiTheme: BranchThemeLike | null | undefined,
+): string | null {
+  if (branchId) {
+    const stored = getStoredBranches().find((b) => String(b.branch_id) === String(branchId));
+    const fromSession = stored?.business_name || stored?.branch_name;
+    if (fromSession) return fromSession;
+  }
+  return apiTheme?.app_name || null;
 }
 
 export function useBranchTheme(branchIdOverride?: string | null) {
@@ -37,15 +52,36 @@ export function useBranchTheme(branchIdOverride?: string | null) {
     retry: 1,
   });
 
-  useEffect(() => {
-    if (query.data) {
-      applyBranchTheme(query.data);
-    } else if (query.isError) {
-      resetHuginnTheme();
-    }
-  }, [query.data, query.isError]);
+  const branchLabel = useMemo(
+    () => resolveBranchLabel(branchId, query.data),
+    [branchId, query.data],
+  );
 
-  return query;
+  const effectiveTheme = useMemo(() => {
+    if (query.isError) {
+      return resolveEffectiveTheme(null, branchLabel);
+    }
+    if (query.data) {
+      return resolveEffectiveTheme(query.data, branchLabel);
+    }
+    return undefined;
+  }, [query.data, query.isError, branchLabel]);
+
+  useEffect(() => {
+    if (query.isError) {
+      applyResolvedBranchTheme(null, branchLabel);
+      return;
+    }
+    if (query.data) {
+      applyResolvedBranchTheme(query.data, branchLabel);
+    }
+  }, [query.data, query.isError, branchLabel]);
+
+  return {
+    ...query,
+    data: effectiveTheme ?? query.data,
+    rawTheme: query.data,
+  };
 }
 
 export function usePublicLoginTheme(slug: string | undefined) {
@@ -57,9 +93,20 @@ export function usePublicLoginTheme(slug: string | undefined) {
     retry: 1,
   });
 
-  useEffect(() => {
-    if (query.data) applyBranchTheme(query.data);
-  }, [query.data]);
+  const effectiveTheme = useMemo(() => {
+    if (!query.data) return undefined;
+    return resolveEffectiveTheme(query.data, query.data.app_name || slug);
+  }, [query.data, slug]);
 
-  return query;
+  useEffect(() => {
+    if (query.data) {
+      applyResolvedBranchTheme(query.data, query.data.app_name || slug);
+    }
+  }, [query.data, slug]);
+
+  return {
+    ...query,
+    data: effectiveTheme ?? query.data,
+    rawTheme: query.data,
+  };
 }

@@ -118,7 +118,7 @@ export default function Login() {
           <CardFooter>
             <Button
               type="submit"
-              className="w-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+              className="w-full bg-primary text-primary-foreground hover:bg-primary-deep transition-colors"
               disabled={login.isPending}
             >
               {login.isPending ? (

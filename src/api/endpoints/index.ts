@@ -7,11 +7,21 @@ export const ENDPOINTS = {
   },
   branches: {
     list: "/branches/",
+    detail: (id: string | number) => `/branches/${id}/`,
     myBranches: "/branches/my-branches/",
     myBranchesSelect: "/branches/my-branches-select/",
     myDefaultTheme: "/branches/my-default-branch-theme/",
     themeConfig: (id: string | number) => `/branches/${id}/theme-config/`,
     publicLoginTheme: (slug: string) => `/branches/public-login-theme/${slug}/`,
+    users: "/branches/users/",
+    userDetail: (id: string | number) => `/branches/users/${id}/`,
+    roles: "/branches/roles/",
+  },
+  users: {
+    list: "/accounts/users/",
+    detail: (id: string | number) => `/accounts/users/${id}/`,
+    generatePassword: (id: string | number) => `/accounts/users/${id}/generate-password/`,
+    resetPassword: "/accounts/users/reset_password/",
   },
   campaigns: {
     list: "/campaigns/",
@@ -91,10 +101,12 @@ export const ENDPOINTS = {
   },
   llm: {
     providers: "/ai-agents/llm-providers/",
-    providerDetail: (id: string) => `/ai-agents/llm-providers/${id}/`,
+    providerDetail: (id: string | number) => `/ai-agents/llm-providers/${id}/`,
     models: "/ai-agents/llm-models/",
-    modelDetail: (id: string) => `/ai-agents/llm-models/${id}/`,
+    modelDetail: (id: string | number) => `/ai-agents/llm-models/${id}/`,
     chat: "/ai-agents/llm-chat/chat/",
+    testConnection: (id: string | number) => `/ai-agents/llm-providers/${id}/test_connection/`,
+    syncModels: (id: string | number) => `/ai-agents/llm-providers/${id}/sync_models/`,
   },
   knowledge: {
     list: "/ai-agents/knowledge/",

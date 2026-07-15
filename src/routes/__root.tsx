@@ -14,116 +14,101 @@ import {
 import { logout } from "@/api/hooks/useAuth";
 import { BranchSwitcher } from "@/components/branch/BranchSwitcher";
 import { useBranchTheme } from "@/api/hooks/useBranchTheme";
-import { resolveThemeLogo } from "@/lib/applyBranchTheme";
 import { getStoredUser } from "@/lib/authSession";
-import { HuginnBrand } from "@/components/brand/HuginnBrand";
 
 type PageMeta = {
-  title: string;
   breadcrumb: { label: string; to?: string }[];
 };
 
 function getPageMeta(pathname: string): PageMeta {
   if (pathname === "/") {
-    return { title: "Inicio", breadcrumb: [{ label: "Inicio" }] };
+    return { breadcrumb: [{ label: "Inicio" }] };
   }
   if (pathname.startsWith("/agentes")) {
-    return {
-      title: "Agentes",
-      breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Agentes" }],
-    };
+    return { breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Agentes" }] };
   }
   if (pathname.startsWith("/canales")) {
-    return {
-      title: "Canales",
-      breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Canales" }],
-    };
+    return { breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Canales" }] };
   }
   if (pathname.startsWith("/conocimiento")) {
-    return {
-      title: "Conocimiento",
-      breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Conocimiento" }],
-    };
+    return { breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Conocimiento" }] };
   }
   if (pathname.startsWith("/apis")) {
-    return {
-      title: "APIs externas",
-      breadcrumb: [{ label: "Inicio", to: "/" }, { label: "APIs" }],
-    };
+    return { breadcrumb: [{ label: "Inicio", to: "/" }, { label: "APIs" }] };
   }
   if (pathname.startsWith("/funciones")) {
-    return {
-      title: "Funciones",
-      breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Funciones" }],
-    };
+    return { breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Funciones" }] };
   }
   if (pathname.startsWith("/chat")) {
+    return { breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Chat" }] };
+  }
+  if (pathname.startsWith("/admin/llm")) {
     return {
-      title: "Chat",
-      breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Chat" }],
+      breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Admin" }, { label: "LLM" }],
+    };
+  }
+  if (pathname.startsWith("/admin/sucursales")) {
+    return {
+      breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Admin" }, { label: "Sucursales" }],
+    };
+  }
+  if (pathname.startsWith("/admin/usuarios")) {
+    return {
+      breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Admin" }, { label: "Usuarios" }],
     };
   }
   if (pathname.startsWith("/configuracion")) {
-    return {
-      title: "Configuración",
-      breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Configuración" }],
-    };
+    return { breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Configuración" }] };
   }
-  return { title: "", breadcrumb: [] };
+  return { breadcrumb: [] };
 }
 
 function PageHeader() {
   const { pathname } = useLocation();
   const meta = getPageMeta(pathname);
   const user = getStoredUser();
-  const { data: theme } = useBranchTheme();
-  const branchLogo = resolveThemeLogo(theme);
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b bg-card/95 backdrop-blur px-3 md:px-5">
-      <SidebarTrigger className="h-8 w-8" />
+    <header className="sticky top-0 z-30 flex min-h-14 shrink-0 items-center gap-2 border-b bg-card px-3 py-2 sm:gap-3 md:px-5 supports-[padding:max(0px)]:pt-[max(0.5rem,env(safe-area-inset-top))]">
+      <SidebarTrigger className="h-9 w-9 shrink-0" />
 
-      <div className="hidden sm:flex flex-col min-w-0 gap-0.5">
-        {meta.breadcrumb.length > 1 && (
-          <nav className="flex items-center gap-1.5 text-[11px] text-muted-foreground min-w-0">
-            {meta.breadcrumb.map((b, i) => {
-              const isLast = i === meta.breadcrumb.length - 1;
-              return (
-                <span key={i} className="flex items-center gap-1.5 min-w-0">
-                  {i > 0 && (
-                    <ChevronRight className="h-3 w-3 shrink-0 opacity-60" strokeWidth={1.75} />
-                  )}
-                  {b.to && !isLast ? (
-                    <Link to={b.to} className="hover:text-primary transition-colors truncate">
-                      {b.label}
-                    </Link>
-                  ) : (
-                    <span className={isLast ? "text-foreground font-medium truncate" : "truncate"}>
-                      {b.label}
-                    </span>
-                  )}
-                </span>
-              );
-            })}
-          </nav>
-        )}
-        {meta.title && (
-          <h1 className="font-display text-[15px] font-semibold leading-none tracking-tight text-foreground">
-            {meta.title}
-          </h1>
-        )}
+      {meta.breadcrumb.length > 0 && (
+        <nav className="hidden sm:flex items-center gap-1.5 text-sm text-muted-foreground min-w-0 flex-1">
+          {meta.breadcrumb.map((b, i) => {
+            const isLast = i === meta.breadcrumb.length - 1;
+            return (
+              <span key={i} className="flex items-center gap-1.5 min-w-0">
+                {i > 0 && (
+                  <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-60" strokeWidth={1.75} />
+                )}
+                {b.to && !isLast ? (
+                  <Link to={b.to} className="hover:text-primary transition-colors truncate">
+                    {b.label}
+                  </Link>
+                ) : (
+                  <span className={isLast ? "text-foreground font-medium truncate" : "truncate"}>
+                    {b.label}
+                  </span>
+                )}
+              </span>
+            );
+          })}
+        </nav>
+      )}
+
+      {/* Móvil: sucursal en el centro del espacio libre */}
+      <div className="flex flex-1 min-w-0 items-center justify-center sm:hidden">
+        <BranchSwitcher compact />
       </div>
 
-      <div className="sm:hidden absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2">
-        <HuginnBrand compact to="/" branchLabel={theme?.app_name} branchLogoUrl={branchLogo} />
-      </div>
-
-      <div className="ml-auto flex items-center gap-2">
-        <BranchSwitcher />
+      <div className="ml-auto flex items-center gap-1.5 sm:gap-2 shrink-0">
+        <div className="hidden sm:block">
+          <BranchSwitcher />
+        </div>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full">
+            <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full shrink-0">
               <Avatar className="h-8 w-8">
                 <AvatarFallback className="bg-primary-deep text-primary-foreground text-[11px] font-semibold">
                   {user?.first_name?.[0] || user?.username?.[0] || <User className="h-4 w-4" />}

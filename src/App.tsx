@@ -24,7 +24,11 @@ import FunctionDetail from "./routes/funciones.$id";
 import Conocimiento from "./routes/conocimiento";
 import EmbedChat from "./routes/embed.chat.$id";
 import Login from "./routes/login";
+import AdminLlmPage from "./routes/admin.llm";
+import AdminSucursalesPage from "./routes/admin.sucursales";
+import AdminUsuariosPage from "./routes/admin.usuarios";
 import { RequireAuth, RedirectIfAuthenticated } from "./components/auth/RequireAuth";
+import { RequireSuperAdmin } from "./components/auth/RequireSuperAdmin";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -57,6 +61,30 @@ function AnimatedOutlet() {
           <Route path="/funciones" element={<Funciones />} />
           <Route path="/funciones/:id" element={<FunctionDetail />} />
           <Route path="/configuracion" element={<Configuracion />} />
+          <Route
+            path="/admin/llm"
+            element={
+              <RequireSuperAdmin>
+                <AdminLlmPage />
+              </RequireSuperAdmin>
+            }
+          />
+          <Route
+            path="/admin/sucursales"
+            element={
+              <RequireSuperAdmin>
+                <AdminSucursalesPage />
+              </RequireSuperAdmin>
+            }
+          />
+          <Route
+            path="/admin/usuarios"
+            element={
+              <RequireSuperAdmin>
+                <AdminUsuariosPage />
+              </RequireSuperAdmin>
+            }
+          />
           {/* Rutas ERP ocultas del nav; se mantienen accesibles por URL temporalmente */}
           <Route path="/conversaciones" element={<Conversaciones />} />
           <Route path="/campanas" element={<Campanas />} />
