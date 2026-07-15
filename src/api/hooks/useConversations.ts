@@ -44,6 +44,9 @@ export interface ChatMessageResponse {
   message?: string;
   created_at?: string;
   timestamp?: string;
+  rag_sources?: unknown[];
+  tool_calls?: unknown[];
+  tool_results?: unknown[];
 }
 
 export function useConversationMessages(

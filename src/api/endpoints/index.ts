@@ -80,6 +80,14 @@ export const ENDPOINTS = {
     byApp: "/ai-agents/agents/by_app/",
     testLLM: (id: string) => `/ai-agents/agents/${id}/test_llm/`,
     planLimits: "/ai-agents/agents/plan_limits/",
+    opsHealth: "/ai-agents/agents/ops-health/",
+  },
+  llm: {
+    providers: "/ai-agents/llm-providers/",
+    providerDetail: (id: string) => `/ai-agents/llm-providers/${id}/`,
+    models: "/ai-agents/llm-models/",
+    modelDetail: (id: string) => `/ai-agents/llm-models/${id}/`,
+    chat: "/ai-agents/llm-chat/chat/",
   },
   knowledge: {
     list: "/ai-agents/knowledge/",

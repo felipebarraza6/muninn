@@ -42,6 +42,9 @@ interface ChatMessage {
   role: "user" | "agent" | "system";
   content: string;
   created?: string;
+  rag_sources?: unknown[];
+  tool_calls?: unknown[];
+  tool_results?: unknown[];
 }
 
 function makeId(prefix: string) {
@@ -59,6 +62,9 @@ function normalizeMessages(data?: ChatMessageResponse[]): ChatMessage[] {
         : "agent") as ChatMessage["role"],
     content: m.content ?? m.text ?? m.message ?? "",
     created: m.created_at ?? m.timestamp,
+    rag_sources: m.rag_sources,
+    tool_calls: m.tool_calls,
+    tool_results: m.tool_results,
   }));
 }
 
@@ -553,6 +559,22 @@ export function AgentChatCore({
                   >
                     {msg.content}
                   </div>
+                  {msg.role === "agent" &&
+                    Array.isArray(msg.rag_sources) &&
+                    msg.rag_sources.length > 0 && (
+                      <div className="text-[10px] text-muted-foreground bg-primary-soft/40 border border-primary/20 rounded-md px-2 py-1.5">
+                        <span className="font-medium text-primary">RAG:</span>{" "}
+                        {msg.rag_sources.length} fuente
+                        {msg.rag_sources.length === 1 ? "" : "s"}
+                      </div>
+                    )}
+                  {msg.role === "agent" &&
+                    Array.isArray(msg.tool_calls) &&
+                    msg.tool_calls.length > 0 && (
+                      <div className="text-[10px] text-muted-foreground bg-info-soft/40 border border-info/20 rounded-md px-2 py-1.5 font-mono">
+                        tools: {msg.tool_calls.length}
+                      </div>
+                    )}
                   <div
                     className={`text-[10px] text-muted-foreground ${
                       msg.role === "user" ? "text-right" : "text-left"

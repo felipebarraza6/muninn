@@ -10,22 +10,33 @@ export interface Agent {
   slug?: string;
   agent_type?: string;
   target_app?: string;
+  description?: string;
   is_active?: boolean;
   is_default?: boolean;
+  status?: string;
   system_prompt?: string;
-  llm_provider?: number | null;
+  welcome_message?: string;
+  llm_provider?: number | string | null;
   llm_provider_name?: string;
-  llm_model?: number | null;
+  llm_provider_type?: string;
+  llm_model?: number | string | null;
   llm_model_name?: string;
+  llm_model_id?: string;
+  model_name?: string;
   temperature?: number;
   max_tokens?: number;
+  requests_per_minute?: number;
   use_rag?: boolean;
   rag_top_k?: number;
+  embedding_model?: string;
+  semantic_weight?: number;
+  use_semantic_search?: boolean;
   top_p?: number;
   frequency_penalty?: number;
   presence_penalty?: number;
-  knowledge_documents?: string[];
-  welcome_message?: string;
+  knowledge_documents?: (string | number)[];
+  functions?: (string | number)[];
+  prompt_template?: number | null;
 }
 
 export function useAgents(filters?: { is_active?: boolean; target_app?: string }) {
@@ -83,8 +94,9 @@ export function useDeleteAgent() {
 export function useTestAgentLLM() {
   return useMutation({
     mutationFn: ({ id, message }: { id: string | number; message?: string }) =>
-      POST<{ response?: string; error?: string }>(ENDPOINTS.agents.testLLM(String(id)), {
-        message,
-      }),
+      POST<{ response?: string; error?: string; rag_sources?: unknown[]; tool_calls?: unknown[] }>(
+        ENDPOINTS.agents.testLLM(String(id)),
+        { message },
+      ),
   });
 }
