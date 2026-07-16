@@ -43,6 +43,11 @@ function getPageMeta(pathname: string): PageMeta {
   if (pathname.startsWith("/chat")) {
     return { breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Chat" }] };
   }
+  if (pathname.startsWith("/admin/organizaciones")) {
+    return {
+      breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Admin" }, { label: "Organizaciones" }],
+    };
+  }
   if (pathname.startsWith("/admin/llm")) {
     return {
       breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Admin" }, { label: "LLM" }],

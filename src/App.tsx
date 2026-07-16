@@ -25,10 +25,12 @@ import Conocimiento from "./routes/conocimiento";
 import EmbedChat from "./routes/embed.chat.$id";
 import Login from "./routes/login";
 import AdminLlmPage from "./routes/admin.llm";
+import AdminOrganizacionesPage from "./routes/admin.organizaciones";
 import AdminSucursalesPage from "./routes/admin.sucursales";
 import AdminUsuariosPage from "./routes/admin.usuarios";
 import { RequireAuth, RedirectIfAuthenticated } from "./components/auth/RequireAuth";
 import { RequireSuperAdmin } from "./components/auth/RequireSuperAdmin";
+import { RequireUsersAdmin } from "./components/auth/RequireUsersAdmin";
 import { ThemeProvider } from "./components/theme/ThemeProvider";
 
 const queryClient = new QueryClient({
@@ -63,6 +65,14 @@ function AnimatedOutlet() {
           <Route path="/funciones/:id" element={<FunctionDetail />} />
           <Route path="/configuracion" element={<Configuracion />} />
           <Route
+            path="/admin/organizaciones"
+            element={
+              <RequireSuperAdmin>
+                <AdminOrganizacionesPage />
+              </RequireSuperAdmin>
+            }
+          />
+          <Route
             path="/admin/llm"
             element={
               <RequireSuperAdmin>
@@ -81,9 +91,9 @@ function AnimatedOutlet() {
           <Route
             path="/admin/usuarios"
             element={
-              <RequireSuperAdmin>
+              <RequireUsersAdmin>
                 <AdminUsuariosPage />
-              </RequireSuperAdmin>
+              </RequireUsersAdmin>
             }
           />
           {/* Rutas ERP ocultas del nav; se mantienen accesibles por URL temporalmente */}

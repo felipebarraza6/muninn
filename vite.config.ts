@@ -45,6 +45,12 @@ export default defineConfig(({ mode }) => {
             });
           },
         },
+        // Logos / favicons / banners (ImageField → /media/...)
+        "/media": {
+          target: devApiProxy,
+          changeOrigin: true,
+          secure: false,
+        },
       },
     },
     preview: {

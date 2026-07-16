@@ -251,4 +251,21 @@
     font-family: var(--font-display);
     letter-spacing: -0.01em;
   }
+
+  /* Preferencias de UI desde theme-config (sucursal/org) */
+  html[data-compact="true"] {
+    --spacing-density: 0.85;
+  }
+
+  html[data-compact="true"] .space-y-3 {
+    gap: calc(0.75rem * var(--spacing-density, 1));
+  }
+
+  html[data-motion="off"] *,
+  html[data-motion="off"] *::before,
+  html[data-motion="off"] *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

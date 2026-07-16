@@ -22,6 +22,9 @@ export interface BranchAssignment {
   commercial_business: string;
   role: string;
   role_display: string;
+  /** Presente en login_complete. */
+  role_code?: string;
+  role_name?: string;
   is_active: boolean;
   assigned_at: string;
   owner?: {
@@ -42,6 +45,7 @@ export interface User {
   is_superuser: boolean;
   is_admin: boolean;
   is_client: boolean;
+  is_multi_branch?: boolean;
   dni?: string;
   branch_assignments: BranchAssignment[];
 }
@@ -130,10 +134,20 @@ export function useLogin() {
     mutationFn: (credentials: LoginCredentials) =>
       POST<LoginCompleteResponse>(ENDPOINTS.auth.login, credentials),
     onSuccess: (data) => {
-      const branches = data.branches ?? data.user.branch_assignments ?? [];
+      const raw = data.branches ?? data.user.branch_assignments ?? [];
+      const branches = raw.map((b) => {
+        const anyB = b as BranchAssignment & { role_code?: string; role_name?: string };
+        return {
+          ...b,
+          role: anyB.role_code || b.role || "",
+          role_display: anyB.role_name || b.role_display || "",
+          role_code: anyB.role_code || b.role,
+          role_name: anyB.role_name || b.role_display,
+        };
+      });
       persistSession({
         token: data.token,
-        user: data.user,
+        user: { ...data.user, branch_assignments: branches },
         branches,
         permissions: data.permissions as unknown as Record<string, unknown>,
       });

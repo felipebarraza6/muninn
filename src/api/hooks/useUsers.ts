@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { DELETE, GET, PATCH, POST, normalizeListResponse } from "../client";
+import { DELETE, GET_ALL_PAGES, PATCH, POST } from "../client";
 import { ENDPOINTS } from "../endpoints/index";
 
 const USERS_KEY = ["accounts", "users"];
@@ -15,6 +15,7 @@ export interface AdminUser {
   is_staff?: boolean;
   is_superuser?: boolean;
   is_multi_branch?: boolean;
+  assigned_product?: number | string | null;
   type_user?: string;
   date_joined?: string;
   last_login?: string | null;
@@ -31,6 +32,7 @@ export type CreateAndAssignPayload = {
     is_superuser?: boolean;
     is_staff?: boolean;
     is_multi_branch?: boolean;
+    assigned_product?: number | string | null;
   };
   /** Obligatorio para usuarios normales; omitir solo si Root. */
   branch_assignment?: {
@@ -54,10 +56,7 @@ export type CreateAndAssignResponse = {
 export function useAdminUsers() {
   return useQuery({
     queryKey: USERS_KEY,
-    queryFn: () =>
-      GET<AdminUser[] | { results: AdminUser[] }>(ENDPOINTS.users.list).then((data) =>
-        normalizeListResponse<AdminUser>(data),
-      ),
+    queryFn: () => GET_ALL_PAGES<AdminUser>(ENDPOINTS.users.list),
     staleTime: 30_000,
   });
 }
@@ -122,6 +121,49 @@ export function useAssignUserToBranch() {
   });
 }
 
+export type ChangeUserRolePayload = {
+  user_id: string | number;
+  branch_id: string | number;
+  role: string;
+};
+
+export function useChangeUserRole() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: ChangeUserRolePayload) =>
+      POST<{ message?: string }>(ENDPOINTS.users.changeUserRole, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: USERS_KEY });
+      qc.invalidateQueries({ queryKey: ["branches", "users"] });
+    },
+  });
+}
+
+/** Activar/desactivar usuario globalmente (`{ user_id }`). */
+export function useToggleUserGlobalStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string | number) =>
+      POST<{ message?: string; is_active?: boolean }>(ENDPOINTS.users.toggleGlobalStatus, {
+        user_id: userId,
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: USERS_KEY }),
+  });
+}
+
+/** Activar/desactivar asignación (`{ assignment_id }`). */
+export function useToggleAssignmentStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (assignmentId: string | number) =>
+      POST(ENDPOINTS.users.toggleAssignmentStatus, { assignment_id: assignmentId }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: USERS_KEY });
+      qc.invalidateQueries({ queryKey: ["branches", "users"] });
+    },
+  });
+}
+
 export type GeneratePasswordResponse = {
   message?: string;
   new_password: string;
@@ -134,7 +176,8 @@ export type GeneratePasswordResponse = {
 export function useGenerateUserPassword() {
   return useMutation({
     mutationFn: (id: string | number) =>
-      POST<GeneratePasswordResponse>(ENDPOINTS.users.generatePassword(id), {}),
+      // Sin body: el action solo usa pk (OpenAPI puede pedir UserModelRequest por error).
+      POST<GeneratePasswordResponse>(ENDPOINTS.users.generatePassword(id)),
   });
 }
 

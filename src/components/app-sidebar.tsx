@@ -10,6 +10,7 @@ import {
   BookOpen,
   Cpu,
   Building2,
+  Network,
   Users,
 } from "lucide-react";
 import {
@@ -26,9 +27,10 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useBranchTheme } from "@/api/hooks/useBranchTheme";
+import { useActiveBranch } from "@/api/hooks/useBranches";
 import { resolveThemeLogo } from "@/lib/applyBranchTheme";
 import { MuninnBrand } from "@/components/brand/MuninnBrand";
-import { isSuperAdmin } from "@/lib/authGuards";
+import { isSuperAdmin, canAccessUsersAdmin } from "@/lib/authGuards";
 
 type IconComponent = React.ComponentType<{ className?: string; strokeWidth?: number }>;
 
@@ -50,17 +52,32 @@ const baseItems: MenuItem[] = [
 ];
 
 const adminItems: MenuItem[] = [
-  { title: "LLM", url: "/admin/llm", icon: Cpu },
+  { title: "Organizaciones", url: "/admin/organizaciones", icon: Network },
   { title: "Sucursales", url: "/admin/sucursales", icon: Building2 },
+  { title: "Usuarios", url: "/admin/usuarios", icon: Users },
+  { title: "LLM", url: "/admin/llm", icon: Cpu },
+];
+
+const usersOnlyItems: MenuItem[] = [
   { title: "Usuarios", url: "/admin/usuarios", icon: Users },
 ];
 
 export function AppSidebar() {
   const { pathname } = useLocation();
   const { isMobile, setOpenMobile } = useSidebar();
-  const { data: theme } = useBranchTheme();
-  const branchLogo = resolveThemeLogo(theme);
+  const { data: theme, rawTheme } = useBranchTheme();
+  const { data: activeBranch } = useActiveBranch();
+  const branchLogo = resolveThemeLogo(rawTheme ?? theme);
+  // Título = fantasy_name | Subtítulo = app_name (como antes MUNINN / Agentes)
+  const fantasyName =
+    activeBranch?.fantasy_name?.trim() || activeBranch?.business_name?.trim() || null;
+  const appNameRaw = (rawTheme?.app_name || theme?.app_name || "").trim();
+  const appName =
+    appNameRaw && appNameRaw.toLowerCase() !== "muninn" && appNameRaw.toLowerCase() !== "erp system"
+      ? appNameRaw
+      : null;
   const showAdmin = isSuperAdmin();
+  const showUsersOnly = !showAdmin && canAccessUsersAdmin();
   const reduceMotion = useReducedMotion();
 
   const isActive = (url: string, exact?: boolean) =>
@@ -125,8 +142,8 @@ export function AppSidebar() {
         <MuninnBrand
           to="/"
           onClick={handleNavClick}
-          branchLabel={theme?.app_name}
-          tagline={theme?.tagline}
+          branchLabel={fantasyName}
+          appName={appName}
           branchLogoUrl={branchLogo}
           className="px-2 py-2.5 group-data-[collapsible=icon]:!px-0 group-data-[collapsible=icon]:!py-2"
         />
@@ -165,6 +182,26 @@ export function AppSidebar() {
                   animate="show"
                 >
                   {renderItems(adminItems, "admin")}
+                </motion.div>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+        {showUsersOnly && (
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-[10.5px] font-semibold tracking-wider uppercase text-muted-foreground/80">
+              Gestión
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <motion.div
+                  className="flex w-full min-w-0 flex-col gap-1"
+                  variants={listVariants}
+                  initial={reduceMotion ? false : "hidden"}
+                  animate="show"
+                >
+                  {renderItems(usersOnlyItems, "gestion")}
                 </motion.div>
               </SidebarMenu>
             </SidebarGroupContent>

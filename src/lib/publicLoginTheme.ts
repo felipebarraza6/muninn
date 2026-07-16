@@ -12,6 +12,14 @@ export type PublicStoreSummary = {
   region?: string;
 };
 
+export type PublicSocialLink = {
+  url: string;
+  icon?: string | null;
+  name?: string | null;
+  order?: number;
+  enabled?: boolean;
+};
+
 export type PublicThemeBranding = {
   app_name?: string | null;
   tagline?: string | null;
@@ -26,6 +34,7 @@ export type PublicThemeBranding = {
   favicon_url?: string | null;
   banner_image_url?: string | null;
   website_url?: string | null;
+  social_links?: PublicSocialLink[] | null;
   social?: {
     facebook?: string;
     instagram?: string;
@@ -46,6 +55,8 @@ export type PublicLoginThemeResponse = {
   branch_id: number | string | null;
   organization_id?: number | string | null;
   organization_name?: string | null;
+  organization_logo_url?: string | null;
+  fantasy_name?: string | null;
   app_name?: string | null;
   branch_name?: string | null;
   logo?: string | null;
@@ -58,7 +69,12 @@ export type PublicLoginThemeResponse = {
   color_mode?: string | null;
   algorithm?: string | null;
   branding?: PublicThemeBranding | null;
-  ui_preferences?: Record<string, unknown> | null;
+  ui_preferences?: {
+    density?: string | null;
+    border_radius_px?: number | null;
+    font_size_px?: number | null;
+    motion_enabled?: boolean | null;
+  } | null;
   login_welcome_message?: string | null;
   login_subtitle?: string | null;
   welcome_message?: string | null;
@@ -66,6 +82,7 @@ export type PublicLoginThemeResponse = {
   tagline?: string | null;
   website_url?: string | null;
   brand_description?: string | null;
+  social_links?: PublicSocialLink[] | null;
   login_slug?: string | null;
   custom_domain?: string | null;
   stores?: PublicStoreSummary[] | null;
@@ -86,6 +103,7 @@ export function hasUsablePublicBranding(
     theme.logo_url ||
     theme.logo ||
     theme.app_name ||
+    theme.fantasy_name ||
     theme.organization_name,
   );
 }
@@ -93,12 +111,18 @@ export function hasUsablePublicBranding(
 /** Copia plana útil para MuninnBrand / applyBranchTheme. */
 export function flattenPublicLoginTheme(theme: PublicLoginThemeResponse) {
   const b = theme.branding;
+  const prefs = theme.ui_preferences;
+  const socialLinks = normalizePublicSocialLinks(
+    theme.social_links ?? b?.social_links ?? null,
+  );
   return {
     scope: theme.scope,
     branch_id: theme.branch_id,
     organization_id: theme.organization_id ?? null,
     organization_name: theme.organization_name ?? null,
-    app_name: theme.app_name || b?.app_name || theme.organization_name || theme.branch_name || null,
+    organization_logo_url: theme.organization_logo_url || null,
+    fantasy_name: theme.fantasy_name ?? null,
+    app_name: theme.app_name || b?.app_name || null,
     branch_name: theme.branch_name ?? null,
     tagline: theme.tagline || b?.tagline || null,
     primary_color: theme.primary_color || b?.colors?.primary || null,
@@ -114,10 +138,33 @@ export function flattenPublicLoginTheme(theme: PublicLoginThemeResponse) {
     welcome_message: theme.welcome_message || b?.login?.welcome_message || null,
     subtitle: theme.subtitle || b?.login?.subtitle || null,
     brand_description: theme.brand_description || b?.brand_description || null,
+    website_url: theme.website_url || b?.website_url || null,
+    social_links: socialLinks,
     branding: theme.branding ?? undefined,
     stores: theme.stores ?? null,
     fallback_from_branch_slug: theme.fallback_from_branch_slug ?? null,
     custom_domain: theme.custom_domain ?? null,
     login_slug: theme.login_slug || b?.login?.slug || null,
+    font_size: prefs?.font_size_px ?? null,
+    borderRadius: prefs?.border_radius_px ?? null,
+    compact: prefs?.density === "compact" ? true : prefs?.density ? false : null,
+    motion: typeof prefs?.motion_enabled === "boolean" ? prefs.motion_enabled : null,
+    ui_preferences: prefs ?? null,
   };
+}
+
+function normalizePublicSocialLinks(
+  raw: PublicSocialLink[] | null | undefined,
+): PublicSocialLink[] {
+  if (!Array.isArray(raw) || raw.length === 0) return [];
+  return [...raw]
+    .filter((l) => l && typeof l.url === "string" && l.url.trim())
+    .map((l, i) => ({
+      url: l.url.trim(),
+      icon: l.icon ?? "web",
+      name: l.name ?? null,
+      enabled: l.enabled !== false,
+      order: typeof l.order === "number" ? l.order : i + 1,
+    }))
+    .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
 }

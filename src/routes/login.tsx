@@ -5,13 +5,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Loader2 } from "lucide-react";
 import { useLogin } from "@/api/hooks/useAuth";
 import { useResolvePublicLoginTheme } from "@/api/hooks/useBranchTheme";
 import { resolveThemeLogo } from "@/lib/applyBranchTheme";
+import { resolveMediaUrl } from "@/lib/mediaUrl";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { MuninnBrand } from "@/components/brand/MuninnBrand";
+import { LoginSocialLinks } from "@/components/brand/LoginSocialLinks";
+
+const GITHUB_CREDIT_URL = "https://github.com/felipebarraza6";
+const GITHUB_CREDIT_LABEL = "felipebarraza6";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -20,7 +24,6 @@ export default function Login() {
   const slug = slugParam || searchParams.get("slug") || undefined;
 
   const {
-    data: publicTheme,
     flat,
     scope,
     isAppDefault,
@@ -46,34 +49,54 @@ export default function Login() {
     ? (login.error as { friendlyMessage?: string }).friendlyMessage || "Error al iniciar sesión"
     : null;
 
-  const branchLogo = resolveThemeLogo(publicTheme);
-  const brandLabel = useMemo(() => {
+  // Logo + colores vienen del flat (theme real de la sucursal/org)
+  const branchLogo = resolveThemeLogo(flat);
+  const fantasyName = flat?.fantasy_name?.trim() || null;
+  const appName = flat?.app_name?.trim() || null;
+  const brandTitle = useMemo(() => {
     if (isAppDefault) return undefined;
-    return (
-      flat?.app_name ||
-      flat?.organization_name ||
-      flat?.branch_name ||
-      publicTheme?.app_name ||
-      undefined
-    );
-  }, [isAppDefault, flat, publicTheme?.app_name]);
+    if (scope === "branch") {
+      return fantasyName || flat?.branch_name || appName || undefined;
+    }
+    // Portal organización
+    return appName || flat?.organization_name || undefined;
+  }, [isAppDefault, scope, fantasyName, flat?.branch_name, flat?.organization_name, appName]);
+
+  const brandSubtitle = useMemo(() => {
+    if (isAppDefault) return undefined;
+    if (scope === "branch") {
+      // Abajo del nombre fantasía: app_name (si es distinto)
+      if (appName && appName !== brandTitle) return appName;
+      return flat?.tagline || undefined;
+    }
+    return flat?.tagline || undefined;
+  }, [isAppDefault, scope, appName, brandTitle, flat?.tagline]);
 
   const subtitle =
     flat?.login_subtitle ||
     flat?.subtitle ||
     flat?.login_welcome_message ||
     flat?.welcome_message ||
-    publicTheme?.login_subtitle ||
-    publicTheme?.subtitle ||
-    publicTheme?.login_welcome_message ||
-    publicTheme?.welcome_message ||
     (isAppDefault
       ? "Accede a tu panel de agentes"
       : scope === "organization"
-        ? "Portal de organización — elige tu sucursal tras entrar"
+        ? "Ingresá a tu portal"
         : "Accede a tu panel");
 
-  const showPortalHint = !isAppDefault && (scope === "organization" || scope === "branch");
+  // Solo el portal de organización muestra el listado de sucursales
+  const isOrgPortal = scope === "organization" && !flat?.branch_id;
+  const isBranchLogin = scope === "branch" && Boolean(flat?.branch_id);
+
+  const organizationLogo = resolveMediaUrl(flat?.organization_logo_url) || null;
+  // Logo del holding: en login de sucursal (crédito org) y en portal org si tiene.
+  const hasOrganizationLogo =
+    Boolean(organizationLogo) && (isBranchLogin || isOrgPortal);
+  const orgName = flat?.organization_name?.trim() || null;
+
+  // Sucursal → Powered by organización. Portal org / Muninn → GitHub.
+  const showGithubCredit = !isBranchLogin;
+
+  const socialLinks = !isAppDefault ? (flat?.social_links ?? []) : [];
 
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center bg-background p-4">
@@ -88,8 +111,8 @@ export default function Login() {
               <Loader2 className="h-10 w-10 animate-spin text-muted-foreground" />
             ) : (
               <MuninnBrand
-                branchLabel={brandLabel}
-                tagline={flat?.tagline || publicTheme?.tagline || undefined}
+                branchLabel={brandTitle}
+                appName={brandSubtitle}
                 branchLogoUrl={isAppDefault ? null : branchLogo}
                 className="justify-center scale-110"
               />
@@ -97,26 +120,7 @@ export default function Login() {
           </div>
           <div className="space-y-2">
             <CardDescription className="text-muted-foreground">{subtitle}</CardDescription>
-            {showPortalHint && (
-              <div className="flex justify-center gap-1.5 flex-wrap">
-                {scope === "organization" && (
-                  <Badge variant="secondary" className="text-[10px]">
-                    Organización
-                  </Badge>
-                )}
-                {scope === "branch" && (
-                  <Badge variant="secondary" className="text-[10px]">
-                    Sucursal
-                  </Badge>
-                )}
-                {flat?.fallback_from_branch_slug && (
-                  <Badge variant="outline" className="text-[10px]">
-                    Branding org
-                  </Badge>
-                )}
-              </div>
-            )}
-            {scope === "organization" && stores.length > 0 && (
+            {isOrgPortal && stores.length > 0 && (
               <p className="text-[11px] text-muted-foreground">
                 {stores.length} sucursal{stores.length === 1 ? "" : "es"} en este portal
               </p>
@@ -183,9 +187,32 @@ export default function Login() {
         </form>
       </Card>
 
-      <p className="mt-6 text-[10px] uppercase tracking-wider text-muted-foreground/70">
-        Powered by felipebarraza6
-      </p>
+      {socialLinks.length > 0 && <LoginSocialLinks links={socialLinks} className="mt-5" />}
+
+      <div className="mt-6 flex flex-col items-center gap-2">
+        {hasOrganizationLogo && (
+          <img
+            src={organizationLogo!}
+            alt={orgName || "Organización"}
+            className="h-7 max-w-[140px] object-contain opacity-80"
+          />
+        )}
+        <p className="text-[10px] uppercase tracking-wider text-muted-foreground/70">
+          Powered by{" "}
+          {showGithubCredit ? (
+            <a
+              href={GITHUB_CREDIT_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline-offset-2 hover:text-foreground hover:underline"
+            >
+              {GITHUB_CREDIT_LABEL}
+            </a>
+          ) : (
+            orgName || "Muninn"
+          )}
+        </p>
+      </div>
     </div>
   );
 }

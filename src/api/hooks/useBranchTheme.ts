@@ -28,45 +28,54 @@ function useActiveBranchIdState() {
   return branchId;
 }
 
-/** Label de la sucursal activa (sesión o app_name del theme). */
-function resolveBranchLabel(
+function isGenericMuninnName(name: string | null | undefined): boolean {
+  return !name?.trim() || name.trim().toLowerCase() === "muninn";
+}
+
+/** Hint para bases de color locales (demo); no es el título del header. */
+function resolveThemeHintLabel(
   branchId: string | null,
   apiTheme: BranchThemeLike | null | undefined,
 ): string | null {
+  const fromTheme =
+    apiTheme?.app_name?.trim() ||
+    (typeof apiTheme?.branding?.app_name === "string" ? apiTheme.branding.app_name.trim() : "") ||
+    null;
+  if (fromTheme && !isGenericMuninnName(fromTheme)) return fromTheme;
+
   if (branchId) {
     const stored = getStoredBranches().find((b) => String(b.branch_id) === String(branchId));
-    const fromSession = stored?.business_name || stored?.branch_name;
-    if (fromSession) return fromSession;
+    return stored?.business_name?.trim() || stored?.branch_name?.trim() || null;
   }
-  return apiTheme?.app_name || null;
+  return fromTheme;
 }
 
 /**
- * Flujo preferido de resolve:
- * 1. by-host (dominio custom)
- * 2. si falla y hay slug → public-login-theme/{slug}
- * 3. si falla → null (Muninn default)
+ * Flujo de resolve:
+ * 1. Con slug → public-login-theme/{slug} (no tocar by-host: en localhost da 404)
+ * 2. Sin slug → by-host (dominio custom)
+ * 3. Si falla → null (Muninn default)
  */
 export async function resolvePublicLoginTheme(
   slug?: string | null,
 ): Promise<PublicLoginThemeResponse | null> {
-  // 1) Dominio custom (Host)
-  try {
-    return await GET<PublicLoginThemeResponse>(ENDPOINTS.branches.publicLoginThemeByHost);
-  } catch {
-    // 404 u otro → seguir con slug / default
-  }
-
-  // 2) /login/{slug} → Branch o Org (incluye fallback branch→org)
+  // 1) /login/{slug} → Branch o Org
   if (slug) {
     try {
       return await GET<PublicLoginThemeResponse>(ENDPOINTS.branches.publicLoginTheme(slug));
     } catch {
-      // 404 → login genérico Muninn
+      // 404 → login genérico Muninn (no caer a by-host con Host=localhost)
     }
+    return null;
   }
 
-  // 3) Theme base Muninn
+  // 2) Dominio custom (solo cuando no hay slug en la URL)
+  try {
+    return await GET<PublicLoginThemeResponse>(ENDPOINTS.branches.publicLoginThemeByHost);
+  } catch {
+    // 404 esperado en localhost / hosts sin dominio propio
+  }
+
   return null;
 }
 
@@ -87,40 +96,41 @@ export function useBranchTheme(branchIdOverride?: string | null) {
     retry: 1,
   });
 
-  const branchLabel = useMemo(
-    () => resolveBranchLabel(branchId, query.data),
+  const themeHintLabel = useMemo(
+    () => resolveThemeHintLabel(branchId, query.data),
     [branchId, query.data],
   );
 
   const effectiveTheme = useMemo(() => {
     if (query.isError) {
-      return resolveEffectiveTheme(null, branchLabel);
+      return resolveEffectiveTheme(null, themeHintLabel);
     }
     if (query.data) {
-      return resolveEffectiveTheme(query.data, branchLabel);
+      return resolveEffectiveTheme(query.data, themeHintLabel);
     }
     return undefined;
-  }, [query.data, query.isError, branchLabel]);
+  }, [query.data, query.isError, themeHintLabel]);
 
   useEffect(() => {
     if (query.isError) {
-      applyResolvedBranchTheme(null, branchLabel);
+      applyResolvedBranchTheme(null, themeHintLabel);
       return;
     }
     if (query.data) {
-      applyResolvedBranchTheme(query.data, branchLabel);
+      applyResolvedBranchTheme(query.data, themeHintLabel);
     }
-  }, [query.data, query.isError, branchLabel]);
+  }, [query.data, query.isError, themeHintLabel]);
 
   return {
     ...query,
     data: effectiveTheme ?? query.data,
     rawTheme: query.data,
+    branchLabel: themeHintLabel,
   };
 }
 
 /**
- * Resuelve branding de login: by-host → slug → Muninn.
+ * Resuelve branding de login: slug → by-host (sin slug) → Muninn.
  * Persiste contexto portal para post-login (X-Branch-ID).
  */
 export function useResolvePublicLoginTheme(slug?: string | null) {

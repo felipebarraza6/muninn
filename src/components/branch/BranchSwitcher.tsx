@@ -11,10 +11,47 @@ import { getActiveBranchId, setActiveBranchId, onBranchChange } from "@/lib/bran
 import { useMyBranchesSelect } from "@/api/hooks/useBranches";
 import { Building2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { User } from "@/api/hooks/useAuth";
 
 interface BranchSwitcherProps {
   /** Versión angosta para header móvil. */
   compact?: boolean;
+}
+
+/** Select solo si hay >1 sucursal y el usuario puede cambiar (multi / admin / root). */
+function canSwitchBranches(user: User | null, optionsCount: number): boolean {
+  if (optionsCount <= 1) return false;
+  if (user?.is_superuser || user?.is_admin) return true;
+  // Owner/empleado sin multi: nunca selector, aunque el API liste más de una.
+  if (user?.is_multi_branch === false) return false;
+  return true;
+}
+
+function BranchLabel({
+  compact,
+  label,
+  loading,
+}: {
+  compact?: boolean;
+  label: string;
+  loading?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex h-9 items-center gap-1.5 rounded-md border border-border bg-muted px-2.5 text-xs text-foreground",
+        compact ? "max-w-[180px] w-full min-w-0" : "max-w-[220px]",
+      )}
+      title={label}
+    >
+      {loading ? (
+        <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0 text-muted-foreground" />
+      ) : (
+        <Building2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+      )}
+      <span className="truncate">{label}</span>
+    </div>
+  );
 }
 
 export function BranchSwitcher({ compact = false }: BranchSwitcherProps) {
@@ -38,17 +75,7 @@ export function BranchSwitcher({ compact = false }: BranchSwitcherProps) {
   }, [options, value, user?.is_superuser]);
 
   if (isLoading) {
-    return (
-      <div
-        className={cn(
-          "flex h-9 items-center gap-1.5 rounded-md border border-border bg-muted px-2.5 text-xs text-muted-foreground",
-          compact ? "max-w-[160px]" : "",
-        )}
-      >
-        <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
-        {!compact && <span className="hidden sm:inline">Sucursales…</span>}
-      </div>
-    );
+    return <BranchLabel compact={compact} label={compact ? "…" : "Sucursales…"} loading />;
   }
 
   if (options.length === 0) {
@@ -67,6 +94,14 @@ export function BranchSwitcher({ compact = false }: BranchSwitcherProps) {
         <span className="truncate">Sin sucursal</span>
       </div>
     );
+  }
+
+  const active =
+    options.find((o) => String(o.value) === String(value)) ?? options[0];
+  const showSelect = canSwitchBranches(user, options.length);
+
+  if (!showSelect) {
+    return <BranchLabel compact={compact} label={active.label} />;
   }
 
   return (

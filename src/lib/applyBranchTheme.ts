@@ -4,6 +4,7 @@
  */
 
 import { MUNINN_DEFAULT_THEME, resolveEffectiveTheme } from "@/lib/branchThemeDefaults";
+import { resolveMediaUrl } from "@/lib/mediaUrl";
 import { getResolvedAppearance, type ResolvedAppearance } from "@/lib/theme";
 
 export interface BranchThemeLike {
@@ -22,6 +23,17 @@ export interface BranchThemeLike {
   welcome_message?: string | null;
   subtitle?: string | null;
   branding?: Record<string, unknown>;
+  /** Preferencias de UI (theme-config). */
+  font_size?: number | null;
+  borderRadius?: number | null;
+  compact?: boolean | null;
+  motion?: boolean | null;
+  ui_preferences?: {
+    font_size_px?: number | null;
+    border_radius_px?: number | null;
+    motion_enabled?: boolean | null;
+    density?: string | null;
+  } | null;
 }
 
 type Rgb = { r: number; g: number; b: number };
@@ -133,8 +145,40 @@ function clearPrimaryOverrides(root: HTMLElement) {
     "--success-soft",
     "--bubble-ai",
     "--bubble-ai-foreground",
+    "--radius",
   ];
   for (const k of keys) root.style.removeProperty(k);
+  root.style.removeProperty("font-size");
+  root.removeAttribute("data-compact");
+  root.removeAttribute("data-motion");
+}
+
+function applyUiPreferences(root: HTMLElement, theme: BranchThemeLike | null | undefined) {
+  const prefs = theme?.ui_preferences;
+  const radiusPx = theme?.borderRadius ?? prefs?.border_radius_px ?? null;
+  const fontPx = theme?.font_size ?? prefs?.font_size_px ?? null;
+  const compact =
+    theme?.compact ?? (prefs?.density === "compact" ? true : prefs?.density ? false : null);
+  const motion =
+    theme?.motion ?? (typeof prefs?.motion_enabled === "boolean" ? prefs.motion_enabled : null);
+
+  if (typeof radiusPx === "number" && radiusPx >= 0) {
+    root.style.setProperty("--radius", `${radiusPx / 16}rem`);
+  } else {
+    root.style.removeProperty("--radius");
+  }
+
+  if (typeof fontPx === "number" && fontPx >= 10 && fontPx <= 22) {
+    root.style.fontSize = `${fontPx}px`;
+  } else {
+    root.style.removeProperty("font-size");
+  }
+
+  if (compact === true) root.setAttribute("data-compact", "true");
+  else root.removeAttribute("data-compact");
+
+  if (motion === false) root.setAttribute("data-motion", "off");
+  else root.removeAttribute("data-motion");
 }
 
 /** Restaura primary mint por defecto (respeta light/dark CSS). */
@@ -145,7 +189,7 @@ export function resetMuninnTheme(): void {
 }
 
 /**
- * Clava solo primary (+ soft/accent según apariencia actual).
+ * Clava primary (+ soft/accent) y preferencias de UI (radius, font, compact, motion).
  * No toca class `.dark` ni superficies (las define styles.css).
  */
 export function applyBranchTheme(theme: BranchThemeLike | null | undefined): void {
@@ -182,6 +226,7 @@ export function applyBranchTheme(theme: BranchThemeLike | null | undefined): voi
   root.style.setProperty("--bubble-ai", soft);
   root.style.setProperty("--bubble-ai-foreground", bubbleFg);
 
+  applyUiPreferences(root, theme);
   setFavicon(theme?.favicon_url || theme?.favicon || null);
 }
 
@@ -213,18 +258,6 @@ export function resolveThemeLogo(theme: BranchThemeLike | null | undefined): str
     null;
 
   if (!raw || typeof raw !== "string") return null;
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
-
-  if (trimmed.startsWith("/")) {
-    const api =
-      import.meta.env.VITE_API_URL?.replace(/\/api\/?$/, "") ||
-      (import.meta.env.DEV ? "" : "https://api.agenciapatagoniachile.com");
-    const origin = import.meta.env.DEV
-      ? (import.meta.env.VITE_DEV_API_PROXY || "http://localhost:8000").replace(/\/$/, "")
-      : api.replace(/\/$/, "");
-    return `${origin}${trimmed}`;
-  }
-
-  return trimmed;
+  const resolved = resolveMediaUrl(raw);
+  return resolved || null;
 }
