@@ -20,6 +20,8 @@ import {
   useTestExternalAPI,
 } from "@/api/hooks/useExternalAPIs";
 import { toast } from "sonner";
+import { AdminPageMotion } from "@/components/admin/AdminPageMotion";
+import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
 
 const AUTH_TYPE_LABEL: Record<string, string> = {
   none: "Sin autenticación",
@@ -48,23 +50,19 @@ export default function APIs() {
   }
 
   return (
-    <div className="px-4 md:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto space-y-6">
-      <header className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">APIs externas</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Conexiones que tus agentes usan vía funciones.
-          </p>
-        </div>
-        <Button size="sm" onClick={() => setOpen(true)}>
-          <Plus className="h-4 w-4 mr-1.5" /> Nueva
-        </Button>
-      </header>
-
+    <AdminPageMotion>
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Integraciones</CardTitle>
-          <CardDescription>CRUD + test_connection.</CardDescription>
+        <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+          <div>
+            <CardTitle className="text-base">APIs externas</CardTitle>
+            <CardDescription>Conexiones que tus agentes usan vía funciones.</CardDescription>
+          </div>
+          <div className="flex items-start gap-2 shrink-0">
+            <StudioBranchFilter />
+            <Button size="sm" onClick={() => setOpen(true)}>
+              <Plus className="h-4 w-4 mr-1.5" /> Nueva
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {apis.length === 0 && (
@@ -193,6 +191,6 @@ export default function APIs() {
           </form>
         </DialogContent>
       </Dialog>
-    </div>
+    </AdminPageMotion>
   );
 }

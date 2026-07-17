@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { GET, POST, PATCH, DELETE, normalizeListResponse } from "../client";
 import { ENDPOINTS } from "../endpoints/index";
+import { useActiveBranchId } from "@/hooks/useActiveBranchId";
 
 const QUERY_KEY = ["ai-agents", "channels"];
 
@@ -21,8 +22,9 @@ export interface Channel {
 }
 
 export function useChannels(filters?: { is_active?: boolean; channel_type?: string }) {
+  const branchId = useActiveBranchId();
   return useQuery({
-    queryKey: [...QUERY_KEY, filters],
+    queryKey: [...QUERY_KEY, branchId, filters],
     queryFn: () =>
       GET<Channel[] | { count: number; results: Channel[] }>(ENDPOINTS.channels.list, {
         params: filters,
@@ -32,8 +34,9 @@ export function useChannels(filters?: { is_active?: boolean; channel_type?: stri
 }
 
 export function useChannel(id: string | undefined) {
+  const branchId = useActiveBranchId();
   return useQuery({
-    queryKey: [...QUERY_KEY, id],
+    queryKey: [...QUERY_KEY, branchId, id],
     queryFn: () => GET<Channel>(ENDPOINTS.channels.detail(id!)),
     enabled: !!id,
   });

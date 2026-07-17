@@ -1,5 +1,5 @@
 /**
- * Tipos del dominio Huginn alineados a Yggdra OpenAPI (ai-agents / branches / auth).
+ * Tipos del dominio Muninn alineados a Yggdra OpenAPI (ai-agents / branches / auth).
  * Fuentes: AgentConfig, BranchThemeConfig, PublicLoginTheme, etc.
  *
  * Regenerar el schema completo (opcional, CI/local):

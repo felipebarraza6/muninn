@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useAgents, type Agent } from "@/api/hooks/useAgents";
 import { AgentForm } from "@/components/agents/agent-form";
+import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
 
 export function AgentList() {
   const navigate = useNavigate();
@@ -26,14 +27,17 @@ export function AgentList() {
       <Card>
         <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
           <div>
-            <CardTitle className="text-base">Agentes IA</CardTitle>
+            <CardTitle className="text-base">Agentes</CardTitle>
             <CardDescription>
               Crea y entrena agentes: modelo, prompt, RAG y herramientas.
             </CardDescription>
           </div>
-          <Button size="sm" onClick={() => setCreating(true)}>
-            <Plus className="h-4 w-4 mr-1.5" /> Nuevo
-          </Button>
+          <div className="flex items-start gap-2 shrink-0">
+            <StudioBranchFilter />
+            <Button size="sm" onClick={() => setCreating(true)}>
+              <Plus className="h-4 w-4 mr-1.5" /> Nuevo
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {agents.length === 0 && (

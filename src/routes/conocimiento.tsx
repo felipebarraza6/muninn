@@ -27,6 +27,8 @@ import {
 import { KnowledgeContentViewer } from "@/components/agents/knowledge-content-viewer";
 import { SpreadsheetImportDialog } from "@/components/knowledge/SpreadsheetImportDialog";
 import { toast } from "sonner";
+import { AdminPageMotion } from "@/components/admin/AdminPageMotion";
+import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
 
 const TYPES: { value: KnowledgeType; label: string }[] = [
   { value: "DOCUMENT", label: "Documento" },
@@ -87,19 +89,20 @@ export default function Conocimiento() {
   };
 
   return (
-    <div className="px-4 md:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto space-y-4">
+    <AdminPageMotion className="space-y-4">
       <Card>
         <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
           <div>
             <CardTitle className="flex items-center gap-2 text-base">
               <BookOpen className="h-5 w-5 text-primary" />
-              Biblioteca de conocimiento
+              Conocimiento
             </CardTitle>
             <CardDescription>
               Crea, indexa y gestiona documentos RAG para asignarlos a agentes.
             </CardDescription>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-start">
+            <StudioBranchFilter />
             <Button
               variant="outline"
               size="sm"
@@ -281,6 +284,6 @@ export default function Conocimiento() {
         onOpenChange={setImportOpen}
         onImported={() => refetch()}
       />
-    </div>
+    </AdminPageMotion>
   );
 }

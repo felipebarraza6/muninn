@@ -1,5 +1,5 @@
 {
-  "name": "huginn",
+  "name": "muninn",
   "private": true,
   "sideEffects": false,
   "type": "module",

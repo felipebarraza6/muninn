@@ -1,4 +1,5 @@
 import { Outlet, useLocation, Link } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Toaster } from "@/components/ui/sonner";
@@ -13,8 +14,16 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { logout } from "@/api/hooks/useAuth";
 import { BranchSwitcher } from "@/components/branch/BranchSwitcher";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { useBranchTheme } from "@/api/hooks/useBranchTheme";
-import { getStoredUser } from "@/lib/authSession";
+import { getStoredBranches, getStoredUser } from "@/lib/authSession";
+import {
+  getBranchesAdminNavLabel,
+  getOrganizationsAdminNavLabel,
+  isOrganizationOwner,
+  showHeaderBranchSwitcher,
+} from "@/lib/authGuards";
+import { getActiveBranchId, getBranchMode, setActiveBranchId } from "@/lib/branchStorage";
 
 type PageMeta = {
   breadcrumb: { label: string; to?: string }[];
@@ -22,43 +31,59 @@ type PageMeta = {
 
 function getPageMeta(pathname: string): PageMeta {
   if (pathname === "/") {
-    return { breadcrumb: [{ label: "Inicio" }] };
+    return { breadcrumb: [] };
   }
   if (pathname.startsWith("/agentes")) {
-    return { breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Agentes" }] };
+    return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Agentes" }] };
   }
   if (pathname.startsWith("/canales")) {
-    return { breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Canales" }] };
+    return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Canales" }] };
   }
   if (pathname.startsWith("/conocimiento")) {
-    return { breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Conocimiento" }] };
+    return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Conocimiento" }] };
   }
   if (pathname.startsWith("/apis")) {
-    return { breadcrumb: [{ label: "Inicio", to: "/" }, { label: "APIs" }] };
+    return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "APIs" }] };
   }
   if (pathname.startsWith("/funciones")) {
-    return { breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Funciones" }] };
+    return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Funciones" }] };
   }
   if (pathname.startsWith("/chat")) {
-    return { breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Chat" }] };
+    return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Chat" }] };
+  }
+  if (pathname.startsWith("/admin/organizaciones")) {
+    return {
+      breadcrumb: [
+        { label: "Resumen", to: "/" },
+        { label: "Admin" },
+        { label: getOrganizationsAdminNavLabel() },
+      ],
+    };
   }
   if (pathname.startsWith("/admin/llm")) {
     return {
-      breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Admin" }, { label: "LLM" }],
+      breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Admin" }, { label: "LLM" }],
     };
   }
   if (pathname.startsWith("/admin/sucursales")) {
     return {
-      breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Admin" }, { label: "Sucursales" }],
+      breadcrumb: [
+        { label: "Resumen", to: "/" },
+        { label: "Admin" },
+        { label: getBranchesAdminNavLabel() },
+      ],
     };
   }
   if (pathname.startsWith("/admin/usuarios")) {
     return {
-      breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Admin" }, { label: "Usuarios" }],
+      breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Admin" }, { label: "Usuarios" }],
     };
   }
   if (pathname.startsWith("/configuracion")) {
-    return { breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Configuración" }] };
+    return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Configuración" }] };
+  }
+  if (pathname.startsWith("/perfil")) {
+    return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Mi perfil" }] };
   }
   return { breadcrumb: [] };
 }
@@ -66,7 +91,32 @@ function getPageMeta(pathname: string): PageMeta {
 function PageHeader() {
   const { pathname } = useLocation();
   const meta = getPageMeta(pathname);
-  const user = getStoredUser();
+  const [user, setUser] = useState(() => getStoredUser());
+  const showBranchSwitcher = showHeaderBranchSwitcher();
+
+  useEffect(() => {
+    const syncUser = () => setUser(getStoredUser());
+    window.addEventListener("authUserChanged", syncUser);
+    return () => window.removeEventListener("authUserChanged", syncUser);
+  }, []);
+
+  // Si una sesión previa dejó al organizador en modo "all" o con un branch
+  // stale (no pertenece a sus stores), restaurar una store válida para
+  // tema/logo/favicon (el switcher del header sigue oculto).
+  useEffect(() => {
+    if (!isOrganizationOwner()) return;
+    const stored = getStoredBranches().filter((b) => b.is_active !== false);
+    const active = getActiveBranchId();
+    const activeOk =
+      Boolean(active) &&
+      getBranchMode() === "branch" &&
+      stored.some((b) => String(b.branch_id) === String(active));
+    if (activeOk) return;
+    const first = stored[0];
+    if (first?.branch_id != null) {
+      setActiveBranchId(first.branch_id, true, false);
+    }
+  }, []);
 
   return (
     <header className="sticky top-0 z-30 flex min-h-14 shrink-0 items-center gap-2 border-b bg-card px-3 py-2 sm:gap-3 md:px-5 supports-[padding:max(0px)]:pt-[max(0.5rem,env(safe-area-inset-top))]">
@@ -96,15 +146,22 @@ function PageHeader() {
         </nav>
       )}
 
-      {/* Móvil: sucursal en el centro del espacio libre */}
-      <div className="flex flex-1 min-w-0 items-center justify-center sm:hidden">
-        <BranchSwitcher compact />
-      </div>
+      {/* Móvil: sucursal en el centro (oculto para organizador — filtra por pantalla). */}
+      {showBranchSwitcher && (
+        <div className="flex flex-1 min-w-0 items-center justify-center sm:hidden">
+          <BranchSwitcher compact />
+        </div>
+      )}
+      {!showBranchSwitcher && <div className="flex-1 min-w-0 sm:hidden" />}
 
       <div className="ml-auto flex items-center gap-1.5 sm:gap-2 shrink-0">
-        <div className="hidden sm:block">
-          <BranchSwitcher />
-        </div>
+        {showBranchSwitcher && (
+          <div className="hidden sm:block">
+            <BranchSwitcher />
+          </div>
+        )}
+
+        <ThemeToggle />
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -122,6 +179,11 @@ function PageHeader() {
                 {user.full_name || user.email}
               </div>
             )}
+            <DropdownMenuItem asChild>
+              <Link to="/perfil">
+                <User className="h-3.5 w-3.5 mr-2" /> Mi perfil
+              </Link>
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={logout}>
               <LogOut className="h-3.5 w-3.5 mr-2" /> Cerrar sesión
             </DropdownMenuItem>

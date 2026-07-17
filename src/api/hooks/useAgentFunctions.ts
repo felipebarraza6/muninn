@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { GET, POST, PATCH, DELETE, normalizeListResponse } from "../client";
 import { ENDPOINTS } from "../endpoints/index";
+import { useActiveBranchId } from "@/hooks/useActiveBranchId";
 
 const QUERY_KEY = ["ai-agents", "agent-functions"];
 const LOGS_KEY = ["ai-agents", "function-execution-logs"];
@@ -27,8 +28,9 @@ export interface AgentFunction {
 }
 
 export function useAgentFunctions() {
+  const branchId = useActiveBranchId();
   return useQuery({
-    queryKey: QUERY_KEY,
+    queryKey: [...QUERY_KEY, branchId],
     queryFn: () =>
       GET<AgentFunction[] | { count: number; results: AgentFunction[] }>(
         ENDPOINTS.functions.list,

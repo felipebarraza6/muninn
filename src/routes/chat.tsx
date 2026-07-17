@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
 
 export default function ChatPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -97,6 +98,9 @@ export default function ChatPage() {
             Conv. #{conversationFromUrl}
           </span>
         ) : null}
+        <div className="ml-auto shrink-0">
+          <StudioBranchFilter />
+        </div>
       </div>
 
       <div className="flex-1 min-h-0">

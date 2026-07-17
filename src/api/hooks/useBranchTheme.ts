@@ -5,7 +5,14 @@ import { ENDPOINTS } from "../endpoints/index";
 import { getActiveBranchId, onBranchChange } from "@/lib/branchStorage";
 import { getStoredBranches } from "@/lib/authSession";
 import { applyResolvedBranchTheme, type BranchThemeLike } from "@/lib/applyBranchTheme";
-import { resolveEffectiveTheme } from "@/lib/branchThemeDefaults";
+import { resolveEffectiveTheme, MUNINN_DEFAULT_THEME } from "@/lib/branchThemeDefaults";
+import {
+  flattenPublicLoginTheme,
+  hasUsablePublicBranding,
+  type PublicLoginThemeResponse,
+} from "@/lib/publicLoginTheme";
+import { loginContextFromPublicTheme, persistLoginPortalContext } from "@/lib/loginContext";
+import { getPrimaryOrganizationName, isOrganizationOwner } from "@/lib/authGuards";
 
 export type BranchTheme = BranchThemeLike & {
   id?: number;
@@ -22,17 +29,55 @@ function useActiveBranchIdState() {
   return branchId;
 }
 
-/** Label de la sucursal activa (sesión o app_name del theme). */
-function resolveBranchLabel(
+function isGenericMuninnName(name: string | null | undefined): boolean {
+  return !name?.trim() || name.trim().toLowerCase() === "muninn";
+}
+
+/** Hint para bases de color locales (demo); no es el título del header. */
+function resolveThemeHintLabel(
   branchId: string | null,
   apiTheme: BranchThemeLike | null | undefined,
 ): string | null {
+  const fromTheme =
+    apiTheme?.app_name?.trim() ||
+    (typeof apiTheme?.branding?.app_name === "string" ? apiTheme.branding.app_name.trim() : "") ||
+    null;
+  if (fromTheme && !isGenericMuninnName(fromTheme)) return fromTheme;
+
   if (branchId) {
     const stored = getStoredBranches().find((b) => String(b.branch_id) === String(branchId));
-    const fromSession = stored?.business_name || stored?.branch_name;
-    if (fromSession) return fromSession;
+    return stored?.business_name?.trim() || stored?.branch_name?.trim() || null;
   }
-  return apiTheme?.app_name || null;
+  return fromTheme;
+}
+
+/**
+ * Flujo de resolve:
+ * 1. Con slug → public-login-theme/{slug} (no tocar by-host: en localhost da 404)
+ * 2. Sin slug → by-host (dominio custom)
+ * 3. Si falla → null (Muninn default)
+ */
+export async function resolvePublicLoginTheme(
+  slug?: string | null,
+): Promise<PublicLoginThemeResponse | null> {
+  // 1) /login/{slug} → Branch o Org
+  if (slug) {
+    try {
+      return await GET<PublicLoginThemeResponse>(ENDPOINTS.branches.publicLoginTheme(slug));
+    } catch {
+      // 404 → login genérico Muninn (no caer a by-host con Host=localhost)
+    }
+    return null;
+  }
+
+  // 2) Dominio custom (solo cuando no hay slug en la URL)
+  try {
+    return await GET<PublicLoginThemeResponse>(ENDPOINTS.branches.publicLoginThemeByHost);
+  } catch {
+    // 404 esperado en localhost / hosts sin dominio propio
+  }
+
+  return null;
 }
 
 export function useBranchTheme(branchIdOverride?: string | null) {
@@ -52,61 +97,100 @@ export function useBranchTheme(branchIdOverride?: string | null) {
     retry: 1,
   });
 
-  const branchLabel = useMemo(
-    () => resolveBranchLabel(branchId, query.data),
+  const themeHintLabel = useMemo(
+    () => resolveThemeHintLabel(branchId, query.data),
     [branchId, query.data],
   );
 
   const effectiveTheme = useMemo(() => {
     if (query.isError) {
-      return resolveEffectiveTheme(null, branchLabel);
+      return resolveEffectiveTheme(null, themeHintLabel);
     }
     if (query.data) {
-      return resolveEffectiveTheme(query.data, branchLabel);
+      return resolveEffectiveTheme(query.data, themeHintLabel);
     }
     return undefined;
-  }, [query.data, query.isError, branchLabel]);
+  }, [query.data, query.isError, themeHintLabel]);
 
   useEffect(() => {
     if (query.isError) {
-      applyResolvedBranchTheme(null, branchLabel);
-      return;
+      applyResolvedBranchTheme(null, themeHintLabel);
+    } else if (query.data) {
+      applyResolvedBranchTheme(query.data, themeHintLabel);
     }
-    if (query.data) {
-      applyResolvedBranchTheme(query.data, branchLabel);
+
+    // Organizador: título de pestaña = nombre del holding.
+    if (isOrganizationOwner()) {
+      const orgName = getPrimaryOrganizationName();
+      if (orgName) {
+        document.title = `${orgName} — Agentes`;
+      }
     }
-  }, [query.data, query.isError, branchLabel]);
+  }, [query.data, query.isError, themeHintLabel]);
 
   return {
     ...query,
     data: effectiveTheme ?? query.data,
     rawTheme: query.data,
+    branchLabel: themeHintLabel,
   };
 }
 
-export function usePublicLoginTheme(slug: string | undefined) {
+/**
+ * Resuelve branding de login: slug → by-host (sin slug) → Muninn.
+ * Persiste contexto portal para post-login (X-Branch-ID).
+ */
+export function useResolvePublicLoginTheme(slug?: string | null) {
+  const host = typeof window !== "undefined" ? window.location.host : "";
+
   const query = useQuery({
-    queryKey: ["branches", "public-login-theme", slug],
-    queryFn: () => GET<BranchTheme>(ENDPOINTS.branches.publicLoginTheme(slug!)),
-    enabled: Boolean(slug),
+    queryKey: ["branches", "public-login-theme", "resolve", host, slug ?? ""],
+    queryFn: () => resolvePublicLoginTheme(slug),
+    enabled: typeof window !== "undefined",
     staleTime: 10 * 60 * 1000,
-    retry: 1,
+    retry: false,
   });
 
+  const raw = query.data ?? null;
+  const flat = useMemo(() => (raw ? flattenPublicLoginTheme(raw) : null), [raw]);
+  const isAppDefault = !raw || !hasUsablePublicBranding(raw);
+
   const effectiveTheme = useMemo(() => {
-    if (!query.data) return undefined;
-    return resolveEffectiveTheme(query.data, query.data.app_name || slug);
-  }, [query.data, slug]);
+    if (isAppDefault) {
+      return resolveEffectiveTheme(null, null);
+    }
+    return resolveEffectiveTheme(flat as BranchThemeLike, flat?.app_name || slug);
+  }, [flat, isAppDefault, slug]);
 
   useEffect(() => {
-    if (query.data) {
-      applyResolvedBranchTheme(query.data, query.data.app_name || slug);
+    if (query.isLoading) return;
+
+    const ctx = loginContextFromPublicTheme(raw, { host, slug });
+    persistLoginPortalContext(ctx);
+
+    if (isAppDefault) {
+      applyResolvedBranchTheme({ ...MUNINN_DEFAULT_THEME }, "Muninn");
+      return;
     }
-  }, [query.data, slug]);
+    if (flat) {
+      applyResolvedBranchTheme(flat as BranchThemeLike, flat.app_name || slug);
+    }
+  }, [query.isLoading, raw, flat, isAppDefault, host, slug]);
 
   return {
     ...query,
-    data: effectiveTheme ?? query.data,
-    rawTheme: query.data,
+    raw,
+    flat,
+    scope: raw?.scope ?? (isAppDefault ? ("app" as const) : undefined),
+    isAppDefault,
+    data: effectiveTheme,
+    stores: raw?.stores ?? [],
+    branchId: raw?.branch_id != null ? String(raw.branch_id) : null,
+    organizationId: raw?.organization_id != null ? String(raw.organization_id) : null,
   };
+}
+
+/** @deprecated Preferir useResolvePublicLoginTheme */
+export function usePublicLoginTheme(slug: string | undefined) {
+  return useResolvePublicLoginTheme(slug);
 }

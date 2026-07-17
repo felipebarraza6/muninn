@@ -3,8 +3,8 @@ import type { BranchThemeLike } from "@/lib/applyBranchTheme";
 /** Defaults de fábrica del backend (no cuentan como branding propio). */
 export const PLACEHOLDER_PRIMARIES = new Set(["#000000", "#1890ff"].map((c) => c.toLowerCase()));
 
-export const HUGINN_DEFAULT_THEME = {
-  app_name: "Huginn",
+export const MUNINN_DEFAULT_THEME = {
+  app_name: "Muninn",
   primary_color: "#2dd4bf",
   secondary_color: "#0d9488",
   algorithm: "dark" as const,
@@ -95,12 +95,12 @@ export function getLocalBaseTheme(branchLabel?: string | null): BranchThemeLike 
       }
     }
   }
-  return { ...HUGINN_DEFAULT_THEME };
+  return { ...MUNINN_DEFAULT_THEME };
 }
 
 /**
  * Theme custom de API → tal cual.
- * Placeholder / ausente → base local por nombre de sucursal (o Huginn).
+ * Placeholder / ausente → base local por nombre de sucursal (o Muninn).
  */
 export function resolveEffectiveTheme(
   apiTheme: BranchThemeLike | null | undefined,
@@ -108,7 +108,7 @@ export function resolveEffectiveTheme(
 ): BranchThemeLike {
   const labelHint = branchLabel || apiTheme?.app_name || null;
 
-  // Huginn siempre dark: solo se toman primary/logo de la sucursal.
+  // Solo se toman primary/logo de la sucursal; light/dark lo decide el toggle del usuario.
   if (isCustomBranchTheme(apiTheme)) {
     return {
       ...apiTheme,

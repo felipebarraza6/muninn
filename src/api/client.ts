@@ -1,9 +1,14 @@
-import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
+import axios, { AxiosError, type AxiosRequestConfig, type InternalAxiosRequestConfig } from "axios";
 import { getActiveBranchId, getBranchMode } from "@/lib/branchStorage";
 
 const API_BASE_URL = import.meta.env.DEV
   ? "/api"
   : (import.meta.env.VITE_API_URL ?? "https://api.agenciapatagoniachile.com/api");
+
+export type ApiRequestConfig = AxiosRequestConfig & {
+  /** No inyectar x-branch-id del switcher (listados admin multi-sucursal). */
+  skipBranchHeader?: boolean;
+};
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -45,7 +50,15 @@ apiClient.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Token ${token}`;
     }
-    if (activeBranchId && branchMode === "branch") {
+
+    // No pisar un x-branch-id explícito (p.ej. roles/asignaciones de otra sucursal en admin).
+    const skipBranchHeader = Boolean((config as ApiRequestConfig).skipBranchHeader);
+    const existingBranchHeader =
+      config.headers.get?.("x-branch-id") ??
+      (config.headers as Record<string, unknown>)["x-branch-id"] ??
+      (config.headers as Record<string, unknown>)["X-Branch-ID"];
+
+    if (!skipBranchHeader && !existingBranchHeader && activeBranchId && branchMode === "branch") {
       config.headers["x-branch-id"] = activeBranchId;
     }
     return config;
@@ -94,11 +107,55 @@ export function normalizeListResponse<T>(
   return [];
 }
 
-export const GET = <T>(url: string, config = {}) =>
+/** Máximo permitido por StandardResultsSetPagination en Yggdra. */
+export const API_MAX_PAGE_SIZE = 200;
+
+/**
+ * Trae todas las páginas de un listado paginado (page_size ≤ 200).
+ * Si la respuesta ya es array, la devuelve tal cual.
+ */
+export async function GET_ALL_PAGES<T>(url: string, config: ApiRequestConfig = {}): Promise<T[]> {
+  const baseParams =
+    config.params && typeof config.params === "object" && !Array.isArray(config.params)
+      ? { ...(config.params as Record<string, unknown>) }
+      : {};
+
+  const pageSize = Math.min(
+    Number(baseParams.page_size) > 0 ? Number(baseParams.page_size) : API_MAX_PAGE_SIZE,
+    API_MAX_PAGE_SIZE,
+  );
+
+  const first = await GET<T[] | PaginatedResponse<T>>(url, {
+    ...config,
+    params: { ...baseParams, page_size: pageSize, page: 1 },
+  });
+
+  if (Array.isArray(first)) return first;
+
+  const all = [...normalizeListResponse<T>(first)];
+  const total = typeof first.count === "number" ? first.count : all.length;
+  let page = 2;
+
+  while (all.length < total) {
+    const next = await GET<T[] | PaginatedResponse<T>>(url, {
+      ...config,
+      params: { ...baseParams, page_size: pageSize, page },
+    });
+    const chunk = normalizeListResponse<T>(next);
+    if (chunk.length === 0) break;
+    all.push(...chunk);
+    page += 1;
+    if (page > 100) break; // safety
+  }
+
+  return all;
+}
+
+export const GET = <T>(url: string, config: ApiRequestConfig = {}) =>
   apiClient.get<T>(url, config).then((r) => r.data);
-export const POST = <T>(url: string, data = {}, config = {}) =>
+export const POST = <T>(url: string, data = {}, config: ApiRequestConfig = {}) =>
   apiClient.post<T>(url, data, config).then((r) => r.data);
-export const PATCH = <T>(url: string, data = {}, config = {}) =>
+export const PATCH = <T>(url: string, data = {}, config: ApiRequestConfig = {}) =>
   apiClient.patch<T>(url, data, config).then((r) => r.data);
-export const DELETE = <T>(url: string, config = {}) =>
+export const DELETE = <T>(url: string, config: ApiRequestConfig = {}) =>
   apiClient.delete<T>(url, config).then((r) => r.data);

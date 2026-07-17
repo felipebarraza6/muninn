@@ -1,29 +1,35 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2 } from "lucide-react";
 import { useLogin } from "@/api/hooks/useAuth";
-import { usePublicLoginTheme } from "@/api/hooks/useBranchTheme";
+import { useResolvePublicLoginTheme } from "@/api/hooks/useBranchTheme";
 import { resolveThemeLogo } from "@/lib/applyBranchTheme";
-import huginnLogo from "@/assets/huginn-logo.png";
+import { resolveMediaUrl } from "@/lib/mediaUrl";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { MuninnBrand } from "@/components/brand/MuninnBrand";
+import { LoginSocialLinks } from "@/components/brand/LoginSocialLinks";
+
+const GITHUB_CREDIT_URL = "https://github.com/felipebarraza6";
+const GITHUB_CREDIT_LABEL = "felipebarraza6";
 
 export default function Login() {
   const navigate = useNavigate();
   const { slug: slugParam } = useParams<{ slug?: string }>();
   const [searchParams] = useSearchParams();
   const slug = slugParam || searchParams.get("slug") || undefined;
-  const { data: publicTheme, isLoading: themeLoading } = usePublicLoginTheme(slug);
+
+  const {
+    flat,
+    scope,
+    isAppDefault,
+    stores,
+    isLoading: themeLoading,
+  } = useResolvePublicLoginTheme(slug);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -43,32 +49,79 @@ export default function Login() {
     ? (login.error as { friendlyMessage?: string }).friendlyMessage || "Error al iniciar sesión"
     : null;
 
-  const logo = resolveThemeLogo(publicTheme) || huginnLogo;
-  const title = publicTheme?.app_name || "Huginn";
+  // Logo + colores vienen del flat (theme real de la sucursal/org)
+  const branchLogo = resolveThemeLogo(flat);
+  const fantasyName = flat?.fantasy_name?.trim() || null;
+  const appName = flat?.app_name?.trim() || null;
+  const brandTitle = useMemo(() => {
+    if (isAppDefault) return undefined;
+    if (scope === "branch") {
+      return fantasyName || flat?.branch_name || appName || undefined;
+    }
+    // Portal organización
+    return appName || flat?.organization_name || undefined;
+  }, [isAppDefault, scope, fantasyName, flat?.branch_name, flat?.organization_name, appName]);
+
+  const brandSubtitle = useMemo(() => {
+    if (isAppDefault) return undefined;
+    if (scope === "branch") {
+      // Abajo del nombre fantasía: app_name (si es distinto)
+      if (appName && appName !== brandTitle) return appName;
+      return flat?.tagline || undefined;
+    }
+    return flat?.tagline || undefined;
+  }, [isAppDefault, scope, appName, brandTitle, flat?.tagline]);
+
   const subtitle =
-    publicTheme?.login_subtitle ||
-    publicTheme?.subtitle ||
-    publicTheme?.login_welcome_message ||
-    publicTheme?.welcome_message ||
-    "Accede a tu panel de agentes";
+    flat?.login_subtitle ||
+    flat?.subtitle ||
+    flat?.login_welcome_message ||
+    flat?.welcome_message ||
+    (isAppDefault
+      ? "Accede a tu panel de agentes"
+      : scope === "organization"
+        ? "Ingresá a tu portal"
+        : "Accede a tu panel");
+
+  // Solo el portal de organización muestra el listado de sucursales
+  const isOrgPortal = scope === "organization" && !flat?.branch_id;
+  const isBranchLogin = scope === "branch" && Boolean(flat?.branch_id);
+
+  const organizationLogo = resolveMediaUrl(flat?.organization_logo_url) || null;
+  // Logo del holding: en login de sucursal (crédito org) y en portal org si tiene.
+  const hasOrganizationLogo = Boolean(organizationLogo) && (isBranchLogin || isOrgPortal);
+  const orgName = flat?.organization_name?.trim() || null;
+
+  // Sucursal → Powered by organización. Portal org / Muninn → GitHub.
+  const showGithubCredit = !isBranchLogin;
+
+  const socialLinks = !isAppDefault ? (flat?.social_links ?? []) : [];
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
+    <div className="relative flex min-h-screen flex-col items-center justify-center bg-background p-4">
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
+
       <Card className="w-full max-w-sm border border-border/50 bg-card/80 backdrop-blur">
-        <CardHeader className="space-y-6 text-center">
+        <CardHeader className="space-y-5 text-center">
           <div className="flex justify-center">
-            {themeLoading && slug ? (
+            {themeLoading ? (
               <Loader2 className="h-10 w-10 animate-spin text-muted-foreground" />
             ) : (
-              <img src={logo} alt={title} className="h-24 w-24 object-contain rounded-xl" />
+              <MuninnBrand
+                branchLabel={brandTitle}
+                appName={brandSubtitle}
+                branchLogoUrl={isAppDefault ? null : branchLogo}
+                className="justify-center scale-110"
+              />
             )}
           </div>
-          <div>
-            <CardTitle className="text-2xl font-bold tracking-tight">{title}</CardTitle>
+          <div className="space-y-2">
             <CardDescription className="text-muted-foreground">{subtitle}</CardDescription>
-            {!slug && (
-              <p className="text-[10px] text-muted-foreground/70 mt-2 uppercase tracking-wider">
-                Powered by Huginn
+            {isOrgPortal && stores.length > 0 && (
+              <p className="text-[11px] text-muted-foreground">
+                {stores.length} sucursal{stores.length === 1 ? "" : "es"} en este portal
               </p>
             )}
           </div>
@@ -132,6 +185,33 @@ export default function Login() {
           </CardFooter>
         </form>
       </Card>
+
+      {socialLinks.length > 0 && <LoginSocialLinks links={socialLinks} className="mt-5" />}
+
+      <div className="mt-6 flex flex-col items-center gap-2">
+        {hasOrganizationLogo && (
+          <img
+            src={organizationLogo!}
+            alt={orgName || "Organización"}
+            className="h-7 max-w-[140px] object-contain opacity-80"
+          />
+        )}
+        <p className="text-[10px] uppercase tracking-wider text-muted-foreground/70">
+          Powered by{" "}
+          {showGithubCredit ? (
+            <a
+              href={GITHUB_CREDIT_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline-offset-2 hover:text-foreground hover:underline"
+            >
+              {GITHUB_CREDIT_LABEL}
+            </a>
+          ) : (
+            orgName || "Muninn"
+          )}
+        </p>
+      </div>
     </div>
   );
 }

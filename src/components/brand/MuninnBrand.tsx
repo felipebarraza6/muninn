@@ -1,35 +1,54 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import huginnMark from "@/assets/huginn-mark.png";
+import muninnMark from "@/assets/muninn-mark.png";
 import { cn } from "@/lib/utils";
 
-interface HuginnBrandProps {
-  /** Nombre de sucursal / theme (secundario; no reemplaza Huginn). */
+interface MuninnBrandProps {
+  /**
+   * Título principal: `Branch.fantasy_name` (reemplaza "MUNINN").
+   */
   branchLabel?: string | null;
+  /**
+   * Subtítulo con sucursal: `theme.app_name` (donde iba "Agentes").
+   */
+  appName?: string | null;
+  /** Subtítulo fallback (login / Muninn default). */
   tagline?: string | null;
-  /** Logo de sucursal: si existe, es el icono principal. */
+  /** Logo de sucursal: si existe, es el icono; si no, mark Muninn. */
   branchLogoUrl?: string | null;
-  to?: string;
+  /** Si se omite, renderiza sin enlace. */
+  to?: string | null;
   onClick?: () => void;
   compact?: boolean;
   className?: string;
 }
 
 /**
- * Shell de marca: logo de sucursal cuando hay theme; fallback mark Huginn legible.
- * El producto "HUGINN" se mantiene en texto.
+ * Shell de marca:
+ * - Con sucursal: título = fantasy_name, subtítulo = app_name; logo sucursal o Muninn.
+ * - Sin sucursal: título = MUNINN, subtítulo = Agentes (+ mark Muninn).
  */
-export function HuginnBrand({
+export function MuninnBrand({
   branchLabel,
+  appName,
   tagline,
   branchLogoUrl,
-  to = "/",
+  to,
   onClick,
   compact = false,
   className,
-}: HuginnBrandProps) {
-  const subtitle = branchLabel || tagline || "Agentes IA";
+}: MuninnBrandProps) {
+  const branchName = branchLabel?.trim() || "";
+  const inBranch = Boolean(branchName);
+  const title = inBranch ? branchName : "MUNINN";
+  const subtitle = inBranch
+    ? appName?.trim() || tagline?.trim() || null
+    : tagline?.trim() || "Agentes";
+
   const [logoFailed, setLogoFailed] = useState(false);
+  useEffect(() => {
+    setLogoFailed(false);
+  }, [branchLogoUrl]);
   const showBranchLogo = Boolean(branchLogoUrl) && !logoFailed;
 
   const content = (
@@ -38,27 +57,26 @@ export function HuginnBrand({
         className={cn(
           "relative flex shrink-0 items-center justify-center overflow-hidden rounded-lg border",
           showBranchLogo
-            ? "border-border bg-secondary p-0.5"
-            : "border-primary/35 bg-primary/15",
+            ? "border-border bg-muted p-0.5"
+            : "border-primary/40 bg-primary/20 dark:bg-primary/15",
           compact ? "h-8 w-8" : "h-9 w-9",
-          // Sidebar icon mode: 3rem rail → mark 32px centered, sin corte
           "group-data-[collapsible=icon]:!h-8 group-data-[collapsible=icon]:!w-8",
         )}
       >
         {showBranchLogo ? (
           <img
             src={branchLogoUrl!}
-            alt={branchLabel || "Sucursal"}
+            alt={title}
             className="h-full w-full object-contain"
             onError={() => setLogoFailed(true)}
           />
         ) : (
           <img
-            src={huginnMark}
+            src={muninnMark}
             alt=""
             aria-hidden
             className={cn(
-              "object-contain brightness-0 invert opacity-95",
+              "object-contain opacity-95 brightness-0 dark:invert",
               compact ? "h-5 w-5" : "h-6 w-6",
               "group-data-[collapsible=icon]:!h-5 group-data-[collapsible=icon]:!w-5",
             )}
@@ -68,16 +86,34 @@ export function HuginnBrand({
 
       {!compact && (
         <div className="flex min-w-0 flex-col leading-tight group-data-[collapsible=icon]:hidden">
-          <span className="text-[15px] font-semibold tracking-[0.04em] text-foreground">
-            HUGINN
+          <span
+            className={cn(
+              "truncate font-semibold text-foreground",
+              inBranch ? "text-sm tracking-tight" : "text-[15px] tracking-[0.04em]",
+            )}
+          >
+            {title}
           </span>
-          <span className="mt-0.5 truncate text-[9.5px] uppercase tracking-[0.14em] text-primary/90">
-            {subtitle}
-          </span>
+          {subtitle && (
+            <span
+              className={cn(
+                "mt-0.5 truncate text-[9.5px] uppercase tracking-[0.14em]",
+                inBranch ? "text-muted-foreground" : "text-primary/90",
+              )}
+            >
+              {subtitle}
+            </span>
+          )}
         </div>
       )}
     </>
   );
+
+  const aria = inBranch
+    ? subtitle
+      ? `${title} — ${subtitle}`
+      : title
+    : `Muninn — ${subtitle || "Agentes"}`;
 
   if (to) {
     return (
@@ -89,7 +125,7 @@ export function HuginnBrand({
           "group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:px-0",
           className,
         )}
-        aria-label={`Huginn — ${subtitle}`}
+        aria-label={aria}
       >
         {content}
       </Link>

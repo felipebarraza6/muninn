@@ -1,9 +1,11 @@
 /**
- * Theme Huginn: shell siempre dark.
- * Solo se clava --primary (y derivados sólidos). Nunca invertir superficies/texto.
+ * Theme Muninn: primary de sucursal sobre shell light/dark (toggle de usuario).
+ * No fuerza `.dark` — eso lo maneja ThemeProvider.
  */
 
-import { HUGINN_DEFAULT_THEME, resolveEffectiveTheme } from "@/lib/branchThemeDefaults";
+import { MUNINN_DEFAULT_THEME, resolveEffectiveTheme } from "@/lib/branchThemeDefaults";
+import { resolveMediaUrl } from "@/lib/mediaUrl";
+import { getResolvedAppearance, type ResolvedAppearance } from "@/lib/theme";
 
 export interface BranchThemeLike {
   app_name?: string | null;
@@ -21,9 +23,22 @@ export interface BranchThemeLike {
   welcome_message?: string | null;
   subtitle?: string | null;
   branding?: Record<string, unknown>;
+  /** Preferencias de UI (theme-config). */
+  font_size?: number | null;
+  borderRadius?: number | null;
+  compact?: boolean | null;
+  motion?: boolean | null;
+  ui_preferences?: {
+    font_size_px?: number | null;
+    border_radius_px?: number | null;
+    motion_enabled?: boolean | null;
+    density?: string | null;
+  } | null;
 }
 
 type Rgb = { r: number; g: number; b: number };
+
+let lastAppliedTheme: BranchThemeLike | null = null;
 
 function hexToRgb(hex: string): Rgb | null {
   const cleaned = hex.replace("#", "").trim();
@@ -62,11 +77,16 @@ function darken(hex: string, amount: number): string {
   return rgbToHex(mixRgb(rgb, { r: 0, g: 0, b: 0 }, amount));
 }
 
-/** Tinte sólido de primary sobre el canvas dark (sin alpha). */
 function tintOnDark(primaryHex: string, amount: number): string {
   const primary = hexToRgb(primaryHex);
   if (!primary) return "#141414";
   return rgbToHex(mixRgb({ r: 0, g: 0, b: 0 }, primary, amount));
+}
+
+function tintOnLight(primaryHex: string, amount: number): string {
+  const primary = hexToRgb(primaryHex);
+  if (!primary) return "#f4f4f5";
+  return rgbToHex(mixRgb({ r: 255, g: 255, b: 255 }, primary, amount));
 }
 
 function relativeLuminance(hex: string): number {
@@ -79,7 +99,6 @@ function relativeLuminance(hex: string): number {
   return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
 }
 
-/** Texto sobre primary sólido: negro si el accent es claro, blanco si es oscuro. */
 function primaryForeground(primaryHex: string): string {
   return relativeLuminance(primaryHex) > 0.4 ? "#000000" : "#ffffff";
 }
@@ -98,58 +117,110 @@ function resolveDeep(primary: string, secondary?: string | null): string {
 
 function setFavicon(href: string | null | undefined) {
   if (!href) return;
+  const resolved = resolveMediaUrl(href) || href;
   let link = document.querySelector<HTMLLinkElement>("link[rel='icon']");
   if (!link) {
     link = document.createElement("link");
     link.rel = "icon";
     document.head.appendChild(link);
   }
-  link.href = href;
+  link.href = resolved;
 }
 
-/** Restaura la paleta mint Huginn (dark). */
-export function resetHuginnTheme(): void {
-  applyBranchTheme({ ...HUGINN_DEFAULT_THEME });
+function setDocumentTitle(theme: BranchThemeLike | null | undefined) {
+  const raw = theme?.app_name?.trim();
+  const brandingName =
+    typeof theme?.branding?.app_name === "string" ? theme.branding.app_name.trim() : "";
+  const name = raw || brandingName;
+  if (name && name.toLowerCase() !== "muninn" && name.toLowerCase() !== "erp system") {
+    document.title = `${name} — Agentes`;
+    return;
+  }
+  document.title = "Muninn — Agentes Especializados";
+}
+
+function clearPrimaryOverrides(root: HTMLElement) {
+  const keys = [
+    "--primary",
+    "--primary-deep",
+    "--primary-foreground",
+    "--primary-soft",
+    "--primary-glow",
+    "--accent",
+    "--ring",
+    "--sidebar-primary",
+    "--sidebar-primary-foreground",
+    "--sidebar-accent",
+    "--sidebar-ring",
+    "--chart-1",
+    "--success",
+    "--success-foreground",
+    "--success-soft",
+    "--bubble-ai",
+    "--bubble-ai-foreground",
+    "--radius",
+  ];
+  for (const k of keys) root.style.removeProperty(k);
+  root.style.removeProperty("font-size");
+  root.removeAttribute("data-compact");
+  root.removeAttribute("data-motion");
+}
+
+function applyUiPreferences(root: HTMLElement, theme: BranchThemeLike | null | undefined) {
+  const prefs = theme?.ui_preferences;
+  const radiusPx = theme?.borderRadius ?? prefs?.border_radius_px ?? null;
+  const fontPx = theme?.font_size ?? prefs?.font_size_px ?? null;
+  const compact =
+    theme?.compact ?? (prefs?.density === "compact" ? true : prefs?.density ? false : null);
+  const motion =
+    theme?.motion ?? (typeof prefs?.motion_enabled === "boolean" ? prefs.motion_enabled : null);
+
+  if (typeof radiusPx === "number" && radiusPx >= 0) {
+    root.style.setProperty("--radius", `${radiusPx / 16}rem`);
+  } else {
+    root.style.removeProperty("--radius");
+  }
+
+  if (typeof fontPx === "number" && fontPx >= 10 && fontPx <= 22) {
+    root.style.fontSize = `${fontPx}px`;
+  } else {
+    root.style.removeProperty("font-size");
+  }
+
+  if (compact === true) root.setAttribute("data-compact", "true");
+  else root.removeAttribute("data-compact");
+
+  if (motion === false) root.setAttribute("data-motion", "off");
+  else root.removeAttribute("data-motion");
+}
+
+/** Restaura primary mint por defecto (respeta light/dark CSS). */
+export function resetMuninnTheme(): void {
+  lastAppliedTheme = null;
+  clearPrimaryOverrides(document.documentElement);
+  applyBranchTheme({ ...MUNINN_DEFAULT_THEME });
 }
 
 /**
- * Aplica solo el primary de sucursal sobre shell dark fijo.
- * Ignora algorithm light del API (Huginn no invierte textos/superficies).
+ * Clava primary (+ soft/accent) y preferencias de UI (radius, font, compact, motion).
+ * No toca class `.dark` ni superficies (las define styles.css).
  */
 export function applyBranchTheme(theme: BranchThemeLike | null | undefined): void {
   const root = document.documentElement;
-  const primary = theme?.primary_color?.trim() || HUGINN_DEFAULT_THEME.primary_color;
+  lastAppliedTheme = theme ? { ...theme } : null;
+
+  const appearance: ResolvedAppearance = getResolvedAppearance();
+  const defaultPrimary = appearance === "dark" ? "#2dd4bf" : "#0d9488";
+  const primary =
+    theme?.primary_color?.trim() || MUNINN_DEFAULT_THEME.primary_color || defaultPrimary;
   const deep = resolveDeep(primary, theme?.secondary_color);
   const onPrimary = primaryForeground(primary);
-  const soft = tintOnDark(primary, 0.14);
-  const glow = darken(primary, 0.12); // hover sólido del botón primary
-  const accent = tintOnDark(primary, 0.16);
-  const ring = tintOnDark(primary, 0.45);
+  const soft = appearance === "dark" ? tintOnDark(primary, 0.14) : tintOnLight(primary, 0.12);
+  const glow = darken(primary, appearance === "dark" ? 0.12 : 0.08);
+  const accent = appearance === "dark" ? tintOnDark(primary, 0.16) : tintOnLight(primary, 0.1);
+  const ring = appearance === "dark" ? tintOnDark(primary, 0.45) : tintOnLight(primary, 0.35);
+  const bubbleFg = appearance === "dark" ? "#f0f0f0" : "#134e4a";
 
-  // Shell siempre dark — no tocar light
-  root.classList.add("dark");
-  root.classList.remove("light");
-
-  // Superficies dark fijas (opacas)
-  root.style.setProperty("--background", "#000000");
-  root.style.setProperty("--foreground", "#f0f0f0");
-  root.style.setProperty("--card", "#0a0a0a");
-  root.style.setProperty("--card-foreground", "#f0f0f0");
-  root.style.setProperty("--popover", "#0a0a0a");
-  root.style.setProperty("--popover-foreground", "#f0f0f0");
-  root.style.setProperty("--muted", "#141414");
-  root.style.setProperty("--muted-foreground", "#a3a3a3");
-  root.style.setProperty("--secondary", "#141414");
-  root.style.setProperty("--secondary-foreground", "#f0f0f0");
-  root.style.setProperty("--border", "#1f1f1f");
-  root.style.setProperty("--input", "#1f1f1f");
-  root.style.setProperty("--sidebar", "#000000");
-  root.style.setProperty("--sidebar-foreground", "#f0f0f0");
-  root.style.setProperty("--sidebar-border", "#1f1f1f");
-  root.style.setProperty("--accent-foreground", "#f0f0f0");
-  root.style.setProperty("--sidebar-accent-foreground", "#f0f0f0");
-
-  // Solo clavar primary + derivados sólidos
   root.style.setProperty("--primary", primary);
   root.style.setProperty("--primary-deep", deep);
   root.style.setProperty("--primary-foreground", onPrimary);
@@ -164,13 +235,22 @@ export function applyBranchTheme(theme: BranchThemeLike | null | undefined): voi
   root.style.setProperty("--chart-1", primary);
   root.style.setProperty("--success", primary);
   root.style.setProperty("--success-foreground", onPrimary);
+  root.style.setProperty("--success-soft", soft);
   root.style.setProperty("--bubble-ai", soft);
-  root.style.setProperty("--bubble-ai-foreground", "#f0f0f0");
+  root.style.setProperty("--bubble-ai-foreground", bubbleFg);
 
+  applyUiPreferences(root, theme);
   setFavicon(theme?.favicon_url || theme?.favicon || null);
+  setDocumentTitle(theme);
 }
 
-/** Aplica el theme efectivo (custom API o base local) en shell dark. */
+/** Reaplica primary al cambiar light/dark. */
+export function refreshBranchThemeForAppearance(): void {
+  if (lastAppliedTheme) {
+    applyBranchTheme(lastAppliedTheme);
+  }
+}
+
 export function applyResolvedBranchTheme(
   apiTheme: BranchThemeLike | null | undefined,
   branchLabel?: string | null,
@@ -192,18 +272,6 @@ export function resolveThemeLogo(theme: BranchThemeLike | null | undefined): str
     null;
 
   if (!raw || typeof raw !== "string") return null;
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
-
-  if (trimmed.startsWith("/")) {
-    const api =
-      import.meta.env.VITE_API_URL?.replace(/\/api\/?$/, "") ||
-      (import.meta.env.DEV ? "" : "https://api.agenciapatagoniachile.com");
-    const origin = import.meta.env.DEV
-      ? (import.meta.env.VITE_DEV_API_PROXY || "http://localhost:8000").replace(/\/$/, "")
-      : api.replace(/\/$/, "");
-    return `${origin}${trimmed}`;
-  }
-
-  return trimmed;
+  const resolved = resolveMediaUrl(raw);
+  return resolved || null;
 }

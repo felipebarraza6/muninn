@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { GET, POST, PATCH, DELETE, normalizeListResponse } from "../client";
 import { ENDPOINTS } from "../endpoints/index";
+import { useActiveBranchId } from "@/hooks/useActiveBranchId";
 
 const QUERY_KEY = ["ai-agents", "agents"];
 
@@ -40,8 +41,9 @@ export interface Agent {
 }
 
 export function useAgents(filters?: { is_active?: boolean; target_app?: string }) {
+  const branchId = useActiveBranchId();
   return useQuery({
-    queryKey: [...QUERY_KEY, filters],
+    queryKey: [...QUERY_KEY, branchId, filters],
     queryFn: () =>
       GET<Agent[] | { count: number; results: Agent[] }>(ENDPOINTS.agents.list, {
         params: filters,
@@ -51,16 +53,18 @@ export function useAgents(filters?: { is_active?: boolean; target_app?: string }
 }
 
 export function useAgent(id: string | undefined) {
+  const branchId = useActiveBranchId();
   return useQuery({
-    queryKey: [...QUERY_KEY, id],
+    queryKey: [...QUERY_KEY, branchId, id],
     queryFn: () => GET<Agent>(ENDPOINTS.agents.detail(id!)),
     enabled: !!id,
   });
 }
 
 export function useDefaultAgent() {
+  const branchId = useActiveBranchId();
   return useQuery({
-    queryKey: [...QUERY_KEY, "default"],
+    queryKey: [...QUERY_KEY, branchId, "default"],
     queryFn: () => GET<Agent>(ENDPOINTS.agents.default),
     staleTime: 5 * 60 * 1000,
   });

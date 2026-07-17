@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { GET, POST, PATCH, DELETE, normalizeListResponse, apiClient } from "../client";
 import { ENDPOINTS } from "../endpoints/index";
+import { useActiveBranchId } from "@/hooks/useActiveBranchId";
 
 const QUERY_KEY = ["ai-agents", "knowledge"];
 
@@ -46,8 +47,9 @@ export interface KnowledgeSearchResult {
 }
 
 export function useKnowledgeCatalog(filters?: { page_size?: number }) {
+  const branchId = useActiveBranchId();
   return useQuery({
-    queryKey: [...QUERY_KEY, "list", filters],
+    queryKey: [...QUERY_KEY, "list", branchId, filters],
     queryFn: () =>
       GET<AgentKnowledge[] | { count: number; results: AgentKnowledge[] }>(
         ENDPOINTS.knowledge.list,

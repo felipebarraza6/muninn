@@ -69,12 +69,13 @@ export function getActiveBranchIdInt(): number | null {
 export function setActiveBranchId(
   id: string | number | null | undefined,
   persist = true,
-  isSuperAdmin = false,
+  /** Permite persistir `all` (superadmin / organizador sin pin de sucursal). */
+  allowGlobal = false,
 ): void {
   let value: string | null = null;
 
   if (isGlobalBranchId(id)) {
-    value = isSuperAdmin ? GLOBAL_BRANCH_ID : null;
+    value = allowGlobal ? GLOBAL_BRANCH_ID : null;
   } else if (isValidBranchId(id)) {
     value = String(id);
   }
@@ -87,6 +88,9 @@ export function setActiveBranchId(
 
   if (persist && value && !isGlobalBranchId(value)) {
     localStorage.setItem("activeBranchId", value);
+  } else if (persist && value && isGlobalBranchId(value) && allowGlobal) {
+    // Mantener "all" en session; no forzar localStorage con una tienda concreta.
+    localStorage.removeItem("activeBranchId");
   } else {
     localStorage.removeItem("activeBranchId");
   }
