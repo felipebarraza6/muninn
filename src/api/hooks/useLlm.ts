@@ -110,6 +110,17 @@ export const LLM_CAPABILITY_LABELS: Record<string, string> = {
   audio: "Audio",
 };
 
+/** Chips siempre disponibles en el catálogo (aunque el proveedor aún no las reporte). */
+export const LLM_CAPABILITY_FILTER_KEYS = [
+  "embeddings",
+  "vision",
+  "tools",
+  "images",
+  "audio",
+  "json_mode",
+  "streaming",
+] as const;
+
 export function capabilityLabel(key: string): string {
   return LLM_CAPABILITY_LABELS[key] || key;
 }

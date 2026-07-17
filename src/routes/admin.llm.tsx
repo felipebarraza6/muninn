@@ -35,6 +35,7 @@ import {
   useUpdateLlmModel,
   useUpdateLlmProvider,
   capabilityLabel,
+  LLM_CAPABILITY_FILTER_KEYS,
   type LlmModel,
   type LlmProvider,
   type LlmTestConnectionResult,
@@ -163,6 +164,14 @@ export default function AdminLlmPage() {
   const { data: capabilityKeys = [] } = useProviderModelCapabilities(
     syncModalOpen ? selectedId : null,
   );
+  const catalogCapKeys = useMemo(() => {
+    const set = new Set<string>([...LLM_CAPABILITY_FILTER_KEYS, ...capabilityKeys]);
+    const ordered: string[] = LLM_CAPABILITY_FILTER_KEYS.filter((k) => set.has(k));
+    for (const k of capabilityKeys) {
+      if (!ordered.includes(k)) ordered.push(k);
+    }
+    return ordered;
+  }, [capabilityKeys]);
 
   const { data: inactiveModelsPage, isLoading: inactiveLoading, isFetching: inactiveFetching } =
     useLlmModels({
@@ -1137,7 +1146,7 @@ export default function AdminLlmPage() {
             >
               Gratis
             </button>
-            {capabilityKeys.map((key) => {
+            {catalogCapKeys.map((key) => {
               const on = syncCaps.includes(key);
               return (
                 <button
