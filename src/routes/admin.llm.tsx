@@ -83,7 +83,9 @@ export default function AdminLlmPage() {
   const canEditModels = canMutateLlmModels();
   const canSync = canSyncLlmProviders();
   const showBranchFilter = showBranchFilterUI();
-  const { data: providers = [], isLoading, refetch } = useLlmProviders();
+  const [branchFilter, setBranchFilter] = useState(GLOBAL_BRANCH_ID);
+  const providerScope = branchFilter === GLOBAL_BRANCH_ID ? "all" : branchFilter;
+  const { data: providers = [], isLoading, refetch } = useLlmProviders({ scope: providerScope });
   const { data: adminBranches = [] } = useAdminBranches({
     enabled: canManageProviders && isGlobalAdmin,
   });
@@ -101,9 +103,6 @@ export default function AdminLlmPage() {
       label: b.label,
     }));
   }, [isGlobalAdmin, adminBranches, myBranches]);
-
-  // Organizador / multi: filtro local; default Todas.
-  const [branchFilter, setBranchFilter] = useState(GLOBAL_BRANCH_ID);
 
   const filteredProviders = useMemo(() => {
     if (!showBranchFilter || branchFilter === GLOBAL_BRANCH_ID) return providers;

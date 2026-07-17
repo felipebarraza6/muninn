@@ -40,7 +40,7 @@ export function showBranchFilterUI(): boolean {
 
 /** Puede cambiar la sucursal activa en el header. */
 export function canSwitchActiveBranch(optionsCount: number): boolean {
-  // Organizador: no usa el switcher del header (filtra por pantalla).
+  // Organizador: no usa el switcher del header; filtra con StudioBranchFilter / BranchFilterSelect en admin.
   if (isOrganizationOwner()) return false;
   if (isSuperAdmin()) return true;
   if (optionsCount <= 1) return false;
@@ -51,7 +51,7 @@ export function canSwitchActiveBranch(optionsCount: number): boolean {
 
 /**
  * Mostrar selector de sucursal en el header.
- * - Organizador: no (filtra por pantalla).
+ * - Organizador: no (usa StudioBranchFilter en Studio y BranchFilterSelect en admin).
  * - OWNER / usuario de una sola sucursal: no (redundante con el branding).
  * - Multi-sucursal o superadmin: sí.
  */

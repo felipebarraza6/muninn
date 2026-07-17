@@ -1,9 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { DELETE, GET, PATCH, POST, normalizeListResponse } from "../client";
+import { DELETE, GET, PATCH, POST, normalizeListResponse, type ApiRequestConfig } from "../client";
 import { ENDPOINTS } from "../endpoints/index";
+import { useActiveBranchId } from "@/hooks/useActiveBranchId";
+import { isOrganizationOwner, isSuperAdmin } from "@/lib/authGuards";
 
 const PROVIDERS_KEY = ["ai-agents", "llm-providers"];
 const MODELS_KEY = ["ai-agents", "llm-models"];
+
+export type LlmProviderScope = "all" | string;
 
 export const PROVIDER_TYPES = [
   { value: "openrouter", label: "OpenRouter" },
@@ -46,13 +50,31 @@ export interface LlmModel {
   context_window?: number | null;
 }
 
-export function useLlmProviders() {
+export function useLlmProviders(options?: { scope?: LlmProviderScope | null }) {
+  const activeBranchId = useActiveBranchId();
+  const scope = options?.scope;
+  const fetchAll = scope === "all";
+  const explicitBranch = scope && scope !== "all" ? scope : null;
+  const skipBranchHeader = fetchAll && (isSuperAdmin() || isOrganizationOwner());
+  const queryScopeKey =
+    fetchAll && skipBranchHeader ? "all" : (explicitBranch ?? activeBranchId ?? "none");
+
   return useQuery({
-    queryKey: PROVIDERS_KEY,
-    queryFn: () =>
-      GET<LlmProvider[] | { results: LlmProvider[] }>(ENDPOINTS.llm.providers).then((data) =>
-        normalizeListResponse<LlmProvider>(data),
-      ),
+    queryKey: [...PROVIDERS_KEY, queryScopeKey],
+    queryFn: () => {
+      const config: ApiRequestConfig = {};
+      if (skipBranchHeader) {
+        config.skipBranchHeader = true;
+      } else if (explicitBranch) {
+        config.headers = { "x-branch-id": explicitBranch };
+      }
+      return GET<LlmProvider[] | { results: LlmProvider[] }>(ENDPOINTS.llm.providers, config).then(
+        (data) => normalizeListResponse<LlmProvider>(data),
+      );
+    },
+    enabled: fetchAll
+      ? skipBranchHeader || Boolean(activeBranchId)
+      : Boolean(explicitBranch || activeBranchId),
     staleTime: 5 * 60 * 1000,
   });
 }
