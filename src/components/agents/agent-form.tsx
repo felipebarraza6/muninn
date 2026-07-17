@@ -93,8 +93,14 @@ export function AgentForm({ agent, onCancel, onSaved }: AgentFormProps) {
   const errors = form.formState.errors;
 
   const { data: providers = [] } = useLlmProviders();
-  const { data: models = [] } = useLlmModels(providerId || null);
-  const { data: allModels = [] } = useLlmModels();
+  const { data: modelsPage } = useLlmModels({
+    providerId: providerId || null,
+    isActive: true,
+    enabled: Boolean(providerId),
+  });
+  const models = modelsPage?.results ?? [];
+  const { data: allModelsPage } = useLlmModels({ isActive: true });
+  const allModels = allModelsPage?.results ?? [];
 
   const embeddingModels = useMemo(() => {
     const active = allModels.filter((m) => m.is_active !== false);

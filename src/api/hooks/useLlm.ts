@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { DELETE, GET, PATCH, POST, normalizeListResponse, type ApiRequestConfig } from "../client";
+import { DELETE, GET, PATCH, POST, normalizeListResponse, type ApiRequestConfig, type PaginatedResponse } from "../client";
 import { ENDPOINTS } from "../endpoints/index";
 import { useActiveBranchId } from "@/hooks/useActiveBranchId";
 import { isOrganizationOwner, isSuperAdmin } from "@/lib/authGuards";
@@ -79,13 +79,62 @@ export function useLlmProviders(options?: { scope?: LlmProviderScope | null }) {
   });
 }
 
-export function useLlmModels(providerId?: string | number | null) {
+export interface LlmModelsListResult {
+  results: LlmModel[];
+  count: number;
+}
+
+export type UseLlmModelsOptions = {
+  providerId?: string | number | null;
+  /** Filtra por estado; omitir = todos (p. ej. selector de agente con activos). */
+  isActive?: boolean;
+  search?: string;
+  page?: number;
+  pageSize?: number;
+  enabled?: boolean;
+};
+
+export function useLlmModels(options?: UseLlmModelsOptions) {
+  const {
+    providerId = null,
+    isActive,
+    search,
+    page,
+    pageSize = 20,
+    enabled = true,
+  } = options ?? {};
+  const paginated = page != null && page > 0;
+
   return useQuery({
-    queryKey: [...MODELS_KEY, providerId ?? "all"],
-    queryFn: () =>
-      GET<LlmModel[] | { results: LlmModel[] }>(ENDPOINTS.llm.models, {
-        params: providerId ? { provider: providerId } : undefined,
-      }).then((data) => normalizeListResponse<LlmModel>(data)),
+    queryKey: [
+      ...MODELS_KEY,
+      providerId ?? "all",
+      isActive ?? "any",
+      search?.trim() ?? "",
+      paginated ? page : 0,
+      paginated ? pageSize : 0,
+    ],
+    queryFn: async () => {
+      const params: Record<string, string | number | boolean> = {};
+      if (providerId) params.provider = providerId;
+      if (isActive !== undefined) params.is_active = isActive;
+      if (search?.trim()) params.search = search.trim();
+      if (paginated) {
+        params.page = page!;
+        params.page_size = pageSize;
+      }
+
+      const data = await GET<LlmModel[] | PaginatedResponse<LlmModel>>(ENDPOINTS.llm.models, {
+        params,
+      });
+      const results = normalizeListResponse(data);
+      const count =
+        data && typeof data === "object" && !Array.isArray(data) && typeof data.count === "number"
+          ? data.count
+          : results.length;
+      return { results, count } satisfies LlmModelsListResult;
+    },
+    enabled,
     staleTime: 5 * 60 * 1000,
   });
 }

@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useMemo, useState } from "react";
+import { startTransition, useDeferredValue, useEffect, useMemo, useState } from "react";
 import {
   Loader2,
   Plus,
@@ -26,7 +26,6 @@ import {
   PROVIDER_TYPES,
   useCreateLlmModel,
   useCreateLlmProvider,
-  useDeleteLlmModel,
   useDeleteLlmProvider,
   useLlmModels,
   useLlmProviders,
@@ -76,6 +75,9 @@ function formatTestTimestamp(ts?: string) {
   }
 }
 
+const ACTIVE_MODELS_PAGE_SIZE = 15;
+const SYNC_CATALOG_PAGE_SIZE = 20;
+
 export default function AdminLlmPage() {
   const isGlobalAdmin = isSuperAdmin();
   const isOrgOwner = isOrganizationOwner();
@@ -114,7 +116,58 @@ export default function AdminLlmPage() {
     () => filteredProviders.find((p) => String(p.id) === selectedId) ?? null,
     [filteredProviders, selectedId],
   );
-  const { data: models = [], isLoading: modelsLoading } = useLlmModels(selectedId);
+  const { data: activeModelsPage, isLoading: modelsLoading } = useLlmModels({
+    providerId: selectedId,
+    isActive: true,
+    enabled: Boolean(selectedId),
+  });
+  const activeModels = activeModelsPage?.results ?? [];
+
+  const [activeSearch, setActiveSearch] = useState("");
+  const deferredActiveSearch = useDeferredValue(activeSearch);
+  const [activePage, setActivePage] = useState(1);
+
+  const filteredActiveModels = useMemo(() => {
+    const q = deferredActiveSearch.trim().toLowerCase();
+    if (!q) return activeModels;
+    return activeModels.filter((m) => {
+      const haystack = [m.name, m.model_id, m.description].filter(Boolean).join(" ").toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [activeModels, deferredActiveSearch]);
+
+  const activeTotalPages = Math.max(
+    1,
+    Math.ceil(filteredActiveModels.length / ACTIVE_MODELS_PAGE_SIZE),
+  );
+  const safeActivePage = Math.min(activePage, activeTotalPages);
+  const pagedActiveModels = useMemo(() => {
+    const start = (safeActivePage - 1) * ACTIVE_MODELS_PAGE_SIZE;
+    return filteredActiveModels.slice(start, start + ACTIVE_MODELS_PAGE_SIZE);
+  }, [filteredActiveModels, safeActivePage]);
+
+  useEffect(() => {
+    setActivePage(1);
+  }, [selectedId, deferredActiveSearch]);
+
+  const [syncModalOpen, setSyncModalOpen] = useState(false);
+  const [syncSearch, setSyncSearch] = useState("");
+  const deferredSyncSearch = useDeferredValue(syncSearch);
+  const [syncPage, setSyncPage] = useState(1);
+  const [activatingModelId, setActivatingModelId] = useState<string | null>(null);
+
+  const { data: inactiveModelsPage, isLoading: inactiveLoading, isFetching: inactiveFetching } =
+    useLlmModels({
+      providerId: selectedId,
+      isActive: false,
+      search: deferredSyncSearch,
+      page: syncPage,
+      pageSize: SYNC_CATALOG_PAGE_SIZE,
+      enabled: Boolean(selectedId) && syncModalOpen,
+    });
+  const inactiveModels = inactiveModelsPage?.results ?? [];
+  const inactiveTotal = inactiveModelsPage?.count ?? 0;
+  const inactiveTotalPages = Math.max(1, Math.ceil(inactiveTotal / SYNC_CATALOG_PAGE_SIZE));
 
   useEffect(() => {
     if (filteredProviders.length === 0) {
@@ -133,7 +186,6 @@ export default function AdminLlmPage() {
   const syncModels = useSyncLlmModels();
   const createModel = useCreateLlmModel();
   const updateModel = useUpdateLlmModel();
-  const deleteModel = useDeleteLlmModel();
 
   /** true = panel derecho muestra formulario de proveedor (en vez de modelos). */
   const [providerFormOpen, setProviderFormOpen] = useState(false);
@@ -166,6 +218,49 @@ export default function AdminLlmPage() {
   const [testResultOpen, setTestResultOpen] = useState(false);
   const [testResult, setTestResult] = useState<LlmTestConnectionResult | null>(null);
 
+  const runSyncAndOpenCatalog = () => {
+    if (!selected) return;
+    syncModels.mutate(selected.id, {
+      onSuccess: (data) => {
+        const summary = data as { created?: number; updated?: number; remote_count?: number };
+        const created = summary.created ?? 0;
+        const updated = summary.updated ?? 0;
+        toast.success(
+          created || updated
+            ? `Catálogo sincronizado · ${created} nuevos, ${updated} actualizados`
+            : "Catálogo sincronizado",
+        );
+        setSyncSearch("");
+        setSyncPage(1);
+        setSyncModalOpen(true);
+      },
+      onError: (e) =>
+        toast.error((e as { friendlyMessage?: string }).friendlyMessage || "Falló sync"),
+    });
+  };
+
+  const openInactiveCatalog = () => {
+    setSyncSearch("");
+    setSyncPage(1);
+    setSyncModalOpen(true);
+  };
+
+  const activateModel = (m: LlmModel) => {
+    setActivatingModelId(String(m.id));
+    updateModel.mutate(
+      { id: m.id, data: { is_active: true } },
+      {
+        onSuccess: () => {
+          toast.success(`${m.name} activado`);
+          setActivatingModelId(null);
+        },
+        onError: (e) => {
+          setActivatingModelId(null);
+          toast.error((e as { friendlyMessage?: string }).friendlyMessage || "No se pudo activar");
+        },
+      },
+    );
+  };
   const runConnectionTest = () => {
     if (!selected) return;
     testProvider.mutate(selected.id, {
@@ -665,7 +760,17 @@ export default function AdminLlmPage() {
           ) : (
             <>
               <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                <h2 className="text-sm font-medium">Modelos</h2>
+                <div className="min-w-0">
+                  <h2 className="text-sm font-medium">Modelos activos</h2>
+                  {selected && (
+                    <p className="text-[11px] text-muted-foreground">
+                      {activeModels.length} activo{activeModels.length === 1 ? "" : "s"}
+                      {filteredActiveModels.length > ACTIVE_MODELS_PAGE_SIZE
+                        ? ` · pág. ${safeActivePage}/${activeTotalPages}`
+                        : ""}
+                    </p>
+                  )}
+                </div>
                 {selected && (
                   <div className="flex gap-1">
                     <Button
@@ -682,22 +787,24 @@ export default function AdminLlmPage() {
                       Test
                     </Button>
                     {canSync && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={syncModels.isPending}
-                        onClick={() =>
-                          syncModels.mutate(selected.id, {
-                            onSuccess: () => toast.success("Sync lanzado"),
-                            onError: (e) =>
-                              toast.error(
-                                (e as { friendlyMessage?: string }).friendlyMessage || "Falló sync",
-                              ),
-                          })
-                        }
-                      >
-                        <RefreshCw className="h-3.5 w-3.5 mr-1" /> Sync
-                      </Button>
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={syncModels.isPending}
+                          onClick={runSyncAndOpenCatalog}
+                        >
+                          {syncModels.isPending ? (
+                            <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                          ) : (
+                            <RefreshCw className="h-3.5 w-3.5 mr-1" />
+                          )}
+                          Sync
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={openInactiveCatalog}>
+                          Catálogo
+                        </Button>
+                      </>
                     )}
                     {canEditModels && (
                       <Button size="sm" onClick={openCreateModel}>
@@ -707,6 +814,17 @@ export default function AdminLlmPage() {
                   </div>
                 )}
               </div>
+
+              {selected && activeModels.length > 0 && (
+                <div className="mb-3">
+                  <Input
+                    value={activeSearch}
+                    onChange={(e) => setActiveSearch(e.target.value)}
+                    placeholder="Buscar modelo activo…"
+                    className="h-8 text-xs"
+                  />
+                </div>
+              )}
 
               <AdminMotionList className="divide-y divide-border/60">
                 {!selected && (
@@ -721,7 +839,7 @@ export default function AdminLlmPage() {
                 )}
                 {selected &&
                   !modelsLoading &&
-                  models.map((m) => (
+                  pagedActiveModels.map((m) => (
                     <AdminMotionItem key={String(m.id)}>
                       <div className="flex items-center justify-between gap-2 px-1 py-2.5">
                         <div className="min-w-0">
@@ -730,11 +848,6 @@ export default function AdminLlmPage() {
                             {m.is_recommended && (
                               <Badge variant="secondary" className="text-[10px]">
                                 Rec.
-                              </Badge>
-                            )}
-                            {m.is_active === false && (
-                              <Badge variant="outline" className="text-[10px]">
-                                Off
                               </Badge>
                             )}
                           </div>
@@ -760,14 +873,17 @@ export default function AdminLlmPage() {
                               variant="ghost"
                               className="h-7 w-7 text-destructive"
                               onClick={() =>
-                                deleteModel.mutate(m.id, {
-                                  onSuccess: () => toast.success("Modelo eliminado"),
-                                  onError: (e) =>
-                                    toast.error(
-                                      (e as { friendlyMessage?: string }).friendlyMessage ||
-                                        "Error",
-                                    ),
-                                })
+                                updateModel.mutate(
+                                  { id: m.id, data: { is_active: false } },
+                                  {
+                                    onSuccess: () => toast.success("Modelo desactivado"),
+                                    onError: (e) =>
+                                      toast.error(
+                                        (e as { friendlyMessage?: string }).friendlyMessage ||
+                                          "Error",
+                                      ),
+                                  },
+                                )
                               }
                             >
                               <Trash2 className="h-3.5 w-3.5" />
@@ -777,8 +893,49 @@ export default function AdminLlmPage() {
                       </div>
                     </AdminMotionItem>
                   ))}
-                {selected && !modelsLoading && models.length === 0 && (
-                  <p className="text-sm text-muted-foreground py-6 text-center">Sin modelos.</p>
+                {selected && !modelsLoading && activeModels.length === 0 && (
+                  <div className="py-6 text-center space-y-2">
+                    <p className="text-sm text-muted-foreground">Sin modelos activos.</p>
+                    {canSync && (
+                      <Button size="sm" variant="outline" onClick={runSyncAndOpenCatalog}>
+                        <RefreshCw className="h-3.5 w-3.5 mr-1" /> Sincronizar catálogo
+                      </Button>
+                    )}
+                  </div>
+                )}
+                {selected && !modelsLoading && activeModels.length > 0 && filteredActiveModels.length === 0 && (
+                  <p className="text-sm text-muted-foreground py-6 text-center">
+                    Sin resultados para esa búsqueda.
+                  </p>
+                )}
+                {selected && !modelsLoading && filteredActiveModels.length > ACTIVE_MODELS_PAGE_SIZE && (
+                  <div className="flex items-center justify-between gap-2 py-3 text-xs text-muted-foreground">
+                    <span>
+                      {(safeActivePage - 1) * ACTIVE_MODELS_PAGE_SIZE + 1}–
+                      {Math.min(safeActivePage * ACTIVE_MODELS_PAGE_SIZE, filteredActiveModels.length)}{" "}
+                      de {filteredActiveModels.length}
+                    </span>
+                    <div className="flex gap-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2"
+                        disabled={safeActivePage <= 1}
+                        onClick={() => setActivePage((p) => Math.max(1, p - 1))}
+                      >
+                        Anterior
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2"
+                        disabled={safeActivePage >= activeTotalPages}
+                        onClick={() => setActivePage((p) => Math.min(activeTotalPages, p + 1))}
+                      >
+                        Siguiente
+                      </Button>
+                    </div>
+                  </div>
                 )}
               </AdminMotionList>
             </>
@@ -890,6 +1047,109 @@ export default function AdminLlmPage() {
               >
                 Cerrar
               </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={syncModalOpen}
+        onOpenChange={(open) => {
+          setSyncModalOpen(open);
+          if (!open) {
+            setSyncSearch("");
+            setSyncPage(1);
+          }
+        }}
+      >
+        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-2xl gap-4 p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle>Catálogo sincronizado — modelos inactivos</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground -mt-2">
+            Los modelos del proveedor se importan como inactivos. Agrega los que quieras usar; pasan a
+            la lista de activos.
+          </p>
+          <Input
+            value={syncSearch}
+            onChange={(e) => {
+              setSyncSearch(e.target.value);
+              setSyncPage(1);
+            }}
+            placeholder="Buscar por nombre o model_id…"
+            className="h-8 text-xs"
+          />
+          <div className="max-h-[min(52vh,420px)] overflow-y-auto rounded-md border border-border divide-y divide-border/60">
+            {inactiveLoading || (inactiveFetching && inactiveModels.length === 0) ? (
+              <div className="flex justify-center py-10">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : inactiveModels.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-8 text-center">
+                {deferredSyncSearch.trim()
+                  ? "Sin resultados para esa búsqueda."
+                  : "No hay modelos inactivos. Ejecuta Sync para importar el catálogo del proveedor."}
+              </p>
+            ) : (
+              inactiveModels.map((m) => (
+                <div
+                  key={String(m.id)}
+                  className="flex items-center justify-between gap-3 px-3 py-2.5"
+                >
+                  <div className="min-w-0">
+                    <p className="font-medium text-sm truncate">{m.name}</p>
+                    <p className="text-[11px] text-muted-foreground font-mono truncate">
+                      {m.model_id}
+                      {m.context_window != null ? ` · ctx ${m.context_window}` : ""}
+                    </p>
+                  </div>
+                  {canEditModels && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="shrink-0 h-8"
+                      disabled={activatingModelId === String(m.id)}
+                      onClick={() => activateModel(m)}
+                    >
+                      {activatingModelId === String(m.id) ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <>
+                          <Plus className="h-3.5 w-3.5 mr-1" /> Agregar
+                        </>
+                      )}
+                    </Button>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+          {inactiveTotal > SYNC_CATALOG_PAGE_SIZE && (
+            <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+              <span>
+                {(syncPage - 1) * SYNC_CATALOG_PAGE_SIZE + 1}–
+                {Math.min(syncPage * SYNC_CATALOG_PAGE_SIZE, inactiveTotal)} de {inactiveTotal}
+              </span>
+              <div className="flex gap-1">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 px-2"
+                  disabled={syncPage <= 1 || inactiveFetching}
+                  onClick={() => setSyncPage((p) => Math.max(1, p - 1))}
+                >
+                  Anterior
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 px-2"
+                  disabled={syncPage >= inactiveTotalPages || inactiveFetching}
+                  onClick={() => setSyncPage((p) => Math.min(inactiveTotalPages, p + 1))}
+                >
+                  Siguiente
+                </Button>
+              </div>
             </div>
           )}
         </DialogContent>
