@@ -28,6 +28,7 @@ import { KnowledgeContentViewer } from "@/components/agents/knowledge-content-vi
 import { SpreadsheetImportDialog } from "@/components/knowledge/SpreadsheetImportDialog";
 import { toast } from "sonner";
 import { AdminPageMotion } from "@/components/admin/AdminPageMotion";
+import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
 
 const TYPES: { value: KnowledgeType; label: string }[] = [
   { value: "DOCUMENT", label: "Documento" },
@@ -100,7 +101,8 @@ export default function Conocimiento() {
               Crea, indexa y gestiona documentos RAG para asignarlos a agentes.
             </CardDescription>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-start">
+            <StudioBranchFilter />
             <Button
               variant="outline"
               size="sm"

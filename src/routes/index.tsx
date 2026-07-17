@@ -18,6 +18,7 @@ import { useAgentFunctions } from "@/api/hooks/useAgentFunctions";
 import { useClinicDashboard } from "@/api/hooks/useAnalytics";
 import { formatNumber } from "@/lib/format";
 import { AdminMotionItem, AdminPageMotion } from "@/components/admin/AdminPageMotion";
+import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
 
 interface SummaryItem {
   key: string;
@@ -100,6 +101,11 @@ export default function HomePage() {
 
   return (
     <AdminPageMotion>
+      <AdminMotionItem>
+        <div className="flex justify-end mb-3">
+          <StudioBranchFilter />
+        </div>
+      </AdminMotionItem>
       <AdminMotionItem>
         <section className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
           {summaryItems.map((item) => (

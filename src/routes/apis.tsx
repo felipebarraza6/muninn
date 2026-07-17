@@ -21,6 +21,7 @@ import {
 } from "@/api/hooks/useExternalAPIs";
 import { toast } from "sonner";
 import { AdminPageMotion } from "@/components/admin/AdminPageMotion";
+import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
 
 const AUTH_TYPE_LABEL: Record<string, string> = {
   none: "Sin autenticación",
@@ -56,9 +57,12 @@ export default function APIs() {
             <CardTitle className="text-base">APIs externas</CardTitle>
             <CardDescription>Conexiones que tus agentes usan vía funciones.</CardDescription>
           </div>
-          <Button size="sm" onClick={() => setOpen(true)}>
-            <Plus className="h-4 w-4 mr-1.5" /> Nueva
-          </Button>
+          <div className="flex items-start gap-2 shrink-0">
+            <StudioBranchFilter />
+            <Button size="sm" onClick={() => setOpen(true)}>
+              <Plus className="h-4 w-4 mr-1.5" /> Nueva
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {apis.length === 0 && (

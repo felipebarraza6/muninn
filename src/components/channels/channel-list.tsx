@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useChannels } from "@/api/hooks/useChannels";
 import { ChannelForm } from "@/components/channels/channel-form";
+import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
 
 function channelLabel(type?: string) {
   const map: Record<string, string> = {
@@ -44,9 +45,12 @@ export function ChannelList() {
               Conecta WhatsApp, Telegram, correo y widgets a tus agentes.
             </CardDescription>
           </div>
-          <Button size="sm" onClick={() => setCreating(true)}>
-            <Plus className="h-4 w-4 mr-1.5" /> Nuevo
-          </Button>
+          <div className="flex items-start gap-2 shrink-0">
+            <StudioBranchFilter />
+            <Button size="sm" onClick={() => setCreating(true)}>
+              <Plus className="h-4 w-4 mr-1.5" /> Nuevo
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {channels.length === 0 && (

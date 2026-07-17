@@ -15,6 +15,7 @@ import {
 } from "@/api/hooks/useAgentFunctions";
 import { toast } from "sonner";
 import { AdminPageMotion } from "@/components/admin/AdminPageMotion";
+import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
 
 export default function Funciones() {
   const { data: functions = [], isLoading, refetch } = useAgentFunctions();
@@ -43,9 +44,12 @@ export default function Funciones() {
               Tools que el agente puede ejecutar (schema + execute).
             </CardDescription>
           </div>
-          <Button size="sm" onClick={() => setOpen(true)}>
-            <Plus className="h-4 w-4 mr-1.5" /> Nueva
-          </Button>
+          <div className="flex items-start gap-2 shrink-0">
+            <StudioBranchFilter />
+            <Button size="sm" onClick={() => setOpen(true)}>
+              <Plus className="h-4 w-4 mr-1.5" /> Nueva
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {functions.length === 0 && (

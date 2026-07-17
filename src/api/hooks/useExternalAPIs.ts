@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { GET, POST, PATCH, DELETE, normalizeListResponse } from "../client";
 import { ENDPOINTS } from "../endpoints/index";
+import { useActiveBranchId } from "@/hooks/useActiveBranchId";
 
 const QUERY_KEY = ["ai-agents", "external-apis"];
 
@@ -30,8 +31,9 @@ export interface ExternalAPI {
 }
 
 export function useExternalAPIs() {
+  const branchId = useActiveBranchId();
   return useQuery({
-    queryKey: QUERY_KEY,
+    queryKey: [...QUERY_KEY, branchId],
     queryFn: () =>
       GET<ExternalAPI[] | { count: number; results: ExternalAPI[] }>(
         ENDPOINTS.integrations.list,
