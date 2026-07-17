@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Select,
@@ -22,6 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   PROVIDER_TYPES,
   useCreateLlmModel,
@@ -31,10 +33,12 @@ import {
   useLlmProviders,
   useProviderModelCapabilities,
   useSyncLlmModels,
+  useTestLlmEndpoint,
   useTestLlmProvider,
   useUpdateLlmModel,
   useUpdateLlmProvider,
   capabilityLabel,
+  defaultEndpointTestConfig,
   LLM_CAPABILITY_FILTER_KEYS,
   PROVIDER_DEFAULT_ENDPOINTS,
   endpointTypeLabel,
@@ -43,6 +47,7 @@ import {
   type LlmModel,
   type LlmProvider,
   type LlmTestConnectionResult,
+  type LlmTestEndpointResult,
 } from "@/api/hooks/useLlm";
 import { useAdminBranches, useMyBranchesSelect } from "@/api/hooks/useBranches";
 import {
@@ -213,12 +218,14 @@ export default function AdminLlmPage() {
   const updateProvider = useUpdateLlmProvider();
   const deleteProvider = useDeleteLlmProvider();
   const testProvider = useTestLlmProvider();
+  const testEndpoint = useTestLlmEndpoint();
   const syncModels = useSyncLlmModels();
   const createModel = useCreateLlmModel();
   const updateModel = useUpdateLlmModel();
 
-  /** true = panel derecho muestra formulario de proveedor (en vez de modelos). */
+  /** true = panel derecho muestra formulario de LLM (en vez de modelos). */
   const [providerFormOpen, setProviderFormOpen] = useState(false);
+  const [providerFormTab, setProviderFormTab] = useState("general");
   const [editingProvider, setEditingProvider] = useState<LlmProvider | null>(null);
   const [pName, setPName] = useState("");
   const [pType, setPType] = useState("openai");
@@ -226,14 +233,25 @@ export default function AdminLlmPage() {
   const [pBaseUrl, setPBaseUrl] = useState("");
   const [pApiKey, setPApiKey] = useState("");
   const [pActive, setPActive] = useState(true);
+  const [pTestSystemPrompt, setPTestSystemPrompt] = useState("");
+  const [pExtraHeadersJson, setPExtraHeadersJson] = useState("");
   const [pBranches, setPBranches] = useState<string[]>([]);
   const [branchSearch, setBranchSearch] = useState("");
   /** Overrides de path por tipo; vacío = usar default del provider_type. */
   const [pEndpointRows, setPEndpointRows] = useState<Array<{ key: string; type: string; path: string }>>(
     [],
   );
+  /** Plantillas de body JSON por tipo de endpoint. */
+  const [pPayloadTemplates, setPPayloadTemplates] = useState<Record<string, string>>({});
+  const [selectedEndpointKey, setSelectedEndpointKey] = useState<string | null>(null);
   const [newEndpointType, setNewEndpointType] = useState("");
   const [newEndpointPath, setNewEndpointPath] = useState("");
+
+  const [epTestType, setEpTestType] = useState("models");
+  const [epTestMethod, setEpTestMethod] = useState<"GET" | "POST">("GET");
+  const [epTestModelId, setEpTestModelId] = useState("");
+  const [epTestBody, setEpTestBody] = useState("{}");
+  const [epTestResult, setEpTestResult] = useState<LlmTestEndpointResult | null>(null);
 
   const defaultEndpointsForType = useMemo(
     () => PROVIDER_DEFAULT_ENDPOINTS[pType] || {},
@@ -250,6 +268,11 @@ export default function AdminLlmPage() {
     return resolveProviderEndpoints(pType, overrides);
   }, [pType, pEndpointRows]);
 
+  const selectedEndpointRow = useMemo(() => {
+    if (!selectedEndpointKey) return pEndpointRows[0] ?? null;
+    return pEndpointRows.find((r) => r.key === selectedEndpointKey) ?? pEndpointRows[0] ?? null;
+  }, [pEndpointRows, selectedEndpointKey]);
+
   const buildEndpointRowsFromProvider = (p: LlmProvider | null, type: string) => {
     const defaults = PROVIDER_DEFAULT_ENDPOINTS[type] || {};
     const overrides = p?.endpoints && typeof p.endpoints === "object" ? p.endpoints : {};
@@ -261,6 +284,32 @@ export default function AdminLlmPage() {
         type: typeKey,
         path: overrides[typeKey] || defaults[typeKey] || "",
       }));
+  };
+
+  const buildPayloadTemplatesFromProvider = (p: LlmProvider | null) => {
+    const templates = p?.endpoints_payload_templates;
+    if (!templates || typeof templates !== "object") return {};
+    const out: Record<string, string> = {};
+    for (const [key, value] of Object.entries(templates)) {
+      try {
+        out[key] = JSON.stringify(value ?? {}, null, 2);
+      } catch {
+        out[key] = "{}";
+      }
+    }
+    return out;
+  };
+
+  const applyEndpointTestDefaults = (endpointType: string, templates?: Record<string, string>) => {
+    const saved = templates?.[endpointType]?.trim();
+    if (saved) {
+      setEpTestBody(saved);
+      setEpTestMethod(endpointType === "models" || endpointType === "embedding_models" ? "GET" : "POST");
+      return;
+    }
+    const cfg = defaultEndpointTestConfig(endpointType);
+    setEpTestMethod(cfg.method);
+    setEpTestBody(JSON.stringify(cfg.payload, null, 2));
   };
 
   const filteredBranchOptions = useMemo(() => {
@@ -357,10 +406,20 @@ export default function AdminLlmPage() {
     setPBaseUrl("");
     setPApiKey("");
     setPActive(true);
+    setPTestSystemPrompt("");
+    setPExtraHeadersJson("");
     setBranchSearch("");
-    setPEndpointRows(buildEndpointRowsFromProvider(null, "openai"));
+    setProviderFormTab("general");
+    const rows = buildEndpointRowsFromProvider(null, "openai");
+    setPEndpointRows(rows);
+    setPPayloadTemplates({});
+    setSelectedEndpointKey(rows[0]?.key ?? null);
     setNewEndpointType("");
     setNewEndpointPath("");
+    setEpTestType("models");
+    applyEndpointTestDefaults("models");
+    setEpTestModelId("");
+    setEpTestResult(null);
     const fromFilter =
       branchFilter !== GLOBAL_BRANCH_ID && branchOptions.some((b) => b.id === branchFilter)
         ? [branchFilter]
@@ -393,11 +452,23 @@ export default function AdminLlmPage() {
     setPBaseUrl(p.base_url || "");
     setPApiKey("");
     setPActive(p.is_active !== false);
+    setPTestSystemPrompt(p.test_system_prompt || "");
+    setPExtraHeadersJson("");
     setBranchSearch("");
     setPBranches((p.branches ?? []).map(String));
-    setPEndpointRows(buildEndpointRowsFromProvider(p, p.provider_type || "openai"));
+    const rows = buildEndpointRowsFromProvider(p, p.provider_type || "openai");
+    setPEndpointRows(rows);
+    const templates = buildPayloadTemplatesFromProvider(p);
+    setPPayloadTemplates(templates);
+    setSelectedEndpointKey(rows[0]?.key ?? null);
     setNewEndpointType("");
     setNewEndpointPath("");
+    setProviderFormTab("general");
+    const firstType = rows.find((r) => r.type === "models")?.type || rows[0]?.type || "models";
+    setEpTestType(firstType);
+    applyEndpointTestDefaults(firstType, templates);
+    setEpTestModelId("");
+    setEpTestResult(null);
     setProviderFormOpen(true);
   };
 
@@ -424,7 +495,14 @@ export default function AdminLlmPage() {
   };
 
   const removeEndpointRow = (key: string) => {
-    setPEndpointRows((prev) => prev.filter((r) => r.key !== key));
+    setPEndpointRows((prev) => {
+      const next = prev.filter((r) => r.key !== key);
+      setSelectedEndpointKey((cur) => {
+        if (cur !== key) return cur;
+        return next[0]?.key ?? null;
+      });
+      return next;
+    });
   };
 
   const addEndpointRow = () => {
@@ -440,12 +518,15 @@ export default function AdminLlmPage() {
     }
     const path = pathRaw.startsWith("/") ? pathRaw : `/${pathRaw}`;
     setPEndpointRows((prev) => [...prev, { key: type, type, path }]);
+    setSelectedEndpointKey(type);
     setNewEndpointType("");
     setNewEndpointPath("");
   };
 
   const resetEndpointsToDefaults = () => {
-    setPEndpointRows(buildEndpointRowsFromProvider(null, pType));
+    const rows = buildEndpointRowsFromProvider(null, pType);
+    setPEndpointRows(rows);
+    setSelectedEndpointKey(rows[0]?.key ?? null);
   };
 
   /** Solo persiste overrides respecto al default del tipo. */
@@ -462,9 +543,32 @@ export default function AdminLlmPage() {
     return out;
   };
 
+  const buildPayloadTemplatesPayload = (): Record<string, unknown> | null => {
+    const out: Record<string, unknown> = {};
+    for (const [type, raw] of Object.entries(pPayloadTemplates)) {
+      const text = raw.trim();
+      if (!text) continue;
+      try {
+        const parsed = JSON.parse(text) as unknown;
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          out[type] = parsed;
+        } else {
+          toast.error(`Plantilla de «${type}» debe ser un objeto JSON`);
+          return null;
+        }
+      } catch {
+        toast.error(`JSON inválido en plantilla de «${type}»`);
+        return null;
+      }
+    }
+    return out;
+  };
+
   const handleProviderTypeChange = (next: string) => {
     setPType(next);
-    setPEndpointRows(buildEndpointRowsFromProvider(null, next));
+    const rows = buildEndpointRowsFromProvider(null, next);
+    setPEndpointRows(rows);
+    setSelectedEndpointKey(rows[0]?.key ?? null);
   };
 
   const saveProvider = () => {
@@ -490,6 +594,9 @@ export default function AdminLlmPage() {
       return;
     }
 
+    const templates = buildPayloadTemplatesPayload();
+    if (templates === null) return;
+
     const payload: Partial<LlmProvider> = {
       name: pName.trim(),
       provider_type: pType,
@@ -497,18 +604,35 @@ export default function AdminLlmPage() {
       base_url: pBaseUrl.trim() || null,
       is_active: pActive,
       auth_type: "api_key",
+      test_system_prompt: pTestSystemPrompt.trim() || "",
       branches: pBranches.map((id) => (Number.isNaN(Number(id)) ? id : Number(id))),
       endpoints: buildEndpointsPayload(),
+      endpoints_payload_templates: templates,
     };
     if (pApiKey.trim()) payload.api_key = pApiKey.trim();
+
+    const headersRaw = pExtraHeadersJson.trim();
+    if (headersRaw) {
+      try {
+        const parsed = JSON.parse(headersRaw) as unknown;
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+          toast.error("Headers extra deben ser un objeto JSON");
+          return;
+        }
+        payload.auth_config = { extra_headers: parsed };
+      } catch {
+        toast.error("JSON inválido en headers extra");
+        return;
+      }
+    }
 
     if (editingProvider) {
       updateProvider.mutate(
         { id: editingProvider.id, data: payload },
         {
-          onSuccess: () => {
-            toast.success("Proveedor actualizado");
-            closeProviderForm();
+          onSuccess: (updated) => {
+            toast.success("LLM actualizado");
+            setEditingProvider(updated);
             refetch();
           },
           onError: (e) =>
@@ -518,15 +642,75 @@ export default function AdminLlmPage() {
     } else {
       createProvider.mutate(payload, {
         onSuccess: (created) => {
-          toast.success("Proveedor creado");
+          toast.success("LLM creado");
           setSelectedId(String(created.id));
-          closeProviderForm();
+          setEditingProvider(created);
+          setProviderFormTab("endpoints");
           refetch();
         },
         onError: (e) =>
           toast.error((e as { friendlyMessage?: string }).friendlyMessage || "Error al crear"),
       });
     }
+  };
+
+  const runEndpointProbe = () => {
+    if (!editingProvider) {
+      toast.error("Guarda el LLM antes de probar endpoints");
+      return;
+    }
+    let payload: Record<string, unknown> = {};
+    if (epTestMethod === "POST") {
+      try {
+        const parsed = JSON.parse(epTestBody || "{}") as unknown;
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          payload = parsed as Record<string, unknown>;
+        } else {
+          toast.error("El body debe ser un objeto JSON");
+          return;
+        }
+      } catch {
+        toast.error("JSON inválido en el body");
+        return;
+      }
+      if (epTestModelId.trim() && typeof payload.model === "string" && payload.model.includes("{{model_id}}")) {
+        payload = { ...payload, model: epTestModelId.trim() };
+      }
+    }
+
+    testEndpoint.mutate(
+      {
+        id: editingProvider.id,
+        data: {
+          endpoint_type: epTestType,
+          method: epTestMethod,
+          model_id: epTestModelId.trim() || undefined,
+          payload: epTestMethod === "POST" ? payload : {},
+        },
+      },
+      {
+        onSuccess: (data) => {
+          const ok = data.success !== false && !data.error;
+          setEpTestResult({ ...data, success: ok });
+          if (ok) toast.success("Endpoint OK");
+          else toast.error(data.error || "Falló la prueba");
+        },
+        onError: (e) => {
+          const err = e as AxiosError<LlmTestEndpointResult>;
+          const body = err.response?.data;
+          setEpTestResult({
+            success: false,
+            error:
+              body?.error ||
+              (e as { friendlyMessage?: string }).friendlyMessage ||
+              err.message ||
+              "Error",
+            ...(body && typeof body === "object" ? body : {}),
+          });
+          toast.error("Falló la prueba");
+        },
+      },
+    );
   };
 
   const openCreateModel = () => {
@@ -619,7 +803,7 @@ export default function AdminLlmPage() {
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs text-muted-foreground">
               {filteredProviders.length}{" "}
-              {filteredProviders.length === 1 ? "proveedor" : "proveedores"}
+              {filteredProviders.length === 1 ? "LLM" : "LLMs"}
               {!canManageProviders ? " · solo lectura" : ""}
             </span>
             {canManageProviders && (
@@ -630,7 +814,7 @@ export default function AdminLlmPage() {
           </div>
           <AdminMotionList className="space-y-1.5">
             {filteredProviders.length === 0 && (
-              <p className="text-sm text-muted-foreground py-6 text-center">Sin providers.</p>
+              <p className="text-sm text-muted-foreground py-6 text-center">Sin LLMs.</p>
             )}
             {filteredProviders.map((p) => (
               <AdminMotionItem key={String(p.id)}>
@@ -708,56 +892,182 @@ export default function AdminLlmPage() {
                     Modelos
                   </Button>
                   <h2 className="text-sm font-medium">
-                    {editingProvider ? "Configurar proveedor" : "Nuevo proveedor"}
+                    {editingProvider ? "Configurar LLM" : "Nuevo LLM"}
                   </h2>
                 </div>
               </div>
 
-              <div className="space-y-3 max-w-xl">
-                <div>
-                  <Label>Nombre</Label>
-                  <Input value={pName} onChange={(e) => setPName(e.target.value)} />
-                </div>
-                <div>
-                  <Label>Tipo</Label>
-                  <Select value={pType} onValueChange={handleProviderTypeChange}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PROVIDER_TYPES.map((t) => (
-                        <SelectItem key={t.value} value={t.value}>
-                          {t.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Descripción</Label>
-                  <Input
-                    value={pDescription}
-                    onChange={(e) => setPDescription(e.target.value)}
-                    placeholder="Notas del provider"
-                  />
-                </div>
-                <div>
-                  <Label>Base URL (opcional)</Label>
-                  <Input
-                    value={pBaseUrl}
-                    onChange={(e) => setPBaseUrl(e.target.value)}
-                    placeholder="https://..."
-                  />
-                </div>
+              <Tabs
+                value={providerFormTab}
+                onValueChange={setProviderFormTab}
+                className="max-w-3xl"
+              >
+                <TabsList className="w-full justify-start overflow-x-auto">
+                  <TabsTrigger value="general">General</TabsTrigger>
+                  <TabsTrigger value="endpoints">Endpoints</TabsTrigger>
+                  <TabsTrigger value="test" disabled={!editingProvider}>
+                    Probar
+                  </TabsTrigger>
+                </TabsList>
 
-                <div className="rounded-md border border-border p-3 space-y-2">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
+                <TabsContent value="general" className="space-y-3 mt-4">
+                  <div>
+                    <Label>Nombre</Label>
+                    <Input value={pName} onChange={(e) => setPName(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label>Tipo</Label>
+                    <Select value={pType} onValueChange={handleProviderTypeChange}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PROVIDER_TYPES.map((t) => (
+                          <SelectItem key={t.value} value={t.value}>
+                            {t.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Descripción</Label>
+                    <Input
+                      value={pDescription}
+                      onChange={(e) => setPDescription(e.target.value)}
+                      placeholder="Notas del LLM"
+                    />
+                  </div>
+                  <div>
+                    <Label>Base URL (opcional)</Label>
+                    <Input
+                      value={pBaseUrl}
+                      onChange={(e) => setPBaseUrl(e.target.value)}
+                      placeholder="https://..."
+                    />
+                  </div>
+                  <div>
+                    <Label>
+                      API Key{" "}
+                      {editingProvider
+                        ? editingProvider.api_key_configured
+                          ? "(dejar vacío para no cambiar)"
+                          : "(requerida)"
+                        : pType === "ollama"
+                          ? "(opcional)"
+                          : "(requerida)"}
+                    </Label>
+                    <Input
+                      type="password"
+                      value={pApiKey}
+                      onChange={(e) => setPApiKey(e.target.value)}
+                      autoComplete="off"
+                      placeholder={editingProvider?.api_key_configured ? "••••••••" : "sk-..."}
+                    />
+                  </div>
+                  <div>
+                    <Label>Headers extra (JSON, opcional)</Label>
+                    <Textarea
+                      value={pExtraHeadersJson}
+                      onChange={(e) => setPExtraHeadersJson(e.target.value)}
+                      placeholder='{"HTTP-Referer":"https://mi-app.com","X-Title":"Mi App"}'
+                      className="font-mono text-xs min-h-[72px]"
+                    />
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      Se fusionan con Authorization / API key al llamar al LLM. Vacío = no
+                      modificar.
+                    </p>
+                  </div>
+                  <div>
+                    <Label>System prompt de prueba (chat)</Label>
+                    <Textarea
+                      value={pTestSystemPrompt}
+                      onChange={(e) => setPTestSystemPrompt(e.target.value)}
+                      placeholder="Opcional · solo se usa al probar chat sin body custom"
+                      className="min-h-[64px] text-sm"
+                    />
+                  </div>
+
+                  {branchOptions.length > 0 && (
                     <div>
-                      <Label className="mb-0">Endpoints</Label>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">
-                        Rutas relativas a la Base URL. Vacío en API = defaults del tipo.
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                        <Label className="mb-0">
+                          Sucursales
+                          {!isGlobalAdmin ? " *" : " (opcional)"}
+                        </Label>
+                        <div className="flex items-center gap-2 text-[11px]">
+                          <span className="text-muted-foreground">
+                            {pBranches.length}/{branchOptions.length}
+                          </span>
+                          <button
+                            type="button"
+                            className="text-primary hover:underline"
+                            onClick={selectAllBranches}
+                          >
+                            Todas
+                          </button>
+                          <span className="text-muted-foreground">·</span>
+                          <button
+                            type="button"
+                            className="text-muted-foreground hover:underline"
+                            onClick={clearBranches}
+                          >
+                            Ninguna
+                          </button>
+                        </div>
+                      </div>
+                      {branchOptions.length > 6 && (
+                        <Input
+                          value={branchSearch}
+                          onChange={(e) => setBranchSearch(e.target.value)}
+                          placeholder="Buscar sucursal…"
+                          className="mb-2 h-8 text-xs"
+                        />
+                      )}
+                      <div className="max-h-44 overflow-y-auto rounded-md border border-border p-2 space-y-1">
+                        {filteredBranchOptions.length === 0 && (
+                          <p className="text-xs text-muted-foreground py-2 text-center">
+                            Sin resultados
+                          </p>
+                        )}
+                        {filteredBranchOptions.map((b) => (
+                          <label
+                            key={b.id}
+                            className="flex items-center gap-2 rounded-md px-1.5 py-1.5 text-sm hover:bg-muted/60"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={pBranches.includes(b.id)}
+                              onChange={() => toggleBranch(b.id)}
+                            />
+                            <span className="truncate">{b.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground mt-1">
+                        {isGlobalAdmin
+                          ? "Vacío = visible según reglas globales del API."
+                          : "El LLM quedará disponible solo en las sucursales marcadas."}
                       </p>
                     </div>
+                  )}
+
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={pActive}
+                      onChange={(e) => setPActive(e.target.checked)}
+                    />
+                    Activo
+                  </label>
+                </TabsContent>
+
+                <TabsContent value="endpoints" className="space-y-3 mt-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-[11px] text-muted-foreground">
+                      Rutas relativas a la Base URL. Elige un endpoint para editar su plantilla de
+                      body.
+                    </p>
                     <button
                       type="button"
                       className="text-[11px] text-muted-foreground hover:underline"
@@ -766,79 +1076,176 @@ export default function AdminLlmPage() {
                       Restaurar defaults
                     </button>
                   </div>
-                  <div className="space-y-2 max-h-56 overflow-y-auto">
-                    {pEndpointRows.length === 0 && (
-                      <p className="text-xs text-muted-foreground py-2 text-center">
-                        Sin endpoints. Agrega al menos chat y models.
-                      </p>
-                    )}
-                    {pEndpointRows.map((row) => {
-                      const isCustom =
-                        defaultEndpointsForType[row.type] !== undefined &&
-                        defaultEndpointsForType[row.type] !== row.path.trim();
-                      const isExtra = defaultEndpointsForType[row.type] === undefined;
-                      return (
-                        <div
-                          key={row.key}
-                          className="grid grid-cols-1 sm:grid-cols-[7.5rem_1fr_auto] gap-1.5 items-start"
+
+                  <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+                    <div className="rounded-md border border-border p-3 space-y-2">
+                      <Label className="mb-0">Rutas</Label>
+                      <div className="space-y-2 max-h-64 overflow-y-auto">
+                        {pEndpointRows.length === 0 && (
+                          <p className="text-xs text-muted-foreground py-2 text-center">
+                            Sin endpoints. Agrega al menos chat y models.
+                          </p>
+                        )}
+                        {pEndpointRows.map((row) => {
+                          const isCustom =
+                            defaultEndpointsForType[row.type] !== undefined &&
+                            defaultEndpointsForType[row.type] !== row.path.trim();
+                          const isExtra = defaultEndpointsForType[row.type] === undefined;
+                          const selected = selectedEndpointRow?.key === row.key;
+                          return (
+                            <button
+                              key={row.key}
+                              type="button"
+                              onClick={() => setSelectedEndpointKey(row.key)}
+                              className={`w-full text-left rounded-md border px-2 py-2 transition-colors ${
+                                selected
+                                  ? "border-primary/50 bg-primary/10"
+                                  : "border-border hover:bg-muted/50"
+                              }`}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0 flex-1 space-y-1">
+                                  <Input
+                                    value={row.type}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onChange={(e) =>
+                                      updateEndpointRow(row.key, {
+                                        type: e.target.value.toLowerCase().replace(/\s+/g, "_"),
+                                      })
+                                    }
+                                    className="h-7 font-mono text-xs"
+                                    placeholder="chat"
+                                  />
+                                  <Input
+                                    value={row.path}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onChange={(e) =>
+                                      updateEndpointRow(row.key, { path: e.target.value })
+                                    }
+                                    className="h-7 font-mono text-xs"
+                                    placeholder="/chat/completions"
+                                  />
+                                  <p className="text-[10px] text-muted-foreground font-mono truncate">
+                                    {endpointTypeLabel(row.type)}
+                                    {isCustom ? " · override" : isExtra ? " · extra" : " · default"}
+                                    {" · "}
+                                    {joinEndpointUrl(pBaseUrl, row.path || "/")}
+                                  </p>
+                                </div>
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-7 w-7 text-destructive shrink-0"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    removeEndpointRow(row.key);
+                                    setPPayloadTemplates((prev) => {
+                                      const next = { ...prev };
+                                      delete next[row.type];
+                                      return next;
+                                    });
+                                  }}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-[7.5rem_1fr_auto] gap-1.5 pt-1 border-t border-border/60">
+                        <Input
+                          value={newEndpointType}
+                          onChange={(e) => setNewEndpointType(e.target.value)}
+                          className="h-8 font-mono text-xs"
+                          placeholder="tipo"
+                        />
+                        <Input
+                          value={newEndpointPath}
+                          onChange={(e) => setNewEndpointPath(e.target.value)}
+                          className="h-8 font-mono text-xs"
+                          placeholder="/ruta"
+                        />
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-8"
+                          onClick={addEndpointRow}
                         >
-                          <div>
-                            <Input
-                              value={row.type}
-                              onChange={(e) =>
-                                updateEndpointRow(row.key, {
-                                  type: e.target.value.toLowerCase().replace(/\s+/g, "_"),
+                          <Plus className="h-3.5 w-3.5 mr-1" /> Add
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="rounded-md border border-border p-3 space-y-2">
+                      <div>
+                        <Label className="mb-0">
+                          Plantilla de body
+                          {selectedEndpointRow ? ` · ${selectedEndpointRow.type}` : ""}
+                        </Label>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          Se usa al probar / llamar si no envías un body distinto. Solo objetos
+                          JSON.
+                        </p>
+                      </div>
+                      {selectedEndpointRow ? (
+                        <>
+                          <Textarea
+                            value={pPayloadTemplates[selectedEndpointRow.type] ?? ""}
+                            onChange={(e) =>
+                              setPPayloadTemplates((prev) => ({
+                                ...prev,
+                                [selectedEndpointRow.type]: e.target.value,
+                              }))
+                            }
+                            placeholder={JSON.stringify(
+                              defaultEndpointTestConfig(selectedEndpointRow.type).payload,
+                              null,
+                              2,
+                            )}
+                            className="font-mono text-xs min-h-[220px]"
+                          />
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                const cfg = defaultEndpointTestConfig(selectedEndpointRow.type);
+                                setPPayloadTemplates((prev) => ({
+                                  ...prev,
+                                  [selectedEndpointRow.type]: JSON.stringify(cfg.payload, null, 2),
+                                }));
+                              }}
+                            >
+                              Sugerir body
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={() =>
+                                setPPayloadTemplates((prev) => {
+                                  const next = { ...prev };
+                                  delete next[selectedEndpointRow.type];
+                                  return next;
                                 })
                               }
-                              className="h-8 font-mono text-xs"
-                              placeholder="chat"
-                            />
-                            <p className="text-[10px] text-muted-foreground truncate mt-0.5">
-                              {endpointTypeLabel(row.type)}
-                              {isCustom ? " · override" : isExtra ? " · extra" : " · default"}
-                            </p>
+                            >
+                              Limpiar
+                            </Button>
                           </div>
-                          <div className="min-w-0">
-                            <Input
-                              value={row.path}
-                              onChange={(e) => updateEndpointRow(row.key, { path: e.target.value })}
-                              className="h-8 font-mono text-xs"
-                              placeholder="/chat/completions"
-                            />
-                            <p className="text-[10px] text-muted-foreground font-mono truncate mt-0.5">
-                              {joinEndpointUrl(pBaseUrl, row.path || "/")}
-                            </p>
-                          </div>
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8 text-destructive"
-                            onClick={() => removeEndpointRow(row.key)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      );
-                    })}
+                        </>
+                      ) : (
+                        <p className="text-xs text-muted-foreground py-8 text-center">
+                          Selecciona un endpoint a la izquierda.
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-[7.5rem_1fr_auto] gap-1.5 pt-1 border-t border-border/60">
-                    <Input
-                      value={newEndpointType}
-                      onChange={(e) => setNewEndpointType(e.target.value)}
-                      className="h-8 font-mono text-xs"
-                      placeholder="tipo"
-                    />
-                    <Input
-                      value={newEndpointPath}
-                      onChange={(e) => setNewEndpointPath(e.target.value)}
-                      className="h-8 font-mono text-xs"
-                      placeholder="/ruta"
-                    />
-                    <Button type="button" size="sm" variant="outline" className="h-8" onClick={addEndpointRow}>
-                      <Plus className="h-3.5 w-3.5 mr-1" /> Add
-                    </Button>
-                  </div>
+
                   {Object.keys(effectiveEndpoints).length > 0 && (
                     <details className="text-[11px] text-muted-foreground">
                       <summary className="cursor-pointer hover:text-foreground">
@@ -856,137 +1263,255 @@ export default function AdminLlmPage() {
                       </ul>
                     </details>
                   )}
-                </div>
+                </TabsContent>
 
-                <div>
-                  <Label>
-                    API Key{" "}
-                    {editingProvider
-                      ? editingProvider.api_key_configured
-                        ? "(dejar vacío para no cambiar)"
-                        : "(requerida)"
-                      : pType === "ollama"
-                        ? "(opcional)"
-                        : "(requerida)"}
-                  </Label>
-                  <Input
-                    type="password"
-                    value={pApiKey}
-                    onChange={(e) => setPApiKey(e.target.value)}
-                    autoComplete="off"
-                    placeholder={editingProvider?.api_key_configured ? "••••••••" : "sk-..."}
-                  />
-                </div>
-
-                {branchOptions.length > 0 && (
-                  <div>
-                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                      <Label className="mb-0">
-                        Sucursales
-                        {!isGlobalAdmin ? " *" : " (opcional)"}
-                      </Label>
-                      <div className="flex items-center gap-2 text-[11px]">
-                        <span className="text-muted-foreground">
-                          {pBranches.length}/{branchOptions.length}
-                        </span>
-                        <button
-                          type="button"
-                          className="text-primary hover:underline"
-                          onClick={selectAllBranches}
-                        >
-                          Todas
-                        </button>
-                        <span className="text-muted-foreground">·</span>
-                        <button
-                          type="button"
-                          className="text-muted-foreground hover:underline"
-                          onClick={clearBranches}
-                        >
-                          Ninguna
-                        </button>
-                      </div>
-                    </div>
-                    {branchOptions.length > 6 && (
-                      <Input
-                        value={branchSearch}
-                        onChange={(e) => setBranchSearch(e.target.value)}
-                        placeholder="Buscar sucursal…"
-                        className="mb-2 h-8 text-xs"
-                      />
-                    )}
-                    <div className="max-h-44 overflow-y-auto rounded-md border border-border p-2 space-y-1">
-                      {filteredBranchOptions.length === 0 && (
-                        <p className="text-xs text-muted-foreground py-2 text-center">
-                          Sin resultados
-                        </p>
-                      )}
-                      {filteredBranchOptions.map((b) => (
-                        <label
-                          key={b.id}
-                          className="flex items-center gap-2 rounded-md px-1.5 py-1.5 text-sm hover:bg-muted/60"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={pBranches.includes(b.id)}
-                            onChange={() => toggleBranch(b.id)}
-                          />
-                          <span className="truncate">{b.label}</span>
-                        </label>
-                      ))}
-                    </div>
-                    <p className="text-[11px] text-muted-foreground mt-1">
-                      {isGlobalAdmin
-                        ? "Vacío = visible según reglas globales del API."
-                        : "El proveedor quedará disponible solo en las sucursales marcadas."}
+                <TabsContent value="test" className="space-y-3 mt-4">
+                  {!editingProvider ? (
+                    <p className="text-sm text-muted-foreground">
+                      Guarda el LLM primero para poder probar endpoints.
                     </p>
-                  </div>
-                )}
+                  ) : (
+                    <>
+                      <p className="text-[11px] text-muted-foreground">
+                        Envía una petición real con el method, body y auth del LLM. La respuesta
+                        muestra headers, payload enviado y body crudo.
+                      </p>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <Label>Endpoint</Label>
+                          <Select
+                            value={epTestType}
+                            onValueChange={(v) => {
+                              setEpTestType(v);
+                              applyEndpointTestDefaults(v, pPayloadTemplates);
+                              setEpTestResult(null);
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {Object.keys(effectiveEndpoints)
+                                .sort((a, b) => a.localeCompare(b))
+                                .map((t) => (
+                                  <SelectItem key={t} value={t}>
+                                    {endpointTypeLabel(t)} ({t})
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label>Method</Label>
+                          <Select
+                            value={epTestMethod}
+                            onValueChange={(v) => setEpTestMethod(v as "GET" | "POST")}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="GET">GET</SelectItem>
+                              <SelectItem value="POST">POST</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <div>
+                        <Label>model_id (opcional)</Label>
+                        <Input
+                          value={epTestModelId}
+                          onChange={(e) => setEpTestModelId(e.target.value)}
+                          placeholder="openai/gpt-4o-mini"
+                          className="font-mono text-sm"
+                        />
+                      </div>
+                      <div className="rounded-md border border-border/80 bg-muted/30 px-3 py-2 text-[11px] font-mono space-y-1">
+                        <p>
+                          <span className="text-muted-foreground">URL · </span>
+                          {joinEndpointUrl(
+                            pBaseUrl || editingProvider.base_url,
+                            effectiveEndpoints[epTestType] || "/",
+                          )}
+                        </p>
+                        <p>
+                          <span className="text-muted-foreground">Auth · </span>
+                          {pType === "anthropic"
+                            ? "x-api-key"
+                            : pType === "google"
+                              ? "x-goog-api-key"
+                              : "Authorization: Bearer …"}
+                          {pExtraHeadersJson.trim() ? " + extra_headers" : ""}
+                        </p>
+                      </div>
+                      {epTestMethod === "POST" && (
+                        <div>
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <Label className="mb-0">Body (JSON)</Label>
+                            <button
+                              type="button"
+                              className="text-[11px] text-muted-foreground hover:underline"
+                              onClick={() => applyEndpointTestDefaults(epTestType, pPayloadTemplates)}
+                            >
+                              Usar plantilla / sugerencia
+                            </button>
+                          </div>
+                          <Textarea
+                            value={epTestBody}
+                            onChange={(e) => setEpTestBody(e.target.value)}
+                            className="font-mono text-xs min-h-[180px]"
+                          />
+                        </div>
+                      )}
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          onClick={runEndpointProbe}
+                          disabled={testEndpoint.isPending}
+                        >
+                          {testEndpoint.isPending ? (
+                            <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                          ) : (
+                            <FlaskConical className="h-3.5 w-3.5 mr-1" />
+                          )}
+                          Ejecutar
+                        </Button>
+                        <Button
+                          variant="outline"
+                          disabled={testProvider.isPending}
+                          onClick={() => {
+                            testProvider.mutate(editingProvider.id, {
+                              onSuccess: (data) => {
+                                setTestResult(parseTestConnectionResult(data));
+                                setTestResultOpen(true);
+                              },
+                              onError: (e) => {
+                                const err = e as AxiosError<LlmTestConnectionResult>;
+                                setTestResult(
+                                  parseTestConnectionResult(
+                                    err.response?.data,
+                                    (e as { friendlyMessage?: string }).friendlyMessage ||
+                                      err.message,
+                                  ),
+                                );
+                                setTestResultOpen(true);
+                              },
+                            });
+                          }}
+                        >
+                          {testProvider.isPending ? (
+                            <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                          ) : (
+                            <FlaskConical className="h-3.5 w-3.5 mr-1" />
+                          )}
+                          Test conexión (models)
+                        </Button>
+                      </div>
 
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={pActive}
-                    onChange={(e) => setPActive(e.target.checked)}
-                  />
-                  Activo
-                </label>
-
-                <div className="flex flex-wrap items-center gap-2 pt-1">
-                  <Button
-                    onClick={saveProvider}
-                    disabled={createProvider.isPending || updateProvider.isPending}
-                  >
-                    Guardar
-                  </Button>
-                  <Button variant="ghost" onClick={closeProviderForm}>
-                    Cancelar
-                  </Button>
-                  {editingProvider && (
-                    <Button
-                      variant="ghost"
-                      className="text-destructive hover:text-destructive ml-auto"
-                      disabled={deleteProvider.isPending}
-                      onClick={() => {
-                        if (!confirm(`¿Eliminar provider ${editingProvider.name}?`)) return;
-                        deleteProvider.mutate(editingProvider.id, {
-                          onSuccess: () => {
-                            toast.success("Eliminado");
-                            setSelectedId(null);
-                            closeProviderForm();
-                            refetch();
-                          },
-                          onError: (e) =>
-                            toast.error(
-                              (e as { friendlyMessage?: string }).friendlyMessage ||
-                                "No se pudo eliminar",
-                            ),
-                        });
-                      }}
-                    >
-                      <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Eliminar
-                    </Button>
+                      {epTestResult && (
+                        <div className="rounded-md border border-border space-y-3 p-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge
+                              variant={epTestResult.success ? "default" : "destructive"}
+                              className="text-[10px]"
+                            >
+                              {epTestResult.success ? "OK" : "Falló"}
+                            </Badge>
+                            {epTestResult.status_code != null && (
+                              <span className="font-mono text-xs">
+                                HTTP {epTestResult.status_code}
+                              </span>
+                            )}
+                            {epTestResult.latency_ms != null && (
+                              <span className="text-xs text-muted-foreground">
+                                {epTestResult.latency_ms} ms
+                              </span>
+                            )}
+                          </div>
+                          {(epTestResult.endpoint || epTestResult.method) && (
+                            <p className="font-mono text-[11px] break-all rounded-md bg-muted px-2 py-1.5">
+                              {epTestResult.method ? `${epTestResult.method} ` : ""}
+                              {epTestResult.endpoint}
+                            </p>
+                          )}
+                          {epTestResult.error && (
+                            <p className="text-xs text-destructive rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2">
+                              {epTestResult.error}
+                            </p>
+                          )}
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            {epTestResult.headers_sent &&
+                              Object.keys(epTestResult.headers_sent).length > 0 && (
+                                <div className="min-w-0">
+                                  <span className="text-muted-foreground text-xs">Headers</span>
+                                  <pre className="mt-1 max-h-40 overflow-auto rounded-md bg-muted p-2 text-[10px] font-mono">
+                                    {JSON.stringify(epTestResult.headers_sent, null, 2)}
+                                  </pre>
+                                </div>
+                              )}
+                            {epTestResult.payload_sent &&
+                              Object.keys(epTestResult.payload_sent).length > 0 && (
+                                <div className="min-w-0">
+                                  <span className="text-muted-foreground text-xs">Body enviado</span>
+                                  <pre className="mt-1 max-h-40 overflow-auto rounded-md bg-muted p-2 text-[10px] font-mono">
+                                    {JSON.stringify(epTestResult.payload_sent, null, 2)}
+                                  </pre>
+                                </div>
+                              )}
+                          </div>
+                          {(epTestResult.raw_response != null || epTestResult.response) && (
+                            <div className="min-w-0">
+                              <span className="text-muted-foreground text-xs">Respuesta</span>
+                              <pre className="mt-1 max-h-56 overflow-auto rounded-md bg-muted p-2 text-[10px] font-mono whitespace-pre-wrap break-all">
+                                {typeof epTestResult.raw_response === "string"
+                                  ? epTestResult.raw_response
+                                  : epTestResult.raw_response != null
+                                    ? JSON.stringify(epTestResult.raw_response, null, 2)
+                                    : epTestResult.response}
+                              </pre>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </>
                   )}
-                </div>
+                </TabsContent>
+              </Tabs>
+
+              <div className="flex flex-wrap items-center gap-2 pt-4 max-w-3xl">
+                <Button
+                  onClick={saveProvider}
+                  disabled={createProvider.isPending || updateProvider.isPending}
+                >
+                  Guardar
+                </Button>
+                <Button variant="ghost" onClick={closeProviderForm}>
+                  Cancelar
+                </Button>
+                {editingProvider && (
+                  <Button
+                    variant="ghost"
+                    className="text-destructive hover:text-destructive ml-auto"
+                    disabled={deleteProvider.isPending}
+                    onClick={() => {
+                      if (!confirm(`¿Eliminar LLM ${editingProvider.name}?`)) return;
+                      deleteProvider.mutate(editingProvider.id, {
+                        onSuccess: () => {
+                          toast.success("Eliminado");
+                          setSelectedId(null);
+                          closeProviderForm();
+                          refetch();
+                        },
+                        onError: (e) =>
+                          toast.error(
+                            (e as { friendlyMessage?: string }).friendlyMessage ||
+                              "No se pudo eliminar",
+                          ),
+                      });
+                    }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Eliminar
+                  </Button>
+                )}
               </div>
             </>
           ) : (
@@ -1061,7 +1586,7 @@ export default function AdminLlmPage() {
               {selected && (
                 <details className="mb-3 rounded-md border border-border/80 px-3 py-2 text-xs">
                   <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
-                    Endpoints del proveedor
+                    Endpoints del LLM
                     {selected.base_url ? (
                       <span className="font-mono text-[10px] ml-1.5 opacity-80">
                         · {selected.base_url}
@@ -1104,7 +1629,10 @@ export default function AdminLlmPage() {
                     <button
                       type="button"
                       className="mt-2 text-[11px] text-primary hover:underline"
-                      onClick={() => openEditProvider(selected)}
+                      onClick={() => {
+                        openEditProvider(selected);
+                        setProviderFormTab("endpoints");
+                      }}
                     >
                       Editar endpoints…
                     </button>
@@ -1115,7 +1643,7 @@ export default function AdminLlmPage() {
               <AdminMotionList className="divide-y divide-border/60">
                 {!selected && (
                   <p className="text-sm text-muted-foreground py-8 text-center">
-                    Elige un proveedor a la izquierda.
+                    Elige un LLM a la izquierda.
                   </p>
                 )}
                 {selected && modelsLoading && (
@@ -1269,7 +1797,7 @@ export default function AdminLlmPage() {
               <div className="grid gap-3 sm:grid-cols-2">
                 {testResult.provider_name && (
                   <div className="min-w-0">
-                    <span className="text-muted-foreground text-xs">Proveedor</span>
+                    <span className="text-muted-foreground text-xs">LLM</span>
                     <p className="font-medium truncate">
                       {testResult.provider_name}
                       {testResult.provider ? (
@@ -1375,7 +1903,7 @@ export default function AdminLlmPage() {
             <DialogTitle>Catálogo sincronizado — modelos inactivos</DialogTitle>
           </DialogHeader>
           <p className="text-xs text-muted-foreground -mt-2">
-            Los modelos del proveedor se importan como inactivos. Agrega los que quieras usar; pasan a
+            Los modelos del LLM se importan como inactivos. Agrega los que quieras usar; pasan a
             la lista de activos.
           </p>
           <Input
@@ -1442,7 +1970,7 @@ export default function AdminLlmPage() {
               <p className="text-sm text-muted-foreground py-8 text-center">
                 {deferredSyncSearch.trim() || syncCaps.length || syncFreeOnly
                   ? "Sin resultados para esos filtros."
-                  : "No hay modelos inactivos. Ejecuta Sync para importar el catálogo del proveedor."}
+                  : "No hay modelos inactivos. Ejecuta Sync para importar el catálogo del LLM."}
               </p>
             ) : (
               inactiveModels.map((m) => {

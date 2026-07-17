@@ -106,6 +106,9 @@ export interface LlmProvider {
   api_key?: string;
   api_key_masked?: string;
   api_key_configured?: boolean;
+  /** write_only en API; solo se envía al guardar. */
+  auth_config?: Record<string, unknown>;
+  test_system_prompt?: string | null;
   is_active?: boolean;
   branches?: (number | string)[];
   branch_names?: string[];
@@ -307,11 +310,35 @@ export interface LlmTestConnectionResult {
   method?: string;
   status_code?: number;
   latency_ms?: number;
-  headers_sent?: Record<string, string>;
+  headers_sent?: Record<string, unknown>;
   response_preview?: string;
   error?: string;
   message?: string;
   timestamp?: string;
+}
+
+export interface LlmTestEndpointPayload {
+  endpoint_type: string;
+  method?: "GET" | "POST";
+  model_id?: string;
+  payload?: Record<string, unknown>;
+}
+
+export interface LlmTestEndpointResult {
+  success?: boolean;
+  endpoint_type?: string;
+  endpoint?: string;
+  method?: string;
+  status_code?: number;
+  latency_ms?: number;
+  payload_sent?: Record<string, unknown>;
+  headers_sent?: Record<string, unknown>;
+  raw_response?: unknown;
+  response?: string;
+  model_used?: string;
+  usage?: Record<string, unknown>;
+  error?: string;
+  message?: string;
 }
 
 export function useTestLlmProvider() {
@@ -319,6 +346,41 @@ export function useTestLlmProvider() {
     mutationFn: (id: string | number) =>
       POST<LlmTestConnectionResult>(ENDPOINTS.llm.testConnection(id), {}),
   });
+}
+
+export function useTestLlmEndpoint() {
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string | number; data: LlmTestEndpointPayload }) =>
+      POST<LlmTestEndpointResult>(ENDPOINTS.llm.testEndpoint(id), data),
+  });
+}
+
+/** Sugerencias de body / método por tipo de endpoint. */
+export function defaultEndpointTestConfig(endpointType: string): {
+  method: "GET" | "POST";
+  payload: Record<string, unknown>;
+} {
+  const getTypes = new Set(["models", "embedding_models"]);
+  if (getTypes.has(endpointType)) {
+    return { method: "GET", payload: {} };
+  }
+  if (endpointType === "chat") {
+    return {
+      method: "POST",
+      payload: {
+        model: "{{model_id}}",
+        messages: [{ role: "user", content: "Hola, responde en una frase." }],
+        max_tokens: 50,
+      },
+    };
+  }
+  if (endpointType === "embeddings" || endpointType === "embed") {
+    return {
+      method: "POST",
+      payload: { model: "{{model_id}}", input: "texto de prueba" },
+    };
+  }
+  return { method: "POST", payload: {} };
 }
 
 export function useSyncLlmModels() {

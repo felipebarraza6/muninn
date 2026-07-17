@@ -41,7 +41,7 @@ function isEmbeddingCapable(m: LlmModel): boolean {
 }
 
 function modelLabel(m: LlmModel): string {
-  return m.model_id ? `${m.name} (${m.model_id})` : m.name;
+  return (m.model_id || m.name || "").trim() || String(m.id);
 }
 
 /** Slug en minúsculas desde el nombre (ej: "Mi Agente" → "mi-agente"). */
@@ -99,14 +99,15 @@ export function AgentForm({ agent, onCancel, onSaved }: AgentFormProps) {
     enabled: Boolean(providerId),
   });
   const models = modelsPage?.results ?? [];
-  const { data: allModelsPage } = useLlmModels({ isActive: true });
-  const allModels = allModelsPage?.results ?? [];
-
+  const { data: embeddingModelsPage } = useLlmModels({
+    isActive: true,
+    capabilities: ["embeddings"],
+  });
   const embeddingModels = useMemo(() => {
-    const active = allModels.filter((m) => m.is_active !== false);
-    const preferred = active.filter(isEmbeddingCapable);
-    return preferred.length > 0 ? preferred : active;
-  }, [allModels]);
+    const fromApi = embeddingModelsPage?.results ?? [];
+    // Refuerzo en cliente por si el API no marca capabilities en todos.
+    return fromApi.filter(isEmbeddingCapable);
+  }, [embeddingModelsPage]);
 
   useEffect(() => {
     slugTouched.current = isEditing;
@@ -253,7 +254,7 @@ export function AgentForm({ agent, onCancel, onSaved }: AgentFormProps) {
                     <SelectContent>
                       {models.map((m) => (
                         <SelectItem key={String(m.id)} value={String(m.id)}>
-                          {modelLabel(m)}
+                          <span className="font-mono text-xs">{modelLabel(m)}</span>
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -369,7 +370,7 @@ export function AgentForm({ agent, onCancel, onSaved }: AgentFormProps) {
                         <SelectItem value="__none__">Automático / por defecto</SelectItem>
                         {embeddingModels.map((m) => (
                           <SelectItem key={String(m.id)} value={String(m.id)}>
-                            {modelLabel(m)}
+                            <span className="font-mono text-xs">{modelLabel(m)}</span>
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -377,7 +378,8 @@ export function AgentForm({ agent, onCancel, onSaved }: AgentFormProps) {
                   )}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Modelo usado para vectorizar el conocimiento.
+                  Solo modelos con capacidad embeddings
+                  {embeddingModels.length === 0 ? " · ninguno activo en el catálogo" : ""}.
                 </p>
               </div>
               <div className="space-y-2 sm:col-span-2">
