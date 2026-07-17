@@ -2,8 +2,18 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Loader2, MessageSquare, Copy, Check, RefreshCw } from "lucide-react";
+import {
+  ArrowLeft,
+  Loader2,
+  MessageSquare,
+  Copy,
+  Check,
+  RefreshCw,
+  ExternalLink,
+} from "lucide-react";
 import { useChannel, useRegenerateChannelSecret } from "@/api/hooks/useChannels";
+import { EmbedChatPanel } from "@/components/channels/EmbedChatPanel";
+import { getEmbedUrl, getIframeCode, getInAppEmbedUrl } from "@/lib/channelEmbed";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -43,20 +53,6 @@ function formatWhatsAppValue(key: string, value: unknown) {
     return value.length > 8 ? `${value.slice(0, 6)}...${value.slice(-4)}` : value;
   }
   return value;
-}
-
-function getWidgetBaseUrl() {
-  if (typeof window === "undefined") return "";
-  return import.meta.env.VITE_WIDGET_BASE_URL ?? "https://agents.agenciapatagoniachile.com";
-}
-
-function getEmbedUrl(channelId: string | number) {
-  return `${getWidgetBaseUrl()}/embed/chat/${channelId}`;
-}
-
-function getIframeCode(channelId: string | number) {
-  const url = getEmbedUrl(channelId);
-  return `<iframe\n  src="${url}"\n  width="100%"\n  height="600"\n  style="border:none;border-radius:12px;"\n  title="Chat">\n</iframe>`;
 }
 
 function CopyButton({ text }: { text: string }) {
@@ -112,6 +108,7 @@ export default function ChannelDetailPage() {
   const isWeb = channel.channel_type === "web_socket" || channel.channel_type === "web_embed";
   const isWhatsApp = channel.channel_type === "whatsapp";
   const embedUrl = getEmbedUrl(channel.id);
+  const inAppUrl = getInAppEmbedUrl(channel.id);
   const iframeCode = getIframeCode(channel.id);
 
   return (
@@ -185,24 +182,45 @@ export default function ChannelDetailPage() {
       </Card>
 
       {isWeb && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">URL pública y embed</CardTitle>
-            <CardDescription>
-              Comparte este link o incrusta el widget en tu sitio web.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-1.5">
-              <div className="text-sm text-muted-foreground">URL pública</div>
-              <div className="flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2">
-                <MessageSquare className="h-4 w-4 text-muted-foreground shrink-0" />
-                <span className="text-sm font-mono truncate flex-1">{embedUrl}</span>
-                <CopyButton text={embedUrl} />
+        <>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Probar chat aquí</CardTitle>
+              <CardDescription>
+                Preview en Muninn — no hace falta abrir otra app. Usa el mismo endpoint público del
+                widget.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <EmbedChatPanel channelId={String(channel.id)} compact />
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" asChild>
+                  <a href={inAppUrl} target="_blank" rel="noreferrer">
+                    <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
+                    Abrir a pantalla completa
+                  </a>
+                </Button>
               </div>
-            </div>
+            </CardContent>
+          </Card>
 
-            {channel.channel_type === "web_embed" && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">URL pública y embed</CardTitle>
+              <CardDescription>
+                Comparte este link o incrusta el widget en tu sitio web.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-1.5">
+                <div className="text-sm text-muted-foreground">URL pública</div>
+                <div className="flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2">
+                  <MessageSquare className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span className="text-sm font-mono truncate flex-1">{embedUrl}</span>
+                  <CopyButton text={embedUrl} />
+                </div>
+              </div>
+
               <div className="space-y-1.5">
                 <div className="text-sm text-muted-foreground">Código iframe</div>
                 <div className="relative rounded-md border bg-muted/30 p-3">
@@ -212,16 +230,9 @@ export default function ChannelDetailPage() {
                   </div>
                 </div>
               </div>
-            )}
-
-            {channel.channel_type === "web_socket" && (
-              <div className="text-sm text-muted-foreground">
-                El canal nativo no tiene embed público. Cambia el tipo a <strong>Widget web</strong>{" "}
-                en Sindre para obtener el iframe.
-              </div>
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </>
       )}
 
       {isWhatsApp && (
