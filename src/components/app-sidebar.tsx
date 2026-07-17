@@ -1,7 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 import { motion, useReducedMotion } from "framer-motion";
 import {
-  Home,
+  LayoutDashboard,
   MessageCircle,
   Bot,
   Share2,
@@ -52,7 +52,7 @@ type MenuItem = {
 };
 
 const baseItems: MenuItem[] = [
-  { title: "Inicio", url: "/", icon: Home, exact: true },
+  { title: "Resumen", url: "/", icon: LayoutDashboard, exact: true },
   { title: "Agentes", url: "/agentes", icon: Bot },
   { title: "Canales", url: "/canales", icon: Share2 },
   { title: "Conocimiento", url: "/conocimiento", icon: BookOpen },

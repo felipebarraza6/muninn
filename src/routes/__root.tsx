@@ -34,27 +34,27 @@ function getPageMeta(pathname: string): PageMeta {
     return { breadcrumb: [] };
   }
   if (pathname.startsWith("/agentes")) {
-    return { breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Agentes" }] };
+    return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Agentes" }] };
   }
   if (pathname.startsWith("/canales")) {
-    return { breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Canales" }] };
+    return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Canales" }] };
   }
   if (pathname.startsWith("/conocimiento")) {
-    return { breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Conocimiento" }] };
+    return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Conocimiento" }] };
   }
   if (pathname.startsWith("/apis")) {
-    return { breadcrumb: [{ label: "Inicio", to: "/" }, { label: "APIs" }] };
+    return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "APIs" }] };
   }
   if (pathname.startsWith("/funciones")) {
-    return { breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Funciones" }] };
+    return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Funciones" }] };
   }
   if (pathname.startsWith("/chat")) {
-    return { breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Chat" }] };
+    return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Chat" }] };
   }
   if (pathname.startsWith("/admin/organizaciones")) {
     return {
       breadcrumb: [
-        { label: "Inicio", to: "/" },
+        { label: "Resumen", to: "/" },
         { label: "Admin" },
         { label: getOrganizationsAdminNavLabel() },
       ],
@@ -62,13 +62,13 @@ function getPageMeta(pathname: string): PageMeta {
   }
   if (pathname.startsWith("/admin/llm")) {
     return {
-      breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Admin" }, { label: "LLM" }],
+      breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Admin" }, { label: "LLM" }],
     };
   }
   if (pathname.startsWith("/admin/sucursales")) {
     return {
       breadcrumb: [
-        { label: "Inicio", to: "/" },
+        { label: "Resumen", to: "/" },
         { label: "Admin" },
         { label: getBranchesAdminNavLabel() },
       ],
@@ -76,14 +76,14 @@ function getPageMeta(pathname: string): PageMeta {
   }
   if (pathname.startsWith("/admin/usuarios")) {
     return {
-      breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Admin" }, { label: "Usuarios" }],
+      breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Admin" }, { label: "Usuarios" }],
     };
   }
   if (pathname.startsWith("/configuracion")) {
-    return { breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Configuración" }] };
+    return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Configuración" }] };
   }
   if (pathname.startsWith("/perfil")) {
-    return { breadcrumb: [{ label: "Inicio", to: "/" }, { label: "Mi perfil" }] };
+    return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Mi perfil" }] };
   }
   return { breadcrumb: [] };
 }
