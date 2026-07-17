@@ -89,6 +89,14 @@ import {
   type ThemeSocialLinkItem,
   type ThemeSponsorItem,
 } from "@/lib/themeFormItems";
+import {
+  canCreateOrganizationsAdmin,
+  getOrganizationsAdminNavLabel,
+  getOwnedOrganizationIds,
+  isOrganizationOwnerScope,
+  isSingleOrganizationOwner,
+  isSuperAdmin,
+} from "@/lib/authGuards";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -167,7 +175,23 @@ function friendlyOrgError(e: unknown): string {
 
 export default function AdminOrganizacionesPage() {
   const reduceMotion = useReducedMotion();
-  const { data: orgs = [], isLoading, isFetching, isError, error } = useOrganizations();
+  const isGlobalAdmin = isSuperAdmin();
+  const orgOwnerScope = isOrganizationOwnerScope();
+  const canCreate = canCreateOrganizationsAdmin();
+  const singleOrgMode = isSingleOrganizationOwner();
+  const pageLabel = getOrganizationsAdminNavLabel();
+  const ownedOrgIdSet = useMemo(() => {
+    if (isGlobalAdmin) return null;
+    if (!orgOwnerScope) return new Set<string>();
+    return new Set(getOwnedOrganizationIds());
+  }, [isGlobalAdmin, orgOwnerScope]);
+
+  const { data: orgsRaw = [], isLoading, isFetching, isError, error } = useOrganizations();
+  const orgs = useMemo(() => {
+    if (!ownedOrgIdSet) return orgsRaw;
+    return orgsRaw.filter((o) => ownedOrgIdSet.has(String(o.id)));
+  }, [orgsRaw, ownedOrgIdSet]);
+
   useOrganizationSyncVersion(true);
   const refreshOrganizations = useRefreshOrganizations();
   const { data: branches = [] } = useAdminBranches();
@@ -330,12 +354,22 @@ export default function AdminOrganizacionesPage() {
   };
 
   const closePanel = () => {
+    // Mi Organización: no hay lista detrás — el editor permanece abierto.
+    if (singleOrgMode) {
+      setPanelTab("datos");
+      return;
+    }
     setPanelOpen(false);
     setFocusedOrgId(null);
     setEditing(null);
+    setPanelTab("datos");
   };
 
   const openCreate = () => {
+    if (!canCreate) {
+      toast.error("No puedes crear organizaciones");
+      return;
+    }
     setFabOpen(false);
     setPanelTab("datos");
     setEditing(null);
@@ -367,7 +401,21 @@ export default function AdminOrganizacionesPage() {
     setPanelOpen(true);
   };
 
+  // Organizador con un solo holding: siempre el editor (nunca lista).
+  useEffect(() => {
+    if (!singleOrgMode || isLoading) return;
+    if (orgs.length !== 1) return;
+    if (!panelOpen || !editing || String(editing.id) !== String(orgs[0].id)) {
+      openEdit(orgs[0]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- openEdit estable para este flujo
+  }, [singleOrgMode, orgs, isLoading, panelOpen, editing?.id]);
+
   const openAttach = (o: Organization) => {
+    if (!canCreate) {
+      toast.error("Solo un administrador global puede vincular sucursales");
+      return;
+    }
     setFabOpen(false);
     setAttachOrg(o);
     setAttachBranchId("");
@@ -401,15 +449,19 @@ export default function AdminOrganizacionesPage() {
 
   const buildOrgPayload = (): Partial<Organization> => {
     const domain = normalizePortalHost(customDomain) || null;
-    return {
+    const payload: Partial<Organization> = {
       name: name.trim(),
       business_name: businessName.trim() || null,
       dni: dni.trim(),
-      owner: owner ? Number(owner) : null,
-      max_branches: Number(maxBranches) || 5,
       custom_domain: domain,
       is_active: active,
     };
+    // Solo superadmin: propietario y cupo de sucursales.
+    if (canCreate) {
+      payload.owner = owner ? Number(owner) : null;
+      payload.max_branches = Number(maxBranches) || 5;
+    }
+    return payload;
   };
 
   const buildThemeJsonPayload = (): Partial<OrganizationTheme> => ({
@@ -481,6 +533,11 @@ export default function AdminOrganizacionesPage() {
       setCustomDomain(domain);
     }
 
+    if (!editing && !canCreate) {
+      toast.error("No puedes crear organizaciones");
+      return;
+    }
+
     setSaving(true);
     try {
       const orgPayload = buildOrgPayload();
@@ -489,12 +546,17 @@ export default function AdminOrganizacionesPage() {
         await updateOrg.mutateAsync({ id: editing.id, data: orgPayload });
         await saveThemeForOrg(editing.id);
         toast.success("Organización actualizada");
+        if (!singleOrgMode) {
+          closePanel();
+        } else {
+          void refreshOrganizations();
+        }
       } else {
         const created = await createOrg.mutateAsync(orgPayload);
         await saveThemeForOrg(created.id);
         toast.success("Organización creada");
+        closePanel();
       }
-      closePanel();
     } catch (e) {
       toast.error(friendlyOrgError(e));
     } finally {
@@ -525,6 +587,10 @@ export default function AdminOrganizacionesPage() {
   };
 
   const handleDetach = (branchId: string | number, label: string, orgId?: string | number) => {
+    if (!canCreate) {
+      toast.error("Solo un administrador global puede desvincular sucursales");
+      return;
+    }
     const targetOrgId = orgId ?? attachOrg?.id ?? editing?.id;
     if (!targetOrgId) return;
     setConfirmAction({
@@ -577,15 +643,23 @@ export default function AdminOrganizacionesPage() {
           }
         : null;
 
-  const panelTitle = !editing ? "Nueva organización" : editing?.name || "Organización";
+  const panelTitle = editing
+    ? singleOrgMode
+      ? pageLabel
+      : editing.name || pageLabel
+    : "Nueva organización";
 
-  const panelSubtitle = editing ? PANEL_SUBTITLES[panelTab].edit : PANEL_SUBTITLES[panelTab].create;
+  const panelSubtitle = editing
+    ? singleOrgMode
+      ? editing.name || PANEL_SUBTITLES[panelTab].edit
+      : PANEL_SUBTITLES[panelTab].edit
+    : PANEL_SUBTITLES[panelTab].create;
 
   const storesList = (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
         <Label className="mb-0">Sucursales vinculadas</Label>
-        {editing && (
+        {editing && canCreate && (
           <Button
             type="button"
             size="sm"
@@ -603,7 +677,9 @@ export default function AdminOrganizacionesPage() {
         </div>
       ) : stores.length === 0 ? (
         <p className="text-xs text-muted-foreground rounded-md border border-dashed border-border px-3 py-4 text-center">
-          Sin sucursales vinculadas.
+          {canCreate
+            ? "Sin sucursales vinculadas."
+            : "Sin sucursales. Créalas en Sucursales; quedan bajo tu organización."}
         </p>
       ) : (
         <ul className="rounded-md border border-border divide-y divide-border overflow-hidden">
@@ -625,17 +701,19 @@ export default function AdminOrganizacionesPage() {
                   )}
                   title={s.is_active !== false ? "Activa" : "Inactiva"}
                 />
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="ghost"
-                  className="h-7 w-7 shrink-0 text-destructive hover:text-destructive"
-                  title="Desvincular"
-                  disabled={detachStore.isPending}
-                  onClick={() => handleDetach(s.id, label, editing?.id)}
-                >
-                  <Unlink2 className="h-3.5 w-3.5" />
-                </Button>
+                {canCreate && (
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7 shrink-0 text-destructive hover:text-destructive"
+                    title="Desvincular"
+                    disabled={detachStore.isPending}
+                    onClick={() => handleDetach(s.id, label, editing?.id)}
+                  >
+                    <Unlink2 className="h-3.5 w-3.5" />
+                  </Button>
+                )}
               </li>
             );
           })}
@@ -670,291 +748,312 @@ export default function AdminOrganizacionesPage() {
         <div
           className={cn(
             "grid gap-4 items-start",
-            panelOpen
-              ? "grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)]"
-              : "grid-cols-1",
+            singleOrgMode
+              ? "grid-cols-1"
+              : panelOpen
+                ? "grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)]"
+                : "grid-cols-1",
           )}
         >
-          <div className={cn("min-w-0 overflow-x-auto", panelOpen && "hidden lg:block")}>
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent border-border/50">
-                  {(
-                    [
-                      {
-                        key: "name" as const,
-                        label: "Organización",
-                        className: undefined,
-                      },
-                      {
-                        key: "dni" as const,
-                        label: "RUT",
-                        className: "hidden sm:table-cell",
-                      },
-                      {
-                        key: "owner" as const,
-                        label: "Propietario",
-                        className: cn("hidden", !panelOpen && "md:table-cell"),
-                      },
-                      {
-                        key: "domain" as const,
-                        label: "Acceso",
-                        className: cn("hidden", !panelOpen && "lg:table-cell"),
-                      },
-                      {
-                        key: "stores" as const,
-                        label: "Sucursales",
-                        className: cn("hidden", !panelOpen && "xl:table-cell"),
-                      },
-                    ] as const
-                  ).map((col) => (
-                    <TableHead key={col.key} className={col.className}>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleFilter(col.key);
-                        }}
-                        className={cn(
-                          "inline-flex max-w-full items-center truncate rounded-sm text-left transition-colors cursor-pointer hover:underline underline-offset-4 hover:text-foreground",
-                          isFilterVisible(col.key)
-                            ? "text-primary hover:text-primary"
-                            : "text-muted-foreground",
-                        )}
-                        title={
-                          isFilterVisible(col.key) ? "Cerrar filtro" : `Filtrar por ${col.label}`
-                        }
-                        aria-label={`Filtrar por ${col.label}`}
-                        aria-pressed={isFilterVisible(col.key)}
-                      >
-                        {col.label}
-                      </button>
+          {singleOrgMode && orgs.length === 0 && (
+            <p className="text-sm text-muted-foreground py-10 text-center">
+              No tienes una organización asignada como propietario.
+            </p>
+          )}
+
+          {!singleOrgMode && (
+            <div className={cn("min-w-0 overflow-x-auto", panelOpen && "hidden lg:block")}>
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent border-border/50">
+                    {(
+                      [
+                        {
+                          key: "name" as const,
+                          label: "Organización",
+                          className: undefined,
+                        },
+                        {
+                          key: "dni" as const,
+                          label: "RUT",
+                          className: "hidden sm:table-cell",
+                        },
+                        {
+                          key: "owner" as const,
+                          label: "Propietario",
+                          className: cn("hidden", !panelOpen && "md:table-cell"),
+                        },
+                        {
+                          key: "domain" as const,
+                          label: "Acceso",
+                          className: cn("hidden", !panelOpen && "lg:table-cell"),
+                        },
+                        {
+                          key: "stores" as const,
+                          label: "Sucursales",
+                          className: cn("hidden", !panelOpen && "xl:table-cell"),
+                        },
+                      ] as const
+                    ).map((col) => (
+                      <TableHead key={col.key} className={col.className}>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleFilter(col.key);
+                          }}
+                          className={cn(
+                            "inline-flex max-w-full items-center truncate rounded-sm text-left transition-colors cursor-pointer hover:underline underline-offset-4 hover:text-foreground",
+                            isFilterVisible(col.key)
+                              ? "text-primary hover:text-primary"
+                              : "text-muted-foreground",
+                          )}
+                          title={
+                            isFilterVisible(col.key) ? "Cerrar filtro" : `Filtrar por ${col.label}`
+                          }
+                          aria-label={`Filtrar por ${col.label}`}
+                          aria-pressed={isFilterVisible(col.key)}
+                        >
+                          {col.label}
+                        </button>
+                      </TableHead>
+                    ))}
+                    <TableHead className="text-right w-[72px]">
+                      <span className="sr-only">Acciones</span>
                     </TableHead>
-                  ))}
-                  <TableHead className="text-right w-[72px]">
-                    <span className="sr-only">Acciones</span>
-                  </TableHead>
-                </TableRow>
-                {showFilterRow && (
-                  <TableRow className="hover:bg-transparent border-border/40">
-                    <TableHead className="pt-0 pb-3 font-normal align-top">
-                      {isFilterVisible("name") ? (
-                        <Input
-                          autoFocus={Boolean(openFilters.name)}
-                          value={filters.name}
-                          onChange={(e) => setFilter("name", e.target.value)}
-                          placeholder="Buscar por nombre…"
-                          className="h-8 text-xs font-normal bg-muted/30 border-border/60"
-                        />
-                      ) : null}
-                    </TableHead>
-                    <TableHead className="hidden sm:table-cell pt-0 pb-3 font-normal align-top">
-                      {isFilterVisible("dni") ? (
-                        <Input
-                          autoFocus={Boolean(openFilters.dni)}
-                          value={filters.dni}
-                          onChange={(e) => setFilter("dni", e.target.value)}
-                          placeholder="12.345.678-9"
-                          className="h-8 text-xs font-normal font-mono bg-muted/30 border-border/60"
-                        />
-                      ) : null}
-                    </TableHead>
-                    <TableHead
-                      className={cn(
-                        "pt-0 pb-3 font-normal align-top hidden",
-                        !panelOpen && "md:table-cell",
-                      )}
-                    >
-                      {isFilterVisible("owner") ? (
-                        <Input
-                          autoFocus={Boolean(openFilters.owner)}
-                          value={filters.owner}
-                          onChange={(e) => setFilter("owner", e.target.value)}
-                          placeholder="correo@empresa.com"
-                          className="h-8 text-xs font-normal bg-muted/30 border-border/60"
-                        />
-                      ) : null}
-                    </TableHead>
-                    <TableHead
-                      className={cn(
-                        "pt-0 pb-3 font-normal align-top hidden",
-                        !panelOpen && "lg:table-cell",
-                      )}
-                    >
-                      {isFilterVisible("domain") ? (
-                        <Input
-                          autoFocus={Boolean(openFilters.domain)}
-                          value={filters.domain}
-                          onChange={(e) => setFilter("domain", e.target.value)}
-                          placeholder="dominio o nombre corto"
-                          className="h-8 text-xs font-normal bg-muted/30 border-border/60"
-                        />
-                      ) : null}
-                    </TableHead>
-                    <TableHead
-                      className={cn(
-                        "pt-0 pb-3 font-normal align-top hidden",
-                        !panelOpen && "xl:table-cell",
-                      )}
-                    >
-                      {isFilterVisible("stores") ? (
-                        <Input
-                          autoFocus={Boolean(openFilters.stores)}
-                          value={filters.stores}
-                          onChange={(e) => setFilter("stores", e.target.value)}
-                          placeholder="2 / 5"
-                          className="h-8 text-xs font-normal bg-muted/30 border-border/60"
-                        />
-                      ) : null}
-                    </TableHead>
-                    <TableHead className="pt-0 pb-3" />
                   </TableRow>
-                )}
-              </TableHeader>
-              <TableBody>
-                {filteredOrgs.length === 0 && (
-                  <TableRow className="hover:bg-transparent">
-                    <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
-                      {orgs.length === 0
-                        ? "Sin organizaciones. Usa el menú para crear la primera."
-                        : "Ninguna organización coincide con los filtros."}
-                    </TableCell>
-                  </TableRow>
-                )}
-                {filteredOrgs.map((o) => {
-                  const selected = panelOpen && focusedOrgId === String(o.id);
-                  const storesCount = o.stores_count ?? 0;
-                  const max = o.max_branches;
-                  return (
-                    <TableRow
-                      key={String(o.id)}
-                      className={cn(
-                        "cursor-pointer transition-colors",
-                        selected && "bg-sidebar-accent/60",
-                      )}
-                      onClick={() => openEdit(o)}
-                    >
-                      <TableCell className="min-w-0">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span
-                            className={cn(
-                              "h-2 w-2 rounded-full shrink-0",
-                              o.is_active !== false ? "bg-emerald-500" : "bg-muted-foreground/40",
-                            )}
-                            title={o.is_active !== false ? "Activa" : "Inactiva"}
+                  {showFilterRow && (
+                    <TableRow className="hover:bg-transparent border-border/40">
+                      <TableHead className="pt-0 pb-3 font-normal align-top">
+                        {isFilterVisible("name") ? (
+                          <Input
+                            autoFocus={Boolean(openFilters.name)}
+                            value={filters.name}
+                            onChange={(e) => setFilter("name", e.target.value)}
+                            placeholder="Buscar por nombre…"
+                            className="h-8 text-xs font-normal bg-muted/30 border-border/60"
                           />
-                          <div className="min-w-0">
-                            <div className="font-medium text-sm truncate">{o.name}</div>
-                            <div className="text-xs text-muted-foreground truncate">
-                              {max != null
-                                ? `${storesCount} / ${max} sucursales`
-                                : `${storesCount} sucursales`}
-                              <span className="sm:hidden font-mono">
-                                {o.dni ? ` · ${o.dni}` : ""}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell font-mono text-xs whitespace-nowrap">
-                        {o.dni || "—"}
-                      </TableCell>
-                      <TableCell
+                        ) : null}
+                      </TableHead>
+                      <TableHead className="hidden sm:table-cell pt-0 pb-3 font-normal align-top">
+                        {isFilterVisible("dni") ? (
+                          <Input
+                            autoFocus={Boolean(openFilters.dni)}
+                            value={filters.dni}
+                            onChange={(e) => setFilter("dni", e.target.value)}
+                            placeholder="12.345.678-9"
+                            className="h-8 text-xs font-normal font-mono bg-muted/30 border-border/60"
+                          />
+                        ) : null}
+                      </TableHead>
+                      <TableHead
                         className={cn(
-                          "text-xs text-muted-foreground truncate max-w-[10rem] hidden",
+                          "pt-0 pb-3 font-normal align-top hidden",
                           !panelOpen && "md:table-cell",
                         )}
                       >
-                        {o.owner_email || "—"}
-                      </TableCell>
-                      <TableCell
+                        {isFilterVisible("owner") ? (
+                          <Input
+                            autoFocus={Boolean(openFilters.owner)}
+                            value={filters.owner}
+                            onChange={(e) => setFilter("owner", e.target.value)}
+                            placeholder="correo@empresa.com"
+                            className="h-8 text-xs font-normal bg-muted/30 border-border/60"
+                          />
+                        ) : null}
+                      </TableHead>
+                      <TableHead
                         className={cn(
-                          "text-xs truncate max-w-[12rem] hidden",
+                          "pt-0 pb-3 font-normal align-top hidden",
                           !panelOpen && "lg:table-cell",
                         )}
-                        onClick={(e) => e.stopPropagation()}
                       >
-                        {(() => {
-                          const access = buildPortalAccessUrl({
-                            customDomain: o.custom_domain,
-                            loginSlug: o.login_slug,
-                          });
-                          const hasOwn =
-                            Boolean(o.custom_domain?.trim()) || Boolean(o.login_slug?.trim());
-                          if (!hasOwn) {
-                            return <span className="text-muted-foreground">—</span>;
-                          }
-                          return (
-                            <a
-                              href={access.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-primary hover:underline underline-offset-2 max-w-full"
-                              title={access.url}
-                            >
-                              <span className="truncate">
-                                {o.custom_domain?.trim() || o.login_slug || "Abrir"}
-                              </span>
-                              <ExternalLink className="h-3 w-3 shrink-0 opacity-80" />
-                            </a>
-                          );
-                        })()}
-                      </TableCell>
-                      <TableCell
-                        className={cn("text-xs tabular-nums hidden", !panelOpen && "xl:table-cell")}
+                        {isFilterVisible("domain") ? (
+                          <Input
+                            autoFocus={Boolean(openFilters.domain)}
+                            value={filters.domain}
+                            onChange={(e) => setFilter("domain", e.target.value)}
+                            placeholder="dominio o nombre corto"
+                            className="h-8 text-xs font-normal bg-muted/30 border-border/60"
+                          />
+                        ) : null}
+                      </TableHead>
+                      <TableHead
+                        className={cn(
+                          "pt-0 pb-3 font-normal align-top hidden",
+                          !panelOpen && "xl:table-cell",
+                        )}
                       >
-                        {max != null ? `${storesCount} / ${max}` : storesCount}
-                      </TableCell>
-                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-8 w-8"
-                              title="Más opciones"
-                            >
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="min-w-[11rem]">
-                            <DropdownMenuItem onClick={() => openAttach(o)}>
-                              <Link2 className="h-3.5 w-3.5 mr-2" />
-                              Vincular sucursal
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => openEdit(o, "apariencia")}>
-                              <ImageIcon className="h-3.5 w-3.5 mr-2" />
-                              Apariencia
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => openEdit(o, "redes")}>
-                              <Share2 className="h-3.5 w-3.5 mr-2" />
-                              Redes
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => openEdit(o, "acceso")}>
-                              <Globe2 className="h-3.5 w-3.5 mr-2" />
-                              Acceso
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => openEdit(o, "patrocinadores")}>
-                              <Handshake className="h-3.5 w-3.5 mr-2" />
-                              Patrocinadores
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              className="text-destructive focus:text-destructive"
-                              onClick={() => handleDelete(o)}
-                            >
-                              <Trash2 className="h-3.5 w-3.5 mr-2" />
-                              Eliminar
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        {isFilterVisible("stores") ? (
+                          <Input
+                            autoFocus={Boolean(openFilters.stores)}
+                            value={filters.stores}
+                            onChange={(e) => setFilter("stores", e.target.value)}
+                            placeholder="2 / 5"
+                            className="h-8 text-xs font-normal bg-muted/30 border-border/60"
+                          />
+                        ) : null}
+                      </TableHead>
+                      <TableHead className="pt-0 pb-3" />
+                    </TableRow>
+                  )}
+                </TableHeader>
+                <TableBody>
+                  {filteredOrgs.length === 0 && (
+                    <TableRow className="hover:bg-transparent">
+                      <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                        {orgs.length === 0
+                          ? canCreate
+                            ? "Sin organizaciones. Usa el menú para crear la primera."
+                            : "Sin organizaciones asignadas."
+                          : "Ninguna organización coincide con los filtros."}
                       </TableCell>
                     </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
+                  )}
+                  {filteredOrgs.map((o) => {
+                    const selected = panelOpen && focusedOrgId === String(o.id);
+                    const storesCount = o.stores_count ?? 0;
+                    const max = o.max_branches;
+                    return (
+                      <TableRow
+                        key={String(o.id)}
+                        className={cn(
+                          "cursor-pointer transition-colors",
+                          selected && "bg-sidebar-accent/60",
+                        )}
+                        onClick={() => openEdit(o)}
+                      >
+                        <TableCell className="min-w-0">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span
+                              className={cn(
+                                "h-2 w-2 rounded-full shrink-0",
+                                o.is_active !== false ? "bg-emerald-500" : "bg-muted-foreground/40",
+                              )}
+                              title={o.is_active !== false ? "Activa" : "Inactiva"}
+                            />
+                            <div className="min-w-0">
+                              <div className="font-medium text-sm truncate">{o.name}</div>
+                              <div className="text-xs text-muted-foreground truncate">
+                                {max != null
+                                  ? `${storesCount} / ${max} sucursales`
+                                  : `${storesCount} sucursales`}
+                                <span className="sm:hidden font-mono">
+                                  {o.dni ? ` · ${o.dni}` : ""}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="hidden sm:table-cell font-mono text-xs whitespace-nowrap">
+                          {o.dni || "—"}
+                        </TableCell>
+                        <TableCell
+                          className={cn(
+                            "text-xs text-muted-foreground truncate max-w-[10rem] hidden",
+                            !panelOpen && "md:table-cell",
+                          )}
+                        >
+                          {o.owner_email || "—"}
+                        </TableCell>
+                        <TableCell
+                          className={cn(
+                            "text-xs truncate max-w-[12rem] hidden",
+                            !panelOpen && "lg:table-cell",
+                          )}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {(() => {
+                            const access = buildPortalAccessUrl({
+                              customDomain: o.custom_domain,
+                              loginSlug: o.login_slug,
+                            });
+                            const hasOwn =
+                              Boolean(o.custom_domain?.trim()) || Boolean(o.login_slug?.trim());
+                            if (!hasOwn) {
+                              return <span className="text-muted-foreground">—</span>;
+                            }
+                            return (
+                              <a
+                                href={access.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-primary hover:underline underline-offset-2 max-w-full"
+                                title={access.url}
+                              >
+                                <span className="truncate">
+                                  {o.custom_domain?.trim() || o.login_slug || "Abrir"}
+                                </span>
+                                <ExternalLink className="h-3 w-3 shrink-0 opacity-80" />
+                              </a>
+                            );
+                          })()}
+                        </TableCell>
+                        <TableCell
+                          className={cn(
+                            "text-xs tabular-nums hidden",
+                            !panelOpen && "xl:table-cell",
+                          )}
+                        >
+                          {max != null ? `${storesCount} / ${max}` : storesCount}
+                        </TableCell>
+                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8"
+                                title="Más opciones"
+                              >
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="min-w-[11rem]">
+                              {canCreate && (
+                                <DropdownMenuItem onClick={() => openAttach(o)}>
+                                  <Link2 className="h-3.5 w-3.5 mr-2" />
+                                  Vincular sucursal
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuItem onClick={() => openEdit(o, "apariencia")}>
+                                <ImageIcon className="h-3.5 w-3.5 mr-2" />
+                                Apariencia
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => openEdit(o, "redes")}>
+                                <Share2 className="h-3.5 w-3.5 mr-2" />
+                                Redes
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => openEdit(o, "acceso")}>
+                                <Globe2 className="h-3.5 w-3.5 mr-2" />
+                                Acceso
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => openEdit(o, "patrocinadores")}>
+                                <Handshake className="h-3.5 w-3.5 mr-2" />
+                                Patrocinadores
+                              </DropdownMenuItem>
+                              {canCreate && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    className="text-destructive focus:text-destructive"
+                                    onClick={() => handleDelete(o)}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5 mr-2" />
+                                    Eliminar
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
 
           <AnimatePresence mode="wait">
             {panelOpen && (
@@ -968,6 +1067,7 @@ export default function AdminOrganizacionesPage() {
                   "rounded-lg border border-border bg-background flex flex-col overflow-hidden min-w-0 self-start",
                   "h-[calc(100dvh-5rem)] max-h-[calc(100dvh-5rem)]",
                   "lg:sticky lg:top-16 lg:z-20 lg:h-[calc(100dvh-5rem)] lg:max-h-[calc(100dvh-5rem)]",
+                  singleOrgMode && "w-full max-w-3xl mx-auto",
                 )}
               >
                 <div className="shrink-0 flex items-start justify-between gap-2 px-4 pt-4 pb-3 border-b border-border/70">
@@ -975,15 +1075,17 @@ export default function AdminOrganizacionesPage() {
                     <h2 className="text-sm font-semibold tracking-tight truncate">{panelTitle}</h2>
                     <p className="text-[11px] text-muted-foreground mt-0.5">{panelSubtitle}</p>
                   </div>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-8 w-8 shrink-0"
-                    onClick={closePanel}
-                    title="Cerrar"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
+                  {!singleOrgMode && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 shrink-0"
+                      onClick={closePanel}
+                      title="Cerrar"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
 
                 <div className="shrink-0 flex flex-wrap gap-1 px-3 py-2 border-b border-border/50 bg-muted/20">
@@ -1042,34 +1144,38 @@ export default function AdminOrganizacionesPage() {
                         <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                           Operación
                         </h3>
-                        <div>
-                          <Label>Propietario</Label>
-                          <Select
-                            value={owner || "none"}
-                            onValueChange={(v) => setOwner(v === "none" ? "" : v)}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Opcional" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">Sin propietario</SelectItem>
-                              {users.map((u) => (
-                                <SelectItem key={String(u.id)} value={String(u.id)}>
-                                  {u.email}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <Label>Máximo de sucursales</Label>
-                          <Input
-                            type="number"
-                            min={1}
-                            value={maxBranches}
-                            onChange={(e) => setMaxBranches(e.target.value)}
-                          />
-                        </div>
+                        {canCreate && (
+                          <>
+                            <div>
+                              <Label>Propietario</Label>
+                              <Select
+                                value={owner || "none"}
+                                onValueChange={(v) => setOwner(v === "none" ? "" : v)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Opcional" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">Sin propietario</SelectItem>
+                                  {users.map((u) => (
+                                    <SelectItem key={String(u.id)} value={String(u.id)}>
+                                      {u.email}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div>
+                              <Label>Máximo de sucursales</Label>
+                              <Input
+                                type="number"
+                                min={1}
+                                value={maxBranches}
+                                onChange={(e) => setMaxBranches(e.target.value)}
+                              />
+                            </div>
+                          </>
+                        )}
                         <label className="flex items-center gap-2 text-sm cursor-pointer">
                           <Checkbox
                             checked={active}
@@ -1559,9 +1665,11 @@ export default function AdminOrganizacionesPage() {
                       updateTheme.isPending) && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
                     Guardar
                   </Button>
-                  <Button variant="outline" onClick={closePanel}>
-                    Cancelar
-                  </Button>
+                  {!singleOrgMode && (
+                    <Button variant="outline" onClick={closePanel}>
+                      Cancelar
+                    </Button>
+                  )}
                 </div>
               </motion.aside>
             )}
@@ -1686,7 +1794,7 @@ export default function AdminOrganizacionesPage() {
       {/* FAB: menú → Nueva / Actualizar (solo iconos + tooltip) */}
       <TooltipProvider delayDuration={200}>
         <AnimatePresence>
-          {!panelOpen && (
+          {!panelOpen && !singleOrgMode && (
             <motion.div
               className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2"
               initial={reduceMotion ? false : { opacity: 0, y: 12 }}
@@ -1718,19 +1826,21 @@ export default function AdminOrganizacionesPage() {
                       </TooltipTrigger>
                       <TooltipContent side="left">Actualizar</TooltipContent>
                     </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          size="icon"
-                          className="h-10 w-10 rounded-full shadow-md"
-                          onClick={openCreate}
-                          aria-label="Nueva"
-                        >
-                          <Plus className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="left">Nueva</TooltipContent>
-                    </Tooltip>
+                    {canCreate && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            size="icon"
+                            className="h-10 w-10 rounded-full shadow-md"
+                            onClick={openCreate}
+                            aria-label="Nueva"
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="left">Nueva</TooltipContent>
+                      </Tooltip>
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>

@@ -12,6 +12,7 @@ import {
   type PublicLoginThemeResponse,
 } from "@/lib/publicLoginTheme";
 import { loginContextFromPublicTheme, persistLoginPortalContext } from "@/lib/loginContext";
+import { getPrimaryOrganizationName, isOrganizationOwner } from "@/lib/authGuards";
 
 export type BranchTheme = BranchThemeLike & {
   id?: number;
@@ -114,10 +115,16 @@ export function useBranchTheme(branchIdOverride?: string | null) {
   useEffect(() => {
     if (query.isError) {
       applyResolvedBranchTheme(null, themeHintLabel);
-      return;
-    }
-    if (query.data) {
+    } else if (query.data) {
       applyResolvedBranchTheme(query.data, themeHintLabel);
+    }
+
+    // Organizador: título de pestaña = nombre del holding.
+    if (isOrganizationOwner()) {
+      const orgName = getPrimaryOrganizationName();
+      if (orgName) {
+        document.title = `${orgName} — Agentes`;
+      }
     }
   }, [query.data, query.isError, themeHintLabel]);
 

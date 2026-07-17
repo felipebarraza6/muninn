@@ -4,6 +4,7 @@ export const ENDPOINTS = {
     logout: "/accounts/users/logout/",
     me: "/accounts/users/me/",
     myProfile: "/accounts/users/my-profile/",
+    changePassword: "/accounts/users/change_password/",
   },
   branches: {
     list: "/branches/",

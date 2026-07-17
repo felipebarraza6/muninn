@@ -11,20 +11,11 @@ import { getActiveBranchId, setActiveBranchId, onBranchChange } from "@/lib/bran
 import { useMyBranchesSelect } from "@/api/hooks/useBranches";
 import { Building2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { User } from "@/api/hooks/useAuth";
+import { canSwitchActiveBranch, showHeaderBranchSwitcher } from "@/lib/authGuards";
 
 interface BranchSwitcherProps {
   /** Versión angosta para header móvil. */
   compact?: boolean;
-}
-
-/** Select solo si hay >1 sucursal y el usuario puede cambiar (multi / admin / root). */
-function canSwitchBranches(user: User | null, optionsCount: number): boolean {
-  if (optionsCount <= 1) return false;
-  if (user?.is_superuser || user?.is_admin) return true;
-  // Owner/empleado sin multi: nunca selector, aunque el API liste más de una.
-  if (user?.is_multi_branch === false) return false;
-  return true;
 }
 
 function BranchLabel({
@@ -55,6 +46,15 @@ function BranchLabel({
 }
 
 export function BranchSwitcher({ compact = false }: BranchSwitcherProps) {
+  // Organizador: sin switcher global; cada pantalla filtra por sucursal.
+  if (!showHeaderBranchSwitcher()) {
+    return null;
+  }
+
+  return <BranchSwitcherInner compact={compact} />;
+}
+
+function BranchSwitcherInner({ compact = false }: BranchSwitcherProps) {
   const user = getStoredUser();
   const { data: options = [], isLoading, isError } = useMyBranchesSelect();
   const [value, setValue] = useState(() => getActiveBranchId() ?? "");
@@ -96,12 +96,11 @@ export function BranchSwitcher({ compact = false }: BranchSwitcherProps) {
     );
   }
 
-  const active =
-    options.find((o) => String(o.value) === String(value)) ?? options[0];
-  const showSelect = canSwitchBranches(user, options.length);
+  const showSelect = canSwitchActiveBranch(options.length);
 
+  // Una sola sucursal: no mostrar nada en el header (el branding ya identifica la tienda).
   if (!showSelect) {
-    return <BranchLabel compact={compact} label={active.label} />;
+    return null;
   }
 
   return (
@@ -128,12 +127,7 @@ export function BranchSwitcher({ compact = false }: BranchSwitcherProps) {
             <SelectItem
               key={String(b.value)}
               value={String(b.value)}
-              className={cn(
-                "rounded-md border border-border/70 bg-muted/30 px-2.5 py-2.5 text-xs",
-                "cursor-pointer focus:bg-accent focus:text-accent-foreground",
-                "data-[state=checked]:border-primary/45 data-[state=checked]:bg-primary/10",
-                index > 0 && "mt-1.5",
-              )}
+              className={cn(index === 0 && "mt-0")}
             >
               {b.label}
             </SelectItem>

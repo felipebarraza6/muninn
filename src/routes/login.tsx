@@ -89,8 +89,7 @@ export default function Login() {
 
   const organizationLogo = resolveMediaUrl(flat?.organization_logo_url) || null;
   // Logo del holding: en login de sucursal (crédito org) y en portal org si tiene.
-  const hasOrganizationLogo =
-    Boolean(organizationLogo) && (isBranchLogin || isOrgPortal);
+  const hasOrganizationLogo = Boolean(organizationLogo) && (isBranchLogin || isOrgPortal);
   const orgName = flat?.organization_name?.trim() || null;
 
   // Sucursal → Powered by organización. Portal org / Muninn → GitHub.

@@ -1,7 +1,16 @@
-import { useMemo, useState } from "react";
-import { Loader2, Plus, Cpu, FlaskConical, RefreshCw, Trash2, Pencil } from "lucide-react";
+import { startTransition, useEffect, useMemo, useState } from "react";
+import {
+  Loader2,
+  Plus,
+  Cpu,
+  FlaskConical,
+  RefreshCw,
+  Trash2,
+  Pencil,
+  Settings,
+  ArrowLeft,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,24 +36,93 @@ import {
   useUpdateLlmProvider,
   type LlmModel,
   type LlmProvider,
+  type LlmTestConnectionResult,
 } from "@/api/hooks/useLlm";
-import { useAdminBranches } from "@/api/hooks/useBranches";
+import { useAdminBranches, useMyBranchesSelect } from "@/api/hooks/useBranches";
+import {
+  canManageLlmProviders,
+  canMutateLlmModels,
+  canSyncLlmProviders,
+  isOrganizationOwner,
+  isSuperAdmin,
+  showBranchFilterUI,
+} from "@/lib/authGuards";
+import { GLOBAL_BRANCH_ID, getActiveBranchId } from "@/lib/branchStorage";
 import {
   AdminMotionItem,
   AdminMotionList,
   AdminPageMotion,
 } from "@/components/admin/AdminPageMotion";
+import { BranchFilterSelect } from "@/components/branch/BranchFilterSelect";
 import { toast } from "sonner";
+import type { AxiosError } from "axios";
+
+function parseTestConnectionResult(data: unknown, fallbackError?: string): LlmTestConnectionResult {
+  if (data && typeof data === "object") {
+    const d = data as LlmTestConnectionResult;
+    if (typeof d.success === "boolean" || d.error || d.message) return d;
+    const anyD = data as Record<string, unknown>;
+    if (anyD.detail) return { success: false, error: String(anyD.detail) };
+  }
+  return { success: false, error: fallbackError || "Error desconocido" };
+}
+
+function formatTestTimestamp(ts?: string) {
+  if (!ts) return "—";
+  try {
+    return new Date(ts).toLocaleString("es-CL");
+  } catch {
+    return ts;
+  }
+}
 
 export default function AdminLlmPage() {
+  const isGlobalAdmin = isSuperAdmin();
+  const isOrgOwner = isOrganizationOwner();
+  const canManageProviders = canManageLlmProviders();
+  const canEditModels = canMutateLlmModels();
+  const canSync = canSyncLlmProviders();
+  const showBranchFilter = showBranchFilterUI();
   const { data: providers = [], isLoading, refetch } = useLlmProviders();
-  const { data: branches = [] } = useAdminBranches();
+  const { data: adminBranches = [] } = useAdminBranches({
+    enabled: canManageProviders && isGlobalAdmin,
+  });
+  const { data: myBranches = [] } = useMyBranchesSelect();
+
+  const branchOptions = useMemo(() => {
+    if (isGlobalAdmin) {
+      return adminBranches.map((b) => ({
+        id: String(b.id),
+        label: b.fantasy_name?.trim() || b.business_name || String(b.id),
+      }));
+    }
+    return myBranches.map((b) => ({
+      id: String(b.value),
+      label: b.label,
+    }));
+  }, [isGlobalAdmin, adminBranches, myBranches]);
+
+  // Organizador / multi: filtro local; default Todas.
+  const [branchFilter, setBranchFilter] = useState(GLOBAL_BRANCH_ID);
+
+  const filteredProviders = useMemo(() => {
+    if (!showBranchFilter || branchFilter === GLOBAL_BRANCH_ID) return providers;
+    return providers.filter((p) => (p.branches ?? []).some((id) => String(id) === branchFilter));
+  }, [providers, showBranchFilter, branchFilter]);
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = useMemo(
-    () => providers.find((p) => String(p.id) === selectedId) ?? null,
-    [providers, selectedId],
+    () => filteredProviders.find((p) => String(p.id) === selectedId) ?? null,
+    [filteredProviders, selectedId],
   );
   const { data: models = [], isLoading: modelsLoading } = useLlmModels(selectedId);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    if (filteredProviders.some((p) => String(p.id) === selectedId)) return;
+    setSelectedId(filteredProviders[0] ? String(filteredProviders[0].id) : null);
+    setProviderFormOpen(false);
+  }, [filteredProviders, selectedId]);
 
   const createProvider = useCreateLlmProvider();
   const updateProvider = useUpdateLlmProvider();
@@ -55,7 +133,8 @@ export default function AdminLlmPage() {
   const updateModel = useUpdateLlmModel();
   const deleteModel = useDeleteLlmModel();
 
-  const [providerOpen, setProviderOpen] = useState(false);
+  /** true = panel derecho muestra formulario de proveedor (en vez de modelos). */
+  const [providerFormOpen, setProviderFormOpen] = useState(false);
   const [editingProvider, setEditingProvider] = useState<LlmProvider | null>(null);
   const [pName, setPName] = useState("");
   const [pType, setPType] = useState("openai");
@@ -64,6 +143,13 @@ export default function AdminLlmPage() {
   const [pApiKey, setPApiKey] = useState("");
   const [pActive, setPActive] = useState(true);
   const [pBranches, setPBranches] = useState<string[]>([]);
+  const [branchSearch, setBranchSearch] = useState("");
+
+  const filteredBranchOptions = useMemo(() => {
+    const q = branchSearch.trim().toLowerCase();
+    if (!q) return branchOptions;
+    return branchOptions.filter((b) => b.label.toLowerCase().includes(q));
+  }, [branchOptions, branchSearch]);
 
   const [modelOpen, setModelOpen] = useState(false);
   const [editingModel, setEditingModel] = useState<LlmModel | null>(null);
@@ -75,19 +161,63 @@ export default function AdminLlmPage() {
   const [mActive, setMActive] = useState(true);
   const [mRecommended, setMRecommended] = useState(false);
 
-  const openCreateProvider = () => {
-    setEditingProvider(null);
+  const [testResultOpen, setTestResultOpen] = useState(false);
+  const [testResult, setTestResult] = useState<LlmTestConnectionResult | null>(null);
+
+  const runConnectionTest = () => {
+    if (!selected) return;
+    testProvider.mutate(selected.id, {
+      onSuccess: (data) => {
+        setTestResult(parseTestConnectionResult(data));
+        setTestResultOpen(true);
+      },
+      onError: (e) => {
+        const err = e as AxiosError<LlmTestConnectionResult>;
+        const body = err.response?.data;
+        setTestResult(
+          parseTestConnectionResult(
+            body,
+            (e as { friendlyMessage?: string }).friendlyMessage || err.message,
+          ),
+        );
+        setTestResultOpen(true);
+      },
+    });
+  };
+
+  const resetProviderForm = () => {
     setPName("");
     setPType("openai");
     setPDescription("");
     setPBaseUrl("");
     setPApiKey("");
     setPActive(true);
-    setPBranches([]);
-    setProviderOpen(true);
+    setBranchSearch("");
+    const fromFilter =
+      branchFilter !== GLOBAL_BRANCH_ID && branchOptions.some((b) => b.id === branchFilter)
+        ? [branchFilter]
+        : null;
+    const active = getActiveBranchId();
+    const defaultBranches =
+      fromFilter ??
+      (active && branchOptions.some((b) => b.id === active)
+        ? [active]
+        : isOrgOwner || isGlobalAdmin
+          ? []
+          : branchOptions.length === 1
+            ? [branchOptions[0].id]
+            : []);
+    setPBranches(defaultBranches);
+  };
+
+  const openCreateProvider = () => {
+    setEditingProvider(null);
+    resetProviderForm();
+    setProviderFormOpen(true);
   };
 
   const openEditProvider = (p: LlmProvider) => {
+    setSelectedId(String(p.id));
     setEditingProvider(p);
     setPName(p.name);
     setPType(p.provider_type || "openai");
@@ -95,19 +225,52 @@ export default function AdminLlmPage() {
     setPBaseUrl(p.base_url || "");
     setPApiKey("");
     setPActive(p.is_active !== false);
+    setBranchSearch("");
     setPBranches((p.branches ?? []).map(String));
-    setProviderOpen(true);
+    setProviderFormOpen(true);
+  };
+
+  const closeProviderForm = () => {
+    setProviderFormOpen(false);
+    setEditingProvider(null);
+  };
+
+  const selectProvider = (id: string) => {
+    setSelectedId(id);
+    setProviderFormOpen(false);
+    setEditingProvider(null);
   };
 
   const toggleBranch = (id: string) => {
     setPBranches((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
 
+  const selectAllBranches = () => setPBranches(branchOptions.map((b) => b.id));
+  const clearBranches = () => setPBranches([]);
+
   const saveProvider = () => {
     if (!pName.trim()) {
       toast.error("Nombre requerido");
       return;
     }
+    if (!isGlobalAdmin && pBranches.length === 0) {
+      toast.error("Selecciona al menos una sucursal");
+      return;
+    }
+    if (!editingProvider && !pApiKey.trim() && pType !== "ollama") {
+      toast.error("API key requerida");
+      return;
+    }
+    if (
+      editingProvider &&
+      !editingProvider.api_key_configured &&
+      !pApiKey.trim() &&
+      pType !== "ollama"
+    ) {
+      toast.error("API key requerida");
+      return;
+    }
+
     const payload: Partial<LlmProvider> = {
       name: pName.trim(),
       provider_type: pType,
@@ -125,7 +288,8 @@ export default function AdminLlmPage() {
         {
           onSuccess: () => {
             toast.success("Proveedor actualizado");
-            setProviderOpen(false);
+            closeProviderForm();
+            refetch();
           },
           onError: (e) =>
             toast.error((e as { friendlyMessage?: string }).friendlyMessage || "Error al guardar"),
@@ -135,8 +299,8 @@ export default function AdminLlmPage() {
       createProvider.mutate(payload, {
         onSuccess: (created) => {
           toast.success("Proveedor creado");
-          setProviderOpen(false);
           setSelectedId(String(created.id));
+          closeProviderForm();
           refetch();
         },
         onError: (e) =>
@@ -218,139 +382,334 @@ export default function AdminLlmPage() {
 
   return (
     <AdminPageMotion>
-      <AdminMotionItem>
-        <header className="flex items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">LLM</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Proveedores y modelos. Los agentes eligen desde este catálogo.
-            </p>
-          </div>
-          <Button size="sm" onClick={openCreateProvider}>
-            <Plus className="h-4 w-4 mr-1.5" /> Nuevo provider
-          </Button>
-        </header>
-      </AdminMotionItem>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {showBranchFilter && (
         <AdminMotionItem>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Proveedores</CardTitle>
-              <CardDescription>{providers.length} configurados</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <AdminMotionList className="space-y-2">
-                {providers.length === 0 && (
-                  <p className="text-sm text-muted-foreground py-6 text-center">Sin providers.</p>
-                )}
-                {providers.map((p) => (
-                  <AdminMotionItem key={String(p.id)}>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedId(String(p.id))}
-                      className={`w-full flex items-center justify-between gap-3 rounded-lg border p-3 text-left transition-colors ${
-                        selectedId === String(p.id)
-                          ? "border-primary bg-sidebar-accent"
-                          : "hover:bg-muted"
+          <div className="mb-2">
+            <BranchFilterSelect
+              value={branchFilter}
+              onValueChange={(v) => startTransition(() => setBranchFilter(v))}
+              options={branchOptions}
+            />
+          </div>
+        </AdminMotionItem>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(260px,340px)_1fr] gap-6 lg:gap-8">
+        <AdminMotionItem>
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs text-muted-foreground">
+              {filteredProviders.length}{" "}
+              {filteredProviders.length === 1 ? "proveedor" : "proveedores"}
+              {!canManageProviders ? " · solo lectura" : ""}
+            </span>
+            {canManageProviders && (
+              <Button size="sm" variant="ghost" onClick={openCreateProvider}>
+                <Plus className="h-4 w-4 mr-1" /> Nuevo
+              </Button>
+            )}
+          </div>
+          <AdminMotionList className="space-y-1.5">
+            {filteredProviders.length === 0 && (
+              <p className="text-sm text-muted-foreground py-6 text-center">Sin providers.</p>
+            )}
+            {filteredProviders.map((p) => (
+              <AdminMotionItem key={String(p.id)}>
+                <button
+                  type="button"
+                  onClick={() => selectProvider(String(p.id))}
+                  className={`w-full flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left transition-colors ${
+                    selectedId === String(p.id) && !providerFormOpen
+                      ? "bg-sidebar-accent text-primary"
+                      : selectedId === String(p.id) && providerFormOpen
+                        ? "bg-muted"
+                        : "hover:bg-muted"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Cpu
+                      className={`h-4 w-4 shrink-0 ${
+                        selectedId === String(p.id) ? "text-primary" : "text-muted-foreground"
                       }`}
+                    />
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-sm truncate">{p.name}</span>
+                        {p.is_active === false && (
+                          <Badge variant="secondary" className="text-[10px]">
+                            Off
+                          </Badge>
+                        )}
+                      </div>
+                      {canManageProviders && (
+                        <div className="text-[11px] text-muted-foreground truncate">
+                          {p.provider_type} · {p.api_key_configured ? "API key ok" : "Sin API key"}
+                          {p.branches?.length ? ` · ${p.branches.length} suc.` : ""}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  {canManageProviders && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className={`h-7 w-7 shrink-0 ${
+                        providerFormOpen &&
+                        editingProvider &&
+                        String(editingProvider.id) === String(p.id)
+                          ? "text-primary"
+                          : ""
+                      }`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openEditProvider(p);
+                      }}
                     >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="h-9 w-9 rounded-lg bg-primary-soft text-primary flex items-center justify-center shrink-0">
-                          <Cpu className="h-5 w-5" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-sm truncate">{p.name}</span>
-                            <Badge
-                              variant={p.is_active !== false ? "default" : "secondary"}
-                              className="text-[10px]"
-                            >
-                              {p.is_active !== false ? "Activo" : "Off"}
-                            </Badge>
-                          </div>
-                          <div className="text-[11px] text-muted-foreground truncate">
-                            {p.provider_type} ·{" "}
-                            {p.api_key_configured ? "API key ok" : "Sin API key"}
-                            {p.branches?.length ? ` · ${p.branches.length} suc.` : ""}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex gap-1 shrink-0">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-8 w-8"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openEditProvider(p);
-                          }}
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </button>
-                  </AdminMotionItem>
-                ))}
-              </AdminMotionList>
-            </CardContent>
-          </Card>
+                      <Settings className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </button>
+              </AdminMotionItem>
+            ))}
+          </AdminMotionList>
         </AdminMotionItem>
 
         <AdminMotionItem>
-          <Card>
-            <CardHeader className="flex-row items-start justify-between space-y-0">
-              <div>
-                <CardTitle className="text-base">Modelos</CardTitle>
-                <CardDescription>
-                  {selected ? selected.name : "Selecciona un provider"}
-                </CardDescription>
-              </div>
-              {selected && (
-                <div className="flex gap-1">
+          {providerFormOpen && canManageProviders ? (
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+                <div className="flex items-center gap-2">
                   <Button
                     size="sm"
-                    variant="outline"
-                    disabled={testProvider.isPending}
-                    onClick={() =>
-                      testProvider.mutate(selected.id, {
-                        onSuccess: () => toast.success("Conexión OK"),
-                        onError: (e) =>
-                          toast.error(
-                            (e as { friendlyMessage?: string }).friendlyMessage || "Falló el test",
-                          ),
-                      })
-                    }
+                    variant="ghost"
+                    className="h-8 px-2"
+                    onClick={closeProviderForm}
                   >
-                    <FlaskConical className="h-3.5 w-3.5 mr-1" /> Test
+                    <ArrowLeft className="h-4 w-4 mr-1" />
+                    Modelos
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={syncModels.isPending}
-                    onClick={() =>
-                      syncModels.mutate(selected.id, {
-                        onSuccess: () => toast.success("Sync lanzado"),
-                        onError: (e) =>
-                          toast.error(
-                            (e as { friendlyMessage?: string }).friendlyMessage || "Falló sync",
-                          ),
-                      })
-                    }
-                  >
-                    <RefreshCw className="h-3.5 w-3.5 mr-1" /> Sync
-                  </Button>
-                  <Button size="sm" onClick={openCreateModel}>
-                    <Plus className="h-3.5 w-3.5 mr-1" /> Modelo
-                  </Button>
+                  <h2 className="text-sm font-medium">
+                    {editingProvider ? "Configurar proveedor" : "Nuevo proveedor"}
+                  </h2>
                 </div>
-              )}
-            </CardHeader>
-            <CardContent>
-              <AdminMotionList className="space-y-2">
+              </div>
+
+              <div className="space-y-3 max-w-xl">
+                <div>
+                  <Label>Nombre</Label>
+                  <Input value={pName} onChange={(e) => setPName(e.target.value)} />
+                </div>
+                <div>
+                  <Label>Tipo</Label>
+                  <Select value={pType} onValueChange={setPType}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PROVIDER_TYPES.map((t) => (
+                        <SelectItem key={t.value} value={t.value}>
+                          {t.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Descripción</Label>
+                  <Input
+                    value={pDescription}
+                    onChange={(e) => setPDescription(e.target.value)}
+                    placeholder="Notas del provider"
+                  />
+                </div>
+                <div>
+                  <Label>Base URL (opcional)</Label>
+                  <Input
+                    value={pBaseUrl}
+                    onChange={(e) => setPBaseUrl(e.target.value)}
+                    placeholder="https://..."
+                  />
+                </div>
+                <div>
+                  <Label>
+                    API Key{" "}
+                    {editingProvider
+                      ? editingProvider.api_key_configured
+                        ? "(dejar vacío para no cambiar)"
+                        : "(requerida)"
+                      : pType === "ollama"
+                        ? "(opcional)"
+                        : "(requerida)"}
+                  </Label>
+                  <Input
+                    type="password"
+                    value={pApiKey}
+                    onChange={(e) => setPApiKey(e.target.value)}
+                    autoComplete="off"
+                    placeholder={editingProvider?.api_key_configured ? "••••••••" : "sk-..."}
+                  />
+                </div>
+
+                {branchOptions.length > 0 && (
+                  <div>
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                      <Label className="mb-0">
+                        Sucursales
+                        {!isGlobalAdmin ? " *" : " (opcional)"}
+                      </Label>
+                      <div className="flex items-center gap-2 text-[11px]">
+                        <span className="text-muted-foreground">
+                          {pBranches.length}/{branchOptions.length}
+                        </span>
+                        <button
+                          type="button"
+                          className="text-primary hover:underline"
+                          onClick={selectAllBranches}
+                        >
+                          Todas
+                        </button>
+                        <span className="text-muted-foreground">·</span>
+                        <button
+                          type="button"
+                          className="text-muted-foreground hover:underline"
+                          onClick={clearBranches}
+                        >
+                          Ninguna
+                        </button>
+                      </div>
+                    </div>
+                    {branchOptions.length > 6 && (
+                      <Input
+                        value={branchSearch}
+                        onChange={(e) => setBranchSearch(e.target.value)}
+                        placeholder="Buscar sucursal…"
+                        className="mb-2 h-8 text-xs"
+                      />
+                    )}
+                    <div className="max-h-44 overflow-y-auto rounded-md border border-border p-2 space-y-1">
+                      {filteredBranchOptions.length === 0 && (
+                        <p className="text-xs text-muted-foreground py-2 text-center">
+                          Sin resultados
+                        </p>
+                      )}
+                      {filteredBranchOptions.map((b) => (
+                        <label
+                          key={b.id}
+                          className="flex items-center gap-2 rounded-md px-1.5 py-1.5 text-sm hover:bg-muted/60"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={pBranches.includes(b.id)}
+                            onChange={() => toggleBranch(b.id)}
+                          />
+                          <span className="truncate">{b.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      {isGlobalAdmin
+                        ? "Vacío = visible según reglas globales del API."
+                        : "El proveedor quedará disponible solo en las sucursales marcadas."}
+                    </p>
+                  </div>
+                )}
+
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={pActive}
+                    onChange={(e) => setPActive(e.target.checked)}
+                  />
+                  Activo
+                </label>
+
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <Button
+                    onClick={saveProvider}
+                    disabled={createProvider.isPending || updateProvider.isPending}
+                  >
+                    Guardar
+                  </Button>
+                  <Button variant="ghost" onClick={closeProviderForm}>
+                    Cancelar
+                  </Button>
+                  {editingProvider && (
+                    <Button
+                      variant="ghost"
+                      className="text-destructive hover:text-destructive ml-auto"
+                      disabled={deleteProvider.isPending}
+                      onClick={() => {
+                        if (!confirm(`¿Eliminar provider ${editingProvider.name}?`)) return;
+                        deleteProvider.mutate(editingProvider.id, {
+                          onSuccess: () => {
+                            toast.success("Eliminado");
+                            setSelectedId(null);
+                            closeProviderForm();
+                            refetch();
+                          },
+                          onError: (e) =>
+                            toast.error(
+                              (e as { friendlyMessage?: string }).friendlyMessage ||
+                                "No se pudo eliminar",
+                            ),
+                        });
+                      }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Eliminar
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                <h2 className="text-sm font-medium">Modelos</h2>
+                {selected && (
+                  <div className="flex gap-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={testProvider.isPending}
+                      onClick={runConnectionTest}
+                    >
+                      {testProvider.isPending ? (
+                        <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                      ) : (
+                        <FlaskConical className="h-3.5 w-3.5 mr-1" />
+                      )}
+                      Test
+                    </Button>
+                    {canSync && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={syncModels.isPending}
+                        onClick={() =>
+                          syncModels.mutate(selected.id, {
+                            onSuccess: () => toast.success("Sync lanzado"),
+                            onError: (e) =>
+                              toast.error(
+                                (e as { friendlyMessage?: string }).friendlyMessage || "Falló sync",
+                              ),
+                          })
+                        }
+                      >
+                        <RefreshCw className="h-3.5 w-3.5 mr-1" /> Sync
+                      </Button>
+                    )}
+                    {canEditModels && (
+                      <Button size="sm" onClick={openCreateModel}>
+                        <Plus className="h-3.5 w-3.5 mr-1" /> Modelo
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <AdminMotionList className="divide-y divide-border/60">
                 {!selected && (
                   <p className="text-sm text-muted-foreground py-8 text-center">
-                    Elige un provider a la izquierda.
+                    Elige un proveedor a la izquierda.
                   </p>
                 )}
                 {selected && modelsLoading && (
@@ -362,7 +721,7 @@ export default function AdminLlmPage() {
                   !modelsLoading &&
                   models.map((m) => (
                     <AdminMotionItem key={String(m.id)}>
-                      <div className="flex items-center justify-between gap-2 rounded-lg border p-3">
+                      <div className="flex items-center justify-between gap-2 px-1 py-2.5">
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
                             <span className="font-medium text-sm truncate">{m.name}</span>
@@ -371,37 +730,47 @@ export default function AdminLlmPage() {
                                 Rec.
                               </Badge>
                             )}
+                            {m.is_active === false && (
+                              <Badge variant="outline" className="text-[10px]">
+                                Off
+                              </Badge>
+                            )}
                           </div>
                           <div className="text-[11px] text-muted-foreground font-mono truncate">
                             {m.model_id}
                             {m.context_window != null ? ` · ctx ${m.context_window}` : ""}
                           </div>
                         </div>
-                        <div className="flex gap-1 shrink-0">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8"
-                            onClick={() => openEditModel(m)}
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8 text-destructive"
-                            onClick={() =>
-                              deleteModel.mutate(m.id, {
-                                onSuccess: () => toast.success("Modelo eliminado"),
-                                onError: (e) =>
-                                  toast.error(
-                                    (e as { friendlyMessage?: string }).friendlyMessage || "Error",
-                                  ),
-                              })
-                            }
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                        <div className="flex gap-0.5 shrink-0">
+                          {canEditModels && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7"
+                              onClick={() => openEditModel(m)}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                          {canManageProviders && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7 text-destructive"
+                              onClick={() =>
+                                deleteModel.mutate(m.id, {
+                                  onSuccess: () => toast.success("Modelo eliminado"),
+                                  onError: (e) =>
+                                    toast.error(
+                                      (e as { friendlyMessage?: string }).friendlyMessage ||
+                                        "Error",
+                                    ),
+                                })
+                              }
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </AdminMotionItem>
@@ -409,125 +778,118 @@ export default function AdminLlmPage() {
                 {selected && !modelsLoading && models.length === 0 && (
                   <p className="text-sm text-muted-foreground py-6 text-center">Sin modelos.</p>
                 )}
-                {selected && (
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    className="w-full mt-2"
-                    disabled={deleteProvider.isPending}
-                    onClick={() => {
-                      if (!confirm(`¿Eliminar provider ${selected.name}?`)) return;
-                      deleteProvider.mutate(selected.id, {
-                        onSuccess: () => {
-                          toast.success("Eliminado");
-                          setSelectedId(null);
-                        },
-                        onError: (e) =>
-                          toast.error(
-                            (e as { friendlyMessage?: string }).friendlyMessage ||
-                              "No se pudo eliminar",
-                          ),
-                      });
-                    }}
-                  >
-                    <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Eliminar provider
-                  </Button>
-                )}
               </AdminMotionList>
-            </CardContent>
-          </Card>
+            </>
+          )}
         </AdminMotionItem>
       </div>
 
-      <Dialog open={providerOpen} onOpenChange={setProviderOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto">
+      <Dialog open={testResultOpen} onOpenChange={setTestResultOpen}>
+        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-2xl gap-4 p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle>{editingProvider ? "Editar provider" : "Nuevo provider"}</DialogTitle>
+            <DialogTitle className="flex flex-wrap items-center gap-2">
+              Prueba de conexión
+              {testResult && (
+                <Badge
+                  variant={testResult.success ? "default" : "destructive"}
+                  className="text-[10px]"
+                >
+                  {testResult.success ? "OK" : "Falló"}
+                </Badge>
+              )}
+            </DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label>Nombre</Label>
-              <Input value={pName} onChange={(e) => setPName(e.target.value)} />
-            </div>
-            <div>
-              <Label>Tipo</Label>
-              <Select value={pType} onValueChange={setPType}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PROVIDER_TYPES.map((t) => (
-                    <SelectItem key={t.value} value={t.value}>
-                      {t.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Descripción</Label>
-              <Input
-                value={pDescription}
-                onChange={(e) => setPDescription(e.target.value)}
-                placeholder="Notas del provider"
-              />
-            </div>
-            <div>
-              <Label>Base URL (opcional)</Label>
-              <Input
-                value={pBaseUrl}
-                onChange={(e) => setPBaseUrl(e.target.value)}
-                placeholder="https://..."
-              />
-            </div>
-            <div>
-              <Label>API Key {editingProvider ? "(dejar vacío para no cambiar)" : ""}</Label>
-              <Input
-                type="password"
-                value={pApiKey}
-                onChange={(e) => setPApiKey(e.target.value)}
-                autoComplete="off"
-              />
-            </div>
-            {branches.length > 0 && (
-              <div>
-                <Label className="mb-2 block">Sucursales (opcional)</Label>
-                <div className="max-h-36 overflow-y-auto rounded-md border border-border p-2 space-y-1.5">
-                  {branches.map((b) => {
-                    const id = String(b.id);
-                    return (
-                      <label key={id} className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={pBranches.includes(id)}
-                          onChange={() => toggleBranch(id)}
-                        />
-                        <span className="truncate">{b.business_name || id}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-                <p className="text-[11px] text-muted-foreground mt-1">
-                  Vacío = disponible globalmente (según reglas del API).
-                </p>
+          {testResult && (
+            <div className="space-y-3 text-sm">
+              <div className="grid gap-3 sm:grid-cols-2">
+                {testResult.provider_name && (
+                  <div className="min-w-0">
+                    <span className="text-muted-foreground text-xs">Proveedor</span>
+                    <p className="font-medium truncate">
+                      {testResult.provider_name}
+                      {testResult.provider ? (
+                        <span className="text-muted-foreground font-normal">
+                          {" "}
+                          · {testResult.provider}
+                        </span>
+                      ) : null}
+                    </p>
+                  </div>
+                )}
+                {testResult.timestamp && (
+                  <div className="min-w-0 sm:text-right">
+                    <span className="text-muted-foreground text-xs">Fecha</span>
+                    <p className="text-xs sm:text-sm">
+                      {formatTestTimestamp(testResult.timestamp)}
+                    </p>
+                  </div>
+                )}
               </div>
-            )}
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={pActive}
-                onChange={(e) => setPActive(e.target.checked)}
-              />
-              Activo
-            </label>
-            <Button
-              className="w-full"
-              onClick={saveProvider}
-              disabled={createProvider.isPending || updateProvider.isPending}
-            >
-              Guardar
-            </Button>
-          </div>
+
+              {testResult.url_tested && (
+                <div className="min-w-0">
+                  <span className="text-muted-foreground text-xs">URL probada</span>
+                  <p className="mt-0.5 font-mono text-[11px] break-all rounded-md bg-muted px-2 py-1.5 leading-snug">
+                    {testResult.method ? `${testResult.method} ` : ""}
+                    {testResult.url_tested}
+                  </p>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {testResult.status_code != null && (
+                  <div>
+                    <span className="text-muted-foreground text-xs">HTTP</span>
+                    <p className="font-mono font-medium">{testResult.status_code}</p>
+                  </div>
+                )}
+                {testResult.latency_ms != null && (
+                  <div>
+                    <span className="text-muted-foreground text-xs">Latencia</span>
+                    <p className="font-mono font-medium">{testResult.latency_ms} ms</p>
+                  </div>
+                )}
+              </div>
+
+              {(testResult.message || testResult.error) && (
+                <div
+                  className={`rounded-md border px-3 py-2 text-xs ${
+                    testResult.success
+                      ? "border-primary/30 bg-primary/5 text-foreground"
+                      : "border-destructive/30 bg-destructive/5 text-destructive"
+                  }`}
+                >
+                  {testResult.success ? testResult.message : testResult.error}
+                </div>
+              )}
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                {testResult.headers_sent && Object.keys(testResult.headers_sent).length > 0 && (
+                  <div className="min-w-0">
+                    <span className="text-muted-foreground text-xs">Headers enviados</span>
+                    <pre className="mt-1 max-h-24 overflow-auto rounded-md bg-muted p-2 text-[10px] font-mono leading-snug">
+                      {JSON.stringify(testResult.headers_sent, null, 2)}
+                    </pre>
+                  </div>
+                )}
+                {testResult.response_preview && (
+                  <div className="min-w-0">
+                    <span className="text-muted-foreground text-xs">Vista previa de respuesta</span>
+                    <pre className="mt-1 max-h-24 overflow-auto rounded-md bg-muted p-2 text-[10px] font-mono whitespace-pre-wrap break-all leading-snug">
+                      {testResult.response_preview}
+                    </pre>
+                  </div>
+                )}
+              </div>
+
+              <Button
+                className="w-full sm:w-auto sm:min-w-[8rem]"
+                onClick={() => setTestResultOpen(false)}
+              >
+                Cerrar
+              </Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

@@ -1,8 +1,8 @@
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { POST, GET, apiClient } from "../client";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { POST, GET, PATCH, apiClient } from "../client";
 import { ENDPOINTS } from "../endpoints/index";
 import { setActiveBranchId, syncBranchId } from "@/lib/branchStorage";
-import { clearSession, persistSession } from "@/lib/authSession";
+import { clearSession, persistSession, updateStoredUser } from "@/lib/authSession";
 import {
   clearLoginPortalContext,
   getLoginPortalContext,
@@ -43,11 +43,24 @@ export interface User {
   full_name: string;
   type_user: string;
   is_superuser: boolean;
+  is_staff?: boolean;
+  is_active?: boolean;
   is_admin: boolean;
   is_client: boolean;
   is_multi_branch?: boolean;
+  is_organization_owner?: boolean;
+  owned_organizations?: OwnedOrganization[];
   dni?: string;
+  last_login?: string | null;
+  created?: string | null;
   branch_assignments: BranchAssignment[];
+}
+
+export interface OwnedOrganization {
+  id: number;
+  name?: string;
+  business_name?: string;
+  stores_count?: number;
 }
 
 export interface AuthPermissions {
@@ -61,6 +74,7 @@ export interface AuthPermissions {
 export interface LoginCompleteResponse {
   user: User;
   branches: BranchAssignment[];
+  owned_organizations?: OwnedOrganization[];
   permissions: AuthPermissions;
   token: string;
   message?: string;
@@ -101,7 +115,10 @@ function pickFromContext(
  * Elige sucursal activa tras login:
  * 1) contexto del portal (branch_id / stores de org)
  * 2) única asignación
- * 3) sync previa / primera activa
+ * 3) sync previa / primera activa (descarta branch stale)
+ *
+ * Nota: el organizador mantiene sucursal activa (tema/logo/favicon),
+ * pero el switcher del header está oculto — filtra por pantalla.
  */
 export function selectDefaultBranch(user: User, branches: BranchAssignment[]) {
   const ctx = getLoginPortalContext();
@@ -117,12 +134,16 @@ export function selectDefaultBranch(user: User, branches: BranchAssignment[]) {
   }
 
   const existing = syncBranchId();
-  if (existing) {
+  const existingOk =
+    Boolean(existing) &&
+    (user.is_superuser ||
+      branches.some((b) => String(b.branch_id) === String(existing) && b.is_active !== false));
+  if (existingOk) {
     clearLoginPortalContext();
     return;
   }
 
-  const firstActive = branches.find((b) => b.is_active);
+  const firstActive = branches.find((b) => b.is_active !== false);
   if (firstActive) {
     setActiveBranchId(firstActive.branch_id, true, user.is_superuser);
   }
@@ -147,7 +168,15 @@ export function useLogin() {
       });
       persistSession({
         token: data.token,
-        user: { ...data.user, branch_assignments: branches },
+        user: {
+          ...data.user,
+          branch_assignments: branches,
+          owned_organizations: data.owned_organizations ?? data.user.owned_organizations ?? [],
+          is_organization_owner: Boolean(
+            (data.owned_organizations ?? data.user.owned_organizations ?? []).length > 0 ||
+            data.user.is_organization_owner,
+          ),
+        },
         branches,
         permissions: data.permissions as unknown as Record<string, unknown>,
       });
@@ -162,6 +191,47 @@ export function useProfile() {
     queryFn: () => GET<User>(ENDPOINTS.auth.myProfile),
     enabled: typeof window !== "undefined",
     retry: false,
+  });
+}
+
+export type UpdateProfilePayload = Pick<User, "first_name" | "last_name" | "email" | "username"> & {
+  dni?: string;
+};
+
+export function useUpdateProfile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: UpdateProfilePayload) =>
+      PATCH<User>(ENDPOINTS.auth.myProfile, data, { skipBranchHeader: true }),
+    onSuccess: (data) => {
+      updateStoredUser({
+        first_name: data.first_name,
+        last_name: data.last_name,
+        email: data.email,
+        username: data.username,
+        dni: data.dni,
+        full_name:
+          [data.first_name, data.last_name].filter(Boolean).join(" ").trim() ||
+          data.username ||
+          data.email,
+      });
+      qc.setQueryData(["auth", "profile"], data);
+    },
+  });
+}
+
+export type ChangePasswordPayload = {
+  current_password: string;
+  new_password: string;
+  confirm_password: string;
+};
+
+export function useChangePassword() {
+  return useMutation({
+    mutationFn: (data: ChangePasswordPayload) =>
+      POST<{ message: string }>(ENDPOINTS.auth.changePassword, data, {
+        skipBranchHeader: true,
+      }),
   });
 }
 

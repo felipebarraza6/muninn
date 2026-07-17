@@ -14,6 +14,7 @@ import {
   useExecuteAgentFunction,
 } from "@/api/hooks/useAgentFunctions";
 import { toast } from "sonner";
+import { AdminPageMotion } from "@/components/admin/AdminPageMotion";
 
 export default function Funciones() {
   const { data: functions = [], isLoading, refetch } = useAgentFunctions();
@@ -33,23 +34,18 @@ export default function Funciones() {
   }
 
   return (
-    <div className="px-4 md:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto space-y-6">
-      <header className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">Funciones</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Tools que el agente puede ejecutar (schema + execute).
-          </p>
-        </div>
-        <Button size="sm" onClick={() => setOpen(true)}>
-          <Plus className="h-4 w-4 mr-1.5" /> Nueva
-        </Button>
-      </header>
-
+    <AdminPageMotion>
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Funciones configuradas</CardTitle>
-          <CardDescription>Vincúlalas al agente desde el Agent Studio.</CardDescription>
+        <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+          <div>
+            <CardTitle className="text-base">Funciones</CardTitle>
+            <CardDescription>
+              Tools que el agente puede ejecutar (schema + execute).
+            </CardDescription>
+          </div>
+          <Button size="sm" onClick={() => setOpen(true)}>
+            <Plus className="h-4 w-4 mr-1.5" /> Nueva
+          </Button>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {functions.length === 0 && (
@@ -178,6 +174,6 @@ export default function Funciones() {
           </form>
         </DialogContent>
       </Dialog>
-    </div>
+    </AdminPageMotion>
   );
 }

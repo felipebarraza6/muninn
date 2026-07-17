@@ -1,8 +1,4 @@
-import axios, {
-  AxiosError,
-  type AxiosRequestConfig,
-  type InternalAxiosRequestConfig,
-} from "axios";
+import axios, { AxiosError, type AxiosRequestConfig, type InternalAxiosRequestConfig } from "axios";
 import { getActiveBranchId, getBranchMode } from "@/lib/branchStorage";
 
 const API_BASE_URL = import.meta.env.DEV
@@ -118,10 +114,7 @@ export const API_MAX_PAGE_SIZE = 200;
  * Trae todas las páginas de un listado paginado (page_size ≤ 200).
  * Si la respuesta ya es array, la devuelve tal cual.
  */
-export async function GET_ALL_PAGES<T>(
-  url: string,
-  config: ApiRequestConfig = {},
-): Promise<T[]> {
+export async function GET_ALL_PAGES<T>(url: string, config: ApiRequestConfig = {}): Promise<T[]> {
   const baseParams =
     config.params && typeof config.params === "object" && !Array.isArray(config.params)
       ? { ...(config.params as Record<string, unknown>) }

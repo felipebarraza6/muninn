@@ -23,6 +23,16 @@ export function getStoredUser(): User | null {
   }
 }
 
+/** Actualiza parcialmente el usuario persistido sin perder datos ricos del login. */
+export function updateStoredUser(patch: Partial<User>): User | null {
+  const current = getStoredUser();
+  if (!current) return null;
+  const next = { ...current, ...patch };
+  localStorage.setItem(USER_KEY, JSON.stringify(next));
+  window.dispatchEvent(new CustomEvent("authUserChanged", { detail: next }));
+  return next;
+}
+
 export function getStoredBranches(): BranchAssignment[] {
   try {
     const raw = localStorage.getItem(BRANCHES_KEY);

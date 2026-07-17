@@ -117,13 +117,26 @@ function resolveDeep(primary: string, secondary?: string | null): string {
 
 function setFavicon(href: string | null | undefined) {
   if (!href) return;
+  const resolved = resolveMediaUrl(href) || href;
   let link = document.querySelector<HTMLLinkElement>("link[rel='icon']");
   if (!link) {
     link = document.createElement("link");
     link.rel = "icon";
     document.head.appendChild(link);
   }
-  link.href = href;
+  link.href = resolved;
+}
+
+function setDocumentTitle(theme: BranchThemeLike | null | undefined) {
+  const raw = theme?.app_name?.trim();
+  const brandingName =
+    typeof theme?.branding?.app_name === "string" ? theme.branding.app_name.trim() : "";
+  const name = raw || brandingName;
+  if (name && name.toLowerCase() !== "muninn" && name.toLowerCase() !== "erp system") {
+    document.title = `${name} — Agentes`;
+    return;
+  }
+  document.title = "Muninn — Agentes Especializados";
 }
 
 function clearPrimaryOverrides(root: HTMLElement) {
@@ -228,6 +241,7 @@ export function applyBranchTheme(theme: BranchThemeLike | null | undefined): voi
 
   applyUiPreferences(root, theme);
   setFavicon(theme?.favicon_url || theme?.favicon || null);
+  setDocumentTitle(theme);
 }
 
 /** Reaplica primary al cambiar light/dark. */

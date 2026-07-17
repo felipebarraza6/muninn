@@ -30,7 +30,17 @@ import { useBranchTheme } from "@/api/hooks/useBranchTheme";
 import { useActiveBranch } from "@/api/hooks/useBranches";
 import { resolveThemeLogo } from "@/lib/applyBranchTheme";
 import { MuninnBrand } from "@/components/brand/MuninnBrand";
-import { isSuperAdmin, canAccessUsersAdmin } from "@/lib/authGuards";
+import {
+  isSuperAdmin,
+  canAccessUsersAdmin,
+  canAccessLlmAdmin,
+  canAccessBranchesAdmin,
+  isOrganizationOwner,
+  isMultiBranchUser,
+  getPrimaryOrganizationName,
+  getBranchesAdminNavLabel,
+  getOrganizationsAdminNavLabel,
+} from "@/lib/authGuards";
 
 type IconComponent = React.ComponentType<{ className?: string; strokeWidth?: number }>;
 
@@ -58,9 +68,44 @@ const adminItems: MenuItem[] = [
   { title: "LLM", url: "/admin/llm", icon: Cpu },
 ];
 
-const usersOnlyItems: MenuItem[] = [
+const usersOnlyItems: MenuItem[] = [{ title: "Usuarios", url: "/admin/usuarios", icon: Users }];
+
+const llmOnlyItems: MenuItem[] = [{ title: "LLM", url: "/admin/llm", icon: Cpu }];
+
+const orgGestionBaseItems: MenuItem[] = [
+  { title: "Sucursales", url: "/admin/sucursales", icon: Building2 },
   { title: "Usuarios", url: "/admin/usuarios", icon: Users },
+  { title: "LLM", url: "/admin/llm", icon: Cpu },
 ];
+
+function buildOrgGestionItems(): MenuItem[] {
+  return [
+    {
+      title: getOrganizationsAdminNavLabel(),
+      url: "/admin/organizaciones",
+      icon: Network,
+    },
+    ...orgGestionBaseItems,
+  ];
+}
+
+function buildRoleGestionItems(): MenuItem[] {
+  const items: MenuItem[] = [];
+  if (canAccessBranchesAdmin()) {
+    items.push({
+      title: getBranchesAdminNavLabel(),
+      url: "/admin/sucursales",
+      icon: Building2,
+    });
+  }
+  if (canAccessUsersAdmin()) {
+    items.push(...usersOnlyItems);
+  }
+  if (canAccessLlmAdmin()) {
+    items.push(...llmOnlyItems);
+  }
+  return items;
+}
 
 export function AppSidebar() {
   const { pathname } = useLocation();
@@ -69,15 +114,27 @@ export function AppSidebar() {
   const { data: activeBranch } = useActiveBranch();
   const branchLogo = resolveThemeLogo(rawTheme ?? theme);
   // Título = fantasy_name | Subtítulo = app_name (como antes MUNINN / Agentes)
-  const fantasyName =
+  const orgName = isOrganizationOwner() ? getPrimaryOrganizationName() : null;
+  const branchDisplayName =
     activeBranch?.fantasy_name?.trim() || activeBranch?.business_name?.trim() || null;
+  // Organizador: título = nombre del holding, subtítulo = sucursal activa.
+  const fantasyName = orgName ?? branchDisplayName;
   const appNameRaw = (rawTheme?.app_name || theme?.app_name || "").trim();
-  const appName =
+  const themeAppName =
     appNameRaw && appNameRaw.toLowerCase() !== "muninn" && appNameRaw.toLowerCase() !== "erp system"
       ? appNameRaw
       : null;
+  // Sin multi-sucursal: no subtítulo (el título del branding ya basta).
+  // Multi / organizador: subtítulo útil (sucursal activa o app_name).
+  const appName = orgName
+    ? (branchDisplayName ?? themeAppName)
+    : isMultiBranchUser()
+      ? themeAppName
+      : null;
   const showAdmin = isSuperAdmin();
-  const showUsersOnly = !showAdmin && canAccessUsersAdmin();
+  const showOrgGestion = !showAdmin && isOrganizationOwner();
+  const roleGestionItems = !showAdmin && !showOrgGestion ? buildRoleGestionItems() : [];
+  const showRoleGestion = roleGestionItems.length > 0;
   const reduceMotion = useReducedMotion();
 
   const isActive = (url: string, exact?: boolean) =>
@@ -188,7 +245,7 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
 
-        {showUsersOnly && (
+        {(showOrgGestion || showRoleGestion) && (
           <SidebarGroup>
             <SidebarGroupLabel className="text-[10.5px] font-semibold tracking-wider uppercase text-muted-foreground/80">
               Gestión
@@ -201,7 +258,10 @@ export function AppSidebar() {
                   initial={reduceMotion ? false : "hidden"}
                   animate="show"
                 >
-                  {renderItems(usersOnlyItems, "gestion")}
+                  {renderItems(
+                    showOrgGestion ? buildOrgGestionItems() : roleGestionItems,
+                    "gestion",
+                  )}
                 </motion.div>
               </SidebarMenu>
             </SidebarGroupContent>

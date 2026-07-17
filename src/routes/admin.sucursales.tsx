@@ -67,6 +67,18 @@ import {
 } from "@/api/hooks/useBranches";
 import { AdminMotionItem, AdminPageMotion } from "@/components/admin/AdminPageMotion";
 import {
+  canCreateBranchesAdmin,
+  canMutateBranch,
+  getBranchesAdminNavLabel,
+  getOwnedOrganizationIds,
+  getOwnerBranchIds,
+  getPrimaryOrganizationName,
+  isMultiBranchUser,
+  isOrganizationOwner,
+  isStoreOwnerScope,
+  isSuperAdmin,
+} from "@/lib/authGuards";
+import {
   CHILE_REGIONS,
   canonicalizeChileGeo,
   getChileCommunes,
@@ -515,8 +527,42 @@ function AssetField({
 
 export default function AdminSucursalesPage() {
   const reduceMotion = useReducedMotion();
-  const { data: branches = [], isLoading, isFetching, isError, error } = useAdminBranches();
-  const { data: orgs = [] } = useOrganizations();
+  const isGlobalAdmin = isSuperAdmin();
+  const isOrgOwner = isOrganizationOwner();
+  const storeOwnerScope = isStoreOwnerScope();
+  const canCreate = canCreateBranchesAdmin();
+  const singleStoreMode = storeOwnerScope && !isMultiBranchUser();
+  const pageLabel = getBranchesAdminNavLabel();
+  const ownedOrgIds = useMemo(
+    () => (isOrgOwner && !isGlobalAdmin ? getOwnedOrganizationIds() : []),
+    [isOrgOwner, isGlobalAdmin],
+  );
+  const singleOrgId = ownedOrgIds.length === 1 ? ownedOrgIds[0] : null;
+  const primaryOrgName = isOrgOwner && !isGlobalAdmin ? getPrimaryOrganizationName() : null;
+  const ownerBranchIdSet = useMemo(() => {
+    if (isGlobalAdmin) return null;
+    return new Set(getOwnerBranchIds());
+  }, [isGlobalAdmin]);
+
+  const {
+    data: branchesRaw = [],
+    isLoading,
+    isFetching,
+    isError,
+    error,
+  } = useAdminBranches({
+    enabled: true,
+    refetchOnMount: "always",
+  });
+  const branches = useMemo(() => {
+    if (!ownerBranchIdSet) return branchesRaw;
+    return branchesRaw.filter((b) => ownerBranchIdSet.has(String(b.id)));
+  }, [branchesRaw, ownerBranchIdSet]);
+
+  const { data: orgs = [] } = useOrganizations({
+    enabled: isGlobalAdmin || isOrgOwner,
+    refetchOnMount: isGlobalAdmin || isOrgOwner ? "always" : false,
+  });
   const refreshBranches = useRefreshBranches();
   const createBranch = useCreateBranch();
   const updateBranch = useUpdateBranch();
@@ -540,6 +586,7 @@ export default function AdminSucursalesPage() {
   const [openFilters, setOpenFilters] = useState<Partial<Record<keyof ColumnFilters, boolean>>>({});
 
   const editingId = editing?.id ?? null;
+  const canEditCurrent = editingId != null ? canMutateBranch(editingId) : canCreate;
   const themeConfigQuery = useBranchThemeConfig(panelOpen && editingId != null ? editingId : null);
 
   // theme-config trae URLs reales (favicon/banner solo ahí; logo también en theme branding).
@@ -636,6 +683,11 @@ export default function AdminSucursalesPage() {
   };
 
   const closePanel = () => {
+    // Mi Sucursal: no hay lista detrás — el editor permanece abierto.
+    if (singleStoreMode) {
+      setPanelTab("datos");
+      return;
+    }
     setPanelOpen(false);
     setEditing(null);
     setFocusedId(null);
@@ -643,10 +695,19 @@ export default function AdminSucursalesPage() {
   };
 
   const openCreate = () => {
+    if (!canCreate) {
+      toast.error("No puedes crear sucursales");
+      return;
+    }
     setFabOpen(false);
     setEditing(null);
     setFocusedId(null);
-    setForm(emptyForm());
+    const base = emptyForm();
+    // Organizador: la nueva sucursal nace ya vinculada a su holding.
+    if (singleOrgId) {
+      base.organization = singleOrgId;
+    }
+    setForm(base);
     setPanelTab("datos");
     setPanelOpen(true);
   };
@@ -659,6 +720,16 @@ export default function AdminSucursalesPage() {
     setPanelTab(tab);
     setPanelOpen(true);
   };
+
+  // OWNER de una sola tienda: siempre el editor (nunca lista).
+  useEffect(() => {
+    if (!singleStoreMode || isLoading) return;
+    if (branches.length !== 1) return;
+    if (!panelOpen || !editing || String(editing.id) !== String(branches[0].id)) {
+      openEdit(branches[0]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- openEdit/fromBranch estables para este flujo
+  }, [singleStoreMode, branches, isLoading, panelOpen, editing?.id]);
 
   const buildGeneralPayload = (): Record<string, unknown> => {
     const geo = canonicalizeChileGeo({
@@ -679,7 +750,15 @@ export default function AdminSucursalesPage() {
       address: form.address.trim(),
       custom_domain: form.custom_domain.trim() || null,
       from_email: form.from_email.trim() || null,
-      organization: form.organization ? Number(form.organization) : null,
+      organization: storeOwnerScope
+        ? editing?.organization != null
+          ? Number(editing.organization)
+          : null
+        : isOrgOwner && !isGlobalAdmin
+          ? Number(singleOrgId || form.organization) || null
+          : form.organization
+            ? Number(form.organization)
+            : null,
       is_active: form.is_active,
       allow_multi_branch_access: form.allow_multi_branch_access,
     };
@@ -766,6 +845,14 @@ export default function AdminSucursalesPage() {
   };
 
   const save = async () => {
+    if (editing && !canMutateBranch(editing.id)) {
+      toast.error("Solo lectura — no puedes editar esta sucursal");
+      return;
+    }
+    if (!editing && !canCreate) {
+      toast.error("No puedes crear sucursales");
+      return;
+    }
     for (const key of Object.keys(REQUIRED_LABELS) as (keyof typeof REQUIRED_LABELS)[]) {
       if (!String(form[key as keyof BranchForm]).trim()) {
         toast.error(`Campo requerido: ${REQUIRED_LABELS[key]}`);
@@ -903,10 +990,20 @@ export default function AdminSucursalesPage() {
     setConfirmAction(null);
   };
 
-  const panelTitle = editing?.business_name || "Nueva sucursal";
-  const panelSubtitle = editing ? PANEL_SUBTITLES[panelTab].edit : PANEL_SUBTITLES[panelTab].create;
+  const panelTitle = editing
+    ? singleStoreMode
+      ? pageLabel
+      : editing.business_name || pageLabel
+    : "Nueva sucursal";
+  const panelSubtitle = editing
+    ? singleStoreMode
+      ? editing.business_name || PANEL_SUBTITLES[panelTab].edit
+      : PANEL_SUBTITLES[panelTab].edit
+    : PANEL_SUBTITLES[panelTab].create;
 
   const saving = createBranch.isPending || updateBranch.isPending || updateThemeConfig.isPending;
+  const showOrgColumn = isGlobalAdmin || isOrgOwner;
+  const formReadOnly = Boolean(editing) && !canEditCurrent;
 
   if (isLoading) {
     return (
@@ -934,285 +1031,310 @@ export default function AdminSucursalesPage() {
         <div
           className={cn(
             "grid gap-4 items-start",
-            panelOpen
-              ? "grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)]"
-              : "grid-cols-1",
+            singleStoreMode
+              ? "grid-cols-1"
+              : panelOpen
+                ? "grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)]"
+                : "grid-cols-1",
           )}
         >
-          <div className={cn("min-w-0 overflow-x-auto", panelOpen && "hidden lg:block")}>
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent border-border/50">
-                  {(
-                    [
-                      { key: "name" as const, label: "Sucursal", className: undefined },
-                      {
-                        key: "dni" as const,
-                        label: "RUT",
-                        className: "hidden sm:table-cell",
-                      },
-                      {
-                        key: "org" as const,
-                        label: "Organización",
-                        className: cn("hidden", !panelOpen && "md:table-cell"),
-                      },
-                      {
-                        key: "domain" as const,
-                        label: "Acceso",
-                        className: cn("hidden", !panelOpen && "lg:table-cell"),
-                      },
-                      {
-                        key: "email" as const,
-                        label: "Email",
-                        className: cn("hidden", !panelOpen && "xl:table-cell"),
-                      },
-                    ] as const
-                  ).map((col) => (
-                    <TableHead key={col.key} className={col.className}>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleFilter(col.key);
-                        }}
-                        className={cn(
-                          "inline-flex max-w-full items-center truncate rounded-sm text-left transition-colors cursor-pointer hover:underline underline-offset-4 hover:text-foreground",
-                          isFilterVisible(col.key)
-                            ? "text-primary hover:text-primary"
-                            : "text-muted-foreground",
-                        )}
-                        title={
-                          isFilterVisible(col.key) ? "Cerrar filtro" : `Filtrar por ${col.label}`
-                        }
-                        aria-pressed={isFilterVisible(col.key)}
-                      >
-                        {col.label}
-                      </button>
+          {singleStoreMode && branches.length === 0 && (
+            <p className="text-sm text-muted-foreground py-10 text-center">
+              No tienes una sucursal asignada como propietario.
+            </p>
+          )}
+
+          {!singleStoreMode && (
+            <div className={cn("min-w-0 overflow-x-auto", panelOpen && "hidden lg:block")}>
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent border-border/50">
+                    {(
+                      [
+                        { key: "name" as const, label: "Sucursal", className: undefined },
+                        {
+                          key: "dni" as const,
+                          label: "RUT",
+                          className: "hidden sm:table-cell",
+                        },
+                        ...(showOrgColumn
+                          ? [
+                              {
+                                key: "org" as const,
+                                label: "Organización",
+                                className: cn("hidden", !panelOpen && "md:table-cell"),
+                              },
+                            ]
+                          : []),
+                        {
+                          key: "domain" as const,
+                          label: "Acceso",
+                          className: cn("hidden", !panelOpen && "lg:table-cell"),
+                        },
+                        {
+                          key: "email" as const,
+                          label: "Email",
+                          className: cn("hidden", !panelOpen && "xl:table-cell"),
+                        },
+                      ] as const
+                    ).map((col) => (
+                      <TableHead key={col.key} className={col.className}>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleFilter(col.key);
+                          }}
+                          className={cn(
+                            "inline-flex max-w-full items-center truncate rounded-sm text-left transition-colors cursor-pointer hover:underline underline-offset-4 hover:text-foreground",
+                            isFilterVisible(col.key)
+                              ? "text-primary hover:text-primary"
+                              : "text-muted-foreground",
+                          )}
+                          title={
+                            isFilterVisible(col.key) ? "Cerrar filtro" : `Filtrar por ${col.label}`
+                          }
+                          aria-pressed={isFilterVisible(col.key)}
+                        >
+                          {col.label}
+                        </button>
+                      </TableHead>
+                    ))}
+                    <TableHead className="text-right w-[72px]">
+                      <span className="sr-only">Acciones</span>
                     </TableHead>
-                  ))}
-                  <TableHead className="text-right w-[72px]">
-                    <span className="sr-only">Acciones</span>
-                  </TableHead>
-                </TableRow>
-                {showFilterRow && (
-                  <TableRow className="hover:bg-transparent border-border/40">
-                    <TableHead className="pt-0 pb-3 font-normal align-top">
-                      {isFilterVisible("name") ? (
-                        <Input
-                          autoFocus={Boolean(openFilters.name)}
-                          value={filters.name}
-                          onChange={(e) => setFilter("name", e.target.value)}
-                          placeholder="Buscar por nombre…"
-                          className="h-8 text-xs font-normal bg-muted/30 border-border/60"
-                        />
-                      ) : null}
-                    </TableHead>
-                    <TableHead className="hidden sm:table-cell pt-0 pb-3 font-normal align-top">
-                      {isFilterVisible("dni") ? (
-                        <Input
-                          autoFocus={Boolean(openFilters.dni)}
-                          value={filters.dni}
-                          onChange={(e) => setFilter("dni", e.target.value)}
-                          placeholder="12.345.678-9"
-                          className="h-8 text-xs font-normal font-mono bg-muted/30 border-border/60"
-                        />
-                      ) : null}
-                    </TableHead>
-                    <TableHead
-                      className={cn(
-                        "pt-0 pb-3 font-normal align-top hidden",
-                        !panelOpen && "md:table-cell",
-                      )}
-                    >
-                      {isFilterVisible("org") ? (
-                        <Input
-                          autoFocus={Boolean(openFilters.org)}
-                          value={filters.org}
-                          onChange={(e) => setFilter("org", e.target.value)}
-                          placeholder="Nombre de organización…"
-                          className="h-8 text-xs font-normal bg-muted/30 border-border/60"
-                        />
-                      ) : null}
-                    </TableHead>
-                    <TableHead
-                      className={cn(
-                        "pt-0 pb-3 font-normal align-top hidden",
-                        !panelOpen && "lg:table-cell",
-                      )}
-                    >
-                      {isFilterVisible("domain") ? (
-                        <Input
-                          autoFocus={Boolean(openFilters.domain)}
-                          value={filters.domain}
-                          onChange={(e) => setFilter("domain", e.target.value)}
-                          placeholder="dominio o nombre corto"
-                          className="h-8 text-xs font-normal bg-muted/30 border-border/60"
-                        />
-                      ) : null}
-                    </TableHead>
-                    <TableHead
-                      className={cn(
-                        "pt-0 pb-3 font-normal align-top hidden",
-                        !panelOpen && "xl:table-cell",
-                      )}
-                    >
-                      {isFilterVisible("email") ? (
-                        <Input
-                          autoFocus={Boolean(openFilters.email)}
-                          value={filters.email}
-                          onChange={(e) => setFilter("email", e.target.value)}
-                          placeholder="correo@empresa.com"
-                          className="h-8 text-xs font-normal bg-muted/30 border-border/60"
-                        />
-                      ) : null}
-                    </TableHead>
-                    <TableHead className="pt-0 pb-3" />
                   </TableRow>
-                )}
-              </TableHeader>
-              <TableBody>
-                {filteredBranches.length === 0 && (
-                  <TableRow className="hover:bg-transparent">
-                    <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
-                      {branches.length === 0
-                        ? "Sin sucursales. Usa el menú para crear la primera."
-                        : "Ninguna sucursal coincide con los filtros."}
-                    </TableCell>
-                  </TableRow>
-                )}
-                {filteredBranches.map((b) => {
-                  const selected = panelOpen && focusedId === String(b.id);
-                  return (
-                    <TableRow
-                      key={String(b.id)}
-                      className={cn(
-                        "cursor-pointer transition-colors",
-                        selected && "bg-sidebar-accent/60",
-                      )}
-                      onClick={() => openEdit(b)}
-                    >
-                      <TableCell className="min-w-0">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span
-                            className={cn(
-                              "h-2 w-2 rounded-full shrink-0",
-                              b.is_active !== false ? "bg-emerald-500" : "bg-muted-foreground/40",
-                            )}
-                            title={b.is_active !== false ? "Activa" : "Inactiva"}
+                  {showFilterRow && (
+                    <TableRow className="hover:bg-transparent border-border/40">
+                      <TableHead className="pt-0 pb-3 font-normal align-top">
+                        {isFilterVisible("name") ? (
+                          <Input
+                            autoFocus={Boolean(openFilters.name)}
+                            value={filters.name}
+                            onChange={(e) => setFilter("name", e.target.value)}
+                            placeholder="Buscar por nombre…"
+                            className="h-8 text-xs font-normal bg-muted/30 border-border/60"
                           />
-                          <div className="min-w-0">
-                            <div className="font-medium text-sm truncate">{b.business_name}</div>
-                            <div className="text-xs text-muted-foreground truncate">
-                              {b.commune || b.email || "—"}
-                              <span className="sm:hidden font-mono">
-                                {b.dni ? ` · ${b.dni}` : ""}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell font-mono text-xs whitespace-nowrap">
-                        {b.dni || "—"}
-                      </TableCell>
-                      <TableCell
+                        ) : null}
+                      </TableHead>
+                      <TableHead className="hidden sm:table-cell pt-0 pb-3 font-normal align-top">
+                        {isFilterVisible("dni") ? (
+                          <Input
+                            autoFocus={Boolean(openFilters.dni)}
+                            value={filters.dni}
+                            onChange={(e) => setFilter("dni", e.target.value)}
+                            placeholder="12.345.678-9"
+                            className="h-8 text-xs font-normal font-mono bg-muted/30 border-border/60"
+                          />
+                        ) : null}
+                      </TableHead>
+                      {showOrgColumn && (
+                        <TableHead
+                          className={cn(
+                            "pt-0 pb-3 font-normal align-top hidden",
+                            !panelOpen && "md:table-cell",
+                          )}
+                        >
+                          {isFilterVisible("org") ? (
+                            <Input
+                              autoFocus={Boolean(openFilters.org)}
+                              value={filters.org}
+                              onChange={(e) => setFilter("org", e.target.value)}
+                              placeholder="Nombre de organización…"
+                              className="h-8 text-xs font-normal bg-muted/30 border-border/60"
+                            />
+                          ) : null}
+                        </TableHead>
+                      )}
+                      <TableHead
                         className={cn(
-                          "text-xs text-muted-foreground truncate max-w-[10rem] hidden",
-                          !panelOpen && "md:table-cell",
-                        )}
-                      >
-                        {b.organization_name ||
-                          (b.organization != null ? `#${b.organization}` : "—")}
-                      </TableCell>
-                      <TableCell
-                        className={cn(
-                          "text-xs truncate max-w-[12rem] hidden",
+                          "pt-0 pb-3 font-normal align-top hidden",
                           !panelOpen && "lg:table-cell",
                         )}
-                        onClick={(e) => e.stopPropagation()}
                       >
-                        {(() => {
-                          const orgDomain = orgs.find(
-                            (o) => String(o.id) === String(b.organization),
-                          )?.custom_domain;
-                          const access = buildPortalAccessUrl({
-                            customDomain: b.custom_domain,
-                            organizationDomain: orgDomain,
-                            loginSlug: b.login_slug,
-                          });
-                          const hasOwn =
-                            Boolean(b.custom_domain?.trim()) ||
-                            Boolean(orgDomain?.trim()) ||
-                            Boolean(b.login_slug?.trim());
-                          if (!hasOwn && access.source === "app") {
-                            return <span className="text-muted-foreground">—</span>;
-                          }
-                          return (
-                            <a
-                              href={access.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-primary hover:underline underline-offset-2 max-w-full"
-                              title={access.url}
-                            >
-                              <span className="truncate">
-                                {b.custom_domain?.trim() ||
-                                  orgDomain?.trim() ||
-                                  b.login_slug ||
-                                  "Abrir"}
-                              </span>
-                              <ExternalLink className="h-3 w-3 shrink-0 opacity-80" />
-                            </a>
-                          );
-                        })()}
-                      </TableCell>
-                      <TableCell
+                        {isFilterVisible("domain") ? (
+                          <Input
+                            autoFocus={Boolean(openFilters.domain)}
+                            value={filters.domain}
+                            onChange={(e) => setFilter("domain", e.target.value)}
+                            placeholder="dominio o nombre corto"
+                            className="h-8 text-xs font-normal bg-muted/30 border-border/60"
+                          />
+                        ) : null}
+                      </TableHead>
+                      <TableHead
                         className={cn(
-                          "text-xs text-muted-foreground truncate max-w-[12rem] hidden",
+                          "pt-0 pb-3 font-normal align-top hidden",
                           !panelOpen && "xl:table-cell",
                         )}
                       >
-                        {b.email || "—"}
-                      </TableCell>
-                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-8 w-8"
-                              title="Más opciones"
-                            >
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="min-w-[12rem]">
-                            {PANEL_TABS.map(({ id, label, icon: Icon }) => (
-                              <DropdownMenuItem key={id} onClick={() => openEdit(b, id)}>
-                                <Icon className="h-3.5 w-3.5 mr-2 opacity-80" />
-                                {label}
-                              </DropdownMenuItem>
-                            ))}
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => askToggleActive(b)}>
-                              {b.is_active === false ? (
-                                <>
-                                  <Power className="h-3.5 w-3.5 mr-2" /> Activar
-                                </>
-                              ) : (
-                                <>
-                                  <PowerOff className="h-3.5 w-3.5 mr-2" /> Desactivar
-                                </>
-                              )}
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        {isFilterVisible("email") ? (
+                          <Input
+                            autoFocus={Boolean(openFilters.email)}
+                            value={filters.email}
+                            onChange={(e) => setFilter("email", e.target.value)}
+                            placeholder="correo@empresa.com"
+                            className="h-8 text-xs font-normal bg-muted/30 border-border/60"
+                          />
+                        ) : null}
+                      </TableHead>
+                      <TableHead className="pt-0 pb-3" />
+                    </TableRow>
+                  )}
+                </TableHeader>
+                <TableBody>
+                  {filteredBranches.length === 0 && (
+                    <TableRow className="hover:bg-transparent">
+                      <TableCell
+                        colSpan={showOrgColumn ? 6 : 5}
+                        className="h-24 text-center text-muted-foreground"
+                      >
+                        {branches.length === 0
+                          ? canCreate
+                            ? "Sin sucursales. Usa el menú para crear la primera."
+                            : "No tienes sucursales asignadas como propietario."
+                          : "Ninguna sucursal coincide con los filtros."}
                       </TableCell>
                     </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
+                  )}
+                  {filteredBranches.map((b) => {
+                    const selected = panelOpen && focusedId === String(b.id);
+                    return (
+                      <TableRow
+                        key={String(b.id)}
+                        className={cn(
+                          "cursor-pointer transition-colors",
+                          selected && "bg-sidebar-accent/60",
+                        )}
+                        onClick={() => openEdit(b)}
+                      >
+                        <TableCell className="min-w-0">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span
+                              className={cn(
+                                "h-2 w-2 rounded-full shrink-0",
+                                b.is_active !== false ? "bg-emerald-500" : "bg-muted-foreground/40",
+                              )}
+                              title={b.is_active !== false ? "Activa" : "Inactiva"}
+                            />
+                            <div className="min-w-0">
+                              <div className="font-medium text-sm truncate">{b.business_name}</div>
+                              <div className="text-xs text-muted-foreground truncate">
+                                {b.commune || b.email || "—"}
+                                <span className="sm:hidden font-mono">
+                                  {b.dni ? ` · ${b.dni}` : ""}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="hidden sm:table-cell font-mono text-xs whitespace-nowrap">
+                          {b.dni || "—"}
+                        </TableCell>
+                        {showOrgColumn && (
+                          <TableCell
+                            className={cn(
+                              "text-xs text-muted-foreground truncate max-w-[10rem] hidden",
+                              !panelOpen && "md:table-cell",
+                            )}
+                          >
+                            {b.organization_name ||
+                              (b.organization != null ? `#${b.organization}` : "—")}
+                          </TableCell>
+                        )}
+                        <TableCell
+                          className={cn(
+                            "text-xs truncate max-w-[12rem] hidden",
+                            !panelOpen && "lg:table-cell",
+                          )}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {(() => {
+                            const orgDomain = orgs.find(
+                              (o) => String(o.id) === String(b.organization),
+                            )?.custom_domain;
+                            const access = buildPortalAccessUrl({
+                              customDomain: b.custom_domain,
+                              organizationDomain: orgDomain,
+                              loginSlug: b.login_slug,
+                            });
+                            const hasOwn =
+                              Boolean(b.custom_domain?.trim()) ||
+                              Boolean(orgDomain?.trim()) ||
+                              Boolean(b.login_slug?.trim());
+                            if (!hasOwn && access.source === "app") {
+                              return <span className="text-muted-foreground">—</span>;
+                            }
+                            return (
+                              <a
+                                href={access.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-primary hover:underline underline-offset-2 max-w-full"
+                                title={access.url}
+                              >
+                                <span className="truncate">
+                                  {b.custom_domain?.trim() ||
+                                    orgDomain?.trim() ||
+                                    b.login_slug ||
+                                    "Abrir"}
+                                </span>
+                                <ExternalLink className="h-3 w-3 shrink-0 opacity-80" />
+                              </a>
+                            );
+                          })()}
+                        </TableCell>
+                        <TableCell
+                          className={cn(
+                            "text-xs text-muted-foreground truncate max-w-[12rem] hidden",
+                            !panelOpen && "xl:table-cell",
+                          )}
+                        >
+                          {b.email || "—"}
+                        </TableCell>
+                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8"
+                                title="Más opciones"
+                              >
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="min-w-[12rem]">
+                              {PANEL_TABS.map(({ id, label, icon: Icon }) => (
+                                <DropdownMenuItem key={id} onClick={() => openEdit(b, id)}>
+                                  <Icon className="h-3.5 w-3.5 mr-2 opacity-80" />
+                                  {label}
+                                </DropdownMenuItem>
+                              ))}
+                              <DropdownMenuSeparator />
+                              {canMutateBranch(b.id) && (
+                                <DropdownMenuItem onClick={() => askToggleActive(b)}>
+                                  {b.is_active === false ? (
+                                    <>
+                                      <Power className="h-3.5 w-3.5 mr-2" /> Activar
+                                    </>
+                                  ) : (
+                                    <>
+                                      <PowerOff className="h-3.5 w-3.5 mr-2" /> Desactivar
+                                    </>
+                                  )}
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
 
           <AnimatePresence mode="wait">
             {panelOpen && (
@@ -1226,6 +1348,7 @@ export default function AdminSucursalesPage() {
                   "rounded-lg border border-border bg-background flex flex-col overflow-hidden min-w-0 self-start",
                   "h-[calc(100dvh-5rem)] max-h-[calc(100dvh-5rem)]",
                   "lg:sticky lg:top-16 lg:z-20 lg:h-[calc(100dvh-5rem)] lg:max-h-[calc(100dvh-5rem)]",
+                  singleStoreMode && "w-full max-w-3xl mx-auto",
                 )}
               >
                 <div className="shrink-0 flex items-start justify-between gap-2 px-4 pt-4 pb-3 border-b border-border/70">
@@ -1233,15 +1356,17 @@ export default function AdminSucursalesPage() {
                     <h2 className="text-sm font-semibold tracking-tight truncate">{panelTitle}</h2>
                     <p className="text-[11px] text-muted-foreground mt-0.5">{panelSubtitle}</p>
                   </div>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-8 w-8 shrink-0"
-                    onClick={closePanel}
-                    title="Cerrar"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
+                  {!singleStoreMode && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 shrink-0"
+                      onClick={closePanel}
+                      title="Cerrar"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
 
                 <div className="shrink-0 flex flex-wrap gap-1 px-3 py-2 border-b border-border/50 bg-muted/20">
@@ -1264,585 +1389,622 @@ export default function AdminSucursalesPage() {
                 </div>
 
                 <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-5">
-                  {panelTab === "datos" && (
-                    <>
-                      <section className="space-y-3">
-                        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                          Identidad
-                        </h3>
-                        <div>
-                          <Label>Nombre comercial *</Label>
-                          <Input
-                            value={form.business_name}
-                            onChange={(e) => set("business_name", e.target.value)}
-                          />
-                        </div>
-                        <div>
-                          <Label>Giro *</Label>
-                          <Input
-                            value={form.commercial_business}
-                            onChange={(e) => set("commercial_business", e.target.value)}
-                          />
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <Label>Nombre fantasía</Label>
-                            <Input
-                              value={form.fantasy_name}
-                              onChange={(e) => set("fantasy_name", e.target.value)}
-                            />
-                          </div>
-                          <div>
-                            <Label>RUT</Label>
-                            <Input
-                              value={form.dni}
-                              onChange={(e) => set("dni", e.target.value)}
-                              className="font-mono"
-                              placeholder="76.111.222-3"
-                            />
-                          </div>
-                        </div>
-                      </section>
-
-                      <section className="space-y-3">
-                        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                          Contacto / geo *
-                        </h3>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <Label>Email *</Label>
-                            <Input
-                              type="email"
-                              value={form.email}
-                              onChange={(e) => set("email", e.target.value)}
-                            />
-                          </div>
-                          <div>
-                            <Label>Teléfono *</Label>
-                            <Input
-                              value={form.phone}
-                              onChange={(e) => set("phone", e.target.value)}
-                            />
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                          <div>
-                            <Label>Región *</Label>
-                            <Select value={form.region || undefined} onValueChange={setRegion}>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Selecciona" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {form.region && !regionInCatalog && (
-                                  <SelectItem value={form.region}>
-                                    {form.region} (actual)
-                                  </SelectItem>
-                                )}
-                                {CHILE_REGIONS.map((r) => (
-                                  <SelectItem key={r.name} value={r.name}>
-                                    {r.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div>
-                            <Label>Provincia *</Label>
-                            <Select
-                              value={form.province || undefined}
-                              onValueChange={setProvince}
-                              disabled={!form.region}
-                            >
-                              <SelectTrigger>
-                                <SelectValue
-                                  placeholder={form.region ? "Selecciona" : "Región primero"}
-                                />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {form.province && !provinceInCatalog && (
-                                  <SelectItem value={form.province}>
-                                    {form.province} (actual)
-                                  </SelectItem>
-                                )}
-                                {provinceOptions.map((p) => (
-                                  <SelectItem key={p.name} value={p.name}>
-                                    {p.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div>
-                            <Label>Comuna *</Label>
-                            <Select
-                              value={form.commune || undefined}
-                              onValueChange={(v) => set("commune", v)}
-                              disabled={!form.province}
-                            >
-                              <SelectTrigger>
-                                <SelectValue
-                                  placeholder={form.province ? "Selecciona" : "Provincia primero"}
-                                />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {form.commune && !communeInCatalog && (
-                                  <SelectItem value={form.commune}>
-                                    {form.commune} (actual)
-                                  </SelectItem>
-                                )}
-                                {communeOptions.map((c) => (
-                                  <SelectItem key={c} value={c}>
-                                    {c}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-                        <div>
-                          <Label>Dirección *</Label>
-                          <Input
-                            value={form.address}
-                            onChange={(e) => set("address", e.target.value)}
-                          />
-                        </div>
-                      </section>
-
-                      <section className="space-y-3">
-                        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                          Operación
-                        </h3>
-                        <div>
-                          <Label>Organización</Label>
-                          <Select
-                            value={form.organization || "none"}
-                            onValueChange={(v) => set("organization", v === "none" ? "" : v)}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Ninguna" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">Ninguna</SelectItem>
-                              {orgs.map((o) => (
-                                <SelectItem key={String(o.id)} value={String(o.id)}>
-                                  {o.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <p className="mt-1 text-[11px] text-muted-foreground">
-                            Solo super admin vincula sucursales a una organización.
-                          </p>
-                        </div>
-                        <div>
-                          <Label>Email de envío</Label>
-                          <Input
-                            value={form.from_email}
-                            onChange={(e) => set("from_email", e.target.value)}
-                            placeholder="noreply@empresa.com"
-                          />
-                        </div>
-                        <div className="flex flex-col gap-2.5 text-sm">
-                          <label className="flex items-center gap-2 cursor-pointer">
-                            <Checkbox
-                              checked={form.is_active}
-                              onCheckedChange={(v) => set("is_active", v === true)}
-                            />
-                            Sucursal activa
-                          </label>
-                          <label className="flex items-center gap-2 cursor-pointer">
-                            <Checkbox
-                              checked={form.allow_multi_branch_access}
-                              onCheckedChange={(v) => set("allow_multi_branch_access", v === true)}
-                            />
-                            Permitir multi-sucursal
-                          </label>
-                        </div>
-                      </section>
-                    </>
-                  )}
-
-                  {panelTab === "apariencia" && (
-                    <>
-                      <section className="space-y-3">
-                        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                          Marca
-                        </h3>
-                        <div>
-                          <Label>Nombre en el menú</Label>
-                          <Input
-                            value={form.app_name}
-                            onChange={(e) => set("app_name", e.target.value)}
-                            placeholder="Ej. Smart Hydro"
-                          />
-                          <p className="mt-1 text-[11px] text-muted-foreground">
-                            Aparece debajo del nombre de fantasía en el menú.
-                          </p>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <ColorField
-                            label="Color principal"
-                            value={form.primary_color}
-                            onChange={(v) => set("primary_color", v)}
-                          />
-                          <ColorField
-                            label="Color secundario"
-                            value={form.secondary_color}
-                            onChange={(v) => set("secondary_color", v)}
-                          />
-                        </div>
-                        <div>
-                          <Label>Eslogan</Label>
-                          <Input
-                            value={form.tagline}
-                            onChange={(e) => set("tagline", e.target.value)}
-                          />
-                        </div>
-                        <div>
-                          <Label>Descripción de marca</Label>
-                          <Textarea
-                            value={form.brand_description}
-                            onChange={(e) => set("brand_description", e.target.value)}
-                            rows={3}
-                          />
-                        </div>
-                      </section>
-
-                      <section className="space-y-3">
-                        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                          Imágenes
-                        </h3>
-                        <AssetField
-                          label="Logo"
-                          hint="PNG, JPG, WebP o GIF. Máximo 2 MB."
-                          previewUrl={form.logo_url}
-                          file={form.logo_file}
-                          onFile={(f) => set("logo_file", f)}
-                        />
-                        <AssetField
-                          label="Ícono de pestaña"
-                          hint="El ícono chico del navegador. PNG, ICO o WebP. Máximo 2 MB."
-                          previewUrl={form.favicon_url}
-                          file={form.favicon_file}
-                          onFile={(f) => set("favicon_file", f)}
-                        />
-                        <AssetField
-                          label="Imagen de portada"
-                          hint="Se muestra en la pantalla de ingreso. PNG, JPG o WebP. Máximo 2 MB."
-                          previewUrl={form.banner_url}
-                          file={form.banner_file}
-                          onFile={(f) => set("banner_file", f)}
-                        />
-                      </section>
-
-                      <section className="space-y-3">
-                        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                          Estilo
-                        </h3>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <Label>Tamaño de texto</Label>
-                            <Input
-                              type="number"
-                              min={12}
-                              max={20}
-                              value={form.font_size}
-                              onChange={(e) => set("font_size", Number(e.target.value) || 14)}
-                            />
-                            <p className="mt-1 text-[11px] text-muted-foreground">12–20 px</p>
-                          </div>
-                          <div>
-                            <Label>Redondeo de bordes</Label>
-                            <Input
-                              type="number"
-                              min={0}
-                              max={24}
-                              value={form.border_radius}
-                              onChange={(e) => set("border_radius", Number(e.target.value) || 0)}
-                            />
-                            <p className="mt-1 text-[11px] text-muted-foreground">0–24 px</p>
-                          </div>
-                        </div>
-                        <label className="flex items-center gap-2 text-sm cursor-pointer">
-                          <Checkbox
-                            checked={form.compact}
-                            onCheckedChange={(v) => set("compact", v === true)}
-                          />
-                          Interfaz compacta
-                        </label>
-                        <label className="flex items-center gap-2 text-sm cursor-pointer">
-                          <Checkbox
-                            checked={form.motion}
-                            onCheckedChange={(v) => set("motion", v === true)}
-                          />
-                          Animaciones
-                        </label>
-                      </section>
-                    </>
-                  )}
-
-                  {panelTab === "redes" && (
-                    <section className="space-y-3">
-                      <div>
-                        <Label>Sitio web</Label>
-                        <Input
-                          value={form.website_url}
-                          onChange={(e) => set("website_url", e.target.value)}
-                          placeholder="https://…"
-                        />
-                      </div>
-
-                      <div className="flex items-center justify-between gap-2 pt-1">
-                        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                          Redes sociales
-                        </h3>
-                        <Button type="button" size="sm" variant="outline" onClick={addSocialLink}>
-                          <Plus className="h-3.5 w-3.5 mr-1" />
-                          Agregar
-                        </Button>
-                      </div>
-                      <p className="text-[11px] text-muted-foreground">
-                        Instagram, WhatsApp, TikTok u otras redes de la sucursal.
+                  <fieldset
+                    disabled={formReadOnly}
+                    className="space-y-5 min-w-0 border-0 p-0 m-0 disabled:opacity-80"
+                  >
+                    {formReadOnly && (
+                      <p className="text-xs text-muted-foreground rounded-md border border-border/70 bg-muted/40 px-3 py-2">
+                        Solo lectura — no eres propietario de esta sucursal.
                       </p>
+                    )}
+                    {panelTab === "datos" && (
+                      <>
+                        <section className="space-y-3">
+                          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                            Identidad
+                          </h3>
+                          <div>
+                            <Label>Nombre comercial *</Label>
+                            <Input
+                              value={form.business_name}
+                              onChange={(e) => set("business_name", e.target.value)}
+                            />
+                          </div>
+                          <div>
+                            <Label>Giro *</Label>
+                            <Input
+                              value={form.commercial_business}
+                              onChange={(e) => set("commercial_business", e.target.value)}
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <Label>Nombre fantasía</Label>
+                              <Input
+                                value={form.fantasy_name}
+                                onChange={(e) => set("fantasy_name", e.target.value)}
+                              />
+                            </div>
+                            <div>
+                              <Label>RUT</Label>
+                              <Input
+                                value={form.dni}
+                                onChange={(e) => set("dni", e.target.value)}
+                                className="font-mono"
+                                placeholder="76.111.222-3"
+                              />
+                            </div>
+                          </div>
+                        </section>
 
-                      {form.social_links.length === 0 ? (
-                        <p className="text-[11px] text-muted-foreground">
-                          Sin links. Agregá las redes que quieras mostrar.
-                        </p>
-                      ) : (
-                        <div className="space-y-3">
-                          {form.social_links.map((link, index) => (
-                            <div
-                              key={link.key}
-                              className="rounded-md border border-border/70 p-3 space-y-2 bg-muted/10"
-                            >
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-[11px] font-medium text-muted-foreground">
-                                  Link {index + 1}
-                                </span>
-                                <Button
-                                  type="button"
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-7 w-7"
-                                  onClick={() => removeSocialLink(link.key)}
-                                  title="Eliminar"
+                        <section className="space-y-3">
+                          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                            Contacto / geo *
+                          </h3>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <Label>Email *</Label>
+                              <Input
+                                type="email"
+                                value={form.email}
+                                onChange={(e) => set("email", e.target.value)}
+                              />
+                            </div>
+                            <div>
+                              <Label>Teléfono *</Label>
+                              <Input
+                                value={form.phone}
+                                onChange={(e) => set("phone", e.target.value)}
+                              />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                            <div>
+                              <Label>Región *</Label>
+                              <Select value={form.region || undefined} onValueChange={setRegion}>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Selecciona" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {form.region && !regionInCatalog && (
+                                    <SelectItem value={form.region}>
+                                      {form.region} (actual)
+                                    </SelectItem>
+                                  )}
+                                  {CHILE_REGIONS.map((r) => (
+                                    <SelectItem key={r.name} value={r.name}>
+                                      {r.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div>
+                              <Label>Provincia *</Label>
+                              <Select
+                                value={form.province || undefined}
+                                onValueChange={setProvince}
+                                disabled={!form.region}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue
+                                    placeholder={form.region ? "Selecciona" : "Región primero"}
+                                  />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {form.province && !provinceInCatalog && (
+                                    <SelectItem value={form.province}>
+                                      {form.province} (actual)
+                                    </SelectItem>
+                                  )}
+                                  {provinceOptions.map((p) => (
+                                    <SelectItem key={p.name} value={p.name}>
+                                      {p.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div>
+                              <Label>Comuna *</Label>
+                              <Select
+                                value={form.commune || undefined}
+                                onValueChange={(v) => set("commune", v)}
+                                disabled={!form.province}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue
+                                    placeholder={form.province ? "Selecciona" : "Provincia primero"}
+                                  />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {form.commune && !communeInCatalog && (
+                                    <SelectItem value={form.commune}>
+                                      {form.commune} (actual)
+                                    </SelectItem>
+                                  )}
+                                  {communeOptions.map((c) => (
+                                    <SelectItem key={c} value={c}>
+                                      {c}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                          <div>
+                            <Label>Dirección *</Label>
+                            <Input
+                              value={form.address}
+                              onChange={(e) => set("address", e.target.value)}
+                            />
+                          </div>
+                        </section>
+
+                        <section className="space-y-3">
+                          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                            Operación
+                          </h3>
+                          <div>
+                            <Label>Organización</Label>
+                            {isGlobalAdmin ? (
+                              <>
+                                <Select
+                                  value={form.organization || "none"}
+                                  onValueChange={(v) => set("organization", v === "none" ? "" : v)}
+                                  disabled={formReadOnly}
                                 >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Ninguna" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="none">Ninguna</SelectItem>
+                                    {orgs.map((o) => (
+                                      <SelectItem key={String(o.id)} value={String(o.id)}>
+                                        {o.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <p className="mt-1 text-[11px] text-muted-foreground">
+                                  Solo super admin vincula o desvincula sucursales a una
+                                  organización.
+                                </p>
+                              </>
+                            ) : isOrgOwner ? (
+                              <p className="mt-1 text-sm text-muted-foreground">
+                                {primaryOrgName ||
+                                  orgs.find((o) => String(o.id) === String(form.organization))
+                                    ?.name ||
+                                  editing?.organization_name ||
+                                  "Tu organización"}
+                              </p>
+                            ) : (
+                              <p className="mt-1 text-sm text-muted-foreground">
+                                {editing?.organization_name ||
+                                  (form.organization ? `#${form.organization}` : "—")}
+                              </p>
+                            )}
+                          </div>
+                          <div>
+                            <Label>Email de envío</Label>
+                            <Input
+                              value={form.from_email}
+                              onChange={(e) => set("from_email", e.target.value)}
+                              placeholder="noreply@empresa.com"
+                            />
+                          </div>
+                          <div className="flex flex-col gap-2.5 text-sm">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <Checkbox
+                                checked={form.is_active}
+                                onCheckedChange={(v) => set("is_active", v === true)}
+                              />
+                              Sucursal activa
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <Checkbox
+                                checked={form.allow_multi_branch_access}
+                                onCheckedChange={(v) =>
+                                  set("allow_multi_branch_access", v === true)
+                                }
+                              />
+                              Permitir multi-sucursal
+                            </label>
+                          </div>
+                        </section>
+                      </>
+                    )}
+
+                    {panelTab === "apariencia" && (
+                      <>
+                        <section className="space-y-3">
+                          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                            Marca
+                          </h3>
+                          <div>
+                            <Label>Nombre en el menú</Label>
+                            <Input
+                              value={form.app_name}
+                              onChange={(e) => set("app_name", e.target.value)}
+                              placeholder="Ej. Smart Hydro"
+                            />
+                            <p className="mt-1 text-[11px] text-muted-foreground">
+                              Aparece debajo del nombre de fantasía en el menú.
+                            </p>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <ColorField
+                              label="Color principal"
+                              value={form.primary_color}
+                              onChange={(v) => set("primary_color", v)}
+                            />
+                            <ColorField
+                              label="Color secundario"
+                              value={form.secondary_color}
+                              onChange={(v) => set("secondary_color", v)}
+                            />
+                          </div>
+                          <div>
+                            <Label>Eslogan</Label>
+                            <Input
+                              value={form.tagline}
+                              onChange={(e) => set("tagline", e.target.value)}
+                            />
+                          </div>
+                          <div>
+                            <Label>Descripción de marca</Label>
+                            <Textarea
+                              value={form.brand_description}
+                              onChange={(e) => set("brand_description", e.target.value)}
+                              rows={3}
+                            />
+                          </div>
+                        </section>
+
+                        <section className="space-y-3">
+                          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                            Imágenes
+                          </h3>
+                          <AssetField
+                            label="Logo"
+                            hint="PNG, JPG, WebP o GIF. Máximo 2 MB."
+                            previewUrl={form.logo_url}
+                            file={form.logo_file}
+                            onFile={(f) => set("logo_file", f)}
+                          />
+                          <AssetField
+                            label="Ícono de pestaña"
+                            hint="El ícono chico del navegador. PNG, ICO o WebP. Máximo 2 MB."
+                            previewUrl={form.favicon_url}
+                            file={form.favicon_file}
+                            onFile={(f) => set("favicon_file", f)}
+                          />
+                          <AssetField
+                            label="Imagen de portada"
+                            hint="Se muestra en la pantalla de ingreso. PNG, JPG o WebP. Máximo 2 MB."
+                            previewUrl={form.banner_url}
+                            file={form.banner_file}
+                            onFile={(f) => set("banner_file", f)}
+                          />
+                        </section>
+
+                        <section className="space-y-3">
+                          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                            Estilo
+                          </h3>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <Label>Tamaño de texto</Label>
+                              <Input
+                                type="number"
+                                min={12}
+                                max={20}
+                                value={form.font_size}
+                                onChange={(e) => set("font_size", Number(e.target.value) || 14)}
+                              />
+                              <p className="mt-1 text-[11px] text-muted-foreground">12–20 px</p>
+                            </div>
+                            <div>
+                              <Label>Redondeo de bordes</Label>
+                              <Input
+                                type="number"
+                                min={0}
+                                max={24}
+                                value={form.border_radius}
+                                onChange={(e) => set("border_radius", Number(e.target.value) || 0)}
+                              />
+                              <p className="mt-1 text-[11px] text-muted-foreground">0–24 px</p>
+                            </div>
+                          </div>
+                          <label className="flex items-center gap-2 text-sm cursor-pointer">
+                            <Checkbox
+                              checked={form.compact}
+                              onCheckedChange={(v) => set("compact", v === true)}
+                            />
+                            Interfaz compacta
+                          </label>
+                          <label className="flex items-center gap-2 text-sm cursor-pointer">
+                            <Checkbox
+                              checked={form.motion}
+                              onCheckedChange={(v) => set("motion", v === true)}
+                            />
+                            Animaciones
+                          </label>
+                        </section>
+                      </>
+                    )}
+
+                    {panelTab === "redes" && (
+                      <section className="space-y-3">
+                        <div>
+                          <Label>Sitio web</Label>
+                          <Input
+                            value={form.website_url}
+                            onChange={(e) => set("website_url", e.target.value)}
+                            placeholder="https://…"
+                          />
+                        </div>
+
+                        <div className="flex items-center justify-between gap-2 pt-1">
+                          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                            Redes sociales
+                          </h3>
+                          <Button type="button" size="sm" variant="outline" onClick={addSocialLink}>
+                            <Plus className="h-3.5 w-3.5 mr-1" />
+                            Agregar
+                          </Button>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">
+                          Instagram, WhatsApp, TikTok u otras redes de la sucursal.
+                        </p>
+
+                        {form.social_links.length === 0 ? (
+                          <p className="text-[11px] text-muted-foreground">
+                            Sin links. Agregá las redes que quieras mostrar.
+                          </p>
+                        ) : (
+                          <div className="space-y-3">
+                            {form.social_links.map((link, index) => (
+                              <div
+                                key={link.key}
+                                className="rounded-md border border-border/70 p-3 space-y-2 bg-muted/10"
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-[11px] font-medium text-muted-foreground">
+                                    Link {index + 1}
+                                  </span>
+                                  <Button
+                                    type="button"
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-7 w-7"
+                                    onClick={() => removeSocialLink(link.key)}
+                                    title="Eliminar"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div>
+                                    <Label>Nombre *</Label>
+                                    <Input
+                                      value={link.name}
+                                      onChange={(e) =>
+                                        updateSocialLink(link.key, { name: e.target.value })
+                                      }
+                                      placeholder="Instagram"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label>Ícono</Label>
+                                    <Select
+                                      value={link.icon || "web"}
+                                      onValueChange={(v) => updateSocialLink(link.key, { icon: v })}
+                                    >
+                                      <SelectTrigger>
+                                        <SelectValue placeholder="Ícono" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {SOCIAL_ICON_OPTIONS.map((opt) => (
+                                          <SelectItem key={opt.value} value={opt.value}>
+                                            {opt.label}
+                                          </SelectItem>
+                                        ))}
+                                        {!SOCIAL_ICON_OPTIONS.some((o) => o.value === link.icon) &&
+                                          link.icon && (
+                                            <SelectItem value={link.icon}>{link.icon}</SelectItem>
+                                          )}
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                </div>
+                                <div>
+                                  <Label>Enlace *</Label>
+                                  <Input
+                                    value={link.url}
+                                    onChange={(e) =>
+                                      updateSocialLink(link.key, { url: e.target.value })
+                                    }
+                                    placeholder="https://instagram.com/…"
+                                    className="font-mono text-sm"
+                                  />
+                                </div>
+                                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                                  <Checkbox
+                                    checked={link.enabled}
+                                    onCheckedChange={(v) =>
+                                      updateSocialLink(link.key, { enabled: v === true })
+                                    }
+                                  />
+                                  Habilitado
+                                </label>
                               </div>
-                              <div className="grid grid-cols-2 gap-2">
+                            ))}
+                          </div>
+                        )}
+                      </section>
+                    )}
+
+                    {panelTab === "acceso" && (
+                      <section className="space-y-3">
+                        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                          Ingreso al portal
+                        </h3>
+                        <div>
+                          <Label>Dominio propio</Label>
+                          <Input
+                            value={form.custom_domain}
+                            onChange={(e) => set("custom_domain", e.target.value)}
+                            placeholder="portal.cliente.com"
+                          />
+                          <p className="mt-1 text-[11px] text-muted-foreground">
+                            Opcional. Si lo tenés, tus clientes entran por ese dominio.
+                          </p>
+                        </div>
+                        <div>
+                          <Label>Nombre corto del link</Label>
+                          <Input
+                            value={form.login_slug}
+                            onChange={(e) => set("login_slug", e.target.value)}
+                            placeholder="mi-tienda"
+                          />
+                          <p className="mt-1 text-[11px] text-muted-foreground">
+                            Se usa cuando no hay dominio propio (ni de la organización).
+                          </p>
+                        </div>
+                        <PortalAccessLinkField
+                          customDomain={form.custom_domain}
+                          organizationDomain={
+                            orgs.find((o) => String(o.id) === String(form.organization))
+                              ?.custom_domain
+                          }
+                          loginSlug={form.login_slug}
+                        />
+                        <div>
+                          <Label>Mensaje de bienvenida</Label>
+                          <Input
+                            value={form.login_welcome_message}
+                            onChange={(e) => set("login_welcome_message", e.target.value)}
+                            placeholder="¡Bienvenido!"
+                          />
+                        </div>
+                        <div>
+                          <Label>Texto de apoyo</Label>
+                          <Input
+                            value={form.login_subtitle}
+                            onChange={(e) => set("login_subtitle", e.target.value)}
+                            placeholder="Ingresá con tu cuenta"
+                          />
+                        </div>
+                      </section>
+                    )}
+
+                    {panelTab === "patrocinadores" && (
+                      <section className="space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                            Patrocinadores
+                          </h3>
+                          <Button type="button" size="sm" variant="outline" onClick={addSponsor}>
+                            <Plus className="h-3.5 w-3.5 mr-1" />
+                            Agregar
+                          </Button>
+                        </div>
+                        <label className="flex items-center gap-2 text-sm cursor-pointer">
+                          <Checkbox
+                            checked={form.show_sponsor_logos}
+                            onCheckedChange={(v) => set("show_sponsor_logos", v === true)}
+                          />
+                          Mostrar patrocinadores al ingresar
+                        </label>
+                        {form.sponsors.length === 0 ? (
+                          <p className="text-[11px] text-muted-foreground">
+                            Sin patrocinadores. Agregá partners con nombre, imagen y sitio web.
+                          </p>
+                        ) : (
+                          <div className="space-y-3">
+                            {form.sponsors.map((s, index) => (
+                              <div
+                                key={s.key}
+                                className="rounded-md border border-border/70 p-3 space-y-2 bg-muted/10"
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-[11px] font-medium text-muted-foreground">
+                                    Patrocinador {index + 1}
+                                  </span>
+                                  <Button
+                                    type="button"
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-7 w-7"
+                                    onClick={() => removeSponsor(s.key)}
+                                    title="Eliminar"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
                                 <div>
                                   <Label>Nombre *</Label>
                                   <Input
-                                    value={link.name}
-                                    onChange={(e) =>
-                                      updateSocialLink(link.key, { name: e.target.value })
-                                    }
-                                    placeholder="Instagram"
+                                    value={s.name}
+                                    onChange={(e) => updateSponsor(s.key, { name: e.target.value })}
+                                    placeholder="Sercotec"
                                   />
                                 </div>
                                 <div>
-                                  <Label>Ícono</Label>
-                                  <Select
-                                    value={link.icon || "web"}
-                                    onValueChange={(v) => updateSocialLink(link.key, { icon: v })}
-                                  >
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Ícono" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {SOCIAL_ICON_OPTIONS.map((opt) => (
-                                        <SelectItem key={opt.value} value={opt.value}>
-                                          {opt.label}
-                                        </SelectItem>
-                                      ))}
-                                      {!SOCIAL_ICON_OPTIONS.some((o) => o.value === link.icon) &&
-                                        link.icon && (
-                                          <SelectItem value={link.icon}>{link.icon}</SelectItem>
-                                        )}
-                                    </SelectContent>
-                                  </Select>
+                                  <Label>Imagen</Label>
+                                  <Input
+                                    value={s.logo_url}
+                                    onChange={(e) =>
+                                      updateSponsor(s.key, { logo_url: e.target.value })
+                                    }
+                                    placeholder="https://…/imagen.png"
+                                  />
                                 </div>
+                                <div>
+                                  <Label>Sitio web</Label>
+                                  <Input
+                                    value={s.website_url}
+                                    onChange={(e) =>
+                                      updateSponsor(s.key, { website_url: e.target.value })
+                                    }
+                                    placeholder="https://…"
+                                  />
+                                </div>
+                                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                                  <Checkbox
+                                    checked={s.enabled}
+                                    onCheckedChange={(v) =>
+                                      updateSponsor(s.key, { enabled: v === true })
+                                    }
+                                  />
+                                  Habilitado
+                                </label>
                               </div>
-                              <div>
-                                <Label>Enlace *</Label>
-                                <Input
-                                  value={link.url}
-                                  onChange={(e) =>
-                                    updateSocialLink(link.key, { url: e.target.value })
-                                  }
-                                  placeholder="https://instagram.com/…"
-                                  className="font-mono text-sm"
-                                />
-                              </div>
-                              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                                <Checkbox
-                                  checked={link.enabled}
-                                  onCheckedChange={(v) =>
-                                    updateSocialLink(link.key, { enabled: v === true })
-                                  }
-                                />
-                                Habilitado
-                              </label>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </section>
-                  )}
-
-                  {panelTab === "acceso" && (
-                    <section className="space-y-3">
-                      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                        Ingreso al portal
-                      </h3>
-                      <div>
-                        <Label>Dominio propio</Label>
-                        <Input
-                          value={form.custom_domain}
-                          onChange={(e) => set("custom_domain", e.target.value)}
-                          placeholder="portal.cliente.com"
-                        />
-                        <p className="mt-1 text-[11px] text-muted-foreground">
-                          Opcional. Si lo tenés, tus clientes entran por ese dominio.
-                        </p>
-                      </div>
-                      <div>
-                        <Label>Nombre corto del link</Label>
-                        <Input
-                          value={form.login_slug}
-                          onChange={(e) => set("login_slug", e.target.value)}
-                          placeholder="mi-tienda"
-                        />
-                        <p className="mt-1 text-[11px] text-muted-foreground">
-                          Se usa cuando no hay dominio propio (ni de la organización).
-                        </p>
-                      </div>
-                      <PortalAccessLinkField
-                        customDomain={form.custom_domain}
-                        organizationDomain={
-                          orgs.find((o) => String(o.id) === String(form.organization))
-                            ?.custom_domain
-                        }
-                        loginSlug={form.login_slug}
-                      />
-                      <div>
-                        <Label>Mensaje de bienvenida</Label>
-                        <Input
-                          value={form.login_welcome_message}
-                          onChange={(e) => set("login_welcome_message", e.target.value)}
-                          placeholder="¡Bienvenido!"
-                        />
-                      </div>
-                      <div>
-                        <Label>Texto de apoyo</Label>
-                        <Input
-                          value={form.login_subtitle}
-                          onChange={(e) => set("login_subtitle", e.target.value)}
-                          placeholder="Ingresá con tu cuenta"
-                        />
-                      </div>
-                    </section>
-                  )}
-
-                  {panelTab === "patrocinadores" && (
-                    <section className="space-y-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                          Patrocinadores
-                        </h3>
-                        <Button type="button" size="sm" variant="outline" onClick={addSponsor}>
-                          <Plus className="h-3.5 w-3.5 mr-1" />
-                          Agregar
-                        </Button>
-                      </div>
-                      <label className="flex items-center gap-2 text-sm cursor-pointer">
-                        <Checkbox
-                          checked={form.show_sponsor_logos}
-                          onCheckedChange={(v) => set("show_sponsor_logos", v === true)}
-                        />
-                        Mostrar patrocinadores al ingresar
-                      </label>
-                      {form.sponsors.length === 0 ? (
-                        <p className="text-[11px] text-muted-foreground">
-                          Sin patrocinadores. Agregá partners con nombre, imagen y sitio web.
-                        </p>
-                      ) : (
-                        <div className="space-y-3">
-                          {form.sponsors.map((s, index) => (
-                            <div
-                              key={s.key}
-                              className="rounded-md border border-border/70 p-3 space-y-2 bg-muted/10"
-                            >
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-[11px] font-medium text-muted-foreground">
-                                  Patrocinador {index + 1}
-                                </span>
-                                <Button
-                                  type="button"
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-7 w-7"
-                                  onClick={() => removeSponsor(s.key)}
-                                  title="Eliminar"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
-                              <div>
-                                <Label>Nombre *</Label>
-                                <Input
-                                  value={s.name}
-                                  onChange={(e) => updateSponsor(s.key, { name: e.target.value })}
-                                  placeholder="Sercotec"
-                                />
-                              </div>
-                              <div>
-                                <Label>Imagen</Label>
-                                <Input
-                                  value={s.logo_url}
-                                  onChange={(e) =>
-                                    updateSponsor(s.key, { logo_url: e.target.value })
-                                  }
-                                  placeholder="https://…/imagen.png"
-                                />
-                              </div>
-                              <div>
-                                <Label>Sitio web</Label>
-                                <Input
-                                  value={s.website_url}
-                                  onChange={(e) =>
-                                    updateSponsor(s.key, { website_url: e.target.value })
-                                  }
-                                  placeholder="https://…"
-                                />
-                              </div>
-                              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                                <Checkbox
-                                  checked={s.enabled}
-                                  onCheckedChange={(v) =>
-                                    updateSponsor(s.key, { enabled: v === true })
-                                  }
-                                />
-                                Habilitado
-                              </label>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </section>
-                  )}
+                            ))}
+                          </div>
+                        )}
+                      </section>
+                    )}
+                  </fieldset>
                 </div>
 
                 <div className="shrink-0 flex gap-2 px-4 py-3 border-t border-border/70 bg-card/60">
-                  <Button className="flex-1" onClick={() => void save()} disabled={saving}>
-                    {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                    Guardar
-                  </Button>
-                  <Button variant="outline" onClick={closePanel}>
-                    Cancelar
-                  </Button>
+                  {canEditCurrent ? (
+                    <Button className="flex-1" onClick={() => void save()} disabled={saving}>
+                      {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                      Guardar
+                    </Button>
+                  ) : (
+                    <p className="flex-1 self-center text-xs text-muted-foreground">Solo lectura</p>
+                  )}
+                  {!singleStoreMode && (
+                    <Button variant="outline" onClick={closePanel}>
+                      Cancelar
+                    </Button>
+                  )}
                 </div>
               </motion.aside>
             )}
@@ -1885,7 +2047,7 @@ export default function AdminSucursalesPage() {
 
       <TooltipProvider delayDuration={200}>
         <AnimatePresence>
-          {!panelOpen && (
+          {!panelOpen && !singleStoreMode && (
             <motion.div
               className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2"
               initial={reduceMotion ? false : { opacity: 0, y: 12 }}
@@ -1917,19 +2079,21 @@ export default function AdminSucursalesPage() {
                       </TooltipTrigger>
                       <TooltipContent side="left">Actualizar</TooltipContent>
                     </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          size="icon"
-                          className="h-10 w-10 rounded-full shadow-md"
-                          onClick={openCreate}
-                          aria-label="Nueva"
-                        >
-                          <Plus className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="left">Nueva</TooltipContent>
-                    </Tooltip>
+                    {canCreate && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            size="icon"
+                            className="h-10 w-10 rounded-full shadow-md"
+                            onClick={openCreate}
+                            aria-label="Nueva"
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="left">Nueva</TooltipContent>
+                      </Tooltip>
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>

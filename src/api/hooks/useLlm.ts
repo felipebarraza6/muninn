@@ -96,9 +96,25 @@ export function useDeleteLlmProvider() {
   });
 }
 
+export interface LlmTestConnectionResult {
+  success: boolean;
+  provider?: string;
+  provider_name?: string;
+  url_tested?: string;
+  method?: string;
+  status_code?: number;
+  latency_ms?: number;
+  headers_sent?: Record<string, string>;
+  response_preview?: string;
+  error?: string;
+  message?: string;
+  timestamp?: string;
+}
+
 export function useTestLlmProvider() {
   return useMutation({
-    mutationFn: (id: string | number) => POST(ENDPOINTS.llm.testConnection(id), {}),
+    mutationFn: (id: string | number) =>
+      POST<LlmTestConnectionResult>(ENDPOINTS.llm.testConnection(id), {}),
   });
 }
 

@@ -28,9 +28,13 @@ import AdminLlmPage from "./routes/admin.llm";
 import AdminOrganizacionesPage from "./routes/admin.organizaciones";
 import AdminSucursalesPage from "./routes/admin.sucursales";
 import AdminUsuariosPage from "./routes/admin.usuarios";
+import PerfilPage from "./routes/perfil";
 import { RequireAuth, RedirectIfAuthenticated } from "./components/auth/RequireAuth";
 import { RequireSuperAdmin } from "./components/auth/RequireSuperAdmin";
 import { RequireUsersAdmin } from "./components/auth/RequireUsersAdmin";
+import { RequireBranchesAdmin } from "./components/auth/RequireBranchesAdmin";
+import { RequireOrganizationsAdmin } from "./components/auth/RequireOrganizationsAdmin";
+import { RequireLlmAdmin } from "./components/auth/RequireLlmAdmin";
 import { ThemeProvider } from "./components/theme/ThemeProvider";
 
 const queryClient = new QueryClient({
@@ -64,28 +68,29 @@ function AnimatedOutlet() {
           <Route path="/funciones" element={<Funciones />} />
           <Route path="/funciones/:id" element={<FunctionDetail />} />
           <Route path="/configuracion" element={<Configuracion />} />
+          <Route path="/perfil" element={<PerfilPage />} />
           <Route
             path="/admin/organizaciones"
             element={
-              <RequireSuperAdmin>
+              <RequireOrganizationsAdmin>
                 <AdminOrganizacionesPage />
-              </RequireSuperAdmin>
+              </RequireOrganizationsAdmin>
             }
           />
           <Route
             path="/admin/llm"
             element={
-              <RequireSuperAdmin>
+              <RequireLlmAdmin>
                 <AdminLlmPage />
-              </RequireSuperAdmin>
+              </RequireLlmAdmin>
             }
           />
           <Route
             path="/admin/sucursales"
             element={
-              <RequireSuperAdmin>
+              <RequireBranchesAdmin>
                 <AdminSucursalesPage />
-              </RequireSuperAdmin>
+              </RequireBranchesAdmin>
             }
           />
           <Route

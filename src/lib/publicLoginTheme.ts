@@ -112,9 +112,7 @@ export function hasUsablePublicBranding(
 export function flattenPublicLoginTheme(theme: PublicLoginThemeResponse) {
   const b = theme.branding;
   const prefs = theme.ui_preferences;
-  const socialLinks = normalizePublicSocialLinks(
-    theme.social_links ?? b?.social_links ?? null,
-  );
+  const socialLinks = normalizePublicSocialLinks(theme.social_links ?? b?.social_links ?? null);
   return {
     scope: theme.scope,
     branch_id: theme.branch_id,
