@@ -17,7 +17,11 @@ import {
   getPrimaryOrganizationName,
   isOrganizationOwner,
 } from "@/lib/authGuards";
-import type { OrganizationTheme } from "./useBranches";
+import {
+  useActiveBranch,
+  useOrganizations,
+  type OrganizationTheme,
+} from "./useBranches";
 
 export type BranchTheme = BranchThemeLike & {
   id?: number;
@@ -35,31 +39,33 @@ function pickAssetUrl(...candidates: Array<string | null | undefined>): string |
 
 /**
  * Organizador: el logo/favicon viven en Organization.theme, no en la sucursal.
- * Colores/textos pueden venir del theme de sucursal; overlay de assets del holding.
+ * Colores/textos pueden venir del theme de sucursal (o fallback local); overlay de assets del holding.
  */
 function overlayOrgBrandAssets(
   branchTheme: BranchThemeLike | null | undefined,
   orgTheme: OrganizationTheme | null | undefined,
+  branchLogo?: string | null,
 ): BranchThemeLike | null | undefined {
-  if (!orgTheme) return branchTheme;
-
   const orgLogo = pickAssetUrl(
-    orgTheme.logo_url,
-    orgTheme.logo,
-    orgTheme.branding?.logo_url ?? undefined,
+    orgTheme?.logo_url,
+    orgTheme?.logo,
+    orgTheme?.branding?.logo_url ?? undefined,
   );
   const orgFavicon = pickAssetUrl(
-    orgTheme.favicon_url,
-    orgTheme.favicon,
-    orgTheme.branding?.favicon_url ?? undefined,
+    orgTheme?.favicon_url,
+    orgTheme?.favicon,
+    orgTheme?.branding?.favicon_url ?? undefined,
   );
-  if (!orgLogo && !orgFavicon) return branchTheme;
+  const fallbackBranchLogo = pickAssetUrl(branchLogo);
+
+  if (!orgLogo && !orgFavicon && !fallbackBranchLogo) return branchTheme;
 
   const base: BranchThemeLike = { ...(branchTheme ?? {}) };
-  if (orgLogo) {
-    base.logo_url = orgLogo;
-    base.logo = orgLogo;
-    base.branding = { ...(base.branding ?? {}), logo_url: orgLogo };
+  const logo = orgLogo || fallbackBranchLogo;
+  if (logo) {
+    base.logo_url = logo;
+    base.logo = logo;
+    base.branding = { ...(base.branding ?? {}), logo_url: logo };
   }
   if (orgFavicon) {
     base.favicon_url = orgFavicon;
@@ -131,7 +137,21 @@ export async function resolvePublicLoginTheme(
 export function useBranchTheme(branchIdOverride?: string | null) {
   const activeId = useActiveBranchIdState();
   const branchId = branchIdOverride !== undefined ? branchIdOverride : activeId;
-  const orgId = isOrganizationOwner() ? getPrimaryOrganizationId() : null;
+  const isOrgOwner = isOrganizationOwner();
+  const sessionOrgId = isOrgOwner ? getPrimaryOrganizationId() : null;
+
+  const { data: activeBranch } = useActiveBranch(branchId);
+  const branchOrgId =
+    isOrgOwner && activeBranch?.organization != null ? String(activeBranch.organization) : null;
+
+  // Si el login no trajo owned_organizations, resolvemos el holding por listado.
+  const { data: organizations = [] } = useOrganizations({
+    enabled: isOrgOwner && !sessionOrgId && !branchOrgId,
+  });
+  const listOrgId =
+    isOrgOwner && organizations.length > 0 ? String(organizations[0].id) : null;
+
+  const orgId = sessionOrgId || branchOrgId || listOrgId;
 
   const query = useQuery({
     queryKey: ["branches", "theme", branchId],
@@ -155,27 +175,49 @@ export function useBranchTheme(branchIdOverride?: string | null) {
   });
 
   const themeWithOrgAssets = useMemo(
-    () => overlayOrgBrandAssets(query.data, orgThemeQuery.data),
-    [query.data, orgThemeQuery.data],
+    () =>
+      overlayOrgBrandAssets(
+        query.data,
+        orgThemeQuery.data,
+        // Branch.logo del modelo (a veces tiene asset aunque theme-config no).
+        activeBranch?.logo ?? null,
+      ),
+    [query.data, orgThemeQuery.data, activeBranch?.logo],
   );
 
   const themeHintLabel = useMemo(
-    () => resolveThemeHintLabel(branchId, themeWithOrgAssets),
-    [branchId, themeWithOrgAssets],
+    () =>
+      resolveThemeHintLabel(
+        branchId,
+        themeWithOrgAssets ??
+          ({
+            app_name:
+              getPrimaryOrganizationName() ||
+              activeBranch?.fantasy_name ||
+              activeBranch?.business_name ||
+              null,
+          } as BranchThemeLike),
+      ),
+    [
+      branchId,
+      themeWithOrgAssets,
+      activeBranch?.fantasy_name,
+      activeBranch?.business_name,
+    ],
   );
 
   const effectiveTheme = useMemo(() => {
-    if (query.isError && !orgThemeQuery.data) {
+    if (query.isError && !orgThemeQuery.data && !activeBranch?.logo) {
       return resolveEffectiveTheme(null, themeHintLabel);
     }
     if (themeWithOrgAssets) {
       return resolveEffectiveTheme(themeWithOrgAssets, themeHintLabel);
     }
     return undefined;
-  }, [themeWithOrgAssets, query.isError, orgThemeQuery.data, themeHintLabel]);
+  }, [themeWithOrgAssets, query.isError, orgThemeQuery.data, activeBranch?.logo, themeHintLabel]);
 
   useEffect(() => {
-    if (query.isError && !orgThemeQuery.data) {
+    if (query.isError && !orgThemeQuery.data && !activeBranch?.logo) {
       applyResolvedBranchTheme(null, themeHintLabel);
     } else if (themeWithOrgAssets) {
       applyResolvedBranchTheme(themeWithOrgAssets, themeHintLabel);
@@ -183,12 +225,24 @@ export function useBranchTheme(branchIdOverride?: string | null) {
 
     // Organizador: título de pestaña = nombre del holding.
     if (isOrganizationOwner()) {
-      const orgName = getPrimaryOrganizationName();
+      const orgName =
+        getPrimaryOrganizationName() ||
+        activeBranch?.organization_name?.trim() ||
+        organizations[0]?.name?.trim() ||
+        null;
       if (orgName) {
         document.title = `${orgName} — Agentes`;
       }
     }
-  }, [themeWithOrgAssets, query.isError, orgThemeQuery.data, themeHintLabel]);
+  }, [
+    themeWithOrgAssets,
+    query.isError,
+    orgThemeQuery.data,
+    activeBranch?.logo,
+    activeBranch?.organization_name,
+    organizations,
+    themeHintLabel,
+  ]);
 
   return {
     ...query,

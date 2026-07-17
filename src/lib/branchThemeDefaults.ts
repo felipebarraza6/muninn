@@ -126,6 +126,12 @@ export function resolveEffectiveTheme(
     ...base,
     app_name: apiTheme.app_name || base.app_name,
     tagline: apiTheme.tagline || undefined,
+    // Conservar assets aunque el primary sea placeholder (p. ej. logo del holding).
+    logo: apiTheme.logo ?? base.logo,
+    logo_url: apiTheme.logo_url ?? base.logo_url,
+    favicon: apiTheme.favicon ?? base.favicon,
+    favicon_url: apiTheme.favicon_url ?? base.favicon_url,
+    branding: apiTheme.branding ?? base.branding,
     algorithm: "dark",
   };
 }

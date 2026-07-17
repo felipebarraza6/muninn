@@ -131,7 +131,9 @@ export function AppSidebar() {
   const { data: activeBranch } = useActiveBranch();
   const branchLogo = resolveThemeLogo(rawTheme ?? theme);
   // Título = fantasy_name | Subtítulo = app_name (como antes MUNINN / Agentes)
-  const orgName = isOrganizationOwner() ? getPrimaryOrganizationName() : null;
+  const orgName = isOrganizationOwner()
+    ? getPrimaryOrganizationName() || activeBranch?.organization_name?.trim() || null
+    : null;
   const branchDisplayName =
     activeBranch?.fantasy_name?.trim() || activeBranch?.business_name?.trim() || null;
   // Organizador: título = nombre del holding, subtítulo = sucursal activa.
