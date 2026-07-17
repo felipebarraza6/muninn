@@ -36,6 +36,10 @@ import {
   useUpdateLlmProvider,
   capabilityLabel,
   LLM_CAPABILITY_FILTER_KEYS,
+  PROVIDER_DEFAULT_ENDPOINTS,
+  endpointTypeLabel,
+  joinEndpointUrl,
+  resolveProviderEndpoints,
   type LlmModel,
   type LlmProvider,
   type LlmTestConnectionResult,
@@ -224,6 +228,40 @@ export default function AdminLlmPage() {
   const [pActive, setPActive] = useState(true);
   const [pBranches, setPBranches] = useState<string[]>([]);
   const [branchSearch, setBranchSearch] = useState("");
+  /** Overrides de path por tipo; vacío = usar default del provider_type. */
+  const [pEndpointRows, setPEndpointRows] = useState<Array<{ key: string; type: string; path: string }>>(
+    [],
+  );
+  const [newEndpointType, setNewEndpointType] = useState("");
+  const [newEndpointPath, setNewEndpointPath] = useState("");
+
+  const defaultEndpointsForType = useMemo(
+    () => PROVIDER_DEFAULT_ENDPOINTS[pType] || {},
+    [pType],
+  );
+
+  const effectiveEndpoints = useMemo(() => {
+    const overrides: Record<string, string> = {};
+    for (const row of pEndpointRows) {
+      const t = row.type.trim();
+      const p = row.path.trim();
+      if (t && p) overrides[t] = p.startsWith("/") ? p : `/${p}`;
+    }
+    return resolveProviderEndpoints(pType, overrides);
+  }, [pType, pEndpointRows]);
+
+  const buildEndpointRowsFromProvider = (p: LlmProvider | null, type: string) => {
+    const defaults = PROVIDER_DEFAULT_ENDPOINTS[type] || {};
+    const overrides = p?.endpoints && typeof p.endpoints === "object" ? p.endpoints : {};
+    const keys = new Set([...Object.keys(defaults), ...Object.keys(overrides)]);
+    return Array.from(keys)
+      .sort((a, b) => a.localeCompare(b))
+      .map((typeKey) => ({
+        key: typeKey,
+        type: typeKey,
+        path: overrides[typeKey] || defaults[typeKey] || "",
+      }));
+  };
 
   const filteredBranchOptions = useMemo(() => {
     const q = branchSearch.trim().toLowerCase();
@@ -320,6 +358,9 @@ export default function AdminLlmPage() {
     setPApiKey("");
     setPActive(true);
     setBranchSearch("");
+    setPEndpointRows(buildEndpointRowsFromProvider(null, "openai"));
+    setNewEndpointType("");
+    setNewEndpointPath("");
     const fromFilter =
       branchFilter !== GLOBAL_BRANCH_ID && branchOptions.some((b) => b.id === branchFilter)
         ? [branchFilter]
@@ -354,6 +395,9 @@ export default function AdminLlmPage() {
     setPActive(p.is_active !== false);
     setBranchSearch("");
     setPBranches((p.branches ?? []).map(String));
+    setPEndpointRows(buildEndpointRowsFromProvider(p, p.provider_type || "openai"));
+    setNewEndpointType("");
+    setNewEndpointPath("");
     setProviderFormOpen(true);
   };
 
@@ -374,6 +418,54 @@ export default function AdminLlmPage() {
 
   const selectAllBranches = () => setPBranches(branchOptions.map((b) => b.id));
   const clearBranches = () => setPBranches([]);
+
+  const updateEndpointRow = (key: string, patch: Partial<{ type: string; path: string }>) => {
+    setPEndpointRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+  };
+
+  const removeEndpointRow = (key: string) => {
+    setPEndpointRows((prev) => prev.filter((r) => r.key !== key));
+  };
+
+  const addEndpointRow = () => {
+    const type = newEndpointType.trim().toLowerCase().replace(/\s+/g, "_");
+    const pathRaw = newEndpointPath.trim();
+    if (!type || !pathRaw) {
+      toast.error("Tipo y ruta del endpoint requeridos");
+      return;
+    }
+    if (pEndpointRows.some((r) => r.type === type)) {
+      toast.error(`Ya existe el endpoint «${type}»`);
+      return;
+    }
+    const path = pathRaw.startsWith("/") ? pathRaw : `/${pathRaw}`;
+    setPEndpointRows((prev) => [...prev, { key: type, type, path }]);
+    setNewEndpointType("");
+    setNewEndpointPath("");
+  };
+
+  const resetEndpointsToDefaults = () => {
+    setPEndpointRows(buildEndpointRowsFromProvider(null, pType));
+  };
+
+  /** Solo persiste overrides respecto al default del tipo. */
+  const buildEndpointsPayload = (): Record<string, string> => {
+    const defaults = defaultEndpointsForType;
+    const out: Record<string, string> = {};
+    for (const row of pEndpointRows) {
+      const t = row.type.trim();
+      let p = row.path.trim();
+      if (!t || !p) continue;
+      if (!p.startsWith("/")) p = `/${p}`;
+      if (defaults[t] !== p) out[t] = p;
+    }
+    return out;
+  };
+
+  const handleProviderTypeChange = (next: string) => {
+    setPType(next);
+    setPEndpointRows(buildEndpointRowsFromProvider(null, next));
+  };
 
   const saveProvider = () => {
     if (!pName.trim()) {
@@ -406,6 +498,7 @@ export default function AdminLlmPage() {
       is_active: pActive,
       auth_type: "api_key",
       branches: pBranches.map((id) => (Number.isNaN(Number(id)) ? id : Number(id))),
+      endpoints: buildEndpointsPayload(),
     };
     if (pApiKey.trim()) payload.api_key = pApiKey.trim();
 
@@ -627,7 +720,7 @@ export default function AdminLlmPage() {
                 </div>
                 <div>
                   <Label>Tipo</Label>
-                  <Select value={pType} onValueChange={setPType}>
+                  <Select value={pType} onValueChange={handleProviderTypeChange}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -656,6 +749,115 @@ export default function AdminLlmPage() {
                     placeholder="https://..."
                   />
                 </div>
+
+                <div className="rounded-md border border-border p-3 space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <Label className="mb-0">Endpoints</Label>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        Rutas relativas a la Base URL. Vacío en API = defaults del tipo.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="text-[11px] text-muted-foreground hover:underline"
+                      onClick={resetEndpointsToDefaults}
+                    >
+                      Restaurar defaults
+                    </button>
+                  </div>
+                  <div className="space-y-2 max-h-56 overflow-y-auto">
+                    {pEndpointRows.length === 0 && (
+                      <p className="text-xs text-muted-foreground py-2 text-center">
+                        Sin endpoints. Agrega al menos chat y models.
+                      </p>
+                    )}
+                    {pEndpointRows.map((row) => {
+                      const isCustom =
+                        defaultEndpointsForType[row.type] !== undefined &&
+                        defaultEndpointsForType[row.type] !== row.path.trim();
+                      const isExtra = defaultEndpointsForType[row.type] === undefined;
+                      return (
+                        <div
+                          key={row.key}
+                          className="grid grid-cols-1 sm:grid-cols-[7.5rem_1fr_auto] gap-1.5 items-start"
+                        >
+                          <div>
+                            <Input
+                              value={row.type}
+                              onChange={(e) =>
+                                updateEndpointRow(row.key, {
+                                  type: e.target.value.toLowerCase().replace(/\s+/g, "_"),
+                                })
+                              }
+                              className="h-8 font-mono text-xs"
+                              placeholder="chat"
+                            />
+                            <p className="text-[10px] text-muted-foreground truncate mt-0.5">
+                              {endpointTypeLabel(row.type)}
+                              {isCustom ? " · override" : isExtra ? " · extra" : " · default"}
+                            </p>
+                          </div>
+                          <div className="min-w-0">
+                            <Input
+                              value={row.path}
+                              onChange={(e) => updateEndpointRow(row.key, { path: e.target.value })}
+                              className="h-8 font-mono text-xs"
+                              placeholder="/chat/completions"
+                            />
+                            <p className="text-[10px] text-muted-foreground font-mono truncate mt-0.5">
+                              {joinEndpointUrl(pBaseUrl, row.path || "/")}
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 text-destructive"
+                            onClick={() => removeEndpointRow(row.key)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-[7.5rem_1fr_auto] gap-1.5 pt-1 border-t border-border/60">
+                    <Input
+                      value={newEndpointType}
+                      onChange={(e) => setNewEndpointType(e.target.value)}
+                      className="h-8 font-mono text-xs"
+                      placeholder="tipo"
+                    />
+                    <Input
+                      value={newEndpointPath}
+                      onChange={(e) => setNewEndpointPath(e.target.value)}
+                      className="h-8 font-mono text-xs"
+                      placeholder="/ruta"
+                    />
+                    <Button type="button" size="sm" variant="outline" className="h-8" onClick={addEndpointRow}>
+                      <Plus className="h-3.5 w-3.5 mr-1" /> Add
+                    </Button>
+                  </div>
+                  {Object.keys(effectiveEndpoints).length > 0 && (
+                    <details className="text-[11px] text-muted-foreground">
+                      <summary className="cursor-pointer hover:text-foreground">
+                        Vista efectiva ({Object.keys(effectiveEndpoints).length})
+                      </summary>
+                      <ul className="mt-1 space-y-0.5 font-mono">
+                        {Object.entries(effectiveEndpoints)
+                          .sort(([a], [b]) => a.localeCompare(b))
+                          .map(([type, path]) => (
+                            <li key={type} className="truncate">
+                              <span className="text-foreground/80">{type}</span> →{" "}
+                              {joinEndpointUrl(pBaseUrl, path)}
+                            </li>
+                          ))}
+                      </ul>
+                    </details>
+                  )}
+                </div>
+
                 <div>
                   <Label>
                     API Key{" "}
@@ -854,6 +1056,60 @@ export default function AdminLlmPage() {
                     className="h-8 text-xs"
                   />
                 </div>
+              )}
+
+              {selected && (
+                <details className="mb-3 rounded-md border border-border/80 px-3 py-2 text-xs">
+                  <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                    Endpoints del proveedor
+                    {selected.base_url ? (
+                      <span className="font-mono text-[10px] ml-1.5 opacity-80">
+                        · {selected.base_url}
+                      </span>
+                    ) : null}
+                  </summary>
+                  <ul className="mt-2 space-y-1 font-mono text-[11px]">
+                    {Object.entries(
+                      resolveProviderEndpoints(selected.provider_type, selected.endpoints),
+                    )
+                      .sort(([a], [b]) => a.localeCompare(b))
+                      .map(([type, path]) => {
+                        const overridden =
+                          selected.endpoints &&
+                          typeof selected.endpoints === "object" &&
+                          type in selected.endpoints;
+                        return (
+                          <li key={type} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                            <span className="text-foreground/90 min-w-[7rem]">
+                              {endpointTypeLabel(type)}
+                              <span className="text-muted-foreground"> ({type})</span>
+                            </span>
+                            <span className="truncate text-muted-foreground">
+                              {selected.chat_url && type === "chat"
+                                ? selected.chat_url
+                                : selected.models_url && type === "models"
+                                  ? selected.models_url
+                                  : joinEndpointUrl(selected.base_url, path)}
+                            </span>
+                            {overridden && (
+                              <Badge variant="outline" className="text-[9px] h-4 px-1">
+                                override
+                              </Badge>
+                            )}
+                          </li>
+                        );
+                      })}
+                  </ul>
+                  {canManageProviders && (
+                    <button
+                      type="button"
+                      className="mt-2 text-[11px] text-primary hover:underline"
+                      onClick={() => openEditProvider(selected)}
+                    >
+                      Editar endpoints…
+                    </button>
+                  )}
+                </details>
               )}
 
               <AdminMotionList className="divide-y divide-border/60">

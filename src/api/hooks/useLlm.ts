@@ -19,6 +19,83 @@ export const PROVIDER_TYPES = [
   { value: "custom", label: "Custom / OpenAI-compatible" },
 ] as const;
 
+/** Defaults alineados a LLMProvider.DEFAULT_ENDPOINTS del backend. */
+export const PROVIDER_DEFAULT_ENDPOINTS: Record<string, Record<string, string>> = {
+  openrouter: {
+    chat: "/chat/completions",
+    models: "/models",
+    embeddings: "/embeddings",
+    embedding_models: "/embeddings/models",
+    completions: "/completions",
+  },
+  openai: {
+    chat: "/chat/completions",
+    models: "/models",
+    embeddings: "/embeddings",
+    images: "/images/generations",
+    audio_transcriptions: "/audio/transcriptions",
+    audio_speech: "/audio/speech",
+    completions: "/completions",
+  },
+  anthropic: {
+    chat: "/messages",
+    models: "/models",
+  },
+  google: {
+    chat: "/models/{model}:generateContent",
+    models: "/models",
+    embeddings: "/models/{model}:embedContent",
+  },
+  cohere: {
+    chat: "/chat",
+    embed: "/embed",
+  },
+  ollama: {
+    chat: "/api/chat",
+    generate: "/api/generate",
+    models: "/api/tags",
+    embeddings: "/api/embeddings",
+  },
+  custom: {
+    chat: "/chat/completions",
+    models: "/models",
+    embeddings: "/embeddings",
+  },
+};
+
+export const ENDPOINT_TYPE_LABELS: Record<string, string> = {
+  chat: "Chat",
+  models: "Modelos (sync)",
+  embeddings: "Embeddings",
+  embedding_models: "Catálogo embeddings",
+  completions: "Completions",
+  images: "Imágenes",
+  audio_transcriptions: "Audio → texto",
+  audio_speech: "Texto → audio",
+  generate: "Generate",
+  embed: "Embed",
+};
+
+export function endpointTypeLabel(type: string): string {
+  return ENDPOINT_TYPE_LABELS[type] || type;
+}
+
+/** Defaults del tipo + overrides del proveedor. */
+export function resolveProviderEndpoints(
+  providerType?: string | null,
+  overrides?: Record<string, string> | null,
+): Record<string, string> {
+  const defaults = PROVIDER_DEFAULT_ENDPOINTS[providerType || ""] || {};
+  return { ...defaults, ...(overrides || {}) };
+}
+
+export function joinEndpointUrl(baseUrl: string | null | undefined, path: string): string {
+  const base = (baseUrl || "").replace(/\/+$/, "");
+  const rel = path.startsWith("/") ? path : `/${path}`;
+  if (!base) return rel;
+  return `${base}${rel}`;
+}
+
 export interface LlmProvider {
   id: number | string;
   name: string;
@@ -33,6 +110,13 @@ export interface LlmProvider {
   branches?: (number | string)[];
   branch_names?: string[];
   models?: LlmModel[];
+  /** Overrides relativos a base_url (vacío = defaults del tipo). */
+  endpoints?: Record<string, string> | null;
+  endpoints_payload_templates?: Record<string, unknown> | null;
+  endpoints_response_mapping?: Record<string, unknown> | null;
+  chat_url?: string | null;
+  models_url?: string | null;
+  connection_test_count?: number;
 }
 
 export interface LlmModel {
