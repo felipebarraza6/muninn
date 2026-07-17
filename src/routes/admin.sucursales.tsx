@@ -541,8 +541,11 @@ export default function AdminSucursalesPage() {
   const primaryOrgName = isOrgOwner && !isGlobalAdmin ? getPrimaryOrganizationName() : null;
   const ownerBranchIdSet = useMemo(() => {
     if (isGlobalAdmin) return null;
-    return new Set(getOwnerBranchIds());
-  }, [isGlobalAdmin]);
+    const ids = getOwnerBranchIds();
+    // Organizador sin IDs en sesión: confiar en el API (ya filtra por holding).
+    if (isOrgOwner && ids.length === 0) return null;
+    return new Set(ids);
+  }, [isGlobalAdmin, isOrgOwner]);
 
   const {
     data: branchesRaw = [],
