@@ -40,6 +40,7 @@ import {
   getPrimaryOrganizationName,
   getBranchesAdminNavLabel,
   getOrganizationsAdminNavLabel,
+  canAccessKnowledgeCatalog,
 } from "@/lib/authGuards";
 
 type IconComponent = React.ComponentType<{ className?: string; strokeWidth?: number }>;
@@ -51,15 +52,31 @@ type MenuItem = {
   exact?: boolean;
 };
 
-const baseItems: MenuItem[] = [
-  { title: "Resumen", url: "/", icon: LayoutDashboard, exact: true },
-  { title: "Agentes", url: "/agentes", icon: Bot },
+const resumenItem: MenuItem = {
+  title: "Resumen",
+  url: "/",
+  icon: LayoutDashboard,
+  exact: true,
+};
+
+const comunicacionItems: MenuItem[] = [
+  { title: "Chat", url: "/chat", icon: MessageCircle },
   { title: "Canales", url: "/canales", icon: Share2 },
-  { title: "Conocimiento", url: "/conocimiento", icon: BookOpen },
+];
+
+const baseStudioItems: MenuItem[] = [
+  { title: "Agentes", url: "/agentes", icon: Bot },
   { title: "APIs externas", url: "/apis", icon: Globe },
   { title: "Funciones", url: "/funciones", icon: FunctionSquare },
-  { title: "Chat", url: "/chat", icon: MessageCircle },
 ];
+
+function buildStudioItems(): MenuItem[] {
+  const items = [...baseStudioItems];
+  if (canAccessKnowledgeCatalog()) {
+    items.splice(1, 0, { title: "Conocimiento", url: "/conocimiento", icon: BookOpen });
+  }
+  return items;
+}
 
 const adminItems: MenuItem[] = [
   { title: "Organizaciones", url: "/admin/organizaciones", icon: Network },
@@ -135,6 +152,7 @@ export function AppSidebar() {
   const showOrgGestion = !showAdmin && isOrganizationOwner();
   const roleGestionItems = !showAdmin && !showOrgGestion ? buildRoleGestionItems() : [];
   const showRoleGestion = roleGestionItems.length > 0;
+  const studioItems = buildStudioItems();
   const reduceMotion = useReducedMotion();
 
   const isActive = (url: string, exact?: boolean) =>
@@ -208,6 +226,39 @@ export function AppSidebar() {
 
       <SidebarContent className="pt-2">
         <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <motion.div
+                className="flex w-full min-w-0 flex-col gap-1"
+                variants={listVariants}
+                initial={reduceMotion ? false : "hidden"}
+                animate="show"
+              >
+                {renderItems([resumenItem], "resumen")}
+              </motion.div>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-[10.5px] font-semibold tracking-wider uppercase text-muted-foreground/80">
+            Comunicación
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <motion.div
+                className="flex w-full min-w-0 flex-col gap-1"
+                variants={listVariants}
+                initial={reduceMotion ? false : "hidden"}
+                animate="show"
+              >
+                {renderItems(comunicacionItems, "comunicacion")}
+              </motion.div>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
           <SidebarGroupLabel className="text-[10.5px] font-semibold tracking-wider uppercase text-muted-foreground/80">
             Studio
           </SidebarGroupLabel>
@@ -219,7 +270,7 @@ export function AppSidebar() {
                 initial={reduceMotion ? false : "hidden"}
                 animate="show"
               >
-                {renderItems(baseItems, "studio")}
+                {renderItems(studioItems, "studio")}
               </motion.div>
             </SidebarMenu>
           </SidebarGroupContent>

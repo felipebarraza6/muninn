@@ -22,6 +22,11 @@ import {
   User,
   MoreVertical,
   RefreshCw,
+  ChevronDown,
+  ChevronRight,
+  Wrench,
+  Database,
+  ArrowRight,
 } from "lucide-react";
 import { useAgent } from "@/api/hooks/useAgents";
 import {
@@ -73,6 +78,204 @@ function formatTime(iso?: string) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
   return d.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" });
+}
+
+interface RagSourceDetail {
+  id?: string;
+  name?: string;
+  title?: string;
+  content?: string;
+  summary?: string;
+  source?: string;
+  source_app?: string;
+  knowledge_type?: string;
+  score?: number;
+}
+
+interface ToolCallDetail {
+  id?: string;
+  name?: string;
+  arguments?: string | Record<string, unknown>;
+  function?: { name?: string; arguments?: string };
+}
+
+interface ToolResultDetail {
+  tool_call_id?: string;
+  name?: string;
+  content?: string;
+}
+
+function asRecordArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : [];
+}
+
+/** Formatea un valor JSON (string u objeto) a texto legible e indentado. */
+function prettyJson(value: unknown): string {
+  if (value == null) return "";
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    try {
+      return JSON.stringify(JSON.parse(trimmed), null, 2);
+    } catch {
+      return value;
+    }
+  }
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
+function sourceTitle(src: RagSourceDetail): string {
+  return src.title || src.name || "Documento sin título";
+}
+
+function toolName(call: ToolCallDetail): string {
+  return call.function?.name || call.name || "función";
+}
+
+function toolArguments(call: ToolCallDetail): string {
+  return prettyJson(call.function?.arguments ?? call.arguments ?? "");
+}
+
+/**
+ * Panel expandible con el detalle del razonamiento del agente: fuentes RAG
+ * usadas (título/score/snippet) y pasos de function calling (nombre, argumentos
+ * y resultado emparejado por tool_call_id).
+ */
+function MessageDetails({
+  ragSources,
+  toolCalls,
+  toolResults,
+}: {
+  ragSources: RagSourceDetail[];
+  toolCalls: ToolCallDetail[];
+  toolResults: ToolResultDetail[];
+}) {
+  const [openRag, setOpenRag] = useState(false);
+  const [openTools, setOpenTools] = useState(false);
+
+  const resultFor = useCallback(
+    (call: ToolCallDetail, index: number): ToolResultDetail | undefined => {
+      if (call.id) {
+        const byId = toolResults.find((r) => r.tool_call_id === call.id);
+        if (byId) return byId;
+      }
+      const name = toolName(call);
+      const byName = toolResults.filter((r) => r.name === name);
+      if (byName.length === 1) return byName[0];
+      return toolResults[index];
+    },
+    [toolResults],
+  );
+
+  const hasRag = ragSources.length > 0;
+  const hasTools = toolCalls.length > 0;
+  if (!hasRag && !hasTools) return null;
+
+  return (
+    <div className="space-y-1.5">
+      {hasRag && (
+        <div className="rounded-md border border-primary/20 bg-primary-soft/40 overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setOpenRag((v) => !v)}
+            className="w-full flex items-center gap-1.5 px-2 py-1.5 text-[10px] font-medium text-primary hover:bg-primary-soft/60 transition-colors"
+          >
+            {openRag ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+            <Database className="h-3 w-3" />
+            RAG: {ragSources.length} fuente{ragSources.length === 1 ? "" : "s"}
+          </button>
+          {openRag && (
+            <div className="px-2 pb-2 space-y-1.5">
+              {ragSources.map((src, i) => {
+                const snippet = (src.content || src.summary || "").trim();
+                const score = typeof src.score === "number" ? src.score : undefined;
+                const kind = src.knowledge_type || src.source || src.source_app;
+                return (
+                  <div
+                    key={src.id ?? i}
+                    className="rounded border border-primary/15 bg-background/60 p-1.5"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-medium truncate">{sourceTitle(src)}</span>
+                      {score !== undefined && (
+                        <span className="text-[9px] font-mono text-primary shrink-0">
+                          {score.toFixed(3)}
+                        </span>
+                      )}
+                    </div>
+                    {kind && (
+                      <div className="text-[9px] uppercase tracking-wide text-muted-foreground">
+                        {kind}
+                      </div>
+                    )}
+                    {snippet && (
+                      <p className="mt-0.5 text-[10px] text-muted-foreground line-clamp-3 whitespace-pre-wrap">
+                        {snippet.slice(0, 280)}
+                        {snippet.length > 280 ? "…" : ""}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {hasTools && (
+        <div className="rounded-md border border-info/20 bg-info-soft/40 overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setOpenTools((v) => !v)}
+            className="w-full flex items-center gap-1.5 px-2 py-1.5 text-[10px] font-medium text-info hover:bg-info-soft/60 transition-colors"
+          >
+            {openTools ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+            <Wrench className="h-3 w-3" />
+            {toolCalls.length} función{toolCalls.length === 1 ? "" : "es"} ejecutada
+            {toolCalls.length === 1 ? "" : "s"}
+          </button>
+          {openTools && (
+            <div className="px-2 pb-2 space-y-2">
+              {toolCalls.map((call, i) => {
+                const result = resultFor(call, i);
+                return (
+                  <div
+                    key={call.id ?? i}
+                    className="rounded border border-info/15 bg-background/60 p-1.5 space-y-1"
+                  >
+                    <div className="flex items-center gap-1.5 text-[11px] font-mono font-medium text-info">
+                      <Wrench className="h-3 w-3" />
+                      {toolName(call)}
+                    </div>
+                    <div>
+                      <div className="text-[9px] uppercase tracking-wide text-muted-foreground mb-0.5">
+                        Argumentos
+                      </div>
+                      <pre className="text-[10px] font-mono bg-muted/60 rounded p-1.5 overflow-x-auto whitespace-pre-wrap">
+                        {toolArguments(call) || "{}"}
+                      </pre>
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1 text-[9px] uppercase tracking-wide text-muted-foreground mb-0.5">
+                        <ArrowRight className="h-2.5 w-2.5" />
+                        Resultado
+                      </div>
+                      <pre className="text-[10px] font-mono bg-muted/60 rounded p-1.5 overflow-x-auto whitespace-pre-wrap max-h-48">
+                        {result ? prettyJson(result.content) : "Sin resultado registrado"}
+                      </pre>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function getCurrentUserId(): number | undefined {
@@ -308,6 +511,9 @@ export function AgentChatCore({
                 role: data.sender?.toLowerCase() === "user" ? "user" : "agent",
                 content: data.message ?? data.content ?? data.text ?? "",
                 created: data.created_at ?? data.timestamp ?? new Date().toISOString(),
+                rag_sources: data.rag_sources ?? data.sources,
+                tool_calls: data.tool_calls,
+                tool_results: data.tool_results,
               },
             ]);
           }
@@ -655,22 +861,13 @@ export function AgentChatCore({
                   >
                     {msg.content}
                   </div>
-                  {msg.role === "agent" &&
-                    Array.isArray(msg.rag_sources) &&
-                    msg.rag_sources.length > 0 && (
-                      <div className="text-[10px] text-muted-foreground bg-primary-soft/40 border border-primary/20 rounded-md px-2 py-1.5">
-                        <span className="font-medium text-primary">RAG:</span>{" "}
-                        {msg.rag_sources.length} fuente
-                        {msg.rag_sources.length === 1 ? "" : "s"}
-                      </div>
-                    )}
-                  {msg.role === "agent" &&
-                    Array.isArray(msg.tool_calls) &&
-                    msg.tool_calls.length > 0 && (
-                      <div className="text-[10px] text-muted-foreground bg-info-soft/40 border border-info/20 rounded-md px-2 py-1.5 font-mono">
-                        tools: {msg.tool_calls.length}
-                      </div>
-                    )}
+                  {msg.role === "agent" && (
+                    <MessageDetails
+                      ragSources={asRecordArray<RagSourceDetail>(msg.rag_sources)}
+                      toolCalls={asRecordArray<ToolCallDetail>(msg.tool_calls)}
+                      toolResults={asRecordArray<ToolResultDetail>(msg.tool_results)}
+                    />
+                  )}
                   <div
                     className={`text-[10px] text-muted-foreground ${
                       msg.role === "user" ? "text-right" : "text-left"

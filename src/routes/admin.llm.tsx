@@ -117,9 +117,12 @@ export default function AdminLlmPage() {
   const { data: models = [], isLoading: modelsLoading } = useLlmModels(selectedId);
 
   useEffect(() => {
-    if (!selectedId) return;
-    if (filteredProviders.some((p) => String(p.id) === selectedId)) return;
-    setSelectedId(filteredProviders[0] ? String(filteredProviders[0].id) : null);
+    if (filteredProviders.length === 0) {
+      if (selectedId) setSelectedId(null);
+      return;
+    }
+    if (selectedId && filteredProviders.some((p) => String(p.id) === selectedId)) return;
+    setSelectedId(String(filteredProviders[0].id));
     setProviderFormOpen(false);
   }, [filteredProviders, selectedId]);
 

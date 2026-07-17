@@ -177,6 +177,19 @@ export function canAccessBranchesAdmin(): boolean {
 }
 
 /**
+ * Puede entrar al catálogo global de Conocimiento.
+ * - Superadmin: sí
+ * - Organizador / owner de organización: sí
+ * - OWNER de sucursal: sí
+ * - Otros roles: no; solo ven conocimiento ya asignado dentro del agente.
+ */
+export function canAccessKnowledgeCatalog(): boolean {
+  if (isSuperAdmin()) return true;
+  if (isOrganizationOwner()) return true;
+  return isBranchOwner();
+}
+
+/**
  * Scope de OWNER de tienda (rol), sin ser organizador ni superadmin.
  */
 export function isStoreOwnerScope(): boolean {

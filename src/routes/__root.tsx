@@ -34,12 +34,38 @@ function getPageMeta(pathname: string): PageMeta {
     return { breadcrumb: [] };
   }
   if (pathname.startsWith("/agentes")) {
+    if (pathname === "/agentes/nuevo") {
+      return {
+        breadcrumb: [
+          { label: "Resumen", to: "/" },
+          { label: "Agentes", to: "/agentes" },
+          { label: "Nuevo" },
+        ],
+      };
+    }
+    if (pathname !== "/agentes") {
+      return {
+        breadcrumb: [
+          { label: "Resumen", to: "/" },
+          { label: "Agentes", to: "/agentes" },
+        ],
+      };
+    }
     return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Agentes" }] };
   }
   if (pathname.startsWith("/canales")) {
     return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Canales" }] };
   }
   if (pathname.startsWith("/conocimiento")) {
+    if (pathname === "/conocimiento/datos") {
+      return {
+        breadcrumb: [
+          { label: "Resumen", to: "/" },
+          { label: "Conocimiento", to: "/conocimiento" },
+          { label: "Datos" },
+        ],
+      };
+    }
     return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Conocimiento" }] };
   }
   if (pathname.startsWith("/apis")) {

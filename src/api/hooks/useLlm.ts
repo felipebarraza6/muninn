@@ -44,7 +44,7 @@ export interface LlmModel {
   is_active?: boolean;
   is_free?: boolean;
   is_recommended?: boolean;
-  capabilities?: string[];
+  capabilities?: string[] | Record<string, unknown>;
   description?: string | null;
   max_tokens?: number | null;
   context_window?: number | null;

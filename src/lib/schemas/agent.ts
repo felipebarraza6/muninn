@@ -1,12 +1,23 @@
 import { z } from "zod";
 
 export const agentFormSchema = z.object({
-  name: z.string().min(1, "Nombre requerido"),
-  agent_type: z.string().min(1),
-  system_prompt: z.string().optional().default(""),
+  name: z.string().trim().min(1, "Nombre requerido").max(120, "Máximo 120 caracteres"),
+  slug: z
+    .string()
+    .trim()
+    .min(1, "Identificador requerido")
+    .max(50, "Máximo 50 caracteres")
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Solo minúsculas, números y guiones (ej: mi-agente)"),
+  agent_type: z.string().min(1).default("ASSISTANT"),
+  system_prompt: z
+    .string()
+    .trim()
+    .min(20, "Describe al menos personalidad y reglas del agente (SOUL.md)"),
   welcome_message: z.string().optional().default(""),
-  llm_provider: z.string().optional().nullable(),
-  llm_model: z.string().optional().nullable(),
+  llm_provider: z
+    .string({ required_error: "Selecciona un proveedor" })
+    .min(1, "Selecciona un proveedor"),
+  llm_model: z.string({ required_error: "Selecciona un modelo" }).min(1, "Selecciona un modelo"),
   temperature: z.number().min(0).max(2),
   max_tokens: z.number().int().min(1).max(8192),
   use_rag: z.boolean(),

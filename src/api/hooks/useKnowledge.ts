@@ -37,6 +37,18 @@ export interface AgentKnowledge {
   modified?: string;
 }
 
+/**
+ * Un documento solo está realmente indexado (usable por RAG) cuando el backend
+ * marcó `is_indexed` Y existen chunks activos. Hay datos/seed donde `is_indexed`
+ * queda en true sin chunks (contenido vacío o carga directa), lo que mostraba
+ * "Indexado" siempre aunque no haya nada que recuperar.
+ */
+export function isKnowledgeIndexed(
+  doc: Pick<AgentKnowledge, "is_indexed" | "chunks_count">,
+): boolean {
+  return Boolean(doc.is_indexed) && (doc.chunks_count ?? 0) > 0;
+}
+
 export interface KnowledgeSearchResult {
   id: string;
   title: string;
@@ -126,6 +138,35 @@ export function useUnindexKnowledge() {
   return useMutation({
     mutationFn: (id: string) => POST<AgentKnowledge>(ENDPOINTS.knowledge.unindex(id)),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: QUERY_KEY }),
+  });
+}
+
+export interface KnowledgeChunk {
+  id: string;
+  order: number;
+  content: string;
+  char_count: number;
+  has_embedding: boolean;
+  dimensions: number;
+  norm: number | null;
+  preview: number[];
+}
+
+export interface KnowledgeChunksResponse {
+  document_id: string;
+  is_indexed: boolean;
+  indexed_at?: string | null;
+  count: number;
+  dimensions: number;
+  chunks: KnowledgeChunk[];
+}
+
+export function useKnowledgeChunks(id: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: [...QUERY_KEY, id, "chunks"],
+    queryFn: () => GET<KnowledgeChunksResponse>(ENDPOINTS.knowledge.chunks(id!)),
+    enabled: !!id && enabled,
+    staleTime: 15_000,
   });
 }
 

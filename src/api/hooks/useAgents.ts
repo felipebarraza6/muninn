@@ -29,7 +29,7 @@ export interface Agent {
   requests_per_minute?: number;
   use_rag?: boolean;
   rag_top_k?: number;
-  embedding_model?: string;
+  embedding_model?: string | number | null;
   semantic_weight?: number;
   use_semantic_search?: boolean;
   top_p?: number;

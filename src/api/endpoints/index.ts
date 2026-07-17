@@ -132,6 +132,7 @@ export const ENDPOINTS = {
     index: (id: string) => `/ai-agents/knowledge/${id}/index/`,
     reindex: (id: string) => `/ai-agents/knowledge/${id}/reindex/`,
     unindex: (id: string) => `/ai-agents/knowledge/${id}/unindex/`,
+    chunks: (id: string) => `/ai-agents/knowledge/${id}/chunks/`,
     bulkIndex: "/ai-agents/knowledge/bulk_index/",
     bulkCreate: "/ai-agents/knowledge/bulk_create/",
     parseSpreadsheet: "/ai-agents/knowledge/parse_spreadsheet/",

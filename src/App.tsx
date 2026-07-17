@@ -12,6 +12,7 @@ import Reportes from "./routes/reportes";
 import Configuracion from "./routes/configuracion";
 import MetricasDetail from "./routes/metricas.$id";
 import Agentes from "./routes/agentes";
+import AgentesNuevo from "./routes/agentes.nuevo";
 import AgentesDetail from "./routes/agentes.$id";
 import AgentesChat from "./routes/agentes.$id.chat";
 import ChatPage from "./routes/chat";
@@ -22,6 +23,7 @@ import APIDetail from "./routes/apis.$id";
 import Funciones from "./routes/funciones";
 import FunctionDetail from "./routes/funciones.$id";
 import Conocimiento from "./routes/conocimiento";
+import ConocimientoDatos from "./routes/conocimiento.datos";
 import EmbedChat from "./routes/embed.chat.$id";
 import Login from "./routes/login";
 import AdminLlmPage from "./routes/admin.llm";
@@ -35,6 +37,7 @@ import { RequireUsersAdmin } from "./components/auth/RequireUsersAdmin";
 import { RequireBranchesAdmin } from "./components/auth/RequireBranchesAdmin";
 import { RequireOrganizationsAdmin } from "./components/auth/RequireOrganizationsAdmin";
 import { RequireLlmAdmin } from "./components/auth/RequireLlmAdmin";
+import { RequireKnowledgeCatalog } from "./components/auth/RequireKnowledgeCatalog";
 import { ThemeProvider } from "./components/theme/ThemeProvider";
 
 const queryClient = new QueryClient({
@@ -57,12 +60,28 @@ function AnimatedOutlet() {
         <Routes location={location}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/agentes" element={<Agentes />} />
+          <Route path="/agentes/nuevo" element={<AgentesNuevo />} />
           <Route path="/agentes/:id" element={<AgentesDetail />} />
           <Route path="/agentes/:id/chat" element={<AgentesChat />} />
           <Route path="/chat" element={<ChatPage />} />
           <Route path="/canales" element={<Canales />} />
           <Route path="/canales/:id" element={<CanalesDetail />} />
-          <Route path="/conocimiento" element={<Conocimiento />} />
+          <Route
+            path="/conocimiento"
+            element={
+              <RequireKnowledgeCatalog>
+                <Conocimiento />
+              </RequireKnowledgeCatalog>
+            }
+          />
+          <Route
+            path="/conocimiento/datos"
+            element={
+              <RequireKnowledgeCatalog>
+                <ConocimientoDatos />
+              </RequireKnowledgeCatalog>
+            }
+          />
           <Route path="/apis" element={<APIs />} />
           <Route path="/apis/:id" element={<APIDetail />} />
           <Route path="/funciones" element={<Funciones />} />

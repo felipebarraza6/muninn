@@ -6,16 +6,18 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import {
-  ArrowLeft,
-  Loader2,
-  Settings,
-  BookOpen,
-  MessageSquare,
-  Pencil,
-  FlaskConical,
-  Wrench,
-} from "lucide-react";
-import { useAgent, useTestAgentLLM } from "@/api/hooks/useAgents";
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { ArrowLeft, Loader2, Settings, BookOpen, FlaskConical, Wrench, Trash2 } from "lucide-react";
+import { useAgent, useDeleteAgent, useTestAgentLLM } from "@/api/hooks/useAgents";
 import { AgentKnowledgePanel } from "@/components/agents/agent-knowledge-panel";
 import { AgentToolsPanel } from "@/components/agents/agent-tools-panel";
 import { AgentForm } from "@/components/agents/agent-form";
@@ -27,6 +29,7 @@ export default function AgentDetailPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const editing = searchParams.get("edit") === "1";
   const { data: agent, isLoading, error, refetch } = useAgent(id);
+  const deleteAgent = useDeleteAgent();
   const testLlm = useTestAgentLLM();
   const [testMessage, setTestMessage] = useState("Hola, ¿quién eres?");
   const [testResult, setTestResult] = useState<string | null>(null);
@@ -67,6 +70,12 @@ export default function AgentDetailPage() {
         >
           <ArrowLeft className="h-4 w-4 mr-1.5" /> Volver al studio
         </Button>
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Configurar agente</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Modelo, SOUL.md, bienvenida, RAG y comportamiento de {agent.name}.
+          </p>
+        </div>
         <AgentForm
           agent={agent}
           onCancel={() => {
@@ -92,11 +101,12 @@ export default function AgentDetailPage() {
           </Link>
         </Button>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight truncate">
-              {agent.name}
-            </h1>
-            <Badge variant={agent.is_active ? "default" : "secondary"} className="text-[10px]">
+          <div className="flex items-center gap-2 min-w-0">
+            <h1 className="text-lg font-semibold tracking-tight truncate">{agent.name}</h1>
+            <Badge
+              variant={agent.is_active ? "default" : "secondary"}
+              className="text-[10px] shrink-0"
+            >
               {agent.is_active ? "Activo" : "Inactivo"}
             </Badge>
           </div>
@@ -116,13 +126,51 @@ export default function AgentDetailPage() {
               setSearchParams(searchParams);
             }}
           >
-            <Pencil className="h-4 w-4 mr-1.5" /> Editar
+            <Settings className="h-4 w-4 mr-1.5" /> Configurar
           </Button>
-          <Button asChild size="icon" title="Chatear con este agente">
-            <Link to={`/agentes/${id}/chat`}>
-              <MessageSquare className="h-4 w-4" />
-            </Link>
-          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-destructive hover:text-destructive"
+                disabled={deleteAgent.isPending}
+              >
+                {deleteAgent.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4 mr-1.5" />
+                )}
+                Eliminar
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Eliminar agente</AlertDialogTitle>
+                <AlertDialogDescription>
+                  ¿Eliminar «{agent.name}»? Esta acción no se puede deshacer.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  onClick={() => {
+                    if (!id) return;
+                    deleteAgent.mutate(id, {
+                      onSuccess: () => {
+                        toast.success("Agente eliminado");
+                        navigate("/agentes");
+                      },
+                      onError: () => toast.error("No se pudo eliminar el agente"),
+                    });
+                  }}
+                >
+                  Eliminar
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </header>
 
@@ -132,7 +180,7 @@ export default function AgentDetailPage() {
             <Settings className="h-4 w-4" /> Modelo
           </TabsTrigger>
           <TabsTrigger value="knowledge" className="gap-1.5">
-            <BookOpen className="h-4 w-4" /> Entrenamiento
+            <BookOpen className="h-4 w-4" /> RAG
           </TabsTrigger>
           <TabsTrigger value="tools" className="gap-1.5">
             <Wrench className="h-4 w-4" /> Herramientas

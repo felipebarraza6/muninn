@@ -1,66 +1,29 @@
 import { useState } from "react";
-import {
-  Loader2,
-  FileText,
-  Database,
-  MessageCircleQuestion,
-  FunctionSquare,
-  CheckCircle2,
-  XCircle,
-  BookOpen,
-  Search,
-  FileSpreadsheet,
-} from "lucide-react";
+import { Link } from "react-router-dom";
+import { Loader2, CheckCircle2, XCircle, BookOpen, Search } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useAgent, useUpdateAgent } from "@/api/hooks/useAgents";
-import { useKnowledgeCatalog, type KnowledgeType } from "@/api/hooks/useKnowledge";
+import { useKnowledgeCatalog, isKnowledgeIndexed } from "@/api/hooks/useKnowledge";
 import { KnowledgeContentViewer } from "./knowledge-content-viewer";
-import { SpreadsheetImportDialog } from "@/components/knowledge/SpreadsheetImportDialog";
 import { toast } from "sonner";
+import { KNOWLEDGE_TYPE_ICON, KNOWLEDGE_TYPE_LABEL } from "@/lib/knowledge-types";
+import { canAccessKnowledgeCatalog } from "@/lib/authGuards";
 
 interface AgentKnowledgePanelProps {
   agentId: string;
 }
 
-const KNOWLEDGE_TYPE_LABEL: Record<KnowledgeType, string> = {
-  DOCUMENT: "Documento",
-  FAQ: "Preguntas frecuentes",
-  DATA: "Tabla de datos",
-  FUNCTION: "Función",
-  PROCEDURE: "Procedimiento",
-  POLICY: "Política",
-  API_DOC: "Documento API",
-  CODE: "Código",
-  CUSTOM: "Personalizado",
-};
-
-const KNOWLEDGE_TYPE_ICON: Record<KnowledgeType, typeof FileText> = {
-  DOCUMENT: FileText,
-  FAQ: MessageCircleQuestion,
-  DATA: Database,
-  FUNCTION: FunctionSquare,
-  PROCEDURE: FileText,
-  POLICY: FileText,
-  API_DOC: FileText,
-  CODE: FileText,
-  CUSTOM: FileText,
-};
-
 export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
   const { data: agent, isLoading: isLoadingAgent, refetch: refetchAgent } = useAgent(agentId);
-  const {
-    data: catalog = [],
-    isLoading: isLoadingKnowledge,
-    refetch: refetchCatalog,
-  } = useKnowledgeCatalog();
+  const { data: catalog = [], isLoading: isLoadingKnowledge } = useKnowledgeCatalog();
   const updateAgent = useUpdateAgent();
   const [search, setSearch] = useState("");
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
-  const [importOpen, setImportOpen] = useState(false);
+  const canManageKnowledge = canAccessKnowledgeCatalog();
 
   if (isLoadingAgent || isLoadingKnowledge) {
     return (
@@ -109,7 +72,11 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
     ),
   );
 
-  const filteredDocs = catalog.filter((doc) => {
+  const visibleDocs = canManageKnowledge
+    ? catalog
+    : catalog.filter((doc) => assignedIds.has(String(doc.id)));
+
+  const filteredDocs = visibleDocs.filter((doc) => {
     const term = search.trim().toLowerCase();
     if (!term) return true;
     return (
@@ -158,18 +125,24 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
           <div>
             <CardTitle className="text-base">Base de conocimiento</CardTitle>
             <CardDescription>
-              Asigna documentos o tablas. Importa Excel/CSV para cargar datos tabulares.
+              {canManageKnowledge
+                ? "Marca los documentos que este agente usará para responder (RAG)."
+                : "Documentos RAG asignados a este agente."}
             </CardDescription>
           </div>
-          <Button size="sm" variant="outline" onClick={() => setImportOpen(true)}>
-            <FileSpreadsheet className="h-4 w-4 mr-1.5" /> Excel / CSV
-          </Button>
+          {canManageKnowledge && (
+            <Button size="sm" variant="outline" asChild>
+              <Link to="/conocimiento">
+                <BookOpen className="h-4 w-4 mr-1.5" /> Gestionar en Conocimiento
+              </Link>
+            </Button>
+          )}
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Buscar por título, tipo o app fuente..."
+              placeholder="Buscar por título o tipo..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"
@@ -183,7 +156,11 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
               ) : (
                 <div className="flex flex-col items-center gap-2">
                   <BookOpen className="h-8 w-8 opacity-40" />
-                  <span>No hay documentos. Importa un Excel o créalos en Conocimiento.</span>
+                  <span>
+                    {canManageKnowledge
+                      ? "No hay documentos. Créalos e indéxalos en Conocimiento."
+                      : "Este agente aún no tiene conocimiento asignado."}
+                  </span>
                 </div>
               )}
             </div>
@@ -191,7 +168,7 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
 
           <div className="space-y-2">
             {filteredDocs.map((doc) => {
-              const Icon = KNOWLEDGE_TYPE_ICON[doc.knowledge_type] ?? FileText;
+              const Icon = KNOWLEDGE_TYPE_ICON[doc.knowledge_type] ?? BookOpen;
               const assigned = assignedIds.has(String(doc.id));
               const isPending = pendingIds.has(String(doc.id));
 
@@ -205,16 +182,21 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
                       : "border-border bg-background hover:bg-muted/40")
                   }
                 >
-                  <Checkbox
-                    id={`doc-${doc.id}`}
-                    checked={assigned}
-                    disabled={isPending}
-                    onCheckedChange={() => toggleAssignment(String(doc.id), assigned)}
-                    className="mt-0.5 sm:mt-0"
-                  />
+                  {canManageKnowledge && (
+                    <Checkbox
+                      id={`doc-${doc.id}`}
+                      checked={assigned}
+                      disabled={isPending}
+                      onCheckedChange={() => toggleAssignment(String(doc.id), assigned)}
+                      className="mt-0.5 sm:mt-0"
+                    />
+                  )}
                   <label
-                    htmlFor={`doc-${doc.id}`}
-                    className="flex flex-1 items-start sm:items-center gap-3 min-w-0 cursor-pointer"
+                    htmlFor={canManageKnowledge ? `doc-${doc.id}` : undefined}
+                    className={
+                      "flex flex-1 items-start sm:items-center gap-3 min-w-0 " +
+                      (canManageKnowledge ? "cursor-pointer" : "")
+                    }
                   >
                     <div className="h-9 w-9 rounded-lg bg-primary-soft text-primary flex items-center justify-center shrink-0">
                       <Icon className="h-5 w-5" />
@@ -222,12 +204,7 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-medium text-sm truncate">{doc.title}</span>
-                        {assigned && (
-                          <Badge variant="default" className="text-[10px]">
-                            Asignado
-                          </Badge>
-                        )}
-                        {doc.is_indexed ? (
+                        {isKnowledgeIndexed(doc) ? (
                           <Badge variant="outline" className="text-[10px] gap-1">
                             <CheckCircle2 className="h-3 w-3" /> Indexado
                           </Badge>
@@ -241,7 +218,7 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
                         )}
                       </div>
                       <div className="text-[11px] text-muted-foreground truncate">
-                        {KNOWLEDGE_TYPE_LABEL[doc.knowledge_type]} · {doc.source_app ?? "general"}
+                        {KNOWLEDGE_TYPE_LABEL[doc.knowledge_type]}
                       </div>
                     </div>
                   </label>
@@ -258,16 +235,6 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
           </div>
         </CardContent>
       </Card>
-
-      <SpreadsheetImportDialog
-        open={importOpen}
-        onOpenChange={setImportOpen}
-        assignToAgentId={agentId}
-        onImported={() => {
-          refetchCatalog();
-          refetchAgent();
-        }}
-      />
     </div>
   );
 }

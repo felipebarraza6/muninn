@@ -45,6 +45,7 @@ export interface ChatMessageResponse {
   created_at?: string;
   timestamp?: string;
   rag_sources?: unknown[];
+  sources?: unknown[];
   tool_calls?: unknown[];
   tool_results?: unknown[];
 }
