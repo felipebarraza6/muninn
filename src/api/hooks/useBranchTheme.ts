@@ -12,7 +12,12 @@ import {
   type PublicLoginThemeResponse,
 } from "@/lib/publicLoginTheme";
 import { loginContextFromPublicTheme, persistLoginPortalContext } from "@/lib/loginContext";
-import { getPrimaryOrganizationName, isOrganizationOwner } from "@/lib/authGuards";
+import {
+  getPrimaryOrganizationId,
+  getPrimaryOrganizationName,
+  isOrganizationOwner,
+} from "@/lib/authGuards";
+import type { OrganizationTheme } from "./useBranches";
 
 export type BranchTheme = BranchThemeLike & {
   id?: number;
@@ -20,6 +25,49 @@ export type BranchTheme = BranchThemeLike & {
   branding?: Record<string, unknown>;
   ui_preferences?: Record<string, unknown>;
 };
+
+function pickAssetUrl(...candidates: Array<string | null | undefined>): string | null {
+  for (const c of candidates) {
+    if (typeof c === "string" && c.trim()) return c.trim();
+  }
+  return null;
+}
+
+/**
+ * Organizador: el logo/favicon viven en Organization.theme, no en la sucursal.
+ * Colores/textos pueden venir del theme de sucursal; overlay de assets del holding.
+ */
+function overlayOrgBrandAssets(
+  branchTheme: BranchThemeLike | null | undefined,
+  orgTheme: OrganizationTheme | null | undefined,
+): BranchThemeLike | null | undefined {
+  if (!orgTheme) return branchTheme;
+
+  const orgLogo = pickAssetUrl(
+    orgTheme.logo_url,
+    orgTheme.logo,
+    orgTheme.branding?.logo_url ?? undefined,
+  );
+  const orgFavicon = pickAssetUrl(
+    orgTheme.favicon_url,
+    orgTheme.favicon,
+    orgTheme.branding?.favicon_url ?? undefined,
+  );
+  if (!orgLogo && !orgFavicon) return branchTheme;
+
+  const base: BranchThemeLike = { ...(branchTheme ?? {}) };
+  if (orgLogo) {
+    base.logo_url = orgLogo;
+    base.logo = orgLogo;
+    base.branding = { ...(base.branding ?? {}), logo_url: orgLogo };
+  }
+  if (orgFavicon) {
+    base.favicon_url = orgFavicon;
+    base.favicon = orgFavicon;
+    base.branding = { ...(base.branding ?? {}), favicon_url: orgFavicon };
+  }
+  return base;
+}
 
 function useActiveBranchIdState() {
   const [branchId, setBranchId] = useState<string | null>(() => getActiveBranchId());
@@ -83,6 +131,7 @@ export async function resolvePublicLoginTheme(
 export function useBranchTheme(branchIdOverride?: string | null) {
   const activeId = useActiveBranchIdState();
   const branchId = branchIdOverride !== undefined ? branchIdOverride : activeId;
+  const orgId = isOrganizationOwner() ? getPrimaryOrganizationId() : null;
 
   const query = useQuery({
     queryKey: ["branches", "theme", branchId],
@@ -97,26 +146,39 @@ export function useBranchTheme(branchIdOverride?: string | null) {
     retry: 1,
   });
 
+  const orgThemeQuery = useQuery({
+    queryKey: ["branches", "organizations", orgId, "theme"],
+    queryFn: () => GET<OrganizationTheme>(ENDPOINTS.branches.organizationTheme(orgId!)),
+    enabled: Boolean(orgId) && typeof window !== "undefined",
+    staleTime: 60_000,
+    retry: 1,
+  });
+
+  const themeWithOrgAssets = useMemo(
+    () => overlayOrgBrandAssets(query.data, orgThemeQuery.data),
+    [query.data, orgThemeQuery.data],
+  );
+
   const themeHintLabel = useMemo(
-    () => resolveThemeHintLabel(branchId, query.data),
-    [branchId, query.data],
+    () => resolveThemeHintLabel(branchId, themeWithOrgAssets),
+    [branchId, themeWithOrgAssets],
   );
 
   const effectiveTheme = useMemo(() => {
-    if (query.isError) {
+    if (query.isError && !orgThemeQuery.data) {
       return resolveEffectiveTheme(null, themeHintLabel);
     }
-    if (query.data) {
-      return resolveEffectiveTheme(query.data, themeHintLabel);
+    if (themeWithOrgAssets) {
+      return resolveEffectiveTheme(themeWithOrgAssets, themeHintLabel);
     }
     return undefined;
-  }, [query.data, query.isError, themeHintLabel]);
+  }, [themeWithOrgAssets, query.isError, orgThemeQuery.data, themeHintLabel]);
 
   useEffect(() => {
-    if (query.isError) {
+    if (query.isError && !orgThemeQuery.data) {
       applyResolvedBranchTheme(null, themeHintLabel);
-    } else if (query.data) {
-      applyResolvedBranchTheme(query.data, themeHintLabel);
+    } else if (themeWithOrgAssets) {
+      applyResolvedBranchTheme(themeWithOrgAssets, themeHintLabel);
     }
 
     // Organizador: título de pestaña = nombre del holding.
@@ -126,13 +188,14 @@ export function useBranchTheme(branchIdOverride?: string | null) {
         document.title = `${orgName} — Agentes`;
       }
     }
-  }, [query.data, query.isError, themeHintLabel]);
+  }, [themeWithOrgAssets, query.isError, orgThemeQuery.data, themeHintLabel]);
 
   return {
     ...query,
-    data: effectiveTheme ?? query.data,
-    rawTheme: query.data,
+    data: effectiveTheme ?? themeWithOrgAssets ?? query.data,
+    rawTheme: themeWithOrgAssets ?? query.data,
     branchLabel: themeHintLabel,
+    isFetching: query.isFetching || orgThemeQuery.isFetching,
   };
 }
 

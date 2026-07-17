@@ -155,6 +155,12 @@ export function getOwnedOrganizationIds(): string[] {
   return (user?.owned_organizations ?? []).map((o) => String(o.id));
 }
 
+/** Id del holding principal del organizador (para branding/tema). */
+export function getPrimaryOrganizationId(): string | null {
+  const ids = getOwnedOrganizationIds();
+  return ids[0] ?? null;
+}
+
 /** Nombre del holding principal del organizador (para branding). */
 export function getPrimaryOrganizationName(): string | null {
   const user = getStoredUser();
