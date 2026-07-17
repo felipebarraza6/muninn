@@ -29,10 +29,12 @@ import {
   useDeleteLlmProvider,
   useLlmModels,
   useLlmProviders,
+  useProviderModelCapabilities,
   useSyncLlmModels,
   useTestLlmProvider,
   useUpdateLlmModel,
   useUpdateLlmProvider,
+  capabilityLabel,
   type LlmModel,
   type LlmProvider,
   type LlmTestConnectionResult,
@@ -154,12 +156,20 @@ export default function AdminLlmPage() {
   const [syncSearch, setSyncSearch] = useState("");
   const deferredSyncSearch = useDeferredValue(syncSearch);
   const [syncPage, setSyncPage] = useState(1);
+  const [syncCaps, setSyncCaps] = useState<string[]>([]);
+  const [syncFreeOnly, setSyncFreeOnly] = useState(false);
   const [activatingModelId, setActivatingModelId] = useState<string | null>(null);
+
+  const { data: capabilityKeys = [] } = useProviderModelCapabilities(
+    syncModalOpen ? selectedId : null,
+  );
 
   const { data: inactiveModelsPage, isLoading: inactiveLoading, isFetching: inactiveFetching } =
     useLlmModels({
       providerId: selectedId,
       isActive: false,
+      isFree: syncFreeOnly || undefined,
+      capabilities: syncCaps.length ? syncCaps : undefined,
       search: deferredSyncSearch,
       page: syncPage,
       pageSize: SYNC_CATALOG_PAGE_SIZE,
@@ -168,6 +178,13 @@ export default function AdminLlmPage() {
   const inactiveModels = inactiveModelsPage?.results ?? [];
   const inactiveTotal = inactiveModelsPage?.count ?? 0;
   const inactiveTotalPages = Math.max(1, Math.ceil(inactiveTotal / SYNC_CATALOG_PAGE_SIZE));
+
+  const toggleSyncCap = (key: string) => {
+    setSyncPage(1);
+    setSyncCaps((prev) =>
+      prev.includes(key) ? prev.filter((c) => c !== key) : [...prev, key],
+    );
+  };
 
   useEffect(() => {
     if (filteredProviders.length === 0) {
@@ -232,6 +249,8 @@ export default function AdminLlmPage() {
         );
         setSyncSearch("");
         setSyncPage(1);
+        setSyncCaps([]);
+        setSyncFreeOnly(false);
         setSyncModalOpen(true);
       },
       onError: (e) =>
@@ -242,6 +261,8 @@ export default function AdminLlmPage() {
   const openInactiveCatalog = () => {
     setSyncSearch("");
     setSyncPage(1);
+    setSyncCaps([]);
+    setSyncFreeOnly(false);
     setSyncModalOpen(true);
   };
 
@@ -855,6 +876,26 @@ export default function AdminLlmPage() {
                             {m.model_id}
                             {m.context_window != null ? ` · ctx ${m.context_window}` : ""}
                           </div>
+                          {(() => {
+                            const caps =
+                              m.capabilities &&
+                              typeof m.capabilities === "object" &&
+                              !Array.isArray(m.capabilities)
+                                ? Object.entries(m.capabilities as Record<string, unknown>)
+                                    .filter(([, v]) => v === true)
+                                    .map(([k]) => k)
+                                : [];
+                            if (!caps.length) return null;
+                            return (
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {caps.slice(0, 3).map((c) => (
+                                  <Badge key={c} variant="outline" className="text-[10px]">
+                                    {capabilityLabel(c)}
+                                  </Badge>
+                                ))}
+                              </div>
+                            );
+                          })()}
                         </div>
                         <div className="flex gap-0.5 shrink-0">
                           {canEditModels && (
@@ -1059,6 +1100,8 @@ export default function AdminLlmPage() {
           if (!open) {
             setSyncSearch("");
             setSyncPage(1);
+            setSyncCaps([]);
+            setSyncFreeOnly(false);
           }
         }}
       >
@@ -1079,6 +1122,52 @@ export default function AdminLlmPage() {
             placeholder="Buscar por nombre o model_id…"
             className="h-8 text-xs"
           />
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                setSyncFreeOnly((v) => !v);
+                setSyncPage(1);
+              }}
+              className={`rounded-md border px-2 py-1 text-[11px] transition-colors ${
+                syncFreeOnly
+                  ? "border-primary/50 bg-primary/15 text-primary"
+                  : "border-border text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              Gratis
+            </button>
+            {capabilityKeys.map((key) => {
+              const on = syncCaps.includes(key);
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => toggleSyncCap(key)}
+                  className={`rounded-md border px-2 py-1 text-[11px] transition-colors ${
+                    on
+                      ? "border-primary/50 bg-primary/15 text-primary"
+                      : "border-border text-muted-foreground hover:bg-muted"
+                  }`}
+                >
+                  {capabilityLabel(key)}
+                </button>
+              );
+            })}
+            {(syncCaps.length > 0 || syncFreeOnly) && (
+              <button
+                type="button"
+                className="text-[11px] text-muted-foreground hover:underline px-1"
+                onClick={() => {
+                  setSyncCaps([]);
+                  setSyncFreeOnly(false);
+                  setSyncPage(1);
+                }}
+              >
+                Limpiar
+              </button>
+            )}
+          </div>
           <div className="max-h-[min(52vh,420px)] overflow-y-auto rounded-md border border-border divide-y divide-border/60">
             {inactiveLoading || (inactiveFetching && inactiveModels.length === 0) ? (
               <div className="flex justify-center py-10">
@@ -1086,42 +1175,72 @@ export default function AdminLlmPage() {
               </div>
             ) : inactiveModels.length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center">
-                {deferredSyncSearch.trim()
-                  ? "Sin resultados para esa búsqueda."
+                {deferredSyncSearch.trim() || syncCaps.length || syncFreeOnly
+                  ? "Sin resultados para esos filtros."
                   : "No hay modelos inactivos. Ejecuta Sync para importar el catálogo del proveedor."}
               </p>
             ) : (
-              inactiveModels.map((m) => (
-                <div
-                  key={String(m.id)}
-                  className="flex items-center justify-between gap-3 px-3 py-2.5"
-                >
-                  <div className="min-w-0">
-                    <p className="font-medium text-sm truncate">{m.name}</p>
-                    <p className="text-[11px] text-muted-foreground font-mono truncate">
-                      {m.model_id}
-                      {m.context_window != null ? ` · ctx ${m.context_window}` : ""}
-                    </p>
-                  </div>
-                  {canEditModels && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="shrink-0 h-8"
-                      disabled={activatingModelId === String(m.id)}
-                      onClick={() => activateModel(m)}
-                    >
-                      {activatingModelId === String(m.id) ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <>
-                          <Plus className="h-3.5 w-3.5 mr-1" /> Agregar
-                        </>
+              inactiveModels.map((m) => {
+                const caps =
+                  m.capabilities && typeof m.capabilities === "object" && !Array.isArray(m.capabilities)
+                    ? Object.entries(m.capabilities as Record<string, unknown>)
+                        .filter(([, v]) => v === true)
+                        .map(([k]) => k)
+                    : Array.isArray(m.capabilities)
+                      ? (m.capabilities as string[])
+                      : [];
+                const isFree =
+                  m.is_free === true ||
+                  (m.cost_per_1k_input != null &&
+                    m.cost_per_1k_output != null &&
+                    Number(m.cost_per_1k_input) === 0 &&
+                    Number(m.cost_per_1k_output) === 0);
+                return (
+                  <div
+                    key={String(m.id)}
+                    className="flex items-center justify-between gap-3 px-3 py-2.5"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm truncate">{m.name}</p>
+                      <p className="text-[11px] text-muted-foreground font-mono truncate">
+                        {m.model_id}
+                        {m.context_window != null ? ` · ctx ${m.context_window}` : ""}
+                      </p>
+                      {(caps.length > 0 || isFree) && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {isFree && (
+                            <Badge variant="secondary" className="text-[10px]">
+                              Gratis
+                            </Badge>
+                          )}
+                          {caps.slice(0, 4).map((c) => (
+                            <Badge key={c} variant="outline" className="text-[10px]">
+                              {capabilityLabel(c)}
+                            </Badge>
+                          ))}
+                        </div>
                       )}
-                    </Button>
-                  )}
-                </div>
-              ))
+                    </div>
+                    {canEditModels && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="shrink-0 h-8"
+                        disabled={activatingModelId === String(m.id)}
+                        onClick={() => activateModel(m)}
+                      >
+                        {activatingModelId === String(m.id) ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <>
+                            <Plus className="h-3.5 w-3.5 mr-1" /> Agregar
+                          </>
+                        )}
+                      </Button>
+                    )}
+                  </div>
+                );
+              })
             )}
           </div>
           {inactiveTotal > SYNC_CATALOG_PAGE_SIZE && (

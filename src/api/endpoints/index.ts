@@ -123,6 +123,7 @@ export const ENDPOINTS = {
     chat: "/ai-agents/llm-chat/chat/",
     testConnection: (id: string | number) => `/ai-agents/llm-providers/${id}/test_connection/`,
     syncModels: (id: string | number) => `/ai-agents/llm-providers/${id}/sync_models/`,
+    modelCapabilities: (id: string | number) => `/ai-agents/llm-providers/${id}/capabilities/`,
     validate: (id: string | number) => `/ai-agents/llm-providers/${id}/validate/`,
   },
   knowledge: {

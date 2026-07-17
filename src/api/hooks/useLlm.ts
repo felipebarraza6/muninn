@@ -48,6 +48,8 @@ export interface LlmModel {
   description?: string | null;
   max_tokens?: number | null;
   context_window?: number | null;
+  cost_per_1k_input?: number | string | null;
+  cost_per_1k_output?: number | string | null;
 }
 
 export function useLlmProviders(options?: { scope?: LlmProviderScope | null }) {
@@ -88,28 +90,51 @@ export type UseLlmModelsOptions = {
   providerId?: string | number | null;
   /** Filtra por estado; omitir = todos (p. ej. selector de agente con activos). */
   isActive?: boolean;
+  /** Modelos con costo 0 (entrada y salida). */
+  isFree?: boolean;
+  /** Capacidades requeridas, p. ej. ["vision","tools"]. */
+  capabilities?: string[];
   search?: string;
   page?: number;
   pageSize?: number;
   enabled?: boolean;
 };
 
+export const LLM_CAPABILITY_LABELS: Record<string, string> = {
+  vision: "Visión",
+  tools: "Tools",
+  embeddings: "Embeddings",
+  json_mode: "JSON",
+  streaming: "Streaming",
+  images: "Imágenes",
+  audio: "Audio",
+};
+
+export function capabilityLabel(key: string): string {
+  return LLM_CAPABILITY_LABELS[key] || key;
+}
+
 export function useLlmModels(options?: UseLlmModelsOptions) {
   const {
     providerId = null,
     isActive,
+    isFree,
+    capabilities,
     search,
     page,
     pageSize = 20,
     enabled = true,
   } = options ?? {};
   const paginated = page != null && page > 0;
+  const capsKey = (capabilities ?? []).slice().sort().join(",");
 
   return useQuery({
     queryKey: [
       ...MODELS_KEY,
       providerId ?? "all",
       isActive ?? "any",
+      isFree ?? "any",
+      capsKey,
       search?.trim() ?? "",
       paginated ? page : 0,
       paginated ? pageSize : 0,
@@ -118,6 +143,8 @@ export function useLlmModels(options?: UseLlmModelsOptions) {
       const params: Record<string, string | number | boolean> = {};
       if (providerId) params.provider = providerId;
       if (isActive !== undefined) params.is_active = isActive;
+      if (isFree === true) params.is_free = true;
+      if (capabilities?.length) params.capabilities = capabilities.join(",");
       if (search?.trim()) params.search = search.trim();
       if (paginated) {
         params.page = page!;
@@ -135,6 +162,16 @@ export function useLlmModels(options?: UseLlmModelsOptions) {
       return { results, count } satisfies LlmModelsListResult;
     },
     enabled,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/** Claves de capacidad presentes en el catálogo del proveedor. */
+export function useProviderModelCapabilities(providerId?: string | number | null) {
+  return useQuery({
+    queryKey: [...PROVIDERS_KEY, providerId ?? "none", "capabilities"],
+    queryFn: () => GET<string[]>(ENDPOINTS.llm.modelCapabilities(providerId!)),
+    enabled: Boolean(providerId),
     staleTime: 5 * 60 * 1000,
   });
 }
