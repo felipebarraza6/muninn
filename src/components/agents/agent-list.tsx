@@ -1,42 +1,62 @@
+import { useMemo, useState } from "react";
 import { Bot, Loader2, Plus } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { useAgents, type Agent } from "@/api/hooks/useAgents";
 import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
 
 export function AgentList() {
   const { data: agents = [], isLoading } = useAgents();
+  const [q, setQ] = useState("");
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[200px]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
+  const filtered = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    if (!term) return agents;
+    return agents.filter((a) => {
+      const hay = [a.name, a.llm_provider_name, a.llm_model_name, a.slug]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(term);
+    });
+  }, [agents, q]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">Modelo, SOUL.md, RAG y herramientas.</p>
-        <div className="flex items-center gap-2 shrink-0">
-          <StudioBranchFilter />
-          <Button size="sm" asChild>
-            <Link to="/agentes/nuevo">
-              <Plus className="h-4 w-4 mr-1.5" /> Nuevo
-            </Link>
-          </Button>
-        </div>
+        <Button size="sm" asChild className="self-start sm:self-auto shrink-0">
+          <Link to="/agentes/nuevo">
+            <Plus className="h-4 w-4 mr-1.5" /> Nuevo
+          </Link>
+        </Button>
       </div>
 
-      {agents.length === 0 ? (
+      <div className="flex flex-col sm:flex-row gap-2 sm:max-w-xl">
+        <Input
+          placeholder="Buscar agente…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          className="h-9 flex-1 min-w-0"
+        />
+        <StudioBranchFilter />
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center justify-center min-h-[200px]">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      ) : filtered.length === 0 ? (
         <p className="py-16 text-center text-sm text-muted-foreground">
-          No hay agentes aún. Crea el primero para empezar.
+          {q.trim()
+            ? "Sin agentes para esa búsqueda."
+            : "No hay agentes aún. Crea el primero para empezar."}
         </p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
-          {agents.map((agent) => (
+          {filtered.map((agent) => (
             <AgentCard key={agent.id} agent={agent} />
           ))}
         </div>

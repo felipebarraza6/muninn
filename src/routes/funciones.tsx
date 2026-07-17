@@ -1,8 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Loader2, FunctionSquare, Eye, Plus, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,73 +15,120 @@ import {
 import { toast } from "sonner";
 import { AdminPageMotion } from "@/components/admin/AdminPageMotion";
 import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
+import { cn } from "@/lib/utils";
 
 export default function Funciones() {
   const { data: functions = [], isLoading, refetch } = useAgentFunctions();
   const create = useCreateAgentFunction();
   const execute = useExecuteAgentFunction();
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [schemaJson, setSchemaJson] = useState('{\n  "type": "object",\n  "properties": {}\n}');
 
-  if (isLoading) {
-    return (
-      <div className="px-4 md:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
+  const filtered = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return functions;
+    return functions.filter(
+      (fn) =>
+        fn.name.toLowerCase().includes(term) ||
+        (fn.slug ?? "").toLowerCase().includes(term) ||
+        (fn.description ?? "").toLowerCase().includes(term) ||
+        (fn.external_api_name ?? "").toLowerCase().includes(term),
     );
-  }
+  }, [functions, search]);
 
   return (
-    <AdminPageMotion>
-      <Card>
-        <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
-          <div>
-            <CardTitle className="text-base">Funciones</CardTitle>
-            <CardDescription>
-              Tools que el agente puede ejecutar (schema + execute).
-            </CardDescription>
-          </div>
-          <div className="flex items-start gap-2 shrink-0">
-            <StudioBranchFilter />
-            <Button size="sm" onClick={() => setOpen(true)}>
-              <Plus className="h-4 w-4 mr-1.5" /> Nueva
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {functions.length === 0 && (
-            <div className="col-span-full text-center py-8 text-muted-foreground">
-              No hay funciones. Crea la primera.
-            </div>
-          )}
-          {functions.map((fn) => (
-            <div
+    <AdminPageMotion className="space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground max-w-xl">
+          Tools que el agente puede ejecutar (schema + execute).
+        </p>
+        <Button
+          size="sm"
+          onClick={() => setOpen(true)}
+          className="self-start sm:self-auto shrink-0"
+        >
+          <Plus className="h-4 w-4 mr-1.5" /> Nueva
+        </Button>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-2 sm:max-w-xl">
+        <Input
+          placeholder="Buscar por nombre, slug o API…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          disabled={isLoading}
+          className="h-9 flex-1 min-w-0"
+        />
+        <StudioBranchFilter />
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center justify-center min-h-[200px]">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="rounded-xl border border-dashed py-16 text-center">
+          <p className="text-sm text-muted-foreground">
+            {search.trim()
+              ? "Sin resultados para esa búsqueda."
+              : "No hay funciones. Crea la primera."}
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+          {filtered.map((fn) => (
+            <article
               key={fn.id}
-              className="flex items-center justify-between gap-3 rounded-lg border p-3"
+              className={cn(
+                "group flex flex-col rounded-xl border bg-card/60 p-4 transition-colors",
+                "hover:border-primary/35 hover:bg-card",
+                fn.is_active ? "border-border" : "border-border/60 opacity-80",
+              )}
             >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="h-9 w-9 rounded-lg bg-primary-soft text-primary flex items-center justify-center shrink-0">
+              <div className="flex items-start gap-3">
+                <div className="h-10 w-10 rounded-lg bg-primary-soft text-primary flex items-center justify-center shrink-0">
                   <FunctionSquare className="h-5 w-5" />
                 </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-sm truncate">{fn.name}</span>
-                    <Badge variant={fn.is_active ? "default" : "secondary"} className="text-[10px]">
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="font-medium text-sm leading-snug truncate">{fn.name}</h3>
+                    <Badge
+                      variant={fn.is_active ? "default" : "secondary"}
+                      className="text-[10px] font-normal"
+                    >
                       {fn.is_active ? "Activa" : "Inactiva"}
                     </Badge>
                   </div>
-                  <div className="text-[11px] text-muted-foreground truncate">
+                  <p className="text-[11px] text-muted-foreground truncate">
                     {fn.slug ?? "Sin slug"} · {fn.external_api_name ?? "Sin API"}
-                  </div>
+                  </p>
                 </div>
               </div>
-              <div className="flex gap-1">
+
+              {fn.description ? (
+                <p className="mt-3 text-[12px] text-muted-foreground line-clamp-2 leading-relaxed flex-1">
+                  {fn.description}
+                </p>
+              ) : (
+                <p className="mt-3 text-[12px] text-muted-foreground/70 italic flex-1">
+                  Sin descripción
+                </p>
+              )}
+
+              <div className="mt-4 flex flex-wrap items-center gap-1 border-t border-border/60 pt-3">
+                <Button variant="ghost" size="sm" className="h-8" asChild>
+                  <Link to={`/funciones/${fn.id}`}>
+                    <Eye className="h-3.5 w-3.5 mr-1" />
+                    Ver
+                  </Link>
+                </Button>
                 <Button
                   variant="ghost"
-                  size="icon"
-                  className="h-9 w-9"
+                  size="sm"
+                  className="h-8"
                   title="Execute"
                   disabled={execute.isPending}
                   onClick={() =>
@@ -95,18 +141,14 @@ export default function Funciones() {
                     )
                   }
                 >
-                  <Play className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size="icon" className="h-9 w-9" asChild>
-                  <Link to={`/funciones/${fn.id}`}>
-                    <Eye className="h-4 w-4" />
-                  </Link>
+                  <Play className="h-3.5 w-3.5 mr-1" />
+                  Execute
                 </Button>
               </div>
-            </div>
+            </article>
           ))}
-        </CardContent>
-      </Card>
+        </div>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-lg">

@@ -33,6 +33,7 @@ export interface AgentKnowledge {
   is_active: boolean;
   file?: string;
   chunks_count?: number;
+  branch?: number | string | null;
   created?: string;
   modified?: string;
 }

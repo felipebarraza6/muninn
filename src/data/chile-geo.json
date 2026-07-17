@@ -5,17 +5,11 @@
       "provincias": [
         {
           "provincia": "Parinacota",
-          "comunas": [
-            "General Lagos",
-            "Putre"
-          ]
+          "comunas": ["General Lagos", "Putre"]
         },
         {
           "provincia": "Arica",
-          "comunas": [
-            "Arica",
-            "Camarones"
-          ]
+          "comunas": ["Arica", "Camarones"]
         }
       ]
     },
@@ -24,20 +18,11 @@
       "provincias": [
         {
           "provincia": "Iquique",
-          "comunas": [
-            "Iquique",
-            "Alto Hospicio"
-          ]
+          "comunas": ["Iquique", "Alto Hospicio"]
         },
         {
           "provincia": "Tamarugal",
-          "comunas": [
-            "Colchane",
-            "Camiña",
-            "Huara",
-            "Pozo Almonte",
-            "Pica"
-          ]
+          "comunas": ["Colchane", "Camiña", "Huara", "Pozo Almonte", "Pica"]
         }
       ]
     },
@@ -46,27 +31,15 @@
       "provincias": [
         {
           "provincia": "Tocopilla",
-          "comunas": [
-            "Tocopilla",
-            "María Elena"
-          ]
+          "comunas": ["Tocopilla", "María Elena"]
         },
         {
           "provincia": "El Loa",
-          "comunas": [
-            "Ollagüe",
-            "Calama",
-            "San Pedro de Atacama"
-          ]
+          "comunas": ["Ollagüe", "Calama", "San Pedro de Atacama"]
         },
         {
           "provincia": "Antofagasta",
-          "comunas": [
-            "Sierra Gorda",
-            "Mejillones",
-            "Antofagasta",
-            "Taltal"
-          ]
+          "comunas": ["Sierra Gorda", "Mejillones", "Antofagasta", "Taltal"]
         }
       ]
     },
@@ -75,27 +48,15 @@
       "provincias": [
         {
           "provincia": "Chañaral",
-          "comunas": [
-            "Chañaral",
-            "Diego de Almagro"
-          ]
+          "comunas": ["Chañaral", "Diego de Almagro"]
         },
         {
           "provincia": "Copiapó",
-          "comunas": [
-            "Caldera",
-            "Copiapó",
-            "Tierra Amarilla"
-          ]
+          "comunas": ["Caldera", "Copiapó", "Tierra Amarilla"]
         },
         {
           "provincia": "Huasco",
-          "comunas": [
-            "Huasco",
-            "Freirina",
-            "Vallenar",
-            "Alto del Carmen"
-          ]
+          "comunas": ["Huasco", "Freirina", "Vallenar", "Alto del Carmen"]
         }
       ]
     },
@@ -104,33 +65,15 @@
       "provincias": [
         {
           "provincia": "Elqui",
-          "comunas": [
-            "La Higuera",
-            "La Serena",
-            "Coquimbo",
-            "Vicuña",
-            "Andacollo",
-            "Paiguano"
-          ]
+          "comunas": ["La Higuera", "La Serena", "Coquimbo", "Vicuña", "Andacollo", "Paiguano"]
         },
         {
           "provincia": "Limarí",
-          "comunas": [
-            "Río Hurtado",
-            "Ovalle",
-            "Punitaqui",
-            "Monte Patria",
-            "Combarbalá"
-          ]
+          "comunas": ["Río Hurtado", "Ovalle", "Punitaqui", "Monte Patria", "Combarbalá"]
         },
         {
           "provincia": "Choapa",
-          "comunas": [
-            "Canela",
-            "Illapel",
-            "Salamanca",
-            "Los Vilos"
-          ]
+          "comunas": ["Canela", "Illapel", "Salamanca", "Los Vilos"]
         }
       ]
     },
@@ -139,58 +82,27 @@
       "provincias": [
         {
           "provincia": "Isla de Pascua",
-          "comunas": [
-            "Isla de Pascua"
-          ]
+          "comunas": ["Isla de Pascua"]
         },
         {
           "provincia": "Petorca",
-          "comunas": [
-            "Petorca",
-            "Cabildo",
-            "La Ligua",
-            "Papudo",
-            "Zapallar"
-          ]
+          "comunas": ["Petorca", "Cabildo", "La Ligua", "Papudo", "Zapallar"]
         },
         {
           "provincia": "San Felipe de Aconcagua",
-          "comunas": [
-            "Putaendo",
-            "Catemu",
-            "Santa María",
-            "San Felipe",
-            "Panquehue",
-            "Llaillay"
-          ]
+          "comunas": ["Putaendo", "Catemu", "Santa María", "San Felipe", "Panquehue", "Llaillay"]
         },
         {
           "provincia": "Quillota",
-          "comunas": [
-            "Nogales",
-            "Calera",
-            "La Cruz",
-            "Hijuelas",
-            "Quillota"
-          ]
+          "comunas": ["Nogales", "Calera", "La Cruz", "Hijuelas", "Quillota"]
         },
         {
           "provincia": "Los Andes",
-          "comunas": [
-            "San Esteban",
-            "Los Andes",
-            "Rinconada",
-            "Calle Larga"
-          ]
+          "comunas": ["San Esteban", "Los Andes", "Rinconada", "Calle Larga"]
         },
         {
           "provincia": "Marga Marga",
-          "comunas": [
-            "Limache",
-            "Olmué",
-            "Villa Alemana",
-            "Quilpué"
-          ]
+          "comunas": ["Limache", "Olmué", "Villa Alemana", "Quilpué"]
         },
         {
           "provincia": "Valparaíso",
@@ -222,11 +134,7 @@
       "provincias": [
         {
           "provincia": "Chacabuco",
-          "comunas": [
-            "Tiltil",
-            "Colina",
-            "Lampa"
-          ]
+          "comunas": ["Tiltil", "Colina", "Lampa"]
         },
         {
           "provincia": "Santiago",
@@ -267,40 +175,19 @@
         },
         {
           "provincia": "Talagante",
-          "comunas": [
-            "Padre Hurtado",
-            "Peñaflor",
-            "Talagante",
-            "El Monte",
-            "Isla de Maipo"
-          ]
+          "comunas": ["Padre Hurtado", "Peñaflor", "Talagante", "El Monte", "Isla de Maipo"]
         },
         {
           "provincia": "Cordillera",
-          "comunas": [
-            "Puente Alto",
-            "San José de Maipo",
-            "Pirque"
-          ]
+          "comunas": ["Puente Alto", "San José de Maipo", "Pirque"]
         },
         {
           "provincia": "Melipilla",
-          "comunas": [
-            "Curacaví",
-            "María Pinto",
-            "Melipilla",
-            "San Pedro",
-            "Alhué"
-          ]
+          "comunas": ["Curacaví", "María Pinto", "Melipilla", "San Pedro", "Alhué"]
         },
         {
           "provincia": "Maipo",
-          "comunas": [
-            "San Bernardo",
-            "Calera de Tango",
-            "Buin",
-            "Paine"
-          ]
+          "comunas": ["San Bernardo", "Calera de Tango", "Buin", "Paine"]
         }
       ]
     },
@@ -309,14 +196,7 @@
       "provincias": [
         {
           "provincia": "Cardenal Caro",
-          "comunas": [
-            "Navidad",
-            "Litueche",
-            "La Estrella",
-            "Pichilemu",
-            "Marchihue",
-            "Paredones"
-          ]
+          "comunas": ["Navidad", "Litueche", "La Estrella", "Pichilemu", "Marchihue", "Paredones"]
         },
         {
           "provincia": "Colchagua",
@@ -404,11 +284,7 @@
         },
         {
           "provincia": "Cauquenes",
-          "comunas": [
-            "Chanco",
-            "Pelluhue",
-            "Cauquenes"
-          ]
+          "comunas": ["Chanco", "Pelluhue", "Cauquenes"]
         }
       ]
     },
@@ -417,13 +293,7 @@
       "provincias": [
         {
           "provincia": "Punilla",
-          "comunas": [
-            "Ñiquén",
-            "San Carlos",
-            "San Nicolás",
-            "San Fabián",
-            "Coihueco"
-          ]
+          "comunas": ["Ñiquén", "San Carlos", "San Nicolás", "San Fabián", "Coihueco"]
         },
         {
           "provincia": "Diguillín",
@@ -494,15 +364,7 @@
         },
         {
           "provincia": "Arauco",
-          "comunas": [
-            "Arauco",
-            "Curanilahue",
-            "Lebu",
-            "Los Álamos",
-            "Cañete",
-            "Contulmo",
-            "Tirúa"
-          ]
+          "comunas": ["Arauco", "Curanilahue", "Lebu", "Los Álamos", "Cañete", "Contulmo", "Tirúa"]
         }
       ]
     },
@@ -571,12 +433,7 @@
         },
         {
           "provincia": "Ranco",
-          "comunas": [
-            "Futrono",
-            "La Unión",
-            "Lago Ranco",
-            "Río Bueno"
-          ]
+          "comunas": ["Futrono", "La Unión", "Lago Ranco", "Río Bueno"]
         }
       ]
     },
@@ -626,12 +483,7 @@
         },
         {
           "provincia": "Palena",
-          "comunas": [
-            "Hualaihué",
-            "Chaitén",
-            "Futaleufú",
-            "Palena"
-          ]
+          "comunas": ["Hualaihué", "Chaitén", "Futaleufú", "Palena"]
         }
       ]
     },
@@ -640,33 +492,19 @@
       "provincias": [
         {
           "provincia": "Coihaique",
-          "comunas": [
-            "Lago Verde",
-            "Coihaique"
-          ]
+          "comunas": ["Lago Verde", "Coihaique"]
         },
         {
           "provincia": "Aysén",
-          "comunas": [
-            "Guaitecas",
-            "Cisnes",
-            "Aysén"
-          ]
+          "comunas": ["Guaitecas", "Cisnes", "Aysén"]
         },
         {
           "provincia": "General Carrera",
-          "comunas": [
-            "Río Ibáñez",
-            "Chile Chico"
-          ]
+          "comunas": ["Río Ibáñez", "Chile Chico"]
         },
         {
           "provincia": "Capitán Prat",
-          "comunas": [
-            "Cochrane",
-            "Tortel",
-            "O’Higgins"
-          ]
+          "comunas": ["Cochrane", "Tortel", "O’Higgins"]
         }
       ]
     },
@@ -675,34 +513,19 @@
       "provincias": [
         {
           "provincia": "Última Esperanza",
-          "comunas": [
-            "Torres del Paine",
-            "Natales"
-          ]
+          "comunas": ["Torres del Paine", "Natales"]
         },
         {
           "provincia": "Magallanes",
-          "comunas": [
-            "Laguna Blanca",
-            "San Gregorio",
-            "Río Verde",
-            "Punta Arenas"
-          ]
+          "comunas": ["Laguna Blanca", "San Gregorio", "Río Verde", "Punta Arenas"]
         },
         {
           "provincia": "Tierra del Fuego",
-          "comunas": [
-            "Primavera",
-            "Porvenir",
-            "Timaukel"
-          ]
+          "comunas": ["Primavera", "Porvenir", "Timaukel"]
         },
         {
           "provincia": "Antártica Chilena",
-          "comunas": [
-            "Cabo de Hornos",
-            "Antártica"
-          ]
+          "comunas": ["Cabo de Hornos", "Antártica"]
         }
       ]
     }

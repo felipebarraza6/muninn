@@ -1,6 +1,15 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Loader2, CheckCircle2, XCircle, BookOpen, Search, Plus, Unlink } from "lucide-react";
+import {
+  Loader2,
+  CheckCircle2,
+  XCircle,
+  BookOpen,
+  Search,
+  Plus,
+  Unlink,
+  RefreshCw,
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -9,6 +18,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { useAgent, useUpdateAgent } from "@/api/hooks/useAgents";
 import {
   useKnowledgeCatalog,
+  useIndexKnowledge,
+  useReindexKnowledge,
   isKnowledgeIndexed,
   type AgentKnowledge,
 } from "@/api/hooks/useKnowledge";
@@ -28,12 +39,19 @@ function docId(doc: AgentKnowledge | string | number | { id?: string | number })
 
 export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
   const { data: agent, isLoading: isLoadingAgent, refetch: refetchAgent } = useAgent(agentId);
-  const { data: catalog = [], isLoading: isLoadingKnowledge } = useKnowledgeCatalog();
+  const {
+    data: catalog = [],
+    isLoading: isLoadingKnowledge,
+    refetch: refetchCatalog,
+  } = useKnowledgeCatalog();
   const updateAgent = useUpdateAgent();
+  const indexKnowledge = useIndexKnowledge();
+  const reindexKnowledge = useReindexKnowledge();
   const [search, setSearch] = useState("");
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignSearch, setAssignSearch] = useState("");
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
+  const [indexingIds, setIndexingIds] = useState<Set<string>>(new Set());
   const canManageKnowledge = canAccessKnowledgeCatalog();
 
   const assignedIds = useMemo(() => {
@@ -109,7 +127,35 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
     );
   }
 
-  const setKnowledgeDocuments = (nextIds: string[], successMsg: string) => {
+  const markIndexing = (id: string, on: boolean) => {
+    setIndexingIds((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+
+  const ensureIndexed = (doc: AgentKnowledge) => {
+    const id = String(doc.id);
+    if (isKnowledgeIndexed(doc)) return;
+    markIndexing(id, true);
+    toast.message("Indexando para RAG…");
+    indexKnowledge.mutate(id, {
+      onSuccess: () => {
+        toast.success("Indexación iniciada");
+        void refetchCatalog();
+      },
+      onError: () => toast.error("No se pudo indexar el documento"),
+      onSettled: () => markIndexing(id, false),
+    });
+  };
+
+  const setKnowledgeDocuments = (
+    nextIds: string[],
+    successMsg: string,
+    docToIndex?: AgentKnowledge,
+  ) => {
     const tracking = nextIds.filter((id) => !assignedIds.has(id));
     const removed = Array.from(assignedIds).filter((id) => !nextIds.includes(id));
     const touched = [...tracking, ...removed];
@@ -126,6 +172,7 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
         onSuccess: () => {
           toast.success(successMsg);
           refetchAgent();
+          if (docToIndex) ensureIndexed(docToIndex);
         },
         onError: () => toast.error("No se pudo actualizar la asignación"),
         onSettled: () => {
@@ -139,10 +186,12 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
     );
   };
 
-  const assignDoc = (id: string) => {
+  const assignDoc = (doc: AgentKnowledge) => {
+    const id = String(doc.id);
     setKnowledgeDocuments(
       Array.from(new Set([...Array.from(assignedIds), id])),
       "Conocimiento asignado al agente",
+      doc,
     );
   };
 
@@ -153,6 +202,18 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
     );
   };
 
+  const reindexDoc = (id: string) => {
+    markIndexing(id, true);
+    reindexKnowledge.mutate(id, {
+      onSuccess: () => {
+        toast.success("Reindexación iniciada");
+        void refetchCatalog();
+      },
+      onError: () => toast.error("No se pudo reindexar"),
+      onSettled: () => markIndexing(id, false),
+    });
+  };
+
   return (
     <div className="space-y-6">
       <Card>
@@ -160,7 +221,8 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
           <div>
             <CardTitle className="text-base">Conocimiento del agente</CardTitle>
             <CardDescription>
-              Solo lo asignado a este agente para RAG
+              Asigna documentos del catálogo. Al asignar se generan vectores con el embedding de la
+              sucursal (el del agente se usa al consultar).
               {assignedDocs.length > 0 ? ` · ${assignedDocs.length}` : ""}.
             </CardDescription>
           </div>
@@ -226,7 +288,10 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
           <div className="space-y-2">
             {filteredAssigned.map((doc) => {
               const Icon = KNOWLEDGE_TYPE_ICON[doc.knowledge_type] ?? BookOpen;
-              const isPending = pendingIds.has(String(doc.id));
+              const id = String(doc.id);
+              const isPending = pendingIds.has(id);
+              const isIndexing = indexingIds.has(id);
+              const indexed = isKnowledgeIndexed(doc);
 
               return (
                 <div
@@ -239,16 +304,16 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-medium text-sm truncate">{doc.title}</span>
-                      {isKnowledgeIndexed(doc) ? (
+                      {indexed ? (
                         <Badge variant="outline" className="text-[10px] gap-1">
-                          <CheckCircle2 className="h-3 w-3" /> Indexado
+                          <CheckCircle2 className="h-3 w-3" /> Con vectores
                         </Badge>
                       ) : (
                         <Badge
                           variant="outline"
                           className="text-[10px] gap-1 text-muted-foreground"
                         >
-                          <XCircle className="h-3 w-3" /> Sin indexar
+                          <XCircle className="h-3 w-3" /> Sin vectores
                         </Badge>
                       )}
                     </div>
@@ -258,25 +323,44 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <KnowledgeContentViewer
-                      knowledgeId={String(doc.id)}
+                      knowledgeId={id}
                       title={doc.title}
                       knowledgeType={doc.knowledge_type}
                     />
                     {canManageKnowledge && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-8 text-destructive hover:text-destructive"
-                        disabled={isPending}
-                        onClick={() => unassignDoc(String(doc.id))}
-                        title="Quitar del agente"
-                      >
-                        {isPending ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Unlink className="h-3.5 w-3.5" />
-                        )}
-                      </Button>
+                      <>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8"
+                          disabled={isIndexing}
+                          onClick={() => reindexDoc(id)}
+                          title="Reindexar"
+                        >
+                          {isIndexing ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <>
+                              <RefreshCw className="h-3.5 w-3.5 mr-1" />
+                              Reindexar
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 text-destructive hover:text-destructive"
+                          disabled={isPending}
+                          onClick={() => unassignDoc(id)}
+                          title="Quitar del agente"
+                        >
+                          {isPending ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Unlink className="h-3.5 w-3.5" />
+                          )}
+                        </Button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -298,7 +382,7 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
             <DialogTitle>Asignar conocimiento</DialogTitle>
           </DialogHeader>
           <p className="text-xs text-muted-foreground -mt-2">
-            Elige documentos del catálogo para que este agente los use en RAG.
+            Elige documentos del catálogo. Si aún no tienen vectores, se indexan al asignar.
           </p>
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -330,10 +414,7 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
                 const Icon = KNOWLEDGE_TYPE_ICON[doc.knowledge_type] ?? BookOpen;
                 const isPending = pendingIds.has(String(doc.id));
                 return (
-                  <div
-                    key={doc.id}
-                    className="flex items-center justify-between gap-3 px-3 py-2.5"
-                  >
+                  <div key={doc.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
                     <div className="flex items-center gap-2.5 min-w-0">
                       <div className="h-8 w-8 rounded-md bg-muted flex items-center justify-center shrink-0">
                         <Icon className="h-4 w-4 text-muted-foreground" />
@@ -342,7 +423,7 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
                         <p className="font-medium text-sm truncate">{doc.title}</p>
                         <p className="text-[11px] text-muted-foreground truncate">
                           {KNOWLEDGE_TYPE_LABEL[doc.knowledge_type]}
-                          {isKnowledgeIndexed(doc) ? " · Indexado" : " · Sin indexar"}
+                          {isKnowledgeIndexed(doc) ? " · Con vectores" : " · Sin vectores"}
                         </p>
                       </div>
                     </div>
@@ -351,7 +432,7 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
                       variant="outline"
                       className="shrink-0 h-8"
                       disabled={isPending}
-                      onClick={() => assignDoc(String(doc.id))}
+                      onClick={() => assignDoc(doc)}
                     >
                       {isPending ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />

@@ -30,7 +30,6 @@ import {
   useKnowledge,
   useKnowledgeChunks,
   useUpdateKnowledge,
-  useReindexKnowledge,
   isKnowledgeIndexed,
   type KnowledgeType,
   type AgentKnowledge,
@@ -398,7 +397,9 @@ function VectorsPanel({
       <div className="flex flex-col items-center justify-center gap-2 py-12 text-center text-muted-foreground px-4">
         <Boxes className="h-8 w-8 opacity-40" />
         <p className="text-sm">No hay fragmentos generados.</p>
-        <p className="text-xs max-w-sm">Prueba reindexar el documento.</p>
+        <p className="text-xs max-w-sm">
+          Asigna el documento a un agente para generar vectores, o usa Reindexar en el panel RAG.
+        </p>
       </div>
     );
   }
@@ -711,12 +712,11 @@ export function KnowledgeContentViewer({
 
   const { data: doc, isLoading, error, refetch } = useKnowledge(open ? knowledgeId : undefined);
   const update = useUpdateKnowledge();
-  const reindex = useReindexKnowledge();
 
   const type = doc?.knowledge_type ?? knowledgeType;
   const isData = type === "DATA";
   const isFaq = type === "FAQ";
-  const saving = update.isPending || reindex.isPending;
+  const saving = update.isPending;
   const indexed = doc ? isKnowledgeIndexed(doc) : false;
 
   const loadEditStateFromDoc = useCallback(
@@ -799,19 +799,13 @@ export function KnowledgeContentViewer({
       },
       {
         onSuccess: () => {
-          // Obligatorio reindexar tras editar para que el RAG use el contenido nuevo
-          reindex.mutate(String(doc.id), {
-            onSuccess: () => {
-              toast.success("Guardado y reindexado");
-              setEditing(false);
-              void refetch();
-            },
-            onError: () => {
-              toast.error("Guardado, pero falló el reindexado. Usa «Reindexar» en la lista.");
-              setEditing(false);
-              void refetch();
-            },
-          });
+          toast.success(
+            indexed
+              ? "Guardado. Reindexa desde el agente para actualizar los vectores."
+              : "Guardado. Se indexará al asignarlo a un agente.",
+          );
+          setEditing(false);
+          void refetch();
         },
         onError: () => toast.error("No se pudo guardar"),
       },
@@ -858,12 +852,14 @@ export function KnowledgeContentViewer({
               </div>
               <DialogDescription>
                 {editing
-                  ? "Al guardar se reindexa automáticamente para actualizar el RAG."
+                  ? indexed
+                    ? "Al guardar, reindexa desde el agente para actualizar el RAG."
+                    : "Se indexará al asignarlo a un agente."
                   : viewTab === "vectores"
                     ? "Fragmentos y embeddings generados al indexar."
                     : isData
                       ? "Tabla de datos · desplázate en horizontal y vertical."
-                      : "Contenido con el que está entrenado el agente."}
+                      : "Contenido del documento en la biblioteca."}
               </DialogDescription>
             </div>
             {!isLoading && doc && !error && (
@@ -886,7 +882,7 @@ export function KnowledgeContentViewer({
                       ) : (
                         <Save className="h-3.5 w-3.5 mr-1" />
                       )}
-                      Guardar y reindexar
+                      Guardar
                     </Button>
                   </>
                 ) : (

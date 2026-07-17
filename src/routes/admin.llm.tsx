@@ -182,26 +182,27 @@ export default function AdminLlmPage() {
     return ordered;
   }, [capabilityKeys]);
 
-  const { data: inactiveModelsPage, isLoading: inactiveLoading, isFetching: inactiveFetching } =
-    useLlmModels({
-      providerId: selectedId,
-      isActive: false,
-      isFree: syncFreeOnly || undefined,
-      capabilities: syncCaps.length ? syncCaps : undefined,
-      search: deferredSyncSearch,
-      page: syncPage,
-      pageSize: SYNC_CATALOG_PAGE_SIZE,
-      enabled: Boolean(selectedId) && syncModalOpen,
-    });
+  const {
+    data: inactiveModelsPage,
+    isLoading: inactiveLoading,
+    isFetching: inactiveFetching,
+  } = useLlmModels({
+    providerId: selectedId,
+    isActive: false,
+    isFree: syncFreeOnly || undefined,
+    capabilities: syncCaps.length ? syncCaps : undefined,
+    search: deferredSyncSearch,
+    page: syncPage,
+    pageSize: SYNC_CATALOG_PAGE_SIZE,
+    enabled: Boolean(selectedId) && syncModalOpen,
+  });
   const inactiveModels = inactiveModelsPage?.results ?? [];
   const inactiveTotal = inactiveModelsPage?.count ?? 0;
   const inactiveTotalPages = Math.max(1, Math.ceil(inactiveTotal / SYNC_CATALOG_PAGE_SIZE));
 
   const toggleSyncCap = (key: string) => {
     setSyncPage(1);
-    setSyncCaps((prev) =>
-      prev.includes(key) ? prev.filter((c) => c !== key) : [...prev, key],
-    );
+    setSyncCaps((prev) => (prev.includes(key) ? prev.filter((c) => c !== key) : [...prev, key]));
   };
 
   useEffect(() => {
@@ -238,9 +239,9 @@ export default function AdminLlmPage() {
   const [pBranches, setPBranches] = useState<string[]>([]);
   const [branchSearch, setBranchSearch] = useState("");
   /** Overrides de path por tipo; vacío = usar default del provider_type. */
-  const [pEndpointRows, setPEndpointRows] = useState<Array<{ key: string; type: string; path: string }>>(
-    [],
-  );
+  const [pEndpointRows, setPEndpointRows] = useState<
+    Array<{ key: string; type: string; path: string }>
+  >([]);
   /** Plantillas de body JSON por tipo de endpoint. */
   const [pPayloadTemplates, setPPayloadTemplates] = useState<Record<string, string>>({});
   const [selectedEndpointKey, setSelectedEndpointKey] = useState<string | null>(null);
@@ -253,10 +254,7 @@ export default function AdminLlmPage() {
   const [epTestBody, setEpTestBody] = useState("{}");
   const [epTestResult, setEpTestResult] = useState<LlmTestEndpointResult | null>(null);
 
-  const defaultEndpointsForType = useMemo(
-    () => PROVIDER_DEFAULT_ENDPOINTS[pType] || {},
-    [pType],
-  );
+  const defaultEndpointsForType = useMemo(() => PROVIDER_DEFAULT_ENDPOINTS[pType] || {}, [pType]);
 
   const effectiveEndpoints = useMemo(() => {
     const overrides: Record<string, string> = {};
@@ -304,7 +302,9 @@ export default function AdminLlmPage() {
     const saved = templates?.[endpointType]?.trim();
     if (saved) {
       setEpTestBody(saved);
-      setEpTestMethod(endpointType === "models" || endpointType === "embedding_models" ? "GET" : "POST");
+      setEpTestMethod(
+        endpointType === "models" || endpointType === "embedding_models" ? "GET" : "POST",
+      );
       return;
     }
     const cfg = defaultEndpointTestConfig(endpointType);
@@ -673,7 +673,11 @@ export default function AdminLlmPage() {
         toast.error("JSON inválido en el body");
         return;
       }
-      if (epTestModelId.trim() && typeof payload.model === "string" && payload.model.includes("{{model_id}}")) {
+      if (
+        epTestModelId.trim() &&
+        typeof payload.model === "string" &&
+        payload.model.includes("{{model_id}}")
+      ) {
         payload = { ...payload, model: epTestModelId.trim() };
       }
     }
@@ -802,8 +806,7 @@ export default function AdminLlmPage() {
         <AdminMotionItem>
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs text-muted-foreground">
-              {filteredProviders.length}{" "}
-              {filteredProviders.length === 1 ? "LLM" : "LLMs"}
+              {filteredProviders.length} {filteredProviders.length === 1 ? "LLM" : "LLMs"}
               {!canManageProviders ? " · solo lectura" : ""}
             </span>
             {canManageProviders && (
@@ -1351,7 +1354,9 @@ export default function AdminLlmPage() {
                             <button
                               type="button"
                               className="text-[11px] text-muted-foreground hover:underline"
-                              onClick={() => applyEndpointTestDefaults(epTestType, pPayloadTemplates)}
+                              onClick={() =>
+                                applyEndpointTestDefaults(epTestType, pPayloadTemplates)
+                              }
                             >
                               Usar plantilla / sugerencia
                             </button>
@@ -1364,10 +1369,7 @@ export default function AdminLlmPage() {
                         </div>
                       )}
                       <div className="flex flex-wrap gap-2">
-                        <Button
-                          onClick={runEndpointProbe}
-                          disabled={testEndpoint.isPending}
-                        >
+                        <Button onClick={runEndpointProbe} disabled={testEndpoint.isPending}>
                           {testEndpoint.isPending ? (
                             <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
                           ) : (
@@ -1451,7 +1453,9 @@ export default function AdminLlmPage() {
                             {epTestResult.payload_sent &&
                               Object.keys(epTestResult.payload_sent).length > 0 && (
                                 <div className="min-w-0">
-                                  <span className="text-muted-foreground text-xs">Body enviado</span>
+                                  <span className="text-muted-foreground text-xs">
+                                    Body enviado
+                                  </span>
                                   <pre className="mt-1 max-h-40 overflow-auto rounded-md bg-muted p-2 text-[10px] font-mono">
                                     {JSON.stringify(epTestResult.payload_sent, null, 2)}
                                   </pre>
@@ -1604,7 +1608,10 @@ export default function AdminLlmPage() {
                           typeof selected.endpoints === "object" &&
                           type in selected.endpoints;
                         return (
-                          <li key={type} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                          <li
+                            key={type}
+                            className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5"
+                          >
                             <span className="text-foreground/90 min-w-[7rem]">
                               {endpointTypeLabel(type)}
                               <span className="text-muted-foreground"> ({type})</span>
@@ -1737,40 +1744,48 @@ export default function AdminLlmPage() {
                     )}
                   </div>
                 )}
-                {selected && !modelsLoading && activeModels.length > 0 && filteredActiveModels.length === 0 && (
-                  <p className="text-sm text-muted-foreground py-6 text-center">
-                    Sin resultados para esa búsqueda.
-                  </p>
-                )}
-                {selected && !modelsLoading && filteredActiveModels.length > ACTIVE_MODELS_PAGE_SIZE && (
-                  <div className="flex items-center justify-between gap-2 py-3 text-xs text-muted-foreground">
-                    <span>
-                      {(safeActivePage - 1) * ACTIVE_MODELS_PAGE_SIZE + 1}–
-                      {Math.min(safeActivePage * ACTIVE_MODELS_PAGE_SIZE, filteredActiveModels.length)}{" "}
-                      de {filteredActiveModels.length}
-                    </span>
-                    <div className="flex gap-1">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 px-2"
-                        disabled={safeActivePage <= 1}
-                        onClick={() => setActivePage((p) => Math.max(1, p - 1))}
-                      >
-                        Anterior
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 px-2"
-                        disabled={safeActivePage >= activeTotalPages}
-                        onClick={() => setActivePage((p) => Math.min(activeTotalPages, p + 1))}
-                      >
-                        Siguiente
-                      </Button>
+                {selected &&
+                  !modelsLoading &&
+                  activeModels.length > 0 &&
+                  filteredActiveModels.length === 0 && (
+                    <p className="text-sm text-muted-foreground py-6 text-center">
+                      Sin resultados para esa búsqueda.
+                    </p>
+                  )}
+                {selected &&
+                  !modelsLoading &&
+                  filteredActiveModels.length > ACTIVE_MODELS_PAGE_SIZE && (
+                    <div className="flex items-center justify-between gap-2 py-3 text-xs text-muted-foreground">
+                      <span>
+                        {(safeActivePage - 1) * ACTIVE_MODELS_PAGE_SIZE + 1}–
+                        {Math.min(
+                          safeActivePage * ACTIVE_MODELS_PAGE_SIZE,
+                          filteredActiveModels.length,
+                        )}{" "}
+                        de {filteredActiveModels.length}
+                      </span>
+                      <div className="flex gap-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 px-2"
+                          disabled={safeActivePage <= 1}
+                          onClick={() => setActivePage((p) => Math.max(1, p - 1))}
+                        >
+                          Anterior
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 px-2"
+                          disabled={safeActivePage >= activeTotalPages}
+                          onClick={() => setActivePage((p) => Math.min(activeTotalPages, p + 1))}
+                        >
+                          Siguiente
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
               </AdminMotionList>
             </>
           )}
@@ -1903,8 +1918,8 @@ export default function AdminLlmPage() {
             <DialogTitle>Catálogo sincronizado — modelos inactivos</DialogTitle>
           </DialogHeader>
           <p className="text-xs text-muted-foreground -mt-2">
-            Los modelos del LLM se importan como inactivos. Agrega los que quieras usar; pasan a
-            la lista de activos.
+            Los modelos del LLM se importan como inactivos. Agrega los que quieras usar; pasan a la
+            lista de activos.
           </p>
           <Input
             value={syncSearch}
@@ -1975,7 +1990,9 @@ export default function AdminLlmPage() {
             ) : (
               inactiveModels.map((m) => {
                 const caps =
-                  m.capabilities && typeof m.capabilities === "object" && !Array.isArray(m.capabilities)
+                  m.capabilities &&
+                  typeof m.capabilities === "object" &&
+                  !Array.isArray(m.capabilities)
                     ? Object.entries(m.capabilities as Record<string, unknown>)
                         .filter(([, v]) => v === true)
                         .map(([k]) => k)

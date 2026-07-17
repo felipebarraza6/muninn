@@ -18,11 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  useCreateKnowledge,
-  useIndexKnowledge,
-  type KnowledgeType,
-} from "@/api/hooks/useKnowledge";
+import { useCreateKnowledge, type KnowledgeType } from "@/api/hooks/useKnowledge";
 import {
   CREATE_KNOWLEDGE_TYPES,
   KNOWLEDGE_TYPE_DESCRIPTION,
@@ -31,6 +27,9 @@ import {
   serializeFaqPairs,
 } from "@/lib/knowledge-types";
 import { toast } from "sonner";
+import { useActiveBranchId } from "@/hooks/useActiveBranchId";
+import { getStoredBranches } from "@/lib/authSession";
+import { isMultiBranchUser } from "@/lib/authGuards";
 
 interface KnowledgeCreateDialogProps {
   open: boolean;
@@ -44,7 +43,13 @@ export function KnowledgeCreateDialog({
   onCreated,
 }: KnowledgeCreateDialogProps) {
   const create = useCreateKnowledge();
-  const index = useIndexKnowledge();
+  const activeBranchId = useActiveBranchId();
+
+  const branchLabel = (() => {
+    if (!activeBranchId) return null;
+    const b = getStoredBranches().find((x) => String(x.branch_id) === String(activeBranchId));
+    return b?.branch_name || b?.business_name || `Sucursal ${activeBranchId}`;
+  })();
 
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
@@ -85,6 +90,10 @@ export function KnowledgeCreateDialog({
       );
       return;
     }
+    if (!activeBranchId) {
+      toast.error("Selecciona una sucursal antes de crear conocimiento");
+      return;
+    }
 
     create.mutate(
       {
@@ -94,17 +103,15 @@ export function KnowledgeCreateDialog({
         is_active: true,
       },
       {
-        onSuccess: (doc) => {
-          toast.success("Documento creado");
+        onSuccess: () => {
+          toast.success(
+            branchLabel
+              ? `Documento creado en ${branchLabel}. Se indexará al asignarlo a un agente.`
+              : "Documento creado. Se indexará al asignarlo a un agente.",
+          );
           reset();
           onOpenChange(false);
           onCreated?.();
-          if (doc.id) {
-            index.mutate(String(doc.id), {
-              onSuccess: () => toast.success("Indexación iniciada"),
-              onError: () => toast.error("No se pudo iniciar la indexación"),
-            });
-          }
         },
         onError: () => toast.error("No se pudo crear el documento"),
       },
@@ -125,6 +132,13 @@ export function KnowledgeCreateDialog({
           <DialogDescription>
             Elige el tipo: el formulario se adapta. Las tablas de datos se cargan desde{" "}
             <span className="font-medium text-foreground">Datos</span>.
+            {isMultiBranchUser() && branchLabel ? (
+              <>
+                {" "}
+                Se guarda en la sucursal activa:{" "}
+                <span className="font-medium text-foreground">{branchLabel}</span>.
+              </>
+            ) : null}
           </DialogDescription>
         </DialogHeader>
 

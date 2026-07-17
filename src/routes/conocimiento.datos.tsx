@@ -41,6 +41,7 @@ import {
 } from "@/api/hooks/useKnowledge";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
 
 type GridRow = Record<string, string>;
 
@@ -737,7 +738,8 @@ export default function ConocimientoDatos() {
             {fileName ? ` · ${fileName}` : ""}
           </p>
         </div>
-        <div className="flex items-center gap-2 self-start">
+        <div className="flex items-center gap-2 self-start flex-wrap justify-end">
+          <StudioBranchFilter />
           <input
             ref={inputRef}
             type="file"

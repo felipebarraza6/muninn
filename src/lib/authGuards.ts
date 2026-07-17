@@ -196,6 +196,25 @@ export function canAccessKnowledgeCatalog(): boolean {
 }
 
 /**
+ * Puede ver APIs externas (lista / detalle).
+ * Studio: cualquier usuario autenticado con acceso a la sucursal.
+ */
+export function canAccessExternalApis(): boolean {
+  return Boolean(getStoredUser());
+}
+
+/**
+ * Crear / editar / eliminar / testear APIs externas.
+ * - Superadmin: sí
+ * - Organizador: sí (stores de su holding)
+ * - OWNER u otros roles: solo lectura
+ */
+export function canManageExternalApis(): boolean {
+  if (isSuperAdmin()) return true;
+  return isOrganizationOwner();
+}
+
+/**
  * Scope de OWNER de tienda (rol), sin ser organizador ni superadmin.
  */
 export function isStoreOwnerScope(): boolean {

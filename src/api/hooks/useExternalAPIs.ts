@@ -5,6 +5,14 @@ import { useActiveBranchId } from "@/hooks/useActiveBranchId";
 
 const QUERY_KEY = ["ai-agents", "external-apis"];
 
+export type ExternalAPIAuthType =
+  | "none"
+  | "api_key"
+  | "bearer"
+  | "oauth2"
+  | "basic"
+  | "endpoint_auth";
+
 export interface ExternalAPIEndpoint {
   method?: string;
   path?: string;
@@ -19,24 +27,63 @@ export interface ExternalAPI {
   name: string;
   description?: string;
   base_url?: string;
-  auth_type?: "none" | "api_key" | "bearer" | "oauth2" | "basic" | "endpoint_auth";
+  auth_type?: ExternalAPIAuthType;
+  /** Write-only en API; no vuelve en GET. */
   auth_config?: Record<string, unknown>;
+  /** Write-only. */
+  api_key?: string;
+  api_key_masked?: string | null;
+  auth_endpoint_key?: string;
+  auth_token_path?: string;
+  auth_token_ttl_seconds?: number;
   default_headers?: Record<string, unknown>;
   retry_policy?: Record<string, unknown>;
   timeout_seconds?: number;
   endpoints?: Record<string, ExternalAPIEndpoint>;
+  endpoints_payload_templates?: Record<string, unknown>;
+  endpoints_response_mapping?: Record<string, unknown>;
   is_active: boolean;
+  branch?: number | string | null;
   created?: string;
   modified?: string;
 }
 
-export function useExternalAPIs() {
+export interface ExternalAPITestRequest {
+  endpoint_type?: string;
+  body?: Record<string, unknown>;
+  authenticate_first?: boolean;
+  method?: string;
+  path?: string;
+  headers?: Record<string, unknown>;
+  params?: Record<string, unknown>;
+}
+
+export interface ExternalAPITestResult {
+  success?: boolean;
+  status_code?: number;
+  data?: unknown;
+  raw_response?: unknown;
+  mapped_data?: unknown;
+  payload_sent?: unknown;
+  latency_ms?: number;
+  error?: string | null;
+  detail?: string;
+  auth?: {
+    success?: boolean;
+    token_preview?: string;
+    error?: string;
+  };
+}
+
+export function useExternalAPIs(options?: { includeInactive?: boolean }) {
   const branchId = useActiveBranchId();
+  const includeInactive = options?.includeInactive ?? false;
   return useQuery({
-    queryKey: [...QUERY_KEY, branchId],
+    queryKey: [...QUERY_KEY, branchId, { includeInactive }],
     queryFn: () =>
       GET<ExternalAPI[] | { count: number; results: ExternalAPI[] }>(
         ENDPOINTS.integrations.list,
+        includeInactive ? { params: { include_inactive: "true" } } : undefined,
       ).then((data) => normalizeListResponse<ExternalAPI>(data)),
     staleTime: 2 * 60 * 1000,
   });
@@ -78,10 +125,8 @@ export function useDeleteExternalAPI() {
 
 export function useTestExternalAPI() {
   return useMutation({
-    mutationFn: (id: string) =>
-      POST<{ ok?: boolean; status?: string; detail?: string }>(
-        ENDPOINTS.integrations.testConnection(id),
-      ),
+    mutationFn: ({ id, body }: { id: string; body?: ExternalAPITestRequest }) =>
+      POST<ExternalAPITestResult>(ENDPOINTS.integrations.testConnection(id), body ?? {}),
   });
 }
 

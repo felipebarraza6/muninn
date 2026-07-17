@@ -378,7 +378,8 @@ export function AgentForm({ agent, onCancel, onSaved }: AgentFormProps) {
                   )}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Solo modelos con capacidad embeddings
+                  Usado al buscar en RAG. Los documentos se vectorizan al asignarlos (embedding de
+                  la sucursal)
                   {embeddingModels.length === 0 ? " · ninguno activo en el catálogo" : ""}.
                 </p>
               </div>

@@ -17,11 +17,7 @@ import {
   getPrimaryOrganizationName,
   isOrganizationOwner,
 } from "@/lib/authGuards";
-import {
-  useActiveBranch,
-  useOrganizations,
-  type OrganizationTheme,
-} from "./useBranches";
+import { useActiveBranch, useOrganizations, type OrganizationTheme } from "./useBranches";
 
 export type BranchTheme = BranchThemeLike & {
   id?: number;
@@ -148,8 +144,7 @@ export function useBranchTheme(branchIdOverride?: string | null) {
   const { data: organizations = [] } = useOrganizations({
     enabled: isOrgOwner && !sessionOrgId && !branchOrgId,
   });
-  const listOrgId =
-    isOrgOwner && organizations.length > 0 ? String(organizations[0].id) : null;
+  const listOrgId = isOrgOwner && organizations.length > 0 ? String(organizations[0].id) : null;
 
   const orgId = sessionOrgId || branchOrgId || listOrgId;
 
@@ -198,12 +193,7 @@ export function useBranchTheme(branchIdOverride?: string | null) {
               null,
           } as BranchThemeLike),
       ),
-    [
-      branchId,
-      themeWithOrgAssets,
-      activeBranch?.fantasy_name,
-      activeBranch?.business_name,
-    ],
+    [branchId, themeWithOrgAssets, activeBranch?.fantasy_name, activeBranch?.business_name],
   );
 
   const effectiveTheme = useMemo(() => {
