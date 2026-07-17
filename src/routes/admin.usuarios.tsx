@@ -203,6 +203,7 @@ export default function AdminUsuariosPage() {
         qc.invalidateQueries({ queryKey: ["accounts", "users"] }),
         qc.invalidateQueries({ queryKey: ["branches", "users"] }),
         qc.invalidateQueries({ queryKey: ["branches", "roles"] }),
+        qc.invalidateQueries({ queryKey: ["branches", "organizations"] }),
       ]);
     } finally {
       setRefreshing(false);
@@ -338,6 +339,35 @@ export default function AdminUsuariosPage() {
     return map;
   }, [branchOptions]);
 
+  /** Organizaciones cuyo owner es el usuario (por id o email). */
+  const ownedOrgsByUser = useMemo(() => {
+    const byId = new Map<string, typeof organizations>();
+    const byEmail = new Map<string, typeof organizations>();
+    for (const org of organizations) {
+      if (org.owner != null && org.owner !== "") {
+        const key = String(org.owner);
+        const list = byId.get(key) ?? [];
+        list.push(org);
+        byId.set(key, list);
+      }
+      const email = org.owner_email?.trim().toLowerCase();
+      if (email) {
+        const list = byEmail.get(email) ?? [];
+        list.push(org);
+        byEmail.set(email, list);
+      }
+    }
+    return { byId, byEmail };
+  }, [organizations]);
+
+  const getOwnedOrgs = (u: AdminUser) => {
+    const byId = ownedOrgsByUser.byId.get(String(u.id));
+    if (byId?.length) return byId;
+    const email = u.email?.trim().toLowerCase();
+    if (email) return ownedOrgsByUser.byEmail.get(email) ?? [];
+    return [];
+  };
+
   const updateDraft = (key: string, patch: Partial<DraftAssignment>) => {
     setDraftAssignments((prev) => prev.map((d) => (d.key === key ? { ...d, ...patch } : d)));
   };
@@ -379,10 +409,11 @@ export default function AdminUsuariosPage() {
       }
 
       if (isGlobalAdmin && orgFilter !== ALL) {
-        const inOrg = userAssignments.some(
+        const inOrgViaBranch = userAssignments.some(
           (a) => branchMeta.get(String(a.branch))?.orgId === orgFilter,
         );
-        if (!inOrg) return false;
+        const ownsFilteredOrg = getOwnedOrgs(u).some((o) => String(o.id) === orgFilter);
+        if (!inOrgViaBranch && !ownsFilteredOrg) return false;
       }
 
       return true;
@@ -396,6 +427,7 @@ export default function AdminUsuariosPage() {
     branchMeta,
     managedBranchIdSet,
     isGlobalAdmin,
+    ownedOrgsByUser,
   ]);
 
   const totalPages = Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE));
@@ -925,6 +957,8 @@ export default function AdminUsuariosPage() {
                     ) : (
                       pagedUsers.map((u) => {
                         const userAssignments = assignmentsByUser.get(String(u.id)) ?? [];
+                        const ownedOrgs = getOwnedOrgs(u);
+                        const isOrganizer = ownedOrgs.length > 0;
 
                         return (
                           <motion.tr
@@ -939,6 +973,15 @@ export default function AdminUsuariosPage() {
                                   {u.is_superuser && (
                                     <Badge variant="secondary" className="text-[10px]">
                                       Root
+                                    </Badge>
+                                  )}
+                                  {isOrganizer && (
+                                    <Badge
+                                      variant="secondary"
+                                      className="text-[10px] bg-teal-500/15 text-teal-400 border-teal-500/30"
+                                      title={ownedOrgs.map((o) => o.name).join(", ")}
+                                    >
+                                      Organizador
                                     </Badge>
                                   )}
                                   {u.is_multi_branch && (
@@ -963,7 +1006,11 @@ export default function AdminUsuariosPage() {
                             <TableCell>
                               {userAssignments.length === 0 ? (
                                 <span className="text-xs text-muted-foreground">
-                                  {u.is_superuser ? "Global" : "Sin asignación"}
+                                  {u.is_superuser
+                                    ? "Global"
+                                    : isOrganizer
+                                      ? ownedOrgs.map((o) => o.name).join(", ") || "Organizador"
+                                      : "Sin asignación"}
                                 </span>
                               ) : (
                                 <div className="flex flex-wrap gap-1 max-w-[280px]">
