@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { CheckCircle2, FileSpreadsheet, Loader2, Plus, Trash2, XCircle } from "lucide-react";
+import { CheckCircle2, FileSpreadsheet, Loader2, Plus, Trash2, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -10,41 +10,50 @@ import {
   isKnowledgeIndexed,
   type AgentKnowledge,
 } from "@/api/hooks/useKnowledge";
+import { useAgents } from "@/api/hooks/useAgents";
 import { KnowledgeContentViewer } from "@/components/agents/knowledge-content-viewer";
 import { KnowledgeCreateDialog } from "@/components/knowledge/knowledge-create-dialog";
-import { knowledgeTypeLabel, knowledgeTypeMeta } from "@/lib/knowledge-types";
+import {
+  knowledgeCardPreview,
+  knowledgeTypeLabel,
+  knowledgeTypeMeta,
+} from "@/lib/knowledge-types";
 import { toast } from "sonner";
 import { AdminPageMotion } from "@/components/admin/AdminPageMotion";
 import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
+import { canViewInactiveStudioResources } from "@/lib/authGuards";
 import { cn } from "@/lib/utils";
 
 function KnowledgeCard({
   doc,
+  agentCount,
   indexed,
   onDelete,
 }: {
   doc: AgentKnowledge;
+  agentCount: number;
   indexed: boolean;
   onDelete: () => void;
 }) {
   const { label, Icon, style } = knowledgeTypeMeta(doc.knowledge_type);
-  const preview = doc.summary || doc.content?.slice(0, 140) || "Sin resumen";
+  const preview = knowledgeCardPreview(doc);
+  const inactive = doc.is_active === false;
 
   return (
     <article
       className={cn(
         "group flex flex-col rounded-xl border bg-card/60 p-4 transition-colors",
-        style.border,
+        inactive ? "border-border/60 opacity-70 grayscale" : style.border,
       )}
     >
       <div className="flex items-start gap-3">
         <div
           className={cn(
             "h-10 w-10 rounded-lg flex items-center justify-center shrink-0",
-            style.soft,
+            inactive ? "bg-muted text-muted-foreground" : style.soft,
           )}
         >
-          <Icon className={cn("h-5 w-5", style.icon)} />
+          <Icon className={cn("h-5 w-5", inactive ? "text-muted-foreground" : style.icon)} />
         </div>
         <div className="min-w-0 flex-1 space-y-1.5">
           <h3 className="font-medium text-sm leading-snug line-clamp-2">{doc.title}</h3>
@@ -57,16 +66,34 @@ function KnowledgeCard({
             >
               {label}
             </span>
+            {inactive && (
+              <Badge variant="secondary" className="text-[10px] font-normal">
+                Inactivo
+              </Badge>
+            )}
             <Badge
               variant="outline"
               className={cn(
                 "text-[10px] gap-1 font-normal",
-                indexed ? "border-primary/30 text-primary" : "text-muted-foreground",
+                agentCount > 0
+                  ? "border-primary/30 text-primary"
+                  : "text-muted-foreground",
               )}
             >
-              {indexed ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
-              {indexed ? "Con vectores" : "Sin vectores"}
+              <Users className="h-3 w-3" />
+              {agentCount > 0
+                ? `${agentCount} agente${agentCount === 1 ? "" : "s"}`
+                : "Sin asignar"}
             </Badge>
+            {indexed && (
+              <Badge
+                variant="outline"
+                className="text-[10px] gap-1 font-normal text-muted-foreground"
+              >
+                <CheckCircle2 className="h-3 w-3" />
+                Indexado
+              </Badge>
+            )}
           </div>
         </div>
       </div>
@@ -80,6 +107,7 @@ function KnowledgeCard({
           knowledgeId={String(doc.id)}
           title={doc.title}
           knowledgeType={doc.knowledge_type}
+          context="catalog"
         />
         <Button
           variant="ghost"
@@ -96,11 +124,40 @@ function KnowledgeCard({
 }
 
 export default function Conocimiento() {
-  const { data: docs = [], isLoading, refetch } = useKnowledgeCatalog();
+  const showInactive = canViewInactiveStudioResources();
+  const { data: docsRaw = [], isLoading, refetch } = useKnowledgeCatalog(
+    showInactive ? { includeInactive: true } : undefined,
+  );
+  const { data: agents = [] } = useAgents(
+    showInactive ? { includeInactive: true } : { is_active: true },
+  );
   const remove = useDeleteKnowledge();
 
   const [q, setQ] = useState("");
   const [creating, setCreating] = useState(false);
+
+  const docs = useMemo(() => {
+    if (showInactive) {
+      return [...docsRaw].sort((a, b) => {
+        const aActive = a.is_active !== false ? 0 : 1;
+        const bActive = b.is_active !== false ? 0 : 1;
+        if (aActive !== bActive) return aActive - bActive;
+        return (a.title || "").localeCompare(b.title || "", "es");
+      });
+    }
+    return docsRaw.filter((d) => d.is_active !== false);
+  }, [docsRaw, showInactive]);
+
+  const agentCountByDoc = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const agent of agents) {
+      for (const raw of agent.knowledge_documents ?? []) {
+        const id = String(raw);
+        map.set(id, (map.get(id) ?? 0) + 1);
+      }
+    }
+    return map;
+  }, [agents]);
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -158,6 +215,7 @@ export default function Conocimiento() {
             <KnowledgeCard
               key={doc.id}
               doc={doc}
+              agentCount={agentCountByDoc.get(String(doc.id)) ?? 0}
               indexed={isKnowledgeIndexed(doc)}
               onDelete={() =>
                 remove.mutate(String(doc.id), {

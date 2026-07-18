@@ -1,11 +1,28 @@
 export const AUTH_TYPE_LABEL: Record<string, string> = {
-  none: "Sin autenticación",
+  none: "Abierta (sin auth)",
   api_key: "API Key",
   bearer: "Bearer Token",
-  oauth2: "OAuth 2.0",
+  oauth2: "Token estático (Bearer)",
   basic: "Basic Auth",
-  endpoint_auth: "Auth por endpoint",
+  endpoint_auth: "Login (obtener token)",
 };
+
+export const AUTH_TYPE_HINT: Record<string, string> = {
+  none: "Sin autenticación. Solo default_headers si los defines.",
+  api_key:
+    "Clave fija de la integración (se guarda aquí). Se envía en un header (por defecto X-API-Key).",
+  bearer: "Token fijo guardado aquí → Authorization: Bearer …",
+  oauth2: "Access token estático ya obtenido (sin flujo OAuth automático).",
+  basic: "Usuario y contraseña fijos de la integración → Authorization: Basic.",
+  endpoint_auth:
+    "Define el flujo: endpoint de login + dónde sale el token + prefijo (Bearer/Token). Cada owner conecta su cuenta en «Mi cuenta»; las skills reutilizan esa sesión sin pedir usuario/clave como parámetros.",
+};
+
+/** Prefijo del header Authorization tras login (endpoint_auth). */
+export const AUTH_HEADER_PREFIX_OPTIONS = [
+  { value: "Bearer", label: "Bearer (JWT / OAuth)" },
+  { value: "Token", label: "Token (DRF / API key hex)" },
+] as const;
 
 export const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"] as const;
 

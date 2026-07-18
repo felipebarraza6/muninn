@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -23,6 +24,28 @@ import type { ExternalAPIEndpoint } from "@/api/hooks/useExternalAPIs";
 import { HTTP_METHODS, parseJsonObject, prettyJson } from "@/lib/external-api";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+
+function headersHaveAuthToken(headersJson: string): boolean {
+  const parsed = parseJsonObject(headersJson, "headers");
+  if (!parsed.ok) return false;
+  return Object.entries(parsed.value).some(
+    ([k, v]) => k.toLowerCase() === "authorization" && String(v).includes("{{auth_token}}"),
+  );
+}
+
+function setAuthTokenInHeaders(headersJson: string, enabled: boolean): string {
+  const parsed = parseJsonObject(headersJson || "{}", "headers");
+  const base = parsed.ok ? { ...parsed.value } : {};
+  const authKey =
+    Object.keys(base).find((k) => k.toLowerCase() === "authorization") ?? "Authorization";
+  if (enabled) {
+    // El prefijo real (Bearer/Token) lo corrige el backend según auth_header_prefix.
+    base[authKey] = "Bearer {{auth_token}}";
+  } else {
+    delete base[authKey];
+  }
+  return prettyJson(base);
+}
 
 const METHOD_STYLE: Record<string, string> = {
   GET: "border-emerald-500/40 text-emerald-400 bg-emerald-500/10",
@@ -117,6 +140,10 @@ interface ExternalApiEndpointsPanelProps {
   canManage: boolean;
   saving: boolean;
   onSave: (next: Record<string, ExternalAPIEndpoint>) => void;
+  /** Cuando va dentro de un tab, oculta el título de sección. */
+  embedded?: boolean;
+  /** Clave del endpoint de login (auth). Evita Bearer en ese endpoint. */
+  authEndpointKey?: string;
 }
 
 export function ExternalApiEndpointsPanel({
@@ -124,11 +151,16 @@ export function ExternalApiEndpointsPanel({
   canManage,
   saving,
   onSave,
+  embedded = false,
+  authEndpointKey = "",
 }: ExternalApiEndpointsPanelProps) {
   const entries = useMemo(() => Object.entries(endpoints), [endpoints]);
   const [open, setOpen] = useState(false);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
+
+  const isAuthEndpointDraft =
+    Boolean(authEndpointKey) && draft.key.trim() === authEndpointKey.trim();
 
   const openCreate = () => {
     setEditingKey(null);
@@ -171,13 +203,14 @@ export function ExternalApiEndpointsPanel({
   };
 
   return (
-    <section className="rounded-xl border bg-card/60 p-4 md:p-5 space-y-3">
+    <section className={cn("space-y-3", !embedded && "rounded-xl border bg-card/60 p-4 md:p-5")}>
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
         <div>
-          <h2 className="text-sm font-medium">Endpoints ({entries.length})</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Rutas relativas que usan las funciones del agente. Se guardan en el mapa{" "}
-            <code className="text-[10px]">endpoints</code> de la API.
+          {!embedded && <h2 className="text-sm font-medium">Endpoints ({entries.length})</h2>}
+          <p className={cn("text-xs text-muted-foreground", !embedded && "mt-0.5")}>
+            Rutas de la aplicación para skills. Placeholders{" "}
+            <code className="text-[10px]">{"{{nombre}}"}</code> se rellenan con args o credenciales
+            de auth.
           </p>
         </div>
         {canManage && (
@@ -260,11 +293,11 @@ export function ExternalApiEndpointsPanel({
               <Input
                 value={draft.key}
                 onChange={(e) => setDraft((d) => ({ ...d, key: e.target.value }))}
-                placeholder="ej: listar_productos"
+                placeholder="ej: listar_items"
                 className="font-mono text-sm"
               />
               <p className="text-[11px] text-muted-foreground">
-                Identificador usado por las funciones (`config.endpoint_type`).
+                Identificador usado por las skills (`config.endpoint_type`).
               </p>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -291,46 +324,101 @@ export function ExternalApiEndpointsPanel({
                 <Input
                   value={draft.path}
                   onChange={(e) => setDraft((d) => ({ ...d, path: e.target.value }))}
-                  placeholder="/v1/items"
+                  placeholder="/v1/recursos/"
                   className="font-mono text-sm"
                 />
+                <p className="text-[11px] text-muted-foreground">
+                  Relativo a la Base URL. Variables:{" "}
+                  <code className="text-[10px]">/v1/items/{"{{id}}"}/</code>
+                </p>
               </div>
             </div>
             <div className="space-y-2">
-              <Label>query_params (JSON)</Label>
+              <Label>Parámetros query (JSON)</Label>
               <Textarea
                 value={draft.queryParams}
                 onChange={(e) => setDraft((d) => ({ ...d, queryParams: e.target.value }))}
                 rows={3}
                 className="font-mono text-xs"
+                placeholder='{ "page": "{{page}}", "q": "{{q}}" }'
               />
+              <p className="text-[11px] text-muted-foreground">
+                Filtros en la URL (<code className="text-[10px]">?clave=valor</code>). Placeholders{" "}
+                <code className="text-[10px]">{"{{nombre}}"}</code> los completa la skill o el test.
+              </p>
             </div>
+            {isAuthEndpointDraft ? (
+              <p className="text-[11px] rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-muted-foreground">
+                Endpoint de <strong className="text-foreground">login</strong>: no pongas
+                Authorization aquí. En el body usa placeholders (
+                <code className="text-[10px]">{"{{email}}"}</code>,{" "}
+                <code className="text-[10px]">{"{{password}}"}</code>, …). Se rellenan al{" "}
+                <strong className="text-foreground">probar</strong> o desde los args de la{" "}
+                <strong className="text-foreground">skill</strong> — no se guardan en la API.
+              </p>
+            ) : (
+              <label className="flex items-center gap-2 text-sm rounded-md border border-border/80 px-3 py-2">
+                <Switch
+                  checked={headersHaveAuthToken(draft.headers)}
+                  onCheckedChange={(on) =>
+                    setDraft((d) => ({ ...d, headers: setAuthTokenInHeaders(d.headers, on) }))
+                  }
+                />
+                Incluir Authorization del login
+                <span className="text-[11px] text-muted-foreground">
+                  (prefijo Bearer/Token según Configuración)
+                </span>
+              </label>
+            )}
             <div className="space-y-2">
-              <Label>headers (JSON)</Label>
+              <Label>Headers (JSON)</Label>
               <Textarea
                 value={draft.headers}
                 onChange={(e) => setDraft((d) => ({ ...d, headers: e.target.value }))}
                 rows={3}
                 className="font-mono text-xs"
               />
+              <p className="text-[11px] text-muted-foreground">
+                Cabeceras HTTP (Accept, X-Custom, etc.). Con auth Login el Bearer se inyecta solo si
+                falta (excepto en el endpoint de login).
+              </p>
             </div>
             <div className="space-y-2">
-              <Label>body (JSON)</Label>
+              <Label>Body (JSON)</Label>
               <Textarea
                 value={draft.body}
                 onChange={(e) => setDraft((d) => ({ ...d, body: e.target.value }))}
                 rows={4}
                 className="font-mono text-xs"
+                placeholder='{ "email": "{{email}}", "password": "{{password}}" }'
               />
+              <p className="text-[11px] text-muted-foreground">
+                {isAuthEndpointDraft ? (
+                  <>
+                    Login: usa placeholders que coincidan con Configuración, ej.{" "}
+                    <code className="text-[10px]">
+                      {'{ "email": "{{email}}", "password": "{{password}}" }'}
+                    </code>
+                    .
+                  </>
+                ) : (
+                  <>Cuerpo JSON (POST/PUT/PATCH). En GET no se envía.</>
+                )}
+              </p>
             </div>
             <div className="space-y-2">
-              <Label>response_mapping (JSON)</Label>
+              <Label>Mapeo de respuesta (JSON)</Label>
               <Textarea
                 value={draft.responseMapping}
                 onChange={(e) => setDraft((d) => ({ ...d, responseMapping: e.target.value }))}
                 rows={3}
                 className="font-mono text-xs"
+                placeholder="{}"
               />
+              <p className="text-[11px] text-muted-foreground">
+                Vacío = la skill recibe el JSON tal cual llega de la API. Con claves, solo extrae
+                esos campos (ej. <code className="text-[10px]">{`{ "items": "results" }`}</code>).
+              </p>
             </div>
           </div>
           <DialogFooter>

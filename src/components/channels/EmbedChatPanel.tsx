@@ -5,6 +5,8 @@ import { Input } from "@/components/ui/input";
 import { usePublicChannelConfig, useSendPublicMessage } from "@/api/hooks/usePublicChat";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { ChatMarkdown } from "@/components/chat/chat-markdown";
+import { ChatCopyButton } from "@/components/chat/chat-copy-button";
 
 interface ChatMessage {
   id: string;
@@ -131,13 +133,24 @@ export function EmbedChatPanel({ channelId, className, compact = false }: EmbedC
               )}
             </div>
             <div
-              className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm break-words ${
-                msg.role === "user"
-                  ? "bg-primary text-primary-foreground rounded-br-md"
-                  : "bg-muted rounded-bl-md"
+              className={`group max-w-[80%] space-y-1 ${
+                msg.role === "user" ? "items-end" : "items-start"
               }`}
             >
-              {msg.content}
+              <div
+                className={`rounded-2xl px-3 py-2 text-sm break-words ${
+                  msg.role === "user"
+                    ? "bg-primary text-primary-foreground rounded-br-md"
+                    : "bg-muted rounded-bl-md"
+                }`}
+              >
+                <ChatMarkdown content={msg.content} inverted={msg.role === "user"} />
+              </div>
+              <div
+                className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+              >
+                <ChatCopyButton text={msg.content} />
+              </div>
             </div>
           </div>
         ))}

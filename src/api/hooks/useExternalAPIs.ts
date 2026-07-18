@@ -36,6 +36,8 @@ export interface ExternalAPI {
   auth_endpoint_key?: string;
   auth_token_path?: string;
   auth_token_ttl_seconds?: number;
+  /** Prefijo Authorization tras login: Bearer | Token (desde auth_config). */
+  auth_header_prefix?: "Bearer" | "Token" | string;
   default_headers?: Record<string, unknown>;
   retry_policy?: Record<string, unknown>;
   timeout_seconds?: number;
@@ -52,6 +54,10 @@ export interface ExternalAPITestRequest {
   endpoint_type?: string;
   body?: Record<string, unknown>;
   authenticate_first?: boolean;
+  /** Credenciales dinámicas para el endpoint de login (placeholders). */
+  credentials?: Record<string, string>;
+  /** Si true, ignora el token cacheado y vuelve a loguear. Default en backend: true. */
+  force_auth?: boolean;
   method?: string;
   path?: string;
   headers?: Record<string, unknown>;
@@ -68,10 +74,22 @@ export interface ExternalAPITestResult {
   latency_ms?: number;
   error?: string | null;
   detail?: string;
+  /** Request real enviada (url, method, query, headers, body). */
+  request?: {
+    method?: string;
+    url?: string;
+    query_params?: Record<string, unknown>;
+    headers?: Record<string, unknown>;
+    body?: unknown;
+  };
   auth?: {
     success?: boolean;
     token_preview?: string;
     error?: string;
+    available_keys?: string[];
+    token_path_used?: string | null;
+    raw_response?: unknown;
+    from_cache?: boolean;
   };
 }
 
@@ -135,5 +153,82 @@ export function useExternalAPIStatus(id: string | undefined) {
     queryKey: [...QUERY_KEY, id, "status"],
     queryFn: () => GET<Record<string, unknown>>(ENDPOINTS.integrations.status(id!)),
     enabled: !!id,
+  });
+}
+
+const CONNECTIONS_KEY = ["ai-agents", "application-connections"];
+
+export interface ApplicationUserConnection {
+  id: string;
+  external_api: string;
+  external_api_name?: string | null;
+  external_api_auth_type?: string | null;
+  label?: string;
+  is_active?: boolean;
+  is_connected?: boolean;
+  last_verified_at?: string | null;
+  last_error?: string;
+  branch?: number | string | null;
+  created?: string;
+  modified?: string;
+}
+
+export interface CredentialField {
+  name: string;
+  type?: string;
+  format?: string | null;
+  required?: boolean;
+}
+
+export function useApplicationConnection(externalApiId: string | undefined) {
+  const branchId = useActiveBranchId();
+  return useQuery({
+    queryKey: [...CONNECTIONS_KEY, branchId, externalApiId],
+    queryFn: () =>
+      GET<ApplicationUserConnection[] | { count: number; results: ApplicationUserConnection[] }>(
+        ENDPOINTS.applicationConnections.list,
+        { params: { external_api: externalApiId! } },
+      ).then((data) => {
+        const list = normalizeListResponse<ApplicationUserConnection>(data);
+        return list[0] ?? null;
+      }),
+    enabled: !!externalApiId,
+    staleTime: 30_000,
+  });
+}
+
+export function useCredentialFields(externalApiId: string | undefined) {
+  return useQuery({
+    queryKey: [...CONNECTIONS_KEY, "fields", externalApiId],
+    queryFn: () =>
+      GET<{
+        external_api: string;
+        auth_endpoint_key?: string;
+        fields: CredentialField[];
+      }>(ENDPOINTS.applicationConnections.credentialFields(externalApiId!)),
+    enabled: !!externalApiId,
+    staleTime: 60_000,
+  });
+}
+
+export function useConnectApplication() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { external_api: string; credentials: Record<string, string> }) =>
+      POST<{
+        success: boolean;
+        error?: string | null;
+        token_preview?: string | null;
+        connection: ApplicationUserConnection;
+      }>(ENDPOINTS.applicationConnections.connect, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: CONNECTIONS_KEY }),
+  });
+}
+
+export function useDisconnectApplication() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => DELETE(ENDPOINTS.applicationConnections.detail(id)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: CONNECTIONS_KEY }),
   });
 }

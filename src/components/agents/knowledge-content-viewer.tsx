@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   Loader2,
   FileText,
@@ -10,6 +11,8 @@ import {
   X,
   Boxes,
   Sparkles,
+  Users,
+  Bot,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,14 +38,43 @@ import {
   type AgentKnowledge,
   type KnowledgeChunk,
 } from "@/api/hooks/useKnowledge";
+import { useAgents, type Agent } from "@/api/hooks/useAgents";
 import { KNOWLEDGE_TYPE_LABEL, parseFaqPairs, serializeFaqPairs } from "@/lib/knowledge-types";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+
+export type KnowledgeViewerContext = "catalog" | "agent";
 
 interface KnowledgeContentViewerProps {
   knowledgeId: string;
   title: string;
   knowledgeType: KnowledgeType;
+  /** `agent`: tab Vectores. `catalog` (default): tab Uso entre agentes. */
+  context?: KnowledgeViewerContext;
+}
+
+function formatUsageDate(value?: string | null) {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("es-CL", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function agentsUsingKnowledge(agents: Agent[], knowledgeId: string): Agent[] {
+  const id = String(knowledgeId);
+  return agents.filter((a) =>
+    (a.knowledge_documents ?? []).some((doc) => {
+      if (doc == null) return false;
+      if (typeof doc === "object" && "id" in doc) return String(doc.id) === id;
+      return String(doc) === id;
+    }),
+  );
 }
 
 interface QAPair {
@@ -287,7 +319,7 @@ function ChunkCard({ chunk, total }: { chunk: KnowledgeChunk; total: number }) {
             </Badge>
           ) : (
             <Badge variant="outline" className="text-[10px] text-muted-foreground">
-              Sin embedding
+              Sin vector
             </Badge>
           )}
         </div>
@@ -345,8 +377,8 @@ function ChunkCard({ chunk, total }: { chunk: KnowledgeChunk; total: number }) {
             </div>
           ) : (
             <div className="rounded-md border border-dashed border-border/60 bg-muted/20 p-2.5 text-[11px] text-muted-foreground leading-snug">
-              Este fragmento se creó, pero no tiene embedding. Puede faltar un proveedor de
-              embeddings o falló la generación. Reindexa el documento.
+              Este fragmento se creó, pero no tiene vector. Reindexa el documento o revisa el
+              modelo de embedding de la sucursal.
             </div>
           )}
         </div>
@@ -355,33 +387,125 @@ function ChunkCard({ chunk, total }: { chunk: KnowledgeChunk; total: number }) {
   );
 }
 
-function VectorsPanel({
+function UsagePanel({
   knowledgeId,
   enabled,
-  indexed,
+  usageCount,
+  lastUsedAt,
 }: {
   knowledgeId: string;
   enabled: boolean;
-  indexed: boolean;
+  usageCount?: number;
+  lastUsedAt?: string;
 }) {
-  const { data, isLoading } = useKnowledgeChunks(knowledgeId, enabled && indexed);
+  const { data: agents = [], isLoading } = useAgents();
+  const assigned = useMemo(
+    () => (enabled ? agentsUsingKnowledge(agents, knowledgeId) : []),
+    [agents, enabled, knowledgeId],
+  );
+  const lastUsedLabel = formatUsageDate(lastUsedAt);
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 py-12 text-muted-foreground">
+        <Loader2 className="h-5 w-5 animate-spin" />
+        <span className="text-sm">Cargando uso…</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-2 sm:grid-cols-2">
+        <div className="rounded-md border border-border/70 bg-muted/20 px-3 py-2.5">
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            Usos en RAG
+          </div>
+          <div className="text-sm font-medium mt-0.5 tabular-nums">
+            {usageCount != null ? usageCount : "—"}
+          </div>
+          <p className="text-[10px] text-muted-foreground mt-0.5 leading-snug">
+            Veces que el documento aportó contexto en consultas.
+          </p>
+        </div>
+        <div className="rounded-md border border-border/70 bg-muted/20 px-3 py-2.5">
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            Último uso
+          </div>
+          <div className="text-sm font-medium mt-0.5">{lastUsedLabel ?? "—"}</div>
+          <p className="text-[10px] text-muted-foreground mt-0.5 leading-snug">
+            Última vez que se recuperó en una conversación.
+          </p>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <Users className="h-4 w-4 text-muted-foreground" />
+          <p className="text-sm font-medium">Agentes que lo usan</p>
+          <Badge variant="secondary" className="h-5 px-1.5 text-[10px] tabular-nums">
+            {assigned.length}
+          </Badge>
+        </div>
+
+        {assigned.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed py-10 text-center text-muted-foreground px-4">
+            <Bot className="h-8 w-8 opacity-40" />
+            <p className="text-sm">Aún no está asignado a ningún agente.</p>
+            <p className="text-xs max-w-sm">
+              Los vectores se generan al asignarlo en el panel RAG de un agente.
+            </p>
+          </div>
+        ) : (
+          <ul className="space-y-1.5">
+            {assigned.map((agent) => (
+              <li key={String(agent.id)}>
+                <Link
+                  to={`/agentes/${agent.id}`}
+                  className="flex items-center gap-2.5 rounded-lg border border-border/70 bg-background/60 px-3 py-2.5 transition-colors hover:border-primary/40 hover:bg-primary-soft/10"
+                >
+                  <div className="h-8 w-8 rounded-lg bg-primary-soft text-primary flex items-center justify-center shrink-0">
+                    <Bot className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium truncate">{agent.name}</div>
+                    <div className="text-[11px] text-muted-foreground truncate">
+                      {[agent.embedding_model, agent.llm_model_name]
+                        .filter(Boolean)
+                        .map(String)
+                        .join(" · ") || "Sin modelo de embedding indicado"}
+                    </div>
+                  </div>
+                  {agent.use_rag === false && (
+                    <Badge variant="outline" className="text-[10px] shrink-0">
+                      RAG off
+                    </Badge>
+                  )}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function VectorsPanel({
+  knowledgeId,
+  enabled,
+}: {
+  knowledgeId: string;
+  enabled: boolean;
+  indexed?: boolean;
+}) {
+  // Siempre pedir chunks al abrir: is_indexed puede decir "ok" sin embeddings reales.
+  const { data, isLoading } = useKnowledgeChunks(knowledgeId, enabled);
 
   const chunks = data?.chunks ?? [];
   const count = data?.count ?? 0;
   const dimensions = data?.dimensions ?? 0;
   const withEmbedding = chunks.filter((c) => c.has_embedding).length;
-
-  if (!indexed) {
-    return (
-      <div className="flex flex-col items-center justify-center gap-2 py-12 text-center text-muted-foreground px-4">
-        <Boxes className="h-8 w-8 opacity-40" />
-        <p className="text-sm">Este documento aún no está indexado.</p>
-        <p className="text-xs max-w-sm">
-          Indexalo desde Conocimiento para generar fragments y embeddings.
-        </p>
-      </div>
-    );
-  }
 
   if (isLoading) {
     return (
@@ -396,9 +520,10 @@ function VectorsPanel({
     return (
       <div className="flex flex-col items-center justify-center gap-2 py-12 text-center text-muted-foreground px-4">
         <Boxes className="h-8 w-8 opacity-40" />
-        <p className="text-sm">No hay fragmentos generados.</p>
+        <p className="text-sm">No hay fragmentos ni vectores generados.</p>
         <p className="text-xs max-w-sm">
-          Asigna el documento a un agente para generar vectores, o usa Reindexar en el panel RAG.
+          Usa Reindexar en el panel RAG. Verás «Generando vectores…» en la lista y te avisamos
+          cuando termine.
         </p>
       </div>
     );
@@ -406,6 +531,13 @@ function VectorsPanel({
 
   return (
     <div className="space-y-4">
+      {withEmbedding === 0 && (
+        <div className="rounded-lg border border-warning/40 bg-warning-soft/40 px-3 py-2.5 text-[12px] text-muted-foreground">
+          Hay {count} fragmento{count === 1 ? "" : "s"}, pero{" "}
+          <strong>aún no hay vectores</strong>. Reindexa de nuevo o revisa el modelo de embedding
+          de la sucursal.
+        </div>
+      )}
       <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-3">
         <div className="flex items-start gap-2.5">
           <Sparkles className="h-4 w-4 shrink-0 text-primary mt-0.5" />
@@ -700,10 +832,13 @@ export function KnowledgeContentViewer({
   knowledgeId,
   title,
   knowledgeType,
+  context = "catalog",
 }: KnowledgeContentViewerProps) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [viewTab, setViewTab] = useState<"documento" | "vectores">("documento");
+  const [viewTab, setViewTab] = useState<"documento" | "vectores" | "uso">("documento");
+  const showVectors = context === "agent";
+  const secondaryTab = showVectors ? "vectores" : "uso";
   const [editTitle, setEditTitle] = useState("");
   const [editContent, setEditContent] = useState("");
   const [faqPairs, setFaqPairs] = useState<QAPair[]>([{ question: "", answer: "" }]);
@@ -742,6 +877,10 @@ export function KnowledgeContentViewer({
       setFaqPairs(parseFaqPairs(doc.content));
     }
   }, [doc, editing, knowledgeType]);
+
+  useEffect(() => {
+    if (!open) setViewTab("documento");
+  }, [open]);
 
   const startEdit = () => {
     if (!doc) return;
@@ -835,8 +974,8 @@ export function KnowledgeContentViewer({
         className={cn(
           "p-0 gap-0 rounded-lg flex flex-col overflow-hidden",
           isData || editing || !isLoading
-            ? "w-[min(96vw,1400px)] max-w-[min(96vw,1400px)] h-[85vh] max-h-[85vh]"
-            : "w-full max-w-3xl max-h-[85vh]",
+            ? "w-full max-w-full h-[100dvh] max-h-[100dvh] sm:w-[min(96vw,1400px)] sm:max-w-[min(96vw,1400px)] sm:h-[85vh] sm:max-h-[85vh] sm:rounded-lg"
+            : "w-full max-w-3xl max-h-[100dvh] sm:max-h-[85vh]",
         )}
       >
         <DialogHeader className="p-5 pb-3 shrink-0 border-b">
@@ -936,8 +1075,8 @@ export function KnowledgeContentViewer({
           </div>
         ) : (
           <Tabs
-            value={viewTab}
-            onValueChange={(v) => setViewTab(v as "documento" | "vectores")}
+            value={viewTab === "documento" ? "documento" : secondaryTab}
+            onValueChange={(v) => setViewTab(v as "documento" | "vectores" | "uso")}
             className="flex-1 min-h-0 flex flex-col overflow-hidden"
           >
             <div className="shrink-0 px-4 pt-3">
@@ -946,18 +1085,25 @@ export function KnowledgeContentViewer({
                   <FileText className="h-3.5 w-3.5" />
                   Documento
                 </TabsTrigger>
-                <TabsTrigger value="vectores" className="gap-1.5 flex-1 sm:flex-none">
-                  <Boxes className="h-3.5 w-3.5" />
-                  Vectores
-                  {indexed && doc.chunks_count != null && doc.chunks_count > 0 && (
-                    <Badge
-                      variant="secondary"
-                      className="ml-0.5 h-5 px-1.5 text-[10px] tabular-nums"
-                    >
-                      {doc.chunks_count}
-                    </Badge>
-                  )}
-                </TabsTrigger>
+                {showVectors ? (
+                  <TabsTrigger value="vectores" className="gap-1.5 flex-1 sm:flex-none">
+                    <Boxes className="h-3.5 w-3.5" />
+                    Vectores
+                    {indexed && doc.chunks_count != null && doc.chunks_count > 0 && (
+                      <Badge
+                        variant="secondary"
+                        className="ml-0.5 h-5 px-1.5 text-[10px] tabular-nums"
+                      >
+                        {doc.chunks_count}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
+                ) : (
+                  <TabsTrigger value="uso" className="gap-1.5 flex-1 sm:flex-none">
+                    <Users className="h-3.5 w-3.5" />
+                    Uso
+                  </TabsTrigger>
+                )}
               </TabsList>
             </div>
 
@@ -978,20 +1124,37 @@ export function KnowledgeContentViewer({
               )}
             </TabsContent>
 
-            <TabsContent
-              value="vectores"
-              className="flex-1 min-h-0 mt-0 overflow-hidden data-[state=inactive]:hidden"
-            >
-              <ScrollArea className="h-full px-4 pb-4">
-                <div className="pt-3">
-                  <VectorsPanel
-                    knowledgeId={String(doc.id)}
-                    enabled={open && viewTab === "vectores"}
-                    indexed={indexed}
-                  />
-                </div>
-              </ScrollArea>
-            </TabsContent>
+            {showVectors ? (
+              <TabsContent
+                value="vectores"
+                className="flex-1 min-h-0 mt-0 overflow-hidden data-[state=inactive]:hidden"
+              >
+                <ScrollArea className="h-full px-4 pb-4">
+                  <div className="pt-3">
+                    <VectorsPanel
+                      knowledgeId={String(doc.id)}
+                      enabled={open && viewTab === "vectores"}
+                    />
+                  </div>
+                </ScrollArea>
+              </TabsContent>
+            ) : (
+              <TabsContent
+                value="uso"
+                className="flex-1 min-h-0 mt-0 overflow-hidden data-[state=inactive]:hidden"
+              >
+                <ScrollArea className="h-full px-4 pb-4">
+                  <div className="pt-3">
+                    <UsagePanel
+                      knowledgeId={String(doc.id)}
+                      enabled={open && viewTab === "uso"}
+                      usageCount={doc.usage_count}
+                      lastUsedAt={doc.last_used_at}
+                    />
+                  </div>
+                </ScrollArea>
+              </TabsContent>
+            )}
           </Tabs>
         )}
       </DialogContent>

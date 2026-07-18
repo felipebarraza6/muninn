@@ -1,4 +1,4 @@
-import { getStoredBranches, getStoredUser } from "@/lib/authSession";
+import { getStoredBranches, getStoredPermissions, getStoredUser } from "@/lib/authSession";
 import type { BranchAssignment } from "@/api/hooks/useAuth";
 
 export const ROLE_OWNER = "OWNER";
@@ -196,7 +196,7 @@ export function canAccessKnowledgeCatalog(): boolean {
 }
 
 /**
- * Puede ver APIs externas (lista / detalle).
+ * Puede ver Aplicaciones (lista / detalle).
  * Studio: cualquier usuario autenticado con acceso a la sucursal.
  */
 export function canAccessExternalApis(): boolean {
@@ -204,7 +204,7 @@ export function canAccessExternalApis(): boolean {
 }
 
 /**
- * Crear / editar / eliminar / testear APIs externas.
+ * Crear / editar / eliminar / probar Aplicaciones.
  * - Superadmin: sí
  * - Organizador: sí (stores de su holding)
  * - OWNER u otros roles: solo lectura
@@ -219,6 +219,28 @@ export function canManageExternalApis(): boolean {
  */
 export function isStoreOwnerScope(): boolean {
   return !isSuperAdmin() && !isOrganizationOwner() && isBranchOwner();
+}
+
+/**
+ * Ver recursos inactivos en Studio (agentes, conocimiento, skills, APIs).
+ * - Superadmin / organizador (owner de holding): sí (activos + inactivos)
+ * - OWNER de sucursal y demás roles: no (solo activos)
+ */
+export function canViewInactiveStudioResources(): boolean {
+  if (isSuperAdmin()) return true;
+  if (isOrganizationOwner()) return true;
+  // Fallback: rol ORG_OWNER en permisos o asignaciones (por si el login no marcó el flag).
+  const perms = getStoredPermissions();
+  const role = String(perms?.user_role ?? "")
+    .trim()
+    .toUpperCase();
+  if (role === ROLE_ORG_OWNER) return true;
+  return getStoredBranches().some((b) => getAssignmentRoleCode(b) === ROLE_ORG_OWNER);
+}
+
+/** @deprecated Usar canViewInactiveStudioResources */
+export function canViewInactiveAgents(): boolean {
+  return canViewInactiveStudioResources();
 }
 
 /**

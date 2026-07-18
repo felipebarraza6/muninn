@@ -6,12 +6,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
   ArrowLeft,
   Bot,
   History,
@@ -20,13 +14,7 @@ import {
   Send,
   Archive,
   User,
-  MoreVertical,
   RefreshCw,
-  ChevronDown,
-  ChevronRight,
-  Wrench,
-  Database,
-  ArrowRight,
 } from "lucide-react";
 import { useAgent } from "@/api/hooks/useAgents";
 import {
@@ -36,6 +24,14 @@ import {
   useUpdateConversationStatus,
   type ChatMessageResponse,
 } from "@/api/hooks/useConversations";
+import { ChatMarkdown } from "@/components/chat/chat-markdown";
+import { ChatCopyButton } from "@/components/chat/chat-copy-button";
+import { ConversationRagSummary } from "@/components/chat/chat-message-insights";
+import {
+  MessageInsightSheet,
+  MessageInspectButton,
+  type InsightMessage,
+} from "@/components/chat/message-insight-sheet";
 import {
   useUnifiedConversations,
   type UnifiedConversation,
@@ -66,216 +62,52 @@ function normalizeMessages(data?: ChatMessageResponse[]): ChatMessage[] {
         ? "system"
         : "agent") as ChatMessage["role"],
     content: m.content ?? m.text ?? m.message ?? "",
-    created: m.created_at ?? m.timestamp,
-    rag_sources: m.rag_sources,
+    created: m.created_at ?? m.created ?? m.timestamp ?? m.modified,
+    rag_sources: m.rag_sources ?? m.sources,
     tool_calls: m.tool_calls,
     tool_results: m.tool_results,
   }));
 }
 
-function formatTime(iso?: string) {
+function formatMessageStamp(iso?: string) {
   if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleString("es-CL", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
-interface RagSourceDetail {
-  id?: string;
-  name?: string;
-  title?: string;
-  content?: string;
-  summary?: string;
-  source?: string;
-  source_app?: string;
-  knowledge_type?: string;
-  score?: number;
+function formatDateTime(iso?: string | null) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleString("es-CL", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
-interface ToolCallDetail {
-  id?: string;
-  name?: string;
-  arguments?: string | Record<string, unknown>;
-  function?: { name?: string; arguments?: string };
-}
-
-interface ToolResultDetail {
-  tool_call_id?: string;
-  name?: string;
-  content?: string;
-}
-
-function asRecordArray<T>(value: unknown): T[] {
-  return Array.isArray(value) ? (value as T[]) : [];
-}
-
-/** Formatea un valor JSON (string u objeto) a texto legible e indentado. */
-function prettyJson(value: unknown): string {
-  if (value == null) return "";
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    try {
-      return JSON.stringify(JSON.parse(trimmed), null, 2);
-    } catch {
-      return value;
-    }
-  }
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
-}
-
-function sourceTitle(src: RagSourceDetail): string {
-  return src.title || src.name || "Documento sin título";
-}
-
-function toolName(call: ToolCallDetail): string {
-  return call.function?.name || call.name || "función";
-}
-
-function toolArguments(call: ToolCallDetail): string {
-  return prettyJson(call.function?.arguments ?? call.arguments ?? "");
-}
-
-/**
- * Panel expandible con el detalle del razonamiento del agente: fuentes RAG
- * usadas (título/score/snippet) y pasos de function calling (nombre, argumentos
- * y resultado emparejado por tool_call_id).
- */
-function MessageDetails({
-  ragSources,
-  toolCalls,
-  toolResults,
-}: {
-  ragSources: RagSourceDetail[];
-  toolCalls: ToolCallDetail[];
-  toolResults: ToolResultDetail[];
-}) {
-  const [openRag, setOpenRag] = useState(false);
-  const [openTools, setOpenTools] = useState(false);
-
-  const resultFor = useCallback(
-    (call: ToolCallDetail, index: number): ToolResultDetail | undefined => {
-      if (call.id) {
-        const byId = toolResults.find((r) => r.tool_call_id === call.id);
-        if (byId) return byId;
-      }
-      const name = toolName(call);
-      const byName = toolResults.filter((r) => r.name === name);
-      if (byName.length === 1) return byName[0];
-      return toolResults[index];
-    },
-    [toolResults],
-  );
-
-  const hasRag = ragSources.length > 0;
-  const hasTools = toolCalls.length > 0;
-  if (!hasRag && !hasTools) return null;
-
-  return (
-    <div className="space-y-1.5">
-      {hasRag && (
-        <div className="rounded-md border border-primary/20 bg-primary-soft/40 overflow-hidden">
-          <button
-            type="button"
-            onClick={() => setOpenRag((v) => !v)}
-            className="w-full flex items-center gap-1.5 px-2 py-1.5 text-[10px] font-medium text-primary hover:bg-primary-soft/60 transition-colors"
-          >
-            {openRag ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-            <Database className="h-3 w-3" />
-            RAG: {ragSources.length} fuente{ragSources.length === 1 ? "" : "s"}
-          </button>
-          {openRag && (
-            <div className="px-2 pb-2 space-y-1.5">
-              {ragSources.map((src, i) => {
-                const snippet = (src.content || src.summary || "").trim();
-                const score = typeof src.score === "number" ? src.score : undefined;
-                const kind = src.knowledge_type || src.source || src.source_app;
-                return (
-                  <div
-                    key={src.id ?? i}
-                    className="rounded border border-primary/15 bg-background/60 p-1.5"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[11px] font-medium truncate">{sourceTitle(src)}</span>
-                      {score !== undefined && (
-                        <span className="text-[9px] font-mono text-primary shrink-0">
-                          {score.toFixed(3)}
-                        </span>
-                      )}
-                    </div>
-                    {kind && (
-                      <div className="text-[9px] uppercase tracking-wide text-muted-foreground">
-                        {kind}
-                      </div>
-                    )}
-                    {snippet && (
-                      <p className="mt-0.5 text-[10px] text-muted-foreground line-clamp-3 whitespace-pre-wrap">
-                        {snippet.slice(0, 280)}
-                        {snippet.length > 280 ? "…" : ""}
-                      </p>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-
-      {hasTools && (
-        <div className="rounded-md border border-info/20 bg-info-soft/40 overflow-hidden">
-          <button
-            type="button"
-            onClick={() => setOpenTools((v) => !v)}
-            className="w-full flex items-center gap-1.5 px-2 py-1.5 text-[10px] font-medium text-info hover:bg-info-soft/60 transition-colors"
-          >
-            {openTools ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-            <Wrench className="h-3 w-3" />
-            {toolCalls.length} función{toolCalls.length === 1 ? "" : "es"} ejecutada
-            {toolCalls.length === 1 ? "" : "s"}
-          </button>
-          {openTools && (
-            <div className="px-2 pb-2 space-y-2">
-              {toolCalls.map((call, i) => {
-                const result = resultFor(call, i);
-                return (
-                  <div
-                    key={call.id ?? i}
-                    className="rounded border border-info/15 bg-background/60 p-1.5 space-y-1"
-                  >
-                    <div className="flex items-center gap-1.5 text-[11px] font-mono font-medium text-info">
-                      <Wrench className="h-3 w-3" />
-                      {toolName(call)}
-                    </div>
-                    <div>
-                      <div className="text-[9px] uppercase tracking-wide text-muted-foreground mb-0.5">
-                        Argumentos
-                      </div>
-                      <pre className="text-[10px] font-mono bg-muted/60 rounded p-1.5 overflow-x-auto whitespace-pre-wrap">
-                        {toolArguments(call) || "{}"}
-                      </pre>
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-1 text-[9px] uppercase tracking-wide text-muted-foreground mb-0.5">
-                        <ArrowRight className="h-2.5 w-2.5" />
-                        Resultado
-                      </div>
-                      <pre className="text-[10px] font-mono bg-muted/60 rounded p-1.5 overflow-x-auto whitespace-pre-wrap max-h-48">
-                        {result ? prettyJson(result.content) : "Sin resultado registrado"}
-                      </pre>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
+function formatRelative(iso?: string | null) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const diffMs = Date.now() - d.getTime();
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 1) return "ahora";
+  if (mins < 60) return `hace ${mins} min`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `hace ${hours} h`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `hace ${days} d`;
+  return formatDateTime(iso);
 }
 
 function getCurrentUserId(): number | undefined {
@@ -318,13 +150,18 @@ export function AgentChatCore({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  /** Tras «Nueva»: chat vacío listo para escribir; se crea al primer mensaje. */
+  const [isDraftNew, setIsDraftNew] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [historyTab, setHistoryTab] = useState<"active" | "archived">("active");
+  const [inspectMessage, setInspectMessage] = useState<InsightMessage | null>(null);
   const initializedRef = useRef(false);
   const skipAutoSelectRef = useRef(false);
+  const isCreatingRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastRemoteMessagesRef = useRef<string>("");
+  const conversationIdRef = useRef<string | null>(conversationIdFromUrl);
 
   const mergeSearchParams = useCallback(
     (updates: Record<string, string | null>) => {
@@ -385,73 +222,96 @@ export function AgentChatCore({
   );
 
   useEffect(() => {
+    conversationIdRef.current = conversationId;
+  }, [conversationId]);
+
+  useEffect(() => {
     initializedRef.current = false;
     skipAutoSelectRef.current = false;
+    setIsDraftNew(false);
     setConversationId(conversationIdFromUrl);
     setMessages([]);
     setCreateError(null);
+    lastRemoteMessagesRef.current = "";
     // Solo reset fuerte al cambiar de agente; conversation synca en otro effect.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- conversationIdFromUrl se aplica abajo
   }, [agentId]);
 
   useEffect(() => {
     if (conversationIdFromUrl) {
+      setIsDraftNew(false);
       setConversationId(conversationIdFromUrl);
+      return;
+    }
+    // URL sin conversation: solo limpiar si estamos en modo «nueva» (no reabrir la anterior)
+    if (skipAutoSelectRef.current) {
+      setConversationId(null);
     }
   }, [conversationIdFromUrl]);
 
   useEffect(() => {
-    if (!remoteMessages) return;
+    lastRemoteMessagesRef.current = "";
+  }, [conversationId]);
+
+  useEffect(() => {
+    if (!conversationId || isDraftNew || !remoteMessages) return;
     const next = normalizeMessages(remoteMessages);
     const key = JSON.stringify(next.map((m) => ({ id: m.id, content: m.content })));
     if (key === lastRemoteMessagesRef.current) return;
     lastRemoteMessagesRef.current = key;
     setMessages(next);
-  }, [remoteMessages]);
+  }, [remoteMessages, conversationId, isDraftNew]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, sendMessage.isPending]);
 
-  const doCreateConversation = useCallback(() => {
-    if (!agent || !agentId || isCreating) return;
+  const ensureConversationId = useCallback(async (): Promise<string | null> => {
+    if (conversationIdRef.current) return conversationIdRef.current;
+    if (!agent || !agentId || isCreatingRef.current) return null;
+
+    isCreatingRef.current = true;
     setIsCreating(true);
     setCreateError(null);
-    createConversation.mutate(
-      {
+
+    try {
+      const data = await createConversation.mutateAsync({
         agent: agentId,
         title: `Chat con ${agent.name}`,
         user: getCurrentUserId(),
-      },
-      {
-        onSuccess: (data) => {
-          const id = String(data.id);
-          setConversationId(id);
-          mergeSearchParams({ conversation: id });
-          if (agent.welcome_message) {
-            setMessages([
-              {
-                id: makeId("welcome"),
-                role: "agent",
-                content: agent.welcome_message,
-                created: new Date().toISOString(),
-              },
-            ]);
-          } else {
-            setMessages([]);
-          }
-          setIsCreating(false);
-          skipAutoSelectRef.current = false;
-        },
-        onError: (err) => {
-          const detail = (err as { friendlyMessage?: string })?.friendlyMessage;
-          setCreateError(detail || "No se pudo iniciar la conversación");
-          setIsCreating(false);
-          skipAutoSelectRef.current = false;
-        },
-      },
-    );
-  }, [agent, createConversation, agentId, isCreating, mergeSearchParams]);
+      });
+      const id = String(data.id);
+      lastRemoteMessagesRef.current = "";
+      conversationIdRef.current = id;
+      setConversationId(id);
+      setIsDraftNew(false);
+      mergeSearchParams({ conversation: id });
+      return id;
+    } catch (err) {
+      const detail = (err as { friendlyMessage?: string })?.friendlyMessage;
+      setCreateError(detail || "No se pudo iniciar la conversación");
+      return null;
+    } finally {
+      isCreatingRef.current = false;
+      setIsCreating(false);
+    }
+  }, [agent, agentId, createConversation, mergeSearchParams]);
+
+  const doCreateConversation = useCallback(() => {
+    void ensureConversationId().then((id) => {
+      if (!id || !agent) return;
+      if (agent.welcome_message) {
+        setMessages([
+          {
+            id: makeId("welcome"),
+            role: "agent",
+            content: agent.welcome_message,
+            created: new Date().toISOString(),
+          },
+        ]);
+      }
+    });
+  }, [agent, ensureConversationId]);
 
   useEffect(() => {
     if (agentLoading || !agent || initializedRef.current || conversationsLoading) return;
@@ -471,9 +331,11 @@ export function AgentChatCore({
       return;
     }
 
-    // Sin conversación activa → crear una automáticamente
+    // Sin conversación activa → draft vacío (se crea al primer mensaje)
     skipAutoSelectRef.current = true;
-    doCreateConversation();
+    setIsDraftNew(true);
+    setConversationId(null);
+    setMessages([]);
   }, [
     agentLoading,
     agent,
@@ -481,14 +343,19 @@ export function AgentChatCore({
     conversationIdFromUrl,
     activeAgentConversations,
     mergeSearchParams,
-    doCreateConversation,
   ]);
 
   const handleSend = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!input.trim() || sendMessage.isPending || !conversationId) return;
+    if (!input.trim() || sendMessage.isPending || isCreating) return;
 
     const text = input.trim();
+    const activeId = conversationId ?? (await ensureConversationId());
+    if (!activeId) {
+      toast.error("No se pudo crear la conversación");
+      return;
+    }
+
     const userMsg: ChatMessage = {
       id: makeId("user"),
       role: "user",
@@ -498,9 +365,10 @@ export function AgentChatCore({
 
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
+    setIsDraftNew(false);
 
     sendMessage.mutate(
-      { id: conversationId, message: text },
+      { id: activeId, message: text },
       {
         onSuccess: (data) => {
           if (data?.message || data?.content || data?.text) {
@@ -510,7 +378,11 @@ export function AgentChatCore({
                 id: data.id ?? makeId("agent"),
                 role: data.sender?.toLowerCase() === "user" ? "user" : "agent",
                 content: data.message ?? data.content ?? data.text ?? "",
-                created: data.created_at ?? data.timestamp ?? new Date().toISOString(),
+                created:
+                  data.created_at ??
+                  data.created ??
+                  data.timestamp ??
+                  new Date().toISOString(),
                 rag_sources: data.rag_sources ?? data.sources,
                 tool_calls: data.tool_calls,
                 tool_results: data.tool_results,
@@ -530,15 +402,22 @@ export function AgentChatCore({
     if (!agent || isCreating) return;
     skipAutoSelectRef.current = true;
     initializedRef.current = true;
+    isCreatingRef.current = false;
+    conversationIdRef.current = null;
+    lastRemoteMessagesRef.current = "";
+    setIsDraftNew(true);
     setConversationId(null);
     setMessages([]);
     setCreateError(null);
+    setInput("");
     mergeSearchParams({ conversation: null });
-    doCreateConversation();
   };
 
   const handleSelectConversation = (convId: string) => {
     skipAutoSelectRef.current = false;
+    setIsDraftNew(false);
+    lastRemoteMessagesRef.current = "";
+    conversationIdRef.current = convId;
     setConversationId(convId);
     mergeSearchParams({ conversation: convId });
     setSidebarOpen(false);
@@ -553,10 +432,12 @@ export function AgentChatCore({
           toast.success(isArchiving ? "Conversación archivada" : "Conversación restaurada");
           if (String(convId) === conversationId && isArchiving) {
             skipAutoSelectRef.current = true;
+            conversationIdRef.current = null;
+            lastRemoteMessagesRef.current = "";
+            setIsDraftNew(true);
             setConversationId(null);
             setMessages([]);
             mergeSearchParams({ conversation: null });
-            doCreateConversation();
           }
         },
         onError: (err) => {
@@ -586,6 +467,30 @@ export function AgentChatCore({
   };
 
   const isReady = Boolean(agent?.is_active && (agent?.llm_model || agent?.llm_model_name));
+
+  const currentConversation = useMemo(() => {
+    if (!conversationId) return null;
+    return (
+      allConversations.find(
+        (c) => String(c.id) === conversationId && String(c.agent) === agentId,
+      ) ?? null
+    );
+  }, [allConversations, conversationId, agentId]);
+
+  const conversationStartedAt = useMemo(() => {
+    if (currentConversation?.created) return currentConversation.created;
+    const first = messages.find((m) => m.created)?.created;
+    return first ?? null;
+  }, [currentConversation?.created, messages]);
+
+  const conversationLastActivity = useMemo(() => {
+    if (currentConversation?.modified) return currentConversation.modified;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i]?.created) return messages[i].created ?? null;
+    }
+    return conversationStartedAt;
+  }, [currentConversation?.modified, messages, conversationStartedAt]);
+
   const shellClass = fillParent
     ? "h-full w-full bg-background text-foreground flex flex-col overflow-hidden"
     : "h-[calc(100dvh-3.5rem)] w-full bg-background text-foreground flex flex-col overflow-hidden";
@@ -633,18 +538,20 @@ export function AgentChatCore({
         <div className="flex-1 min-w-0">
           <div className="font-medium text-sm truncate">{agent.name}</div>
           <div className="text-xs text-muted-foreground truncate">
-            {isReady
-              ? "Listo para conversar"
-              : agent?.is_active
+            {!isReady
+              ? agent?.is_active
                 ? "Sin modelo de lenguaje configurado"
-                : "Agente inactivo"}
+                : "Agente inactivo"
+              : agent.use_rag
+                ? `RAG top ${agent.rag_top_k ?? "—"} · ${agent.embedding_model || "embedding default"}`
+                : "RAG desactivado"}
           </div>
         </div>
 
         <Button
           variant="outline"
           size="sm"
-          className="shrink-0 gap-1.5"
+          className="shrink-0 gap-1.5 cursor-pointer"
           onClick={handleNewConversation}
           disabled={isCreating}
           title="Nueva conversación"
@@ -657,9 +564,28 @@ export function AgentChatCore({
           <span className="hidden sm:inline">Nueva</span>
         </Button>
 
+        {conversationId && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0 gap-1.5 cursor-pointer"
+            onClick={handleCloseCurrentConversation}
+            disabled={updateStatus.isPending}
+            title="Archivar"
+          >
+            <Archive className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Archivar</span>
+          </Button>
+        )}
+
         <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
           <SheetTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" title="Historial">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0 cursor-pointer"
+              title="Historial"
+            >
               <History className="h-4 w-4" />
             </Button>
           </SheetTrigger>
@@ -667,19 +593,13 @@ export function AgentChatCore({
             side="right"
             className="w-full sm:max-w-sm p-0 bg-background flex flex-col h-full"
           >
-            <SheetHeader className="px-4 py-4 border-b border-border/50 shrink-0">
-              <SheetTitle className="text-sm font-medium">Historial</SheetTitle>
+            <SheetHeader className="px-4 py-4 border-b border-border/50 shrink-0 space-y-1">
+              <SheetTitle className="text-sm font-medium">Historial de prueba</SheetTitle>
+              <p className="text-[11px] text-muted-foreground font-normal">
+                Las conversaciones solo se archivan cuando tú lo indiques.
+              </p>
             </SheetHeader>
             <div className="flex flex-col flex-1 min-h-0 p-3">
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full justify-start gap-2 mb-3 shrink-0"
-                onClick={handleNewConversation}
-              >
-                <MessageSquarePlus className="h-4 w-4" /> Nueva conversación
-              </Button>
-
               <div className="flex rounded-lg border border-border/50 p-0.5 mb-3 shrink-0">
                 <button
                   onClick={() => setHistoryTab("active")}
@@ -734,36 +654,64 @@ export function AgentChatCore({
                             onClick={() => handleSelectConversation(String(conv.id))}
                             className="flex-1 text-left px-3 py-2.5 min-w-0"
                           >
-                            <div className="font-medium truncate">{conv.title || "Sin título"}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {conv.message_count ?? 0} mensajes
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="font-medium truncate">
+                                {conv.title || "Sin título"}
+                              </span>
+                              <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
+                                #{conv.id}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-muted-foreground mt-0.5 space-y-0.5">
+                              <div className="flex flex-wrap gap-x-2 gap-y-0.5">
+                                <span>{conv.message_count ?? 0} msgs</span>
+                                {conv.created && (
+                                  <span title={formatDateTime(conv.created) ?? undefined}>
+                                    Inicio {formatRelative(conv.created)}
+                                  </span>
+                                )}
+                                {conv.modified && (
+                                  <span title={formatDateTime(conv.modified) ?? undefined}>
+                                    Act. {formatRelative(conv.modified)}
+                                  </span>
+                                )}
+                              </div>
+                              {conv.last_message && (
+                                <p className="truncate text-[10px] opacity-80">
+                                  {conv.last_message}
+                                </p>
+                              )}
                             </div>
                           </button>
                           {isArchived ? (
                             <button
+                              type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleRestoreConversation(conv.id);
                               }}
                               disabled={updateStatus.isPending}
-                              className="px-2 py-2 text-muted-foreground hover:text-destructive transition-colors"
-                              title="Restaurar conversación"
+                              className="shrink-0 inline-flex items-center gap-1 px-2 py-2 text-xs text-muted-foreground hover:text-primary transition-colors cursor-pointer disabled:opacity-50"
+                              title="Restaurar"
                             >
-                              <RefreshCw className="h-4 w-4" />
+                              <RefreshCw className="h-3.5 w-3.5" />
+                              <span className="hidden sm:inline">Restaurar</span>
                             </button>
-                          ) : String(conv.id) !== conversationId ? (
+                          ) : (
                             <button
+                              type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleArchiveConversation(conv.id);
                               }}
                               disabled={updateStatus.isPending}
-                              className="px-2 py-2 text-muted-foreground hover:text-destructive transition-colors"
-                              title="Archivar conversación"
+                              className="shrink-0 inline-flex items-center gap-1 px-2 py-2 text-xs text-muted-foreground hover:text-destructive transition-colors cursor-pointer disabled:opacity-50"
+                              title="Archivar"
                             >
-                              <Archive className="h-4 w-4" />
+                              <Archive className="h-3.5 w-3.5" />
+                              <span className="hidden sm:inline">Archivar</span>
                             </button>
-                          ) : null}
+                          )}
                         </div>
                       );
                     })}
@@ -773,36 +721,65 @@ export function AgentChatCore({
             </div>
           </SheetContent>
         </Sheet>
-
-        {conversationId && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" title="Opciones">
-                <MoreVertical className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleCloseCurrentConversation();
-                }}
-              >
-                <Archive className="h-4 w-4 mr-2" /> Archivar conversación
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
       </header>
+
+      {(conversationId || isDraftNew) && (
+        <div className="border-b border-border/40 bg-muted/20 px-4 py-2 shrink-0">
+          <div className="max-w-3xl mx-auto flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+            {conversationId ? (
+              <>
+                <span className="font-medium text-foreground/80 tabular-nums">
+                  Conv. #{conversationId}
+                </span>
+                <span title={formatDateTime(conversationStartedAt) ?? undefined}>
+                  Inicio:{" "}
+                  <span className="text-foreground/70">
+                    {formatDateTime(conversationStartedAt) ?? "—"}
+                  </span>
+                </span>
+                <span title={formatDateTime(conversationLastActivity) ?? undefined}>
+                  Última act.:{" "}
+                  <span className="text-foreground/70">
+                    {formatRelative(conversationLastActivity) ?? "—"}
+                  </span>
+                </span>
+                <span>
+                  Mensajes:{" "}
+                  <span className="text-foreground/70 tabular-nums">
+                    {currentConversation?.message_count ?? messages.length}
+                  </span>
+                </span>
+                {currentConversation?.status && (
+                  <span className="capitalize">
+                    Estado:{" "}
+                    <span className="text-foreground/70">
+                      {(currentConversation.display_status || currentConversation.status).toLowerCase()}
+                    </span>
+                  </span>
+                )}
+              </>
+            ) : (
+              <span>Conversación nueva · se creará al enviar el primer mensaje</span>
+            )}
+          </div>
+        </div>
+      )}
 
       <ScrollArea className="flex-1 px-4 py-6">
         <div className="max-w-3xl mx-auto space-y-5">
+          {messages.length > 0 && agent.use_rag && (
+            <ConversationRagSummary
+              messages={messages}
+              embeddingModel={agent.embedding_model}
+              topK={agent.rag_top_k}
+            />
+          )}
           {messagesLoading && messages.length === 0 ? (
             <div className="space-y-4">
               <Skeleton className="h-16 w-3/4" />
               <Skeleton className="h-12 w-2/3 ml-auto" />
             </div>
-          ) : !conversationId && !isCreating ? (
+          ) : !conversationId && !isCreating && !isDraftNew ? (
             <div className="flex flex-col items-center justify-center text-center py-16 gap-4">
               <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
                 <MessageSquarePlus className="h-8 w-8 text-primary" />
@@ -829,55 +806,85 @@ export function AgentChatCore({
               <p className="text-muted-foreground max-w-md">
                 {isCreating
                   ? "Creando un chat nuevo…"
-                  : `Escribe tu consulta y ${agent.name} te ayudará con lo que necesites.`}
+                  : isDraftNew
+                    ? `Escribe el primer mensaje para abrir una conversación nueva con ${agent.name}.`
+                    : `Escribe tu consulta y ${agent.name} te ayudará con lo que necesites.`}
               </p>
             </div>
           ) : (
-            messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}
-              >
+            messages.map((msg) => {
+              const ragCount = Array.isArray(msg.rag_sources) ? msg.rag_sources.length : 0;
+              const toolCount = Array.isArray(msg.tool_calls) ? msg.tool_calls.length : 0;
+              return (
                 <div
-                  className={`h-8 w-8 rounded-full shrink-0 flex items-center justify-center ${
-                    msg.role === "user" ? "bg-muted" : "bg-primary/10"
-                  }`}
+                  key={msg.id}
+                  className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}
                 >
-                  {msg.role === "user" ? (
-                    <User className="h-4 w-4" />
-                  ) : (
-                    <Bot className="h-4 w-4 text-primary" />
-                  )}
-                </div>
-                <div className="max-w-[85%] sm:max-w-[75%] space-y-1">
                   <div
-                    className={`px-4 py-2.5 text-sm leading-relaxed rounded-2xl ${
-                      msg.role === "user"
-                        ? "bg-primary text-primary-foreground rounded-br-md"
-                        : msg.role === "system"
-                          ? "bg-destructive/10 text-destructive rounded-bl-md border border-destructive/20"
-                          : "bg-muted text-foreground rounded-bl-md"
+                    className={`h-8 w-8 rounded-full shrink-0 flex items-center justify-center ${
+                      msg.role === "user" ? "bg-muted" : "bg-primary/10"
                     }`}
                   >
-                    {msg.content}
+                    {msg.role === "user" ? (
+                      <User className="h-4 w-4" />
+                    ) : (
+                      <Bot className="h-4 w-4 text-primary" />
+                    )}
                   </div>
-                  {msg.role === "agent" && (
-                    <MessageDetails
-                      ragSources={asRecordArray<RagSourceDetail>(msg.rag_sources)}
-                      toolCalls={asRecordArray<ToolCallDetail>(msg.tool_calls)}
-                      toolResults={asRecordArray<ToolResultDetail>(msg.tool_results)}
-                    />
-                  )}
                   <div
-                    className={`text-[10px] text-muted-foreground ${
-                      msg.role === "user" ? "text-right" : "text-left"
+                    className={`group max-w-[85%] sm:max-w-[75%] space-y-1 ${
+                      msg.role === "user" ? "items-end" : "items-start"
                     }`}
                   >
-                    {formatTime(msg.created)}
+                    <div
+                      className={`px-4 py-2.5 text-sm leading-relaxed rounded-2xl ${
+                        msg.role === "user"
+                          ? "bg-primary text-primary-foreground rounded-br-md"
+                          : msg.role === "system"
+                            ? "bg-destructive/10 text-destructive rounded-bl-md border border-destructive/20"
+                            : "bg-muted text-foreground rounded-bl-md"
+                      }`}
+                    >
+                      <ChatMarkdown content={msg.content} inverted={msg.role === "user"} />
+                      <div
+                        className={`mt-1.5 flex items-center gap-2 text-[10px] tabular-nums font-medium ${
+                          msg.role === "user"
+                            ? "justify-end text-primary-foreground/70"
+                            : "justify-end text-muted-foreground"
+                        }`}
+                      >
+                        <span title={formatDateTime(msg.created) ?? undefined}>
+                          {formatMessageStamp(msg.created) || "Sin fecha"}
+                        </span>
+                      </div>
+                    </div>
+                    <div
+                      className={`flex items-center gap-1.5 ${
+                        msg.role === "user" ? "justify-end" : "justify-start"
+                      }`}
+                    >
+                      <ChatCopyButton text={msg.content} />
+                      {msg.role === "agent" && (
+                        <MessageInspectButton
+                          chunkCount={ragCount}
+                          toolCount={toolCount}
+                          onClick={() =>
+                            setInspectMessage({
+                              id: msg.id,
+                              content: msg.content,
+                              created: msg.created,
+                              rag_sources: msg.rag_sources,
+                              tool_calls: msg.tool_calls,
+                              tool_results: msg.tool_results,
+                            })
+                          }
+                        />
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
 
           {sendMessage.isPending && (
@@ -919,6 +926,16 @@ export function AgentChatCore({
         </div>
       )}
 
+      <MessageInsightSheet
+        open={Boolean(inspectMessage)}
+        onOpenChange={(open) => {
+          if (!open) setInspectMessage(null);
+        }}
+        message={inspectMessage}
+        embeddingModel={agent.embedding_model}
+        topK={agent.rag_top_k}
+      />
+
       <div className="border-t border-border/50 bg-card/50 backdrop-blur p-3 sm:p-4">
         <form
           onSubmit={handleSend}
@@ -928,20 +945,27 @@ export function AgentChatCore({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={
-              !conversationId
-                ? "Iniciando conversación..."
+              isCreating
+                ? "Creando conversación..."
                 : sendMessage.isPending
                   ? "El agente está respondiendo..."
-                  : "Escribe tu mensaje..."
+                  : isDraftNew || !conversationId
+                    ? "Escribe para iniciar una conversación nueva..."
+                    : "Escribe tu mensaje..."
             }
-            disabled={sendMessage.isPending || !conversationId}
+            disabled={sendMessage.isPending || isCreating || (!conversationId && !isDraftNew)}
             className="flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-3 py-2 text-sm"
           />
           <Button
             type="submit"
             size="icon"
             className="h-9 w-9 rounded-full shrink-0"
-            disabled={!input.trim() || sendMessage.isPending || !conversationId}
+            disabled={
+              !input.trim() ||
+              sendMessage.isPending ||
+              isCreating ||
+              (!conversationId && !isDraftNew)
+            }
           >
             {sendMessage.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin" />

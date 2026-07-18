@@ -33,21 +33,58 @@ export interface AgentKnowledge {
   is_active: boolean;
   file?: string;
   chunks_count?: number;
+  /** Chunks activos con embedding real (vectores RAG). */
+  embeddings_count?: number;
+  /** Columnas detectadas (tipo DATA). */
+  columns?: string[];
   branch?: number | string | null;
   created?: string;
   modified?: string;
 }
 
+export type KnowledgeIndexResponse = AgentKnowledge & {
+  indexing_task_id?: string;
+};
+
+export interface KnowledgeIndexingStatus {
+  document_id: string;
+  title?: string;
+  is_indexed: boolean;
+  indexed_at?: string | null;
+  chunks_count: number;
+  embeddings_count: number;
+  has_vectors: boolean;
+  task_id?: string | null;
+  task_state?: string | null;
+  task_ready?: boolean | null;
+  task_successful?: boolean | null;
+  task_result?: {
+    status?: string;
+    chunks?: number;
+    has_embeddings?: boolean;
+    error?: string;
+    knowledge_id?: string;
+    embedding_model?: string;
+    embedding_error?: string;
+  } | null;
+  task_error?: string | null;
+}
+
 /**
- * Un documento solo está realmente indexado (usable por RAG) cuando el backend
- * marcó `is_indexed` Y existen chunks activos. Hay datos/seed donde `is_indexed`
- * queda en true sin chunks (contenido vacío o carga directa), lo que mostraba
- * "Indexado" siempre aunque no haya nada que recuperar.
+ * Tiene fragmentos indexados (puede ser solo keywords, sin embeddings).
  */
 export function isKnowledgeIndexed(
-  doc: Pick<AgentKnowledge, "is_indexed" | "chunks_count">,
+  doc: Pick<AgentKnowledge, "is_indexed" | "chunks_count" | "embeddings_count">,
 ): boolean {
+  if ((doc.embeddings_count ?? 0) > 0) return true;
   return Boolean(doc.is_indexed) && (doc.chunks_count ?? 0) > 0;
+}
+
+/** Tiene vectores/embeddings reales para RAG semántico. */
+export function hasKnowledgeVectors(
+  doc: Pick<AgentKnowledge, "embeddings_count" | "is_indexed" | "chunks_count">,
+): boolean {
+  return (doc.embeddings_count ?? 0) > 0;
 }
 
 export interface KnowledgeSearchResult {
@@ -59,14 +96,28 @@ export interface KnowledgeSearchResult {
   score: number;
 }
 
-export function useKnowledgeCatalog(filters?: { page_size?: number }) {
+export function useKnowledgeCatalog(filters?: {
+  page_size?: number;
+  includeInactive?: boolean;
+}) {
   const branchId = useActiveBranchId();
+  const { includeInactive, page_size } = filters ?? {};
   return useQuery({
-    queryKey: [...QUERY_KEY, "list", branchId, filters],
+    queryKey: [
+      ...QUERY_KEY,
+      "list",
+      branchId,
+      { page_size, includeInactive: !!includeInactive },
+    ],
     queryFn: () =>
       GET<AgentKnowledge[] | { count: number; results: AgentKnowledge[] }>(
         ENDPOINTS.knowledge.list,
-        { params: { page_size: filters?.page_size ?? 100 } },
+        {
+          params: {
+            page_size: page_size ?? 100,
+            ...(includeInactive ? { include_inactive: "true" } : {}),
+          },
+        },
       ).then((data) => normalizeListResponse<AgentKnowledge>(data)),
     staleTime: 30_000,
   });
@@ -118,19 +169,68 @@ export function useDeleteKnowledge() {
   });
 }
 
+function patchKnowledgeInLists(
+  queryClient: ReturnType<typeof useQueryClient>,
+  id: string,
+  patch: Partial<AgentKnowledge>,
+) {
+  queryClient.setQueriesData<AgentKnowledge[]>(
+    { queryKey: [...QUERY_KEY, "list"] },
+    (old) => {
+      if (!Array.isArray(old)) return old;
+      return old.map((doc) => (String(doc.id) === id ? { ...doc, ...patch } : doc));
+    },
+  );
+  queryClient.setQueryData<AgentKnowledge>([...QUERY_KEY, id], (old) =>
+    old ? { ...old, ...patch } : old,
+  );
+}
+
 export function useIndexKnowledge() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => POST<AgentKnowledge>(ENDPOINTS.knowledge.index(id)),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: QUERY_KEY }),
+    mutationFn: (id: string) =>
+      POST<KnowledgeIndexResponse>(ENDPOINTS.knowledge.index(id)),
+    onSuccess: (data, id) => {
+      patchKnowledgeInLists(queryClient, id, {
+        ...data,
+        is_indexed: false,
+        chunks_count: 0,
+        embeddings_count: 0,
+        indexed_at: undefined,
+      });
+      void queryClient.invalidateQueries({ queryKey: [...QUERY_KEY, id, "chunks"] });
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+    },
   });
 }
 
 export function useReindexKnowledge() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => POST<AgentKnowledge>(ENDPOINTS.knowledge.reindex(id)),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: QUERY_KEY }),
+    mutationFn: (id: string) =>
+      POST<KnowledgeIndexResponse>(ENDPOINTS.knowledge.reindex(id)),
+    onSuccess: (data, id) => {
+      // El endpoint marca is_indexed=false al encolar; reflejarlo ya en UI.
+      patchKnowledgeInLists(queryClient, id, {
+        ...data,
+        is_indexed: false,
+        chunks_count: 0,
+        embeddings_count: 0,
+        indexed_at: undefined,
+      });
+      void queryClient.invalidateQueries({ queryKey: [...QUERY_KEY, id, "chunks"] });
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+    },
+  });
+}
+
+export async function fetchKnowledgeIndexingStatus(
+  id: string,
+  taskId?: string | null,
+): Promise<KnowledgeIndexingStatus> {
+  return GET<KnowledgeIndexingStatus>(ENDPOINTS.knowledge.indexingStatus(id), {
+    params: taskId ? { task_id: taskId } : undefined,
   });
 }
 
@@ -138,7 +238,14 @@ export function useUnindexKnowledge() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => POST<AgentKnowledge>(ENDPOINTS.knowledge.unindex(id)),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: QUERY_KEY }),
+    onSuccess: (data, id) => {
+      patchKnowledgeInLists(queryClient, id, {
+        ...data,
+        is_indexed: false,
+        chunks_count: 0,
+      });
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+    },
   });
 }
 

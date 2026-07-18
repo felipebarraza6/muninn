@@ -42,8 +42,10 @@ export interface ChatMessageResponse {
   content?: string;
   text?: string;
   message?: string;
+  created?: string;
   created_at?: string;
   timestamp?: string;
+  modified?: string;
   rag_sources?: unknown[];
   sources?: unknown[];
   tool_calls?: unknown[];
@@ -83,6 +85,7 @@ export function useCreateConversation() {
       POST<Conversation>(ENDPOINTS.conversations.list, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      queryClient.invalidateQueries({ queryKey: ["unified-conversations"] });
     },
   });
 }

@@ -207,3 +207,69 @@ export function parseFaqPairs(content?: string): { question: string; answer: str
 
   return pairs.length > 0 ? pairs : [{ question: "", answer: "" }];
 }
+
+/** Texto corto para cards del catálogo (sin JSON crudo en DATA). */
+export function knowledgeCardPreview(
+  doc: {
+    knowledge_type: KnowledgeType;
+    summary?: string | null;
+    content?: string | null;
+    columns?: string[] | null;
+  },
+): string {
+  if (doc.summary?.trim()) return doc.summary.trim();
+
+  if (doc.knowledge_type === "DATA") {
+    const columns =
+      Array.isArray(doc.columns) && doc.columns.length > 0
+        ? doc.columns.map(String)
+        : (() => {
+            try {
+              let parsed = JSON.parse((doc.content || "").trim() || "[]");
+              if (!Array.isArray(parsed)) parsed = [parsed];
+              const first = parsed.find(
+                (row: unknown) => row && typeof row === "object",
+              ) as Record<string, unknown> | undefined;
+              return first ? Object.keys(first) : [];
+            } catch {
+              return [];
+            }
+          })();
+
+    let rowCount = 0;
+    try {
+      let parsed = JSON.parse((doc.content || "").trim() || "[]");
+      if (!Array.isArray(parsed)) parsed = [parsed];
+      rowCount = parsed.filter(
+        (row: unknown) => row && typeof row === "object",
+      ).length;
+    } catch {
+      rowCount = 0;
+    }
+
+    const colsLabel =
+      columns.length > 0
+        ? columns.slice(0, 4).join(", ") + (columns.length > 4 ? "…" : "")
+        : "sin columnas";
+    const rowsLabel =
+      rowCount === 1 ? "1 fila" : `${rowCount || 0} filas`;
+    return `${rowsLabel} · ${colsLabel}`;
+  }
+
+  if (doc.knowledge_type === "FAQ") {
+    const pairs = parseFaqPairs(doc.content || undefined).filter(
+      (p) => p.question.trim() || p.answer.trim(),
+    );
+    if (pairs.length === 0) return "Sin preguntas aún";
+    const first = pairs[0].question.trim() || pairs[0].answer.trim();
+    const more =
+      pairs.length > 1
+        ? ` · +${pairs.length - 1} pregunta${pairs.length === 2 ? "" : "s"}`
+        : "";
+    return (first.slice(0, 100) + (first.length > 100 ? "…" : "") + more).trim();
+  }
+
+  const text = (doc.content || "").replace(/\s+/g, " ").trim();
+  if (!text) return "Sin resumen";
+  return text.length > 140 ? `${text.slice(0, 140)}…` : text;
+}

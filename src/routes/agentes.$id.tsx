@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useParams, useNavigate, Link, useSearchParams } from "react-router-dom";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import {
   AlertDialog,
@@ -16,23 +16,124 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, Loader2, Settings, BookOpen, FlaskConical, Wrench, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Loader2,
+  Settings,
+  BookOpen,
+  FlaskConical,
+  Sparkles,
+  Trash2,
+  type LucideIcon,
+} from "lucide-react";
 import { useAgent, useDeleteAgent, useTestAgentLLM } from "@/api/hooks/useAgents";
 import { AgentKnowledgePanel } from "@/components/agents/agent-knowledge-panel";
-import { AgentToolsPanel } from "@/components/agents/agent-tools-panel";
+import { AgentSkillsPanel } from "@/components/agents/agent-skills-panel";
 import { AgentForm } from "@/components/agents/agent-form";
+import { AdminPageMotion } from "@/components/admin/AdminPageMotion";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+
+const AGENT_SECTIONS = [
+  { id: "modelo", label: "Modelo", icon: Settings },
+  { id: "rag", label: "RAG", icon: BookOpen },
+  { id: "skills", label: "Skills", icon: Sparkles },
+  { id: "test", label: "Test LLM", icon: FlaskConical },
+] as const;
+
+type AgentSectionId = (typeof AGENT_SECTIONS)[number]["id"];
+
+function parseSection(raw: string | null): AgentSectionId {
+  if (raw === "herramientas") return "skills";
+  const match = AGENT_SECTIONS.find((s) => s.id === raw);
+  return match?.id ?? "modelo";
+}
+
+function AgentSectionNav({
+  value,
+  onChange,
+}: {
+  value: AgentSectionId;
+  onChange: (id: AgentSectionId) => void;
+}) {
+  const reduceMotion = useReducedMotion();
+
+  return (
+    <div
+      role="tablist"
+      aria-label="Secciones del agente"
+      className="relative flex w-full gap-1 overflow-x-auto rounded-xl border border-border/60 bg-muted/50 p-1"
+    >
+      {AGENT_SECTIONS.map((section) => {
+        const active = value === section.id;
+        const Icon = section.icon as LucideIcon;
+        return (
+          <button
+            key={section.id}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(section.id)}
+            className={cn(
+              "relative z-[1] flex flex-1 min-w-[7.5rem] items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+              active ? "text-primary" : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {active && !reduceMotion && (
+              <motion.span
+                layoutId="agent-section-active"
+                className="absolute inset-0 rounded-lg bg-background shadow-sm border border-border/50"
+                transition={{ type: "spring", stiffness: 380, damping: 32 }}
+              />
+            )}
+            {active && reduceMotion && (
+              <span className="absolute inset-0 rounded-lg bg-background shadow-sm border border-border/50" />
+            )}
+            <Icon className={cn("relative h-4 w-4 shrink-0", active && "text-primary")} />
+            <span className="relative truncate">{section.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function AgentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const reduceMotion = useReducedMotion();
   const editing = searchParams.get("edit") === "1";
+  const section = parseSection(searchParams.get("sec"));
   const { data: agent, isLoading, error, refetch } = useAgent(id);
   const deleteAgent = useDeleteAgent();
   const testLlm = useTestAgentLLM();
   const [testMessage, setTestMessage] = useState("Hola, ¿quién eres?");
   const [testResult, setTestResult] = useState<string | null>(null);
+
+  const setSection = (next: AgentSectionId) => {
+    setSearchParams(
+      (prev) => {
+        const p = new URLSearchParams(prev);
+        if (next === "modelo") p.delete("sec");
+        else p.set("sec", next);
+        return p;
+      },
+      { replace: true },
+    );
+  };
+
+  const panelMotion = useMemo(
+    () =>
+      reduceMotion
+        ? undefined
+        : {
+            initial: { opacity: 0, y: 10 },
+            animate: { opacity: 1, y: 0, transition: { duration: 0.22, ease: "easeOut" as const } },
+            exit: { opacity: 0, y: -6, transition: { duration: 0.16, ease: "easeIn" as const } },
+          },
+    [reduceMotion],
+  );
 
   if (isLoading) {
     return (
@@ -93,7 +194,7 @@ export default function AgentDetailPage() {
   }
 
   return (
-    <div className="px-4 md:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto space-y-6">
+    <AdminPageMotion>
       <header className="flex flex-col sm:flex-row sm:items-center gap-3">
         <Button variant="outline" size="sm" asChild className="self-start">
           <Link to="/agentes">
@@ -174,119 +275,117 @@ export default function AgentDetailPage() {
         </div>
       </header>
 
-      <Tabs defaultValue="info">
-        <TabsList className="w-full overflow-x-auto">
-          <TabsTrigger value="info" className="gap-1.5">
-            <Settings className="h-4 w-4" /> Modelo
-          </TabsTrigger>
-          <TabsTrigger value="knowledge" className="gap-1.5">
-            <BookOpen className="h-4 w-4" /> RAG
-          </TabsTrigger>
-          <TabsTrigger value="tools" className="gap-1.5">
-            <Wrench className="h-4 w-4" /> Herramientas
-          </TabsTrigger>
-          <TabsTrigger value="test" className="gap-1.5">
-            <FlaskConical className="h-4 w-4" /> Test LLM
-          </TabsTrigger>
-        </TabsList>
+      <AgentSectionNav value={section} onChange={setSection} />
 
-        <TabsContent value="info" className="space-y-4 mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Configuración</CardTitle>
-              <CardDescription>Parámetros actuales del agente.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-              <div>
-                <span className="text-muted-foreground">Proveedor:</span>{" "}
-                <span className="font-medium">{agent.llm_provider_name ?? "—"}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Modelo:</span>{" "}
-                <span className="font-medium">{agent.llm_model_name ?? "—"}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Temperatura:</span>{" "}
-                <span className="font-medium">{agent.temperature ?? "—"}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Máximo de tokens:</span>{" "}
-                <span className="font-medium">{agent.max_tokens ?? "—"}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Conocimiento (RAG):</span>{" "}
-                <span className="font-medium">{agent.use_rag ? "Activado" : "Desactivado"}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Top K / embedding:</span>{" "}
-                <span className="font-medium">
-                  {agent.rag_top_k ?? "—"} / {agent.embedding_model || "—"}
-                </span>
-              </div>
-            </CardContent>
-          </Card>
+      <div className="relative min-h-[280px]">
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={section}
+            role="tabpanel"
+            className="space-y-4"
+            {...(panelMotion ?? {})}
+          >
+            {section === "modelo" && (
+              <>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Configuración</CardTitle>
+                    <CardDescription>Parámetros actuales del agente.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Proveedor:</span>{" "}
+                      <span className="font-medium">{agent.llm_provider_name ?? "—"}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Modelo:</span>{" "}
+                      <span className="font-medium">{agent.llm_model_name ?? "—"}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Temperatura:</span>{" "}
+                      <span className="font-medium">{agent.temperature ?? "—"}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Máximo de tokens:</span>{" "}
+                      <span className="font-medium">{agent.max_tokens ?? "—"}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Conocimiento (RAG):</span>{" "}
+                      <span className="font-medium">
+                        {agent.use_rag ? "Activado" : "Desactivado"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Top K / embedding:</span>{" "}
+                      <span className="font-medium">
+                        {agent.rag_top_k ?? "—"} / {agent.embedding_model || "—"}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Instrucciones del sistema</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <pre className="whitespace-pre-wrap text-sm font-mono bg-muted/50 p-4 rounded-md">
-                {agent.system_prompt || "Sin instrucciones del sistema configuradas."}
-              </pre>
-            </CardContent>
-          </Card>
-        </TabsContent>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Instrucciones del sistema</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <pre className="whitespace-pre-wrap text-sm font-mono bg-muted/50 p-4 rounded-md">
+                      {agent.system_prompt || "Sin instrucciones del sistema configuradas."}
+                    </pre>
+                  </CardContent>
+                </Card>
+              </>
+            )}
 
-        <TabsContent value="knowledge" className="mt-4">
-          <AgentKnowledgePanel agentId={id!} />
-        </TabsContent>
+            {section === "rag" && <AgentKnowledgePanel agentId={id!} />}
 
-        <TabsContent value="tools" className="mt-4">
-          <AgentToolsPanel agentId={id!} />
-        </TabsContent>
+            {section === "skills" && <AgentSkillsPanel agentId={id!} />}
 
-        <TabsContent value="test" className="mt-4 space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Probar LLM</CardTitle>
-              <CardDescription>
-                Llama a <code>test_llm</code> sin abrir una conversación completa.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <Input
-                value={testMessage}
-                onChange={(e) => setTestMessage(e.target.value)}
-                placeholder="Mensaje de prueba"
-              />
-              <Button
-                disabled={testLlm.isPending || !testMessage.trim()}
-                onClick={() => {
-                  testLlm.mutate(
-                    { id: agent.id, message: testMessage },
-                    {
-                      onSuccess: (res) => {
-                        setTestResult(res.response || res.error || JSON.stringify(res, null, 2));
-                        toast.success("Test completado");
-                      },
-                      onError: () => toast.error("Falló el test LLM"),
-                    },
-                  );
-                }}
-              >
-                {testLlm.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Ejecutar test
-              </Button>
-              {testResult && (
-                <pre className="whitespace-pre-wrap text-sm font-mono bg-muted/50 p-4 rounded-md max-h-80 overflow-auto">
-                  {testResult}
-                </pre>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-    </div>
+            {section === "test" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Probar LLM</CardTitle>
+                  <CardDescription>
+                    Llama a <code>test_llm</code> sin abrir una conversación completa.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Input
+                    value={testMessage}
+                    onChange={(e) => setTestMessage(e.target.value)}
+                    placeholder="Mensaje de prueba"
+                  />
+                  <Button
+                    disabled={testLlm.isPending || !testMessage.trim()}
+                    onClick={() => {
+                      testLlm.mutate(
+                        { id: agent.id, message: testMessage },
+                        {
+                          onSuccess: (res) => {
+                            setTestResult(
+                              res.response || res.error || JSON.stringify(res, null, 2),
+                            );
+                            toast.success("Test completado");
+                          },
+                          onError: () => toast.error("Falló el test LLM"),
+                        },
+                      );
+                    }}
+                  >
+                    {testLlm.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Ejecutar test
+                  </Button>
+                  {testResult && (
+                    <pre className="whitespace-pre-wrap text-sm font-mono bg-muted/50 p-4 rounded-md max-h-80 overflow-auto">
+                      {testResult}
+                    </pre>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+          </motion.div>
+        </AnimatePresence>
+      </div>
+    </AdminPageMotion>
   );
 }

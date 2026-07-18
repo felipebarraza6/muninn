@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HelmetProvider } from "react-helmet-async";
 import { AnimatePresence, motion } from "framer-motion";
@@ -22,6 +22,7 @@ import APIs from "./routes/apis";
 import APIDetail from "./routes/apis.$id";
 import Funciones from "./routes/funciones";
 import FunctionDetail from "./routes/funciones.$id";
+import { APP_STORE_PATH } from "./lib/applications";
 import Conocimiento from "./routes/conocimiento";
 import ConocimientoDatos from "./routes/conocimiento.datos";
 import EmbedChat from "./routes/embed.chat.$id";
@@ -45,6 +46,16 @@ const queryClient = new QueryClient({
     queries: { retry: 1, refetchOnWindowFocus: false },
   },
 });
+
+function ApiDetailRedirect() {
+  const { id } = useParams<{ id: string }>();
+  return <Navigate to={`${APP_STORE_PATH}/${id}`} replace />;
+}
+
+function FunctionDetailRedirect() {
+  const { id } = useParams<{ id: string }>();
+  return <Navigate to={id ? `/skills/${id}` : "/skills"} replace />;
+}
 
 function AnimatedOutlet() {
   const location = useLocation();
@@ -82,10 +93,14 @@ function AnimatedOutlet() {
               </RequireKnowledgeCatalog>
             }
           />
-          <Route path="/apis" element={<APIs />} />
-          <Route path="/apis/:id" element={<APIDetail />} />
-          <Route path="/funciones" element={<Funciones />} />
-          <Route path="/funciones/:id" element={<FunctionDetail />} />
+          <Route path="/aplicaciones" element={<APIs />} />
+          <Route path="/aplicaciones/:id" element={<APIDetail />} />
+          <Route path="/apis" element={<Navigate to={APP_STORE_PATH} replace />} />
+          <Route path="/apis/:id" element={<ApiDetailRedirect />} />
+          <Route path="/skills" element={<Funciones />} />
+          <Route path="/skills/:id" element={<FunctionDetail />} />
+          <Route path="/funciones" element={<Navigate to="/skills" replace />} />
+          <Route path="/funciones/:id" element={<FunctionDetailRedirect />} />
           <Route path="/configuracion" element={<Configuracion />} />
           <Route path="/perfil" element={<PerfilPage />} />
           <Route

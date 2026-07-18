@@ -91,10 +91,18 @@ export const ENDPOINTS = {
     status: (id: string) => `/ai-agents/external-apis/${id}/status/`,
     testConnection: (id: string) => `/ai-agents/external-apis/${id}/test_connection/`,
   },
+  applicationConnections: {
+    list: "/ai-agents/application-connections/",
+    detail: (id: string) => `/ai-agents/application-connections/${id}/`,
+    connect: "/ai-agents/application-connections/connect/",
+    credentialFields: (apiId: string) =>
+      `/ai-agents/application-connections/credential-fields/${apiId}/`,
+  },
   functions: {
     list: "/ai-agents/agent-functions/",
     detail: (id: string) => `/ai-agents/agent-functions/${id}/`,
     execute: (id: string) => `/ai-agents/agent-functions/${id}/execute/`,
+    resolveIds: (id: string) => `/ai-agents/agent-functions/${id}/resolve-ids/`,
     logs: "/ai-agents/function-execution-logs/",
   },
   channels: {
@@ -133,6 +141,7 @@ export const ENDPOINTS = {
     search: "/ai-agents/knowledge/search/",
     index: (id: string) => `/ai-agents/knowledge/${id}/index/`,
     reindex: (id: string) => `/ai-agents/knowledge/${id}/reindex/`,
+    indexingStatus: (id: string) => `/ai-agents/knowledge/${id}/indexing-status/`,
     unindex: (id: string) => `/ai-agents/knowledge/${id}/unindex/`,
     chunks: (id: string) => `/ai-agents/knowledge/${id}/chunks/`,
     bulkIndex: "/ai-agents/knowledge/bulk_index/",

@@ -40,13 +40,23 @@ export interface Agent {
   prompt_template?: number | null;
 }
 
-export function useAgents(filters?: { is_active?: boolean; target_app?: string }) {
+export function useAgents(filters?: {
+  is_active?: boolean;
+  target_app?: string;
+  /** Superadmin / organizador: incluir agentes con is_active=false */
+  includeInactive?: boolean;
+}) {
   const branchId = useActiveBranchId();
+  const { includeInactive, ...rest } = filters ?? {};
+  const params: Record<string, string | number | boolean> = { ...rest };
+  // Backend compara contra el string "true".
+  if (includeInactive) params.include_inactive = "true";
+
   return useQuery({
-    queryKey: [...QUERY_KEY, branchId, filters],
+    queryKey: [...QUERY_KEY, branchId, { ...rest, includeInactive: !!includeInactive }],
     queryFn: () =>
       GET<Agent[] | { count: number; results: Agent[] }>(ENDPOINTS.agents.list, {
-        params: filters,
+        params,
       }).then((data) => normalizeListResponse<Agent>(data)),
     staleTime: 2 * 60 * 1000,
   });

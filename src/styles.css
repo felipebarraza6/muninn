@@ -269,3 +269,163 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Markdown compacto dentro de burbujas de chat */
+.chat-md {
+  min-width: 0;
+}
+
+.chat-md > :first-child {
+  margin-top: 0;
+}
+
+.chat-md > :last-child {
+  margin-bottom: 0;
+}
+
+.chat-md__p {
+  margin: 0.45em 0;
+}
+
+.chat-md__p:first-child {
+  margin-top: 0;
+}
+
+.chat-md__p:last-child {
+  margin-bottom: 0;
+}
+
+.chat-md__ul,
+.chat-md__ol {
+  margin: 0.4em 0;
+  padding-left: 1.25em;
+}
+
+.chat-md__ul {
+  list-style: disc;
+}
+
+.chat-md__ol {
+  list-style: decimal;
+}
+
+.chat-md__ul .chat-md__ul,
+.chat-md__ol .chat-md__ul {
+  list-style: circle;
+  margin: 0.2em 0;
+}
+
+.chat-md__li {
+  margin: 0.2em 0;
+  padding-left: 0.15em;
+}
+
+.chat-md__li > .chat-md__p {
+  margin: 0.15em 0;
+}
+
+.chat-md__strong {
+  font-weight: 600;
+}
+
+.chat-md__em {
+  font-style: italic;
+}
+
+.chat-md__heading {
+  font-weight: 600;
+  margin: 0.55em 0 0.25em;
+}
+
+.chat-md__heading:first-child {
+  margin-top: 0;
+}
+
+.chat-md__a {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-weight: 500;
+}
+
+.chat-md--default .chat-md__a {
+  color: var(--color-primary);
+}
+
+.chat-md--inverted .chat-md__a {
+  color: inherit;
+  text-decoration-thickness: 1.5px;
+}
+
+.chat-md__code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.85em;
+  padding: 0.1em 0.35em;
+  border-radius: 0.3em;
+}
+
+.chat-md--default .chat-md__code {
+  background: color-mix(in oklab, var(--color-foreground) 8%, transparent);
+}
+
+.chat-md--inverted .chat-md__code {
+  background: color-mix(in oklab, var(--color-primary-foreground) 16%, transparent);
+}
+
+.chat-md__pre {
+  margin: 0.5em 0;
+  padding: 0.65em 0.75em;
+  border-radius: 0.5em;
+  overflow-x: auto;
+  font-size: 0.8em;
+  line-height: 1.45;
+}
+
+.chat-md--default .chat-md__pre {
+  background: color-mix(in oklab, var(--color-foreground) 6%, transparent);
+}
+
+.chat-md--inverted .chat-md__pre {
+  background: color-mix(in oklab, var(--color-primary-foreground) 14%, transparent);
+}
+
+.chat-md__pre .chat-md__code,
+.chat-md__pre .chat-md__code-block {
+  padding: 0;
+  background: transparent;
+  font-size: inherit;
+}
+
+.chat-md__blockquote {
+  margin: 0.5em 0;
+  padding-left: 0.75em;
+  border-left: 2px solid color-mix(in oklab, currentColor 35%, transparent);
+  opacity: 0.95;
+}
+
+.chat-md__hr {
+  margin: 0.65em 0;
+  border: 0;
+  border-top: 1px solid color-mix(in oklab, currentColor 20%, transparent);
+}
+
+.chat-md__table-wrap {
+  margin: 0.5em 0;
+  overflow-x: auto;
+}
+
+.chat-md__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85em;
+}
+
+.chat-md__th,
+.chat-md__td {
+  border: 1px solid color-mix(in oklab, currentColor 18%, transparent);
+  padding: 0.3em 0.5em;
+  text-align: left;
+}
+
+.chat-md__th {
+  font-weight: 600;
+}

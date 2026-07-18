@@ -30,6 +30,8 @@ import { snippets, campaigns, type Conversation } from "@/lib/mock-data";
 import { initials, avatarColor } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { ChatMarkdown } from "@/components/chat/chat-markdown";
+import { ChatCopyButton } from "@/components/chat/chat-copy-button";
 
 interface Props {
   conversation: Conversation;
@@ -229,39 +231,47 @@ export function ChatPane({ conversation, onTakeControl, onSend, onOpenDetails, o
                       isPatient ? "rounded-bl-sm" : "rounded-br-sm",
                     )}
                   >
-                    <div className="leading-relaxed whitespace-pre-line break-words">{m.text}</div>
+                    <ChatMarkdown content={m.text} />
                     <div className="text-[10px] opacity-50 text-right mt-1 font-medium">
                       {m.time}
                     </div>
                   </div>
-                  {isAi && (
-                    <div className="flex items-center gap-1 mt-1 mr-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button
-                        onClick={() => handleFeedback(m.id, "up")}
-                        className={cn(
-                          "h-5 w-5 rounded flex items-center justify-center transition-colors",
-                          fb === "up"
-                            ? "bg-success-soft text-success"
-                            : "text-muted-foreground hover:bg-muted",
-                        )}
-                        title="Buena respuesta"
-                      >
-                        <ThumbsUp className="h-3 w-3" />
-                      </button>
-                      <button
-                        onClick={() => handleFeedback(m.id, "down")}
-                        className={cn(
-                          "h-5 w-5 rounded flex items-center justify-center transition-colors",
-                          fb === "down"
-                            ? "bg-destructive-soft text-destructive"
-                            : "text-muted-foreground hover:bg-muted",
-                        )}
-                        title="Marcar para revisar"
-                      >
-                        <ThumbsDown className="h-3 w-3" />
-                      </button>
-                    </div>
-                  )}
+                  <div
+                    className={cn(
+                      "flex items-center gap-0.5 mt-1",
+                      isPatient ? "ml-0.5" : "mr-0.5",
+                    )}
+                  >
+                    <ChatCopyButton text={m.text} />
+                    {isAi && (
+                      <>
+                        <button
+                          onClick={() => handleFeedback(m.id, "up")}
+                          className={cn(
+                            "h-6 w-6 rounded-md flex items-center justify-center transition-colors opacity-60 sm:opacity-0 sm:group-hover:opacity-100",
+                            fb === "up"
+                              ? "opacity-100 bg-success-soft text-success"
+                              : "text-muted-foreground hover:bg-muted",
+                          )}
+                          title="Buena respuesta"
+                        >
+                          <ThumbsUp className="h-3 w-3" />
+                        </button>
+                        <button
+                          onClick={() => handleFeedback(m.id, "down")}
+                          className={cn(
+                            "h-6 w-6 rounded-md flex items-center justify-center transition-colors opacity-60 sm:opacity-0 sm:group-hover:opacity-100",
+                            fb === "down"
+                              ? "opacity-100 bg-destructive-soft text-destructive"
+                              : "text-muted-foreground hover:bg-muted",
+                          )}
+                          title="Marcar para revisar"
+                        >
+                          <ThumbsDown className="h-3 w-3" />
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             );

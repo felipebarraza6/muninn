@@ -1,12 +1,11 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Loader2, Globe, Plus, FlaskConical, ArrowUpRight, Lock } from "lucide-react";
+import { Loader2, Plus, FlaskConical, ArrowUpRight, Lock, LayoutGrid } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Select,
@@ -29,24 +28,17 @@ import {
   AdminPageMotion,
 } from "@/components/admin/AdminPageMotion";
 import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
-import { canManageExternalApis } from "@/lib/authGuards";
-import { AUTH_TYPE_LABEL, formatTestResultToast } from "@/lib/external-api";
+import { canManageExternalApis, canViewInactiveStudioResources } from "@/lib/authGuards";
+import { AUTH_TYPE_HINT, AUTH_TYPE_LABEL, formatTestResultToast } from "@/lib/external-api";
+import { APP_STORE_PATH, hostFromUrl } from "@/lib/applications";
+import { AppIcon } from "@/components/applications/app-icon";
 import { cn } from "@/lib/utils";
 
 function endpointCount(api: ExternalAPI): number {
   return api.endpoints ? Object.keys(api.endpoints).length : 0;
 }
 
-function hostFromUrl(url?: string): string {
-  if (!url) return "Sin URL";
-  try {
-    return new URL(url).host;
-  } catch {
-    return url.replace(/^https?:\/\//, "").split("/")[0] || url;
-  }
-}
-
-function ApiIdentityCard({
+function AppStoreCard({
   api,
   canManage,
   testPending,
@@ -61,33 +53,31 @@ function ApiIdentityCard({
   return (
     <article
       className={cn(
-        "group relative flex flex-col rounded-xl border bg-card/60 p-4 transition-colors",
-        "hover:border-primary/35 hover:bg-card",
-        api.is_active ? "border-border" : "border-border/60 opacity-80",
+        "group relative flex flex-col rounded-2xl border bg-card/50 p-4 transition-all duration-200",
+        "hover:border-primary/40 hover:bg-card hover:shadow-[0_0_0_1px_hsl(var(--primary)/0.12)]",
+        api.is_active ? "border-border/80" : "border-border/50 opacity-75",
       )}
     >
-      <div className="flex items-start gap-3">
-        <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary flex items-center justify-center shrink-0 ring-1 ring-primary/20">
-          <Globe className="h-5 w-5" strokeWidth={1.75} />
-        </div>
+      <div className="flex items-start gap-3.5">
+        <AppIcon name={api.name} />
         <div className="min-w-0 flex-1 space-y-1.5">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="font-medium text-sm leading-snug truncate">{api.name}</h3>
+            <h3 className="font-semibold text-sm leading-snug truncate tracking-tight">
+              {api.name}
+            </h3>
             <Badge
               variant={api.is_active ? "default" : "secondary"}
               className="text-[10px] font-normal"
             >
-              {api.is_active ? "Activa" : "Inactiva"}
+              {api.is_active ? "Instalada" : "Inactiva"}
             </Badge>
           </div>
-          <p className="text-[11px] font-mono text-muted-foreground truncate">
-            {hostFromUrl(api.base_url)}
-          </p>
+          <p className="text-[11px] text-muted-foreground truncate">{hostFromUrl(api.base_url)}</p>
           <div className="flex flex-wrap gap-1.5">
-            <span className="inline-flex items-center rounded-md border border-border/80 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+            <span className="inline-flex items-center rounded-md border border-border/70 bg-background/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">
               {AUTH_TYPE_LABEL[api.auth_type ?? "none"] ?? api.auth_type}
             </span>
-            <span className="inline-flex items-center rounded-md border border-border/80 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+            <span className="inline-flex items-center rounded-md border border-border/70 bg-background/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">
               {count} endpoint{count === 1 ? "" : "s"}
             </span>
           </div>
@@ -99,13 +89,13 @@ function ApiIdentityCard({
           {api.description}
         </p>
       ) : (
-        <p className="mt-3 text-[12px] text-muted-foreground/70 italic">Sin descripción</p>
+        <p className="mt-3 text-[12px] text-muted-foreground/60">Sin descripción</p>
       )}
 
-      <div className="mt-4 flex flex-wrap items-center gap-1 border-t border-border/60 pt-3">
-        <Button variant="ghost" size="sm" className="h-8" asChild>
-          <Link to={`/apis/${api.id}`}>
-            Configurar
+      <div className="mt-4 flex flex-wrap items-center gap-1.5 border-t border-border/50 pt-3">
+        <Button size="sm" className="h-8" asChild>
+          <Link to={`${APP_STORE_PATH}/${api.id}`}>
+            Abrir
             <ArrowUpRight className="h-3.5 w-3.5 ml-1" />
           </Link>
         </Button>
@@ -123,7 +113,7 @@ function ApiIdentityCard({
             ) : (
               <FlaskConical className="h-3.5 w-3.5 mr-1" />
             )}
-            Test
+            Probar
           </Button>
         )}
       </div>
@@ -134,8 +124,14 @@ function ApiIdentityCard({
 export default function APIs() {
   const navigate = useNavigate();
   const canManage = canManageExternalApis();
-  const [includeInactive, setIncludeInactive] = useState(false);
-  const { data: apis = [], isLoading, refetch } = useExternalAPIs({ includeInactive });
+  const showInactive = canViewInactiveStudioResources();
+  const {
+    data: apisRaw = [],
+    isLoading,
+    refetch,
+  } = useExternalAPIs({
+    includeInactive: showInactive,
+  });
   const create = useCreateExternalAPI();
   const test = useTestExternalAPI();
   const [open, setOpen] = useState(false);
@@ -146,6 +142,18 @@ export default function APIs() {
   const [authType, setAuthType] = useState<ExternalAPIAuthType>("none");
   const [apiKey, setApiKey] = useState("");
   const [testingId, setTestingId] = useState<string | null>(null);
+
+  const apis = useMemo(() => {
+    if (showInactive) {
+      return [...apisRaw].sort((a, b) => {
+        const aActive = a.is_active !== false ? 0 : 1;
+        const bActive = b.is_active !== false ? 0 : 1;
+        if (aActive !== bActive) return aActive - bActive;
+        return (a.name || "").localeCompare(b.name || "", "es");
+      });
+    }
+    return apisRaw.filter((a) => a.is_active !== false);
+  }, [apisRaw, showInactive]);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -167,20 +175,49 @@ export default function APIs() {
     setApiKey("");
   };
 
-  if (isLoading) {
-    return (
-      <AdminPageMotion className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-          <p className="text-sm text-muted-foreground max-w-xl">
-            Conexiones a servicios de terceros: crear, configurar endpoints y probar.
+  const storeHeader = (
+    <div className="relative overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-br from-primary/10 via-card/80 to-card px-5 py-5 md:px-6 md:py-6">
+      <div
+        className="pointer-events-none absolute -right-8 -top-10 h-40 w-40 rounded-full bg-primary/15 blur-3xl"
+        aria-hidden
+      />
+      <div
+        className="pointer-events-none absolute -bottom-12 left-1/3 h-32 w-32 rounded-full bg-teal-500/10 blur-3xl"
+        aria-hidden
+      />
+      <div className="relative flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+        <div className="space-y-1.5 min-w-0">
+          <div className="flex items-center gap-2 text-primary">
+            <LayoutGrid className="h-4 w-4" strokeWidth={1.75} />
+            <span className="text-[11px] font-medium uppercase tracking-[0.14em]">Store</span>
+          </div>
+          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">Aplicaciones</h1>
+          <p className="text-sm text-muted-foreground max-w-lg leading-relaxed">
+            Conectá servicios externos como apps instalables. Configurá endpoints y usalos desde
+            skills.
+            {!canManage && (
+              <span className="inline-flex items-center gap-1 ml-1.5">
+                <Lock className="h-3 w-3" /> Solo lectura
+              </span>
+            )}
           </p>
         </div>
+        {canManage && (
+          <Button size="sm" className="shrink-0" onClick={() => setOpen(true)}>
+            <Plus className="h-4 w-4 mr-1.5" />
+            Añadir aplicación
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+
+  if (isLoading) {
+    return (
+      <AdminPageMotion className="space-y-5">
+        {storeHeader}
         <div className="flex flex-col sm:flex-row gap-2 sm:max-w-xl">
-          <Input
-            placeholder="Buscar por nombre, host o auth…"
-            disabled
-            className="h-9 flex-1 min-w-0"
-          />
+          <Input placeholder="Buscar aplicaciones…" disabled className="h-9 flex-1 min-w-0" />
           <StudioBranchFilter />
         </div>
         <div className="flex items-center justify-center min-h-[240px]">
@@ -191,26 +228,10 @@ export default function APIs() {
   }
 
   return (
-    <AdminPageMotion className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-        <p className="text-sm text-muted-foreground max-w-xl">
-          Conexiones a servicios de terceros: crear, configurar endpoints y probar.
-          {!canManage && (
-            <span className="inline-flex items-center gap-1 ml-1.5 text-muted-foreground">
-              <Lock className="h-3 w-3" /> Solo lectura
-            </span>
-          )}
-        </p>
-        <div className="flex gap-2 items-center flex-wrap justify-end shrink-0">
-          {canManage && (
-            <Button size="sm" onClick={() => setOpen(true)}>
-              <Plus className="h-4 w-4 mr-1.5" /> Nueva
-            </Button>
-          )}
-        </div>
-      </div>
+    <AdminPageMotion className="space-y-5">
+      {storeHeader}
 
-      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:max-w-2xl">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:max-w-xl">
         <Input
           placeholder="Buscar por nombre, host o auth…"
           value={search}
@@ -218,35 +239,36 @@ export default function APIs() {
           className="h-9 flex-1 min-w-0"
         />
         <StudioBranchFilter />
-        <label className="flex items-center gap-2 text-xs text-muted-foreground shrink-0 h-9">
-          <Switch checked={includeInactive} onCheckedChange={setIncludeInactive} />
-          Inactivas
-        </label>
       </div>
 
       {filtered.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border py-14 text-center space-y-3">
-          <div className="mx-auto h-12 w-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-            <Globe className="h-6 w-6" />
+        <div className="rounded-2xl border border-dashed border-border/80 py-16 text-center space-y-3 bg-card/30">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20">
+            <LayoutGrid className="h-7 w-7" strokeWidth={1.5} />
           </div>
-          <p className="text-sm text-muted-foreground">
-            {search.trim()
-              ? "Sin resultados para esa búsqueda."
-              : canManage
-                ? "No hay APIs en esta sucursal. Crea la primera."
-                : "No hay APIs externas en esta sucursal."}
-          </p>
+          <div className="space-y-1">
+            <p className="text-sm font-medium">
+              {search.trim() ? "Sin resultados" : "Tu store está vacío"}
+            </p>
+            <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+              {search.trim()
+                ? "Probá con otro nombre o host."
+                : canManage
+                  ? "Añadí la primera aplicación para conectar un servicio y usarlo en skills."
+                  : "No hay aplicaciones instaladas en esta sucursal."}
+            </p>
+          </div>
           {canManage && !search.trim() && (
             <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
-              <Plus className="h-4 w-4 mr-1.5" /> Nueva API
+              <Plus className="h-4 w-4 mr-1.5" /> Añadir aplicación
             </Button>
           )}
         </div>
       ) : (
-        <AdminMotionList className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+        <AdminMotionList className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5">
           {filtered.map((api) => (
             <AdminMotionItem key={api.id}>
-              <ApiIdentityCard
+              <AppStoreCard
                 api={api}
                 canManage={canManage}
                 testPending={testingId === String(api.id) && test.isPending}
@@ -262,7 +284,7 @@ export default function APIs() {
                         setTestingId(null);
                       },
                       onError: () => {
-                        toast.error("Test falló");
+                        toast.error("Prueba falló");
                         setTestingId(null);
                       },
                     },
@@ -283,7 +305,7 @@ export default function APIs() {
       >
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Nueva API externa</DialogTitle>
+            <DialogTitle>Añadir aplicación</DialogTitle>
           </DialogHeader>
           <form
             className="space-y-3"
@@ -301,23 +323,28 @@ export default function APIs() {
                 },
                 {
                   onSuccess: (created) => {
-                    toast.success("API creada. Configura endpoints en el detalle.");
+                    toast.success("Aplicación añadida. Completá la configuración y los endpoints.");
                     setOpen(false);
                     resetCreate();
                     refetch();
-                    if (created?.id) navigate(`/apis/${created.id}`);
+                    if (created?.id) navigate(`${APP_STORE_PATH}/${created.id}`);
                   },
-                  onError: () => toast.error("No se pudo crear"),
+                  onError: () => toast.error("No se pudo añadir"),
                 },
               );
             }}
           >
             <div className="space-y-2">
               <Label>Nombre</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} required />
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+                placeholder="ej. Dentidesk, SmartHydro"
+              />
             </div>
             <div className="space-y-2">
-              <Label>Base URL</Label>
+              <Label>URL base</Label>
               <Input
                 value={baseUrl}
                 onChange={(e) => setBaseUrl(e.target.value)}
@@ -332,10 +359,11 @@ export default function APIs() {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={2}
+                placeholder="Qué hace esta app en tu operación"
               />
             </div>
             <div className="space-y-2">
-              <Label>Auth</Label>
+              <Label>Autenticación</Label>
               <Select value={authType} onValueChange={(v) => setAuthType(v as ExternalAPIAuthType)}>
                 <SelectTrigger>
                   <SelectValue />
@@ -348,6 +376,7 @@ export default function APIs() {
                   ))}
                 </SelectContent>
               </Select>
+              <p className="text-[11px] text-muted-foreground">{AUTH_TYPE_HINT[authType] ?? ""}</p>
             </div>
             {(authType === "api_key" || authType === "bearer" || authType === "oauth2") && (
               <div className="space-y-2">
@@ -361,7 +390,7 @@ export default function APIs() {
               </div>
             )}
             <p className="text-[11px] text-muted-foreground">
-              Tras crear, configura endpoints, headers y prueba la conexión en el detalle.
+              Solo info general. Los endpoints se configuran después en el detalle.
             </p>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>
@@ -369,7 +398,7 @@ export default function APIs() {
               </Button>
               <Button type="submit" disabled={create.isPending}>
                 {create.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Crear
+                Añadir
               </Button>
             </div>
           </form>

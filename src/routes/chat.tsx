@@ -97,7 +97,11 @@ export default function ChatPage() {
           <span className="text-[11px] text-muted-foreground truncate hidden sm:inline">
             Conv. #{conversationFromUrl}
           </span>
-        ) : null}
+        ) : (
+          <span className="text-[11px] text-muted-foreground truncate hidden md:inline">
+            Conversación nueva
+          </span>
+        )}
         <div className="ml-auto shrink-0">
           <StudioBranchFilter />
         </div>

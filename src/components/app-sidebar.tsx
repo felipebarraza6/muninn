@@ -3,10 +3,11 @@ import { motion, useReducedMotion } from "framer-motion";
 import {
   LayoutDashboard,
   MessageCircle,
+  MessageSquarePlus,
   Bot,
   Share2,
-  Globe,
-  FunctionSquare,
+  LayoutGrid,
+  Sparkles,
   BookOpen,
   Cpu,
   Building2,
@@ -60,21 +61,33 @@ const resumenItem: MenuItem = {
 };
 
 const comunicacionItems: MenuItem[] = [
-  { title: "Chat", url: "/chat", icon: MessageCircle },
+  { title: "Conversaciones", url: "/conversaciones", icon: MessageCircle },
   { title: "Canales", url: "/canales", icon: Share2 },
 ];
 
 const baseStudioItems: MenuItem[] = [
+  { title: "Chat", url: "/chat", icon: MessageSquarePlus },
   { title: "Agentes", url: "/agentes", icon: Bot },
-  { title: "APIs externas", url: "/apis", icon: Globe },
-  { title: "Funciones", url: "/funciones", icon: FunctionSquare },
+  { title: "Aplicaciones", url: "/aplicaciones", icon: LayoutGrid },
 ];
 
 function buildStudioItems(): MenuItem[] {
   const items = [...baseStudioItems];
+  // Orden: Chat → Agentes → Conocimiento → Skills → Aplicaciones
+  const agentesIdx = items.findIndex((i) => i.url === "/agentes");
   if (canAccessKnowledgeCatalog()) {
-    items.splice(1, 0, { title: "Conocimiento", url: "/conocimiento", icon: BookOpen });
+    items.splice(agentesIdx + 1, 0, {
+      title: "Conocimiento",
+      url: "/conocimiento",
+      icon: BookOpen,
+    });
   }
+  const appsIdx = items.findIndex((i) => i.url === "/aplicaciones");
+  items.splice(appsIdx >= 0 ? appsIdx : items.length, 0, {
+    title: "Skills",
+    url: "/skills",
+    icon: Sparkles,
+  });
   return items;
 }
 

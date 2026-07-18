@@ -15,13 +15,6 @@ export default function AgentesNuevoPage() {
             <ArrowLeft className="h-4 w-4 mr-1.5" /> Volver a agentes
           </Link>
         </Button>
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Nuevo agente</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Define nombre, modelo, SOUL.md y cómo se presenta. El RAG y las herramientas se
-            configuran después en el detalle.
-          </p>
-        </div>
         <AgentForm
           onCancel={() => navigate("/agentes")}
           onSaved={(saved) => {

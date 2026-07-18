@@ -53,6 +53,9 @@ function getPageMeta(pathname: string): PageMeta {
     }
     return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Agentes" }] };
   }
+  if (pathname.startsWith("/conversaciones")) {
+    return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Conversaciones" }] };
+  }
   if (pathname.startsWith("/canales")) {
     return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Canales" }] };
   }
@@ -68,14 +71,36 @@ function getPageMeta(pathname: string): PageMeta {
     }
     return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Conocimiento" }] };
   }
-  if (pathname.startsWith("/apis")) {
-    return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "APIs" }] };
+  if (pathname.startsWith("/aplicaciones") || pathname.startsWith("/apis")) {
+    if (pathname !== "/aplicaciones" && pathname !== "/apis") {
+      return {
+        breadcrumb: [
+          { label: "Resumen", to: "/" },
+          { label: "Aplicaciones", to: "/aplicaciones" },
+        ],
+      };
+    }
+    return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Aplicaciones" }] };
   }
-  if (pathname.startsWith("/funciones")) {
-    return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Funciones" }] };
+  if (pathname.startsWith("/skills") || pathname.startsWith("/funciones")) {
+    if (pathname !== "/skills" && pathname !== "/funciones") {
+      return {
+        breadcrumb: [
+          { label: "Resumen", to: "/" },
+          { label: "Skills", to: "/skills" },
+        ],
+      };
+    }
+    return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Skills" }] };
   }
   if (pathname.startsWith("/chat")) {
-    return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Chat" }] };
+    return {
+      breadcrumb: [
+        { label: "Resumen", to: "/" },
+        { label: "Studio" },
+        { label: "Chat" },
+      ],
+    };
   }
   if (pathname.startsWith("/admin/organizaciones")) {
     return {

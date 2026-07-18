@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Loader2,
@@ -20,9 +20,12 @@ import {
   useKnowledgeCatalog,
   useIndexKnowledge,
   useReindexKnowledge,
+  fetchKnowledgeIndexingStatus,
+  hasKnowledgeVectors,
   isKnowledgeIndexed,
   type AgentKnowledge,
 } from "@/api/hooks/useKnowledge";
+import { useQueryClient } from "@tanstack/react-query";
 import { KnowledgeContentViewer } from "./knowledge-content-viewer";
 import { toast } from "sonner";
 import { KNOWLEDGE_TYPE_ICON, KNOWLEDGE_TYPE_LABEL } from "@/lib/knowledge-types";
@@ -47,12 +50,138 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
   const updateAgent = useUpdateAgent();
   const indexKnowledge = useIndexKnowledge();
   const reindexKnowledge = useReindexKnowledge();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignSearch, setAssignSearch] = useState("");
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [indexingIds, setIndexingIds] = useState<Set<string>>(new Set());
+  const indexingStartedAt = useRef<Map<string, number>>(new Map());
+  const indexingTaskIds = useRef<Map<string, string>>(new Map());
   const canManageKnowledge = canAccessKnowledgeCatalog();
+
+  /** Mientras indexa, consulta el estado hasta que termine y avisa al usuario. */
+  useEffect(() => {
+    if (indexingIds.size === 0) return;
+    let cancelled = false;
+
+    const finish = (id: string) => {
+      indexingStartedAt.current.delete(id);
+      indexingTaskIds.current.delete(id);
+      setIndexingIds((prev) => {
+        if (!prev.has(id)) return prev;
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    };
+
+    const tick = async () => {
+      const ids = Array.from(indexingIds);
+      for (const id of ids) {
+        if (cancelled) return;
+        const taskId = indexingTaskIds.current.get(id);
+        const started = indexingStartedAt.current.get(id) ?? Date.now();
+        try {
+          const status = await fetchKnowledgeIndexingStatus(id, taskId);
+          if (cancelled) return;
+
+          // Actualizar contadores en cache mientras corre.
+          queryClient.setQueriesData<AgentKnowledge[]>(
+            { queryKey: ["ai-agents", "knowledge", "list"] },
+            (old) => {
+              if (!Array.isArray(old)) return old;
+              return old.map((doc) =>
+                String(doc.id) === id
+                  ? {
+                      ...doc,
+                      is_indexed: status.is_indexed,
+                      chunks_count: status.chunks_count,
+                      embeddings_count: status.embeddings_count,
+                      indexed_at: status.indexed_at ?? undefined,
+                    }
+                  : doc,
+              );
+            },
+          );
+
+          const title = status.title || "Documento";
+          const taskReady = status.task_ready === true;
+          const timedOut = Date.now() - started > 180_000;
+
+          if (taskReady && status.task_successful === false) {
+            toast.error(
+              `No se pudo generar los vectores de «${title}». Intenta reindexar de nuevo.`,
+            );
+            finish(id);
+            continue;
+          }
+
+          if (taskReady && status.task_successful) {
+            void queryClient.invalidateQueries({
+              queryKey: ["ai-agents", "knowledge", id, "chunks"],
+            });
+            if (status.has_vectors) {
+              toast.success(
+                `«${title}» listo: ${status.embeddings_count} vectores generados`,
+              );
+            } else if (status.chunks_count > 0) {
+              toast.warning(
+                `«${title}» se dividió en fragmentos, pero no se pudieron crear los vectores. Revisa el modelo de embedding en la configuración de la sucursal.`,
+              );
+            } else {
+              toast.warning(
+                `No se pudo preparar «${title}» para búsqueda. Intenta reindexar de nuevo.`,
+              );
+            }
+            finish(id);
+            void refetchCatalog();
+            continue;
+          }
+
+          // Sin task_id (fallback): esperar vectores o indexado estable.
+          if (!taskId && status.has_vectors) {
+            toast.success(`«${title}» listo con vectores`);
+            finish(id);
+            void refetchCatalog();
+            continue;
+          }
+
+          if (timedOut) {
+            if (status.has_vectors) {
+              toast.success(`«${title}» listo con vectores`);
+            } else if (status.is_indexed && status.chunks_count > 0) {
+              toast.warning(
+                `«${title}» aún no tiene vectores. Revisa el modelo de embedding de la sucursal o vuelve a reindexar.`,
+              );
+            } else {
+              toast.message(
+                `Todavía estamos preparando «${title}». Espera un momento y revisa de nuevo.`,
+              );
+            }
+            finish(id);
+            void refetchCatalog();
+          }
+        } catch {
+          if (Date.now() - started > 180_000) {
+            toast.message(
+              "No pudimos confirmar el estado. Espera un momento y vuelve a abrir el documento.",
+            );
+            finish(id);
+          }
+        }
+      }
+    };
+
+    void tick();
+    const interval = window.setInterval(() => {
+      void tick();
+    }, 2500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [indexingIds, queryClient, refetchCatalog]);
 
   const assignedIds = useMemo(() => {
     return new Set((agent?.knowledge_documents ?? []).map((d) => docId(d)));
@@ -87,6 +216,24 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
         KNOWLEDGE_TYPE_LABEL[doc.knowledge_type].toLowerCase().includes(term),
     );
   }, [availableDocs, assignSearch]);
+
+  const vectorStats = useMemo(() => {
+    const total = assignedDocs.length;
+    let indexed = 0;
+    let chunks = 0;
+    for (const doc of assignedDocs) {
+      if (hasKnowledgeVectors(doc)) indexed += 1;
+      chunks += doc.chunks_count ?? 0;
+    }
+    const indexing = assignedDocs.filter((d) => indexingIds.has(String(d.id))).length;
+    return {
+      total,
+      indexed,
+      pending: Math.max(0, total - indexed - indexing),
+      chunks,
+      indexing,
+    };
+  }, [assignedDocs, indexingIds]);
 
   if (isLoadingAgent || isLoadingKnowledge) {
     return (
@@ -130,24 +277,33 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
   const markIndexing = (id: string, on: boolean) => {
     setIndexingIds((prev) => {
       const next = new Set(prev);
-      if (on) next.add(id);
-      else next.delete(id);
+      if (on) {
+        next.add(id);
+        indexingStartedAt.current.set(id, Date.now());
+      } else {
+        next.delete(id);
+        indexingStartedAt.current.delete(id);
+      }
       return next;
     });
   };
 
   const ensureIndexed = (doc: AgentKnowledge) => {
     const id = String(doc.id);
-    if (isKnowledgeIndexed(doc)) return;
+    if (hasKnowledgeVectors(doc)) return;
     markIndexing(id, true);
-    toast.message("Indexando para RAG…");
+    toast.message("Generando vectores… esto puede tardar unos segundos");
     indexKnowledge.mutate(id, {
-      onSuccess: () => {
-        toast.success("Indexación iniciada");
-        void refetchCatalog();
+      onSuccess: (data) => {
+        if (data.indexing_task_id) {
+          indexingTaskIds.current.set(id, data.indexing_task_id);
+        }
+        toast.message(`Preparando «${doc.title}»… te avisamos al terminar`);
       },
-      onError: () => toast.error("No se pudo indexar el documento"),
-      onSettled: () => markIndexing(id, false),
+      onError: () => {
+        toast.error("No se pudo indexar el documento");
+        markIndexing(id, false);
+      },
     });
   };
 
@@ -202,15 +358,21 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
     );
   };
 
-  const reindexDoc = (id: string) => {
+  const reindexDoc = (id: string, title?: string) => {
     markIndexing(id, true);
     reindexKnowledge.mutate(id, {
-      onSuccess: () => {
-        toast.success("Reindexación iniciada");
-        void refetchCatalog();
+      onSuccess: (data) => {
+        if (data.indexing_task_id) {
+          indexingTaskIds.current.set(id, data.indexing_task_id);
+        }
+        toast.message(
+          `Reindexando${title ? ` «${title}»` : ""}… te avisamos cuando esté listo`,
+        );
       },
-      onError: () => toast.error("No se pudo reindexar"),
-      onSettled: () => markIndexing(id, false),
+      onError: () => {
+        toast.error("No se pudo reindexar");
+        markIndexing(id, false);
+      },
     });
   };
 
@@ -248,6 +410,39 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
+          {assignedDocs.length > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="rounded-md border border-border/70 bg-muted/20 px-3 py-2">
+                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  Asignados
+                </div>
+                <div className="text-sm font-medium mt-0.5 tabular-nums">{vectorStats.total}</div>
+              </div>
+              <div className="rounded-md border border-border/70 bg-muted/20 px-3 py-2">
+                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  Con vectores
+                </div>
+                <div className="text-sm font-medium mt-0.5 tabular-nums text-primary">
+                  {vectorStats.indexed}
+                </div>
+              </div>
+              <div className="rounded-md border border-border/70 bg-muted/20 px-3 py-2">
+                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  {vectorStats.indexing > 0 ? "Generando" : "Sin vectores"}
+                </div>
+                <div className="text-sm font-medium mt-0.5 tabular-nums">
+                  {vectorStats.indexing > 0 ? vectorStats.indexing : vectorStats.pending}
+                </div>
+              </div>
+              <div className="rounded-md border border-border/70 bg-muted/20 px-3 py-2">
+                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  Fragmentos
+                </div>
+                <div className="text-sm font-medium mt-0.5 tabular-nums">{vectorStats.chunks}</div>
+              </div>
+            </div>
+          )}
+
           {assignedDocs.length > 0 && (
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -291,7 +486,9 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
               const id = String(doc.id);
               const isPending = pendingIds.has(id);
               const isIndexing = indexingIds.has(id);
-              const indexed = isKnowledgeIndexed(doc);
+              const withVectors = hasKnowledgeVectors(doc);
+              const withChunksOnly =
+                !withVectors && isKnowledgeIndexed(doc) && (doc.chunks_count ?? 0) > 0;
 
               return (
                 <div
@@ -304,9 +501,21 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-medium text-sm truncate">{doc.title}</span>
-                      {indexed ? (
+                      {isIndexing ? (
+                        <Badge variant="outline" className="text-[10px] gap-1 text-primary">
+                          <Loader2 className="h-3 w-3 animate-spin" /> Generando vectores…
+                        </Badge>
+                      ) : withVectors ? (
                         <Badge variant="outline" className="text-[10px] gap-1">
                           <CheckCircle2 className="h-3 w-3" /> Con vectores
+                          {doc.embeddings_count != null ? ` · ${doc.embeddings_count}` : ""}
+                        </Badge>
+                      ) : withChunksOnly ? (
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] gap-1 text-warning"
+                        >
+                          <XCircle className="h-3 w-3" /> Sin vectores
                         </Badge>
                       ) : (
                         <Badge
@@ -326,6 +535,7 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
                       knowledgeId={id}
                       title={doc.title}
                       knowledgeType={doc.knowledge_type}
+                      context="agent"
                     />
                     {canManageKnowledge && (
                       <>
@@ -334,7 +544,7 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
                           variant="ghost"
                           className="h-8"
                           disabled={isIndexing}
-                          onClick={() => reindexDoc(id)}
+                          onClick={() => reindexDoc(id, doc.title)}
                           title="Reindexar"
                         >
                           {isIndexing ? (
@@ -377,7 +587,7 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
           if (!open) setAssignSearch("");
         }}
       >
-        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-xl gap-4 p-4 sm:p-6">
+        <DialogContent className="w-full max-w-xl gap-4 p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>Asignar conocimiento</DialogTitle>
           </DialogHeader>
@@ -423,7 +633,9 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
                         <p className="font-medium text-sm truncate">{doc.title}</p>
                         <p className="text-[11px] text-muted-foreground truncate">
                           {KNOWLEDGE_TYPE_LABEL[doc.knowledge_type]}
-                          {isKnowledgeIndexed(doc) ? " · Con vectores" : " · Sin vectores"}
+                          {hasKnowledgeVectors(doc)
+                            ? " · Con vectores"
+                            : " · Sin vectores"}
                         </p>
                       </div>
                     </div>

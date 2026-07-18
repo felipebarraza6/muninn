@@ -1793,7 +1793,7 @@ export default function AdminLlmPage() {
       </div>
 
       <Dialog open={testResultOpen} onOpenChange={setTestResultOpen}>
-        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-2xl gap-4 p-4 sm:p-6">
+        <DialogContent className="w-full max-w-2xl gap-4 p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="flex flex-wrap items-center gap-2">
               Prueba de conexión
@@ -1913,7 +1913,7 @@ export default function AdminLlmPage() {
           }
         }}
       >
-        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-2xl gap-4 p-4 sm:p-6">
+        <DialogContent className="w-full max-w-2xl gap-4 p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>Catálogo sincronizado — modelos inactivos</DialogTitle>
           </DialogHeader>
