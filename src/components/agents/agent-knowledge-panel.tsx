@@ -42,11 +42,19 @@ function docId(doc: AgentKnowledge | string | number | { id?: string | number })
 
 export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
   const { data: agent, isLoading: isLoadingAgent, refetch: refetchAgent } = useAgent(agentId);
+  const agentBranchId = agent?.branch ?? null;
   const {
-    data: catalog = [],
+    data: catalogRaw = [],
     isLoading: isLoadingKnowledge,
     refetch: refetchCatalog,
-  } = useKnowledgeCatalog();
+  } = useKnowledgeCatalog({ branch: agentBranchId });
+  const catalog = useMemo(() => {
+    if (agentBranchId == null) return catalogRaw;
+    const branchKey = String(agentBranchId);
+    return catalogRaw.filter(
+      (doc) => doc.branch == null || String(doc.branch) === branchKey,
+    );
+  }, [catalogRaw, agentBranchId]);
   const updateAgent = useUpdateAgent();
   const indexKnowledge = useIndexKnowledge();
   const reindexKnowledge = useReindexKnowledge();
@@ -83,7 +91,7 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
         const taskId = indexingTaskIds.current.get(id);
         const started = indexingStartedAt.current.get(id) ?? Date.now();
         try {
-          const status = await fetchKnowledgeIndexingStatus(id, taskId);
+          const status = await fetchKnowledgeIndexingStatus(id, taskId, agentBranchId);
           if (cancelled) return;
 
           // Actualizar contadores en cache mientras corre.
@@ -181,7 +189,7 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [indexingIds, queryClient, refetchCatalog]);
+  }, [indexingIds, queryClient, refetchCatalog, agentBranchId]);
 
   const assignedIds = useMemo(() => {
     return new Set((agent?.knowledge_documents ?? []).map((d) => docId(d)));
@@ -293,18 +301,21 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
     if (hasKnowledgeVectors(doc)) return;
     markIndexing(id, true);
     toast.message("Generando vectores… esto puede tardar unos segundos");
-    indexKnowledge.mutate(id, {
-      onSuccess: (data) => {
-        if (data.indexing_task_id) {
-          indexingTaskIds.current.set(id, data.indexing_task_id);
-        }
-        toast.message(`Preparando «${doc.title}»… te avisamos al terminar`);
+    indexKnowledge.mutate(
+      { id, branch: agentBranchId },
+      {
+        onSuccess: (data) => {
+          if (data.indexing_task_id) {
+            indexingTaskIds.current.set(id, data.indexing_task_id);
+          }
+          toast.message(`Preparando «${doc.title}»… te avisamos al terminar`);
+        },
+        onError: () => {
+          toast.error("No se pudo indexar el documento");
+          markIndexing(id, false);
+        },
       },
-      onError: () => {
-        toast.error("No se pudo indexar el documento");
-        markIndexing(id, false);
-      },
-    });
+    );
   };
 
   const setKnowledgeDocuments = (
@@ -360,20 +371,23 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
 
   const reindexDoc = (id: string, title?: string) => {
     markIndexing(id, true);
-    reindexKnowledge.mutate(id, {
-      onSuccess: (data) => {
-        if (data.indexing_task_id) {
-          indexingTaskIds.current.set(id, data.indexing_task_id);
-        }
-        toast.message(
-          `Reindexando${title ? ` «${title}»` : ""}… te avisamos cuando esté listo`,
-        );
+    reindexKnowledge.mutate(
+      { id, branch: agentBranchId },
+      {
+        onSuccess: (data) => {
+          if (data.indexing_task_id) {
+            indexingTaskIds.current.set(id, data.indexing_task_id);
+          }
+          toast.message(
+            `Reindexando${title ? ` «${title}»` : ""}… te avisamos cuando esté listo`,
+          );
+        },
+        onError: () => {
+          toast.error("No se pudo reindexar");
+          markIndexing(id, false);
+        },
       },
-      onError: () => {
-        toast.error("No se pudo reindexar");
-        markIndexing(id, false);
-      },
-    });
+    );
   };
 
   return (
@@ -536,6 +550,7 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
                       title={doc.title}
                       knowledgeType={doc.knowledge_type}
                       context="agent"
+                      branchId={agentBranchId}
                     />
                     {canManageKnowledge && (
                       <>

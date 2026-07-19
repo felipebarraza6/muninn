@@ -529,16 +529,32 @@ export default function AdminLlmPage() {
     setSelectedEndpointKey(rows[0]?.key ?? null);
   };
 
-  /** Solo persiste overrides respecto al default del tipo. */
+  /**
+   * Persiste el mapa completo de endpoints (rutas relativas).
+   * Antes solo mandaba overrides → si coincidían con defaults enviaba `{}`
+   * y el backend respondía «Faltan endpoints obligatorios: chat, models».
+   */
   const buildEndpointsPayload = (): Record<string, string> => {
-    const defaults = defaultEndpointsForType;
+    const base = (pBaseUrl || "").replace(/\/+$/, "");
     const out: Record<string, string> = {};
     for (const row of pEndpointRows) {
       const t = row.type.trim();
       let p = row.path.trim();
       if (!t || !p) continue;
+      // Si pegaron URL completa, bajar a path relativo a la base.
+      if (/^https?:\/\//i.test(p)) {
+        if (base && p.toLowerCase().startsWith(base.toLowerCase())) {
+          p = p.slice(base.length) || "/";
+        } else {
+          try {
+            p = new URL(p).pathname || p;
+          } catch {
+            /* keep */
+          }
+        }
+      }
       if (!p.startsWith("/")) p = `/${p}`;
-      if (defaults[t] !== p) out[t] = p;
+      out[t] = p;
     }
     return out;
   };
@@ -1052,6 +1068,13 @@ export default function AdminLlmPage() {
                           ? "Vacío = visible según reglas globales del API."
                           : "El LLM quedará disponible solo en las sucursales marcadas."}
                       </p>
+                      {pBranches.length > 1 && (
+                        <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1.5">
+                          Atención: una sola API key se comparte entre todas las sucursales
+                          marcadas. Si una se rompe (key inválida), fallan los agentes de
+                          todas. Preferí un proveedor LLM por sucursal.
+                        </p>
+                      )}
                     </div>
                   )}
 

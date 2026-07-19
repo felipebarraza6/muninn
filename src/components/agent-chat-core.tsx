@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -15,8 +16,10 @@ import {
   Archive,
   User,
   RefreshCw,
+  X,
 } from "lucide-react";
 import { useAgent } from "@/api/hooks/useAgents";
+import { useAgentFunctions } from "@/api/hooks/useAgentFunctions";
 import {
   useConversationMessages,
   useSendConversationMessage,
@@ -25,8 +28,13 @@ import {
   type ChatMessageResponse,
 } from "@/api/hooks/useConversations";
 import { ChatMarkdown } from "@/components/chat/chat-markdown";
-import { ChatCopyButton } from "@/components/chat/chat-copy-button";
+import { ChatMessageActions } from "@/components/chat/chat-message-actions";
 import { ConversationRagSummary } from "@/components/chat/chat-message-insights";
+import {
+  ChatProcessingIndicator,
+  MessageActivityTrail,
+  type LiveStreamStep,
+} from "@/components/chat/chat-processing";
 import {
   MessageInsightSheet,
   MessageInspectButton,
@@ -36,7 +44,10 @@ import {
   useUnifiedConversations,
   type UnifiedConversation,
 } from "@/api/hooks/useUnifiedConversations";
+import { streamConversationChat } from "@/api/chat-stream";
 import { toast } from "sonner";
+import { getActiveBranchId, setActiveBranchId } from "@/lib/branchStorage";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface ChatMessage {
   id: string | number;
@@ -46,6 +57,29 @@ interface ChatMessage {
   rag_sources?: unknown[];
   tool_calls?: unknown[];
   tool_results?: unknown[];
+  replyToId?: string | number;
+  replyToRole?: string;
+  replyToPreview?: string;
+}
+
+type ReplyTarget = {
+  id: string | number;
+  role: ChatMessage["role"];
+  preview: string;
+};
+
+function previewText(text: string, max = 120) {
+  const t = text.trim().replace(/\s+/g, " ");
+  if (t.length <= max) return t;
+  return `${t.slice(0, max - 1)}…`;
+}
+
+function roleLabel(role: string | undefined) {
+  const r = (role || "").toLowerCase();
+  if (r === "user") return "Tú";
+  if (r === "agent" || r === "assistant") return "Agente";
+  if (r === "system") return "Sistema";
+  return "Mensaje";
 }
 
 function makeId(prefix: string) {
@@ -54,19 +88,34 @@ function makeId(prefix: string) {
 
 function normalizeMessages(data?: ChatMessageResponse[]): ChatMessage[] {
   if (!Array.isArray(data)) return [];
-  return data.map((m) => ({
-    id: m.id ?? makeId("msg"),
-    role: (m.role?.toLowerCase() === "user"
-      ? "user"
-      : m.role?.toLowerCase() === "system"
-        ? "system"
-        : "agent") as ChatMessage["role"],
-    content: m.content ?? m.text ?? m.message ?? "",
-    created: m.created_at ?? m.created ?? m.timestamp ?? m.modified,
-    rag_sources: m.rag_sources ?? m.sources,
-    tool_calls: m.tool_calls,
-    tool_results: m.tool_results,
-  }));
+  return data.map((m) => {
+    const meta = m.metadata && typeof m.metadata === "object" ? m.metadata : null;
+    const replyRoleRaw = String(meta?.reply_to_role || "").toLowerCase();
+    return {
+      id: m.id ?? makeId("msg"),
+      role: (m.role?.toLowerCase() === "user"
+        ? "user"
+        : m.role?.toLowerCase() === "system"
+          ? "system"
+          : "agent") as ChatMessage["role"],
+      content: m.content ?? m.text ?? m.message ?? "",
+      created: m.created_at ?? m.created ?? m.timestamp ?? m.modified,
+      rag_sources: m.rag_sources ?? m.sources,
+      tool_calls: m.tool_calls,
+      tool_results: m.tool_results,
+      replyToId: meta?.reply_to_id,
+      replyToRole:
+        replyRoleRaw === "user"
+          ? "user"
+          : replyRoleRaw === "system"
+            ? "system"
+            : meta?.reply_to_id
+              ? "agent"
+              : undefined,
+      replyToPreview:
+        typeof meta?.reply_to_preview === "string" ? meta.reply_to_preview : undefined,
+    };
+  });
 }
 
 function formatMessageStamp(iso?: string) {
@@ -140,11 +189,32 @@ export function AgentChatCore({
   const agentIdFromUrl = searchParams.get("agent");
 
   const { data: agent, isLoading: agentLoading, error: agentError } = useAgent(agentId);
+  const { data: allFunctions = [] } = useAgentFunctions();
   const { data: allConversations = [], isLoading: conversationsLoading } =
     useUnifiedConversations();
   const createConversation = useCreateConversation();
   const sendMessage = useSendConversationMessage();
   const updateStatus = useUpdateConversationStatus();
+  const queryClient = useQueryClient();
+  const reduceMotion = useReducedMotion();
+
+  const agentSkillNames = useMemo(() => {
+    const ids = new Set((agent?.functions ?? []).map((id) => String(id)));
+    if (!ids.size) return [] as string[];
+    return allFunctions
+      .filter((f) => ids.has(String(f.id)) && f.is_active !== false)
+      .map((f) => f.name || f.slug || "")
+      .filter(Boolean);
+  }, [agent?.functions, allFunctions]);
+
+  // Si el agente es de otra sucursal, alinear el switcher antes de crear el chat.
+  useEffect(() => {
+    if (!agent?.branch) return;
+    const agentBranch = String(agent.branch);
+    if (getActiveBranchId() !== agentBranch) {
+      setActiveBranchId(agentBranch, true, false);
+    }
+  }, [agent?.branch, agent?.id]);
 
   const [conversationId, setConversationId] = useState<string | null>(conversationIdFromUrl);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -156,12 +226,22 @@ export function AgentChatCore({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [historyTab, setHistoryTab] = useState<"active" | "archived">("active");
   const [inspectMessage, setInspectMessage] = useState<InsightMessage | null>(null);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [liveSteps, setLiveSteps] = useState<LiveStreamStep[]>([]);
+  const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
   const initializedRef = useRef(false);
   const skipAutoSelectRef = useRef(false);
   const isCreatingRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastRemoteMessagesRef = useRef<string>("");
   const conversationIdRef = useRef<string | null>(conversationIdFromUrl);
+  const streamAbortRef = useRef<AbortController | null>(null);
+
+  const isBusy = sendMessage.isPending || isStreaming;
+
+  useEffect(() => {
+    setReplyTo(null);
+  }, [conversationId]);
 
   const mergeSearchParams = useCallback(
     (updates: Record<string, string | null>) => {
@@ -275,10 +355,19 @@ export function AgentChatCore({
     setCreateError(null);
 
     try {
+      const agentBranch =
+        agent.branch != null && String(agent.branch).trim() !== ""
+          ? String(agent.branch)
+          : null;
+      // Alinear x-branch-id con la sucursal del agente (evita PK inválida).
+      if (agentBranch && getActiveBranchId() !== agentBranch) {
+        setActiveBranchId(agentBranch, true, false);
+      }
       const data = await createConversation.mutateAsync({
         agent: agentId,
         title: `Chat con ${agent.name}`,
         user: getCurrentUserId(),
+        ...(agentBranch ? { branch: agentBranch } : {}),
       });
       const id = String(data.id);
       lastRemoteMessagesRef.current = "";
@@ -345,11 +434,18 @@ export function AgentChatCore({
     mergeSearchParams,
   ]);
 
-  const handleSend = async (e?: React.FormEvent) => {
+  const handleSend = async (
+    e?: React.FormEvent,
+    overrides?: { text?: string; reply?: ReplyTarget | null },
+  ) => {
     e?.preventDefault();
-    if (!input.trim() || sendMessage.isPending || isCreating) return;
+    const text = (overrides?.text ?? input).trim();
+    if (!text || isBusy || isCreating) return;
 
-    const text = input.trim();
+    const activeReply =
+      overrides && "reply" in overrides ? overrides.reply : replyTo;
+    const replyToId = activeReply?.id ?? null;
+
     const activeId = conversationId ?? (await ensureConversationId());
     if (!activeId) {
       toast.error("No se pudo crear la conversación");
@@ -361,16 +457,127 @@ export function AgentChatCore({
       role: "user",
       content: text,
       created: new Date().toISOString(),
+      replyToId: activeReply?.id,
+      replyToRole: activeReply?.role,
+      replyToPreview: activeReply?.preview,
     };
 
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
+    setReplyTo(null);
     setIsDraftNew(false);
-
-    sendMessage.mutate(
-      { id: activeId, message: text },
+    setLiveSteps([
       {
-        onSuccess: (data) => {
+        key: "connected",
+        label: "Conectado",
+        detail: "Iniciando…",
+        icon: "sparkles",
+        status: "active",
+      },
+    ]);
+    setIsStreaming(true);
+
+    streamAbortRef.current?.abort();
+    const abort = new AbortController();
+    streamAbortRef.current = abort;
+
+    const upsertStep = (
+      key: string,
+      label: string,
+      detail: string | undefined,
+      icon: LiveStreamStep["icon"],
+      opts?: { demoteActive?: "all" | "non-tools" | "none" },
+    ) => {
+      const demote = opts?.demoteActive ?? "all";
+      setLiveSteps((prev) => {
+        const next = prev.map((s) => {
+          if (s.status !== "active") return s;
+          if (demote === "none") return s;
+          if (demote === "non-tools" && s.key.startsWith("tool-")) return s;
+          return { ...s, status: "done" as const };
+        });
+        if (next.some((s) => s.key === key)) {
+          return next.map((s) =>
+            s.key === key ? { ...s, label, detail, icon, status: "active" as const } : s,
+          );
+        }
+        return [...next, { key, label, detail, icon, status: "active" as const }];
+      });
+    };
+
+    try {
+      const data = await streamConversationChat(
+        activeId,
+        text,
+        {
+          onStatus: (ev) => {
+            const stage = ev.stage || "status";
+            const icon: LiveStreamStep["icon"] =
+              stage === "rag"
+                ? "database"
+                : stage === "writing"
+                  ? "loader"
+                  : "sparkles";
+            upsertStep(`status-${stage}`, ev.label || stage, ev.detail, icon, {
+              demoteActive: "all",
+            });
+          },
+          onToolStart: (ev) => {
+            const key = `tool-${ev.id || ev.name || makeId("tool")}`;
+            upsertStep(key, "Ejecutando skill", ev.label || ev.name || "skill", "wrench", {
+              demoteActive: "non-tools",
+            });
+          },
+          onToolEnd: (ev) => {
+            const key = `tool-${ev.id || ev.name || ""}`;
+            setLiveSteps((prev) =>
+              prev.map((s) =>
+                s.key === key || (ev.label && s.detail === ev.label)
+                  ? {
+                      ...s,
+                      status: ev.ok === false ? ("error" as const) : ("done" as const),
+                    }
+                  : s,
+              ),
+            );
+          },
+        },
+        { replyToId, signal: abort.signal },
+      );
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: data.id ?? makeId("agent"),
+          role: "agent",
+          content: data.message ?? data.content ?? data.text ?? "",
+          created:
+            data.created_at ?? data.created ?? data.timestamp ?? new Date().toISOString(),
+          rag_sources: data.rag_sources ?? data.sources,
+          tool_calls: data.tool_calls,
+          tool_results: data.tool_results,
+        },
+      ]);
+      void queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      void queryClient.invalidateQueries({ queryKey: ["unified-conversations"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["conversations", activeId, "messages"],
+      });
+    } catch (err) {
+      if ((err as Error)?.name === "AbortError") return;
+      // Fallback al POST clásico si el stream no está disponible.
+      const msg = (err as Error)?.message || "";
+      if (
+        /stream|SSE|event-stream|Failed to fetch|406|Not Acceptable|Accept header/i.test(
+          msg,
+        )
+      ) {
+        try {
+          const data = await sendMessage.mutateAsync({
+            id: activeId,
+            message: text,
+            replyToId,
+          });
           if (data?.message || data?.content || data?.text) {
             setMessages((prev) => [
               ...prev,
@@ -389,13 +596,34 @@ export function AgentChatCore({
               },
             ]);
           }
-        },
-        onError: () => {
+        } catch {
           toast.error("Error al enviar el mensaje");
           setInput(text);
-        },
-      },
-    );
+          if (activeReply) setReplyTo(activeReply);
+        }
+      } else {
+        toast.error(msg || "Error al enviar el mensaje");
+        setInput(text);
+        if (activeReply) setReplyTo(activeReply);
+      }
+    } finally {
+      setIsStreaming(false);
+      setLiveSteps([]);
+      streamAbortRef.current = null;
+    }
+  };
+
+  const startReply = (msg: ChatMessage) => {
+    setReplyTo({
+      id: msg.id,
+      role: msg.role,
+      preview: previewText(msg.content),
+    });
+  };
+
+  const resendMessage = (msg: ChatMessage) => {
+    if (isBusy || isCreating) return;
+    void handleSend(undefined, { text: msg.content, reply: null });
   };
 
   const handleNewConversation = () => {
@@ -816,8 +1044,11 @@ export function AgentChatCore({
               const ragCount = Array.isArray(msg.rag_sources) ? msg.rag_sources.length : 0;
               const toolCount = Array.isArray(msg.tool_calls) ? msg.tool_calls.length : 0;
               return (
-                <div
+                <motion.div
                   key={msg.id}
+                  initial={reduceMotion ? false : { opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.32, ease: [0.25, 0.1, 0.25, 1] }}
                   className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}
                 >
                   <div
@@ -845,9 +1076,23 @@ export function AgentChatCore({
                             : "bg-muted text-foreground rounded-bl-md"
                       }`}
                     >
+                      {msg.replyToPreview && (
+                        <div
+                          className={`mb-2 rounded-md border-l-2 px-2 py-1 text-[11px] leading-snug ${
+                            msg.role === "user"
+                              ? "border-primary-foreground/50 bg-primary-foreground/10 text-primary-foreground/85"
+                              : "border-primary/50 bg-background/60 text-muted-foreground"
+                          }`}
+                        >
+                          <p className="font-semibold opacity-90">
+                            Respondiendo a {roleLabel(msg.replyToRole)}
+                          </p>
+                          <p className="line-clamp-2 opacity-80">{msg.replyToPreview}</p>
+                        </div>
+                      )}
                       <ChatMarkdown content={msg.content} inverted={msg.role === "user"} />
                       <div
-                        className={`mt-1.5 flex items-center gap-2 text-[10px] tabular-nums font-medium ${
+                        className={`mt-1.5 flex items-center gap-1.5 text-[10px] tabular-nums font-medium ${
                           msg.role === "user"
                             ? "justify-end text-primary-foreground/70"
                             : "justify-end text-muted-foreground"
@@ -856,58 +1101,60 @@ export function AgentChatCore({
                         <span title={formatDateTime(msg.created) ?? undefined}>
                           {formatMessageStamp(msg.created) || "Sin fecha"}
                         </span>
+                        {msg.role === "agent" && (
+                          <MessageInspectButton
+                            variant="icon"
+                            chunkCount={ragCount}
+                            toolCount={toolCount}
+                            onClick={() =>
+                              setInspectMessage({
+                                id: msg.id,
+                                content: msg.content,
+                                created: msg.created,
+                                rag_sources: msg.rag_sources,
+                                tool_calls: msg.tool_calls,
+                                tool_results: msg.tool_results,
+                              })
+                            }
+                          />
+                        )}
                       </div>
                     </div>
-                    <div
-                      className={`flex items-center gap-1.5 ${
-                        msg.role === "user" ? "justify-end" : "justify-start"
-                      }`}
-                    >
-                      <ChatCopyButton text={msg.content} />
-                      {msg.role === "agent" && (
-                        <MessageInspectButton
-                          chunkCount={ragCount}
-                          toolCount={toolCount}
-                          onClick={() =>
-                            setInspectMessage({
-                              id: msg.id,
-                              content: msg.content,
-                              created: msg.created,
-                              rag_sources: msg.rag_sources,
-                              tool_calls: msg.tool_calls,
-                              tool_results: msg.tool_results,
-                            })
-                          }
-                        />
-                      )}
-                    </div>
+                    {msg.role === "agent" && (
+                      <MessageActivityTrail
+                        toolCalls={msg.tool_calls}
+                        toolResults={msg.tool_results}
+                      />
+                    )}
+                    <ChatMessageActions
+                      text={msg.content}
+                      align={msg.role === "user" ? "end" : "start"}
+                      onReply={
+                        msg.role !== "system" && !isBusy
+                          ? () => startReply(msg)
+                          : undefined
+                      }
+                      onResend={
+                        msg.role === "user" && !isBusy
+                          ? () => resendMessage(msg)
+                          : undefined
+                      }
+                    />
                   </div>
-                </div>
+                </motion.div>
               );
             })
           )}
 
-          {sendMessage.isPending && (
-            <div className="flex gap-3">
-              <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                <Bot className="h-4 w-4 text-primary" />
-              </div>
-              <div className="bg-muted rounded-2xl rounded-bl-md px-4 py-2.5 flex items-center gap-1">
-                <span
-                  className="w-1.5 h-1.5 rounded-full bg-muted-foreground animate-bounce"
-                  style={{ animationDelay: "0ms" }}
-                />
-                <span
-                  className="w-1.5 h-1.5 rounded-full bg-muted-foreground animate-bounce"
-                  style={{ animationDelay: "150ms" }}
-                />
-                <span
-                  className="w-1.5 h-1.5 rounded-full bg-muted-foreground animate-bounce"
-                  style={{ animationDelay: "300ms" }}
-                />
-              </div>
-            </div>
-          )}
+          <AnimatePresence>
+            {isBusy && (
+              <ChatProcessingIndicator
+                useRag={agent.use_rag !== false}
+                skillNames={agentSkillNames}
+                liveSteps={liveSteps}
+              />
+            )}
+          </AnimatePresence>
 
           <div ref={messagesEndRef} />
         </div>
@@ -937,43 +1184,66 @@ export function AgentChatCore({
       />
 
       <div className="border-t border-border/50 bg-card/50 backdrop-blur p-3 sm:p-4">
-        <form
-          onSubmit={handleSend}
-          className="max-w-3xl mx-auto flex items-end gap-2 rounded-full bg-muted/60 border border-border/50 px-2 py-2 transition-colors focus-within:border-primary/40 focus-within:bg-muted"
-        >
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder={
-              isCreating
-                ? "Creando conversación..."
-                : sendMessage.isPending
-                  ? "El agente está respondiendo..."
-                  : isDraftNew || !conversationId
-                    ? "Escribe para iniciar una conversación nueva..."
-                    : "Escribe tu mensaje..."
-            }
-            disabled={sendMessage.isPending || isCreating || (!conversationId && !isDraftNew)}
-            className="flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-3 py-2 text-sm"
-          />
-          <Button
-            type="submit"
-            size="icon"
-            className="h-9 w-9 rounded-full shrink-0"
-            disabled={
-              !input.trim() ||
-              sendMessage.isPending ||
-              isCreating ||
-              (!conversationId && !isDraftNew)
-            }
+        <div className="max-w-3xl mx-auto space-y-2">
+          {replyTo && (
+            <div className="flex items-start gap-2 rounded-xl border border-primary/25 bg-primary/5 px-3 py-2">
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-semibold text-primary">
+                  Respondiendo a {roleLabel(replyTo.role)}
+                </p>
+                <p className="truncate text-xs text-muted-foreground">{replyTo.preview}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReplyTo(null)}
+                className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                title="Cancelar respuesta"
+                aria-label="Cancelar respuesta"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+          <form
+            onSubmit={(e) => void handleSend(e)}
+            className="flex items-end gap-2 rounded-full bg-muted/60 border border-border/50 px-2 py-2 transition-colors focus-within:border-primary/40 focus-within:bg-muted"
           >
-            {sendMessage.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Send className="h-4 w-4" />
-            )}
-          </Button>
-        </form>
+            <Input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder={
+                isCreating
+                  ? "Creando conversación..."
+                  : isBusy
+                    ? "El agente está respondiendo..."
+                    : replyTo
+                      ? "Escribe tu respuesta…"
+                      : isDraftNew || !conversationId
+                        ? "Escribe para iniciar una conversación nueva..."
+                        : "Escribe tu mensaje..."
+              }
+              disabled={isBusy || isCreating || (!conversationId && !isDraftNew)}
+              className="flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-3 py-2 text-sm"
+            />
+            <Button
+              type="submit"
+              size="icon"
+              className="h-9 w-9 rounded-full shrink-0"
+              disabled={
+                !input.trim() ||
+                isBusy ||
+                isCreating ||
+                (!conversationId && !isDraftNew)
+              }
+            >
+              {isBusy ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+            </Button>
+          </form>
+        </div>
       </div>
     </div>
   );

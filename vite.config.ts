@@ -32,6 +32,7 @@ export default defineConfig(({ mode }) => {
           target: devApiProxy,
           changeOrigin: true,
           secure: false,
+          // SSE (chat stream): no bufferizar la respuesta.
           configure: (proxy) => {
             // by-host lee HTTP_HOST: reinyecta el Host del SPA (custom domain local).
             proxy.on("proxyReq", (proxyReq, req) => {
@@ -41,6 +42,13 @@ export default defineConfig(({ mode }) => {
               if (originalHost) {
                 proxyReq.setHeader("Host", originalHost);
                 proxyReq.setHeader("X-Forwarded-Host", originalHost);
+              }
+            });
+            proxy.on("proxyRes", (proxyRes, _req, res) => {
+              const ct = String(proxyRes.headers["content-type"] || "");
+              if (ct.includes("text/event-stream")) {
+                res.setHeader("Cache-Control", "no-cache");
+                res.setHeader("X-Accel-Buffering", "no");
               }
             });
           },

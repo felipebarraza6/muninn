@@ -15,7 +15,7 @@ export const AUTH_TYPE_HINT: Record<string, string> = {
   oauth2: "Access token estático ya obtenido (sin flujo OAuth automático).",
   basic: "Usuario y contraseña fijos de la integración → Authorization: Basic.",
   endpoint_auth:
-    "Define el flujo: endpoint de login + dónde sale el token + prefijo (Bearer/Token). Cada owner conecta su cuenta en «Mi cuenta»; las skills reutilizan esa sesión sin pedir usuario/clave como parámetros.",
+    "Define el flujo: endpoint de login + dónde sale el token + prefijo (Bearer/Token). La cuenta de la instalación (por sucursal) es la que usan los agentes; «Cuenta de prueba» solo sirve para Studio / Probar.",
 };
 
 /** Prefijo del header Authorization tras login (endpoint_auth). */
@@ -58,9 +58,27 @@ export function formatTestResultToast(result: {
   latency_ms?: number;
   error?: string | null;
   detail?: string;
+  tested?: {
+    mode?: string;
+    endpoint?: string;
+    method?: string;
+    path?: string;
+    base_url?: string;
+    installation_label?: string | null;
+  };
+  auth?: { success?: boolean; error?: string | null };
 }): { ok: boolean; message: string } {
+  const tested = result.tested;
+  const modeHint =
+    tested?.mode === "health" || tested?.mode === "login"
+      ? `${tested.mode === "health" ? "health" : "login"} «${tested.endpoint || "auth"}»`
+      : tested?.mode === "base_url"
+        ? `GET ${tested.base_url || "base_url"}`
+        : null;
+
   if (result.success) {
-    const parts = ["Conexión OK"];
+    const parts = [modeHint ? `OK · ${modeHint}` : "Conexión OK"];
+    if (tested?.installation_label) parts.push(tested.installation_label);
     if (result.status_code != null) parts.push(`HTTP ${result.status_code}`);
     if (result.latency_ms != null) parts.push(`${result.latency_ms} ms`);
     return { ok: true, message: parts.join(" · ") };
@@ -68,6 +86,8 @@ export function formatTestResultToast(result: {
   const err =
     result.error ||
     result.detail ||
+    result.auth?.error ||
     (result.status_code != null ? `HTTP ${result.status_code}` : "Test falló");
-  return { ok: false, message: String(err) };
+  const prefix = modeHint ? `${modeHint}: ` : "";
+  return { ok: false, message: `${prefix}${err}` };
 }

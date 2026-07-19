@@ -40,5 +40,13 @@ export function getInAppEmbedUrl(channelId: string | number): string {
 
 export function getIframeCode(channelId: string | number): string {
   const url = getEmbedUrl(channelId);
-  return `<iframe\n  src="${url}"\n  width="100%"\n  height="600"\n  style="border:none;border-radius:12px;"\n  title="Chat">\n</iframe>`;
+  return `<iframe\n  src="${url}"\n  width="100%"\n  height="600"\n  style="border:none;border-radius:12px;"\n  title="Chat"\n  allow="clipboard-write">\n</iframe>`;
+}
+
+/**
+ * Snippet de una línea: burbuja flotante (widget.js) para montar en cualquier web.
+ */
+export function getWidgetScriptCode(channelId: string | number): string {
+  const base = getWidgetBaseUrl();
+  return `<script src="${base}/widget.js" data-channel-id="${channelId}" async></script>`;
 }

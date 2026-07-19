@@ -4,7 +4,11 @@ import { GET } from "../client";
 import { ENDPOINTS } from "../endpoints/index";
 import { getActiveBranchId, onBranchChange } from "@/lib/branchStorage";
 import { getStoredBranches } from "@/lib/authSession";
-import { applyResolvedBranchTheme, type BranchThemeLike } from "@/lib/applyBranchTheme";
+import {
+  applyResolvedBranchTheme,
+  resetMuninnTheme,
+  type BranchThemeLike,
+} from "@/lib/applyBranchTheme";
 import { resolveEffectiveTheme, MUNINN_DEFAULT_THEME } from "@/lib/branchThemeDefaults";
 import {
   flattenPublicLoginTheme,
@@ -16,6 +20,7 @@ import {
   getPrimaryOrganizationId,
   getPrimaryOrganizationName,
   isOrganizationOwner,
+  isSuperAdmin,
 } from "@/lib/authGuards";
 import { useActiveBranch, useOrganizations, type OrganizationTheme } from "./useBranches";
 
@@ -207,6 +212,13 @@ export function useBranchTheme(branchIdOverride?: string | null) {
   }, [themeWithOrgAssets, query.isError, orgThemeQuery.data, activeBranch?.logo, themeHintLabel]);
 
   useEffect(() => {
+    // Superadmin: siempre branding Muninn (no heredar logo/colores de la sucursal activa).
+    if (isSuperAdmin()) {
+      resetMuninnTheme();
+      document.title = "Muninn — Agentes";
+      return;
+    }
+
     if (query.isError && !orgThemeQuery.data && !activeBranch?.logo) {
       applyResolvedBranchTheme(null, themeHintLabel);
     } else if (themeWithOrgAssets) {
@@ -234,11 +246,16 @@ export function useBranchTheme(branchIdOverride?: string | null) {
     themeHintLabel,
   ]);
 
+  const muninnTheme = useMemo(
+    () => (isSuperAdmin() ? resolveEffectiveTheme({ ...MUNINN_DEFAULT_THEME }, "Muninn") : undefined),
+    [],
+  );
+
   return {
     ...query,
-    data: effectiveTheme ?? themeWithOrgAssets ?? query.data,
-    rawTheme: themeWithOrgAssets ?? query.data,
-    branchLabel: themeHintLabel,
+    data: muninnTheme ?? effectiveTheme ?? themeWithOrgAssets ?? query.data,
+    rawTheme: isSuperAdmin() ? { ...MUNINN_DEFAULT_THEME } : (themeWithOrgAssets ?? query.data),
+    branchLabel: isSuperAdmin() ? "Muninn" : themeHintLabel,
     isFetching: query.isFetching || orgThemeQuery.isFetching,
   };
 }

@@ -83,6 +83,15 @@ function getPageMeta(pathname: string): PageMeta {
     return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Aplicaciones" }] };
   }
   if (pathname.startsWith("/skills") || pathname.startsWith("/funciones")) {
+    if (pathname === "/skills/nuevo" || pathname === "/funciones/nuevo") {
+      return {
+        breadcrumb: [
+          { label: "Resumen", to: "/" },
+          { label: "Skills", to: "/skills" },
+          { label: "Nueva" },
+        ],
+      };
+    }
     if (pathname !== "/skills" && pathname !== "/funciones") {
       return {
         breadcrumb: [

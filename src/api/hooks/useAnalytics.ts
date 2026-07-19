@@ -3,12 +3,13 @@ import { GET } from "../client";
 import { ENDPOINTS } from "../endpoints/index";
 import { useActiveBranchId } from "@/hooks/useActiveBranchId";
 
-export function useClinicDashboard() {
+export function useClinicDashboard(options?: { enabled?: boolean }) {
   const branchId = useActiveBranchId();
   return useQuery({
     queryKey: ["analytics", "clinic-dashboard", branchId],
     queryFn: () => GET(ENDPOINTS.analytics.clinicDashboard),
     staleTime: 60_000,
+    enabled: options?.enabled !== false,
   });
 }
 

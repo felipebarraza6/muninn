@@ -57,20 +57,19 @@ function accentFor(seed: string) {
 }
 
 export function AgentList() {
-  const showInactive = canViewInactiveStudioResources();
-  // Superadmin / org owner: pedir inactivos. El backend también los incluye por rol.
-  // OWNER de sucursal: solo activos.
+  const canSeeInactive = canViewInactiveStudioResources();
+  /** Por defecto solo activos: al «eliminar» (soft-delete) el agente desaparece del listado. */
+  const [includeInactive, setIncludeInactive] = useState(false);
   const { data: agentsRaw = [], isLoading } = useAgents(
-    showInactive ? { includeInactive: true } : { is_active: true },
+    canSeeInactive && includeInactive ? { includeInactive: true } : { is_active: true },
   );
   const [q, setQ] = useState("");
   const reduceMotion = useReducedMotion();
 
-  /** OWNER y roles operativos: solo activos. Admin/organizador: todos. */
   const agents = useMemo(() => {
-    if (showInactive) return agentsRaw;
+    if (canSeeInactive && includeInactive) return agentsRaw;
     return agentsRaw.filter((a) => a.is_active !== false);
-  }, [agentsRaw, showInactive]);
+  }, [agentsRaw, canSeeInactive, includeInactive]);
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -117,17 +116,28 @@ export function AgentList() {
           {!isLoading && agents.length > 0 && (
             <p className="text-[11px] text-muted-foreground/80 tabular-nums">
               {stats.active} activos
-              {showInactive && stats.inactive > 0 ? ` · ${stats.inactive} inactivos` : ""}
+              {includeInactive && stats.inactive > 0 ? ` · ${stats.inactive} inactivos` : ""}
               {" · "}
               {stats.withRag} con RAG · {stats.total} en total
             </p>
           )}
         </div>
-        <Button size="sm" asChild className="self-start sm:self-auto shrink-0 cursor-pointer">
-          <Link to="/agentes/nuevo">
-            <Plus className="h-4 w-4 mr-1.5" /> Nuevo
-          </Link>
-        </Button>
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto shrink-0">
+          {canSeeInactive && (
+            <Button
+              size="sm"
+              variant={includeInactive ? "secondary" : "outline"}
+              onClick={() => setIncludeInactive((v) => !v)}
+            >
+              {includeInactive ? "Ocultar inactivos" : "Ver inactivos"}
+            </Button>
+          )}
+          <Button size="sm" asChild className="cursor-pointer">
+            <Link to="/agentes/nuevo">
+              <Plus className="h-4 w-4 mr-1.5" /> Nuevo
+            </Link>
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-2 sm:max-w-xl">

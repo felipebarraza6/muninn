@@ -1,31 +1,39 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
-import { MessageSquare, Eye, Loader2, Plus } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { MessageSquare, Eye, Loader2, Plus, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useChannels } from "@/api/hooks/useChannels";
+import { useChannels, useTestChannel, type Channel } from "@/api/hooks/useChannels";
 import { ChannelForm } from "@/components/channels/channel-form";
 import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
-
-function channelLabel(type?: string) {
-  const map: Record<string, string> = {
-    whatsapp: "WhatsApp",
-    telegram: "Telegram",
-    email: "Correo electrónico",
-    web_socket: "Chat web",
-    web_embed: "Widget web",
-    instagram: "Instagram",
-    messenger: "Messenger",
-    sms: "SMS",
-  };
-  return map[type ?? ""] ?? type ?? "Canal";
-}
+import { channelLabel, formatChannelTestToast } from "@/lib/channels";
+import { toast } from "sonner";
 
 export function ChannelList() {
+  const navigate = useNavigate();
   const { data: channels = [], isLoading, refetch } = useChannels();
+  const testConnection = useTestChannel();
   const [creating, setCreating] = useState(false);
+  const [testingId, setTestingId] = useState<string | number | null>(null);
+
+  const handleTest = (channel: Channel) => {
+    setTestingId(channel.id);
+    testConnection.mutate(
+      { id: channel.id },
+      {
+        onSuccess: (result) => {
+          const msg = formatChannelTestToast(result);
+          if (result.ok) toast.success(msg.title, { description: msg.description });
+          else toast.error(msg.title, { description: msg.description });
+          refetch();
+        },
+        onError: () => toast.error("Error al probar conexión"),
+        onSettled: () => setTestingId(null),
+      },
+    );
+  };
 
   if (isLoading) {
     return (
@@ -42,7 +50,7 @@ export function ChannelList() {
           <div>
             <CardTitle className="text-base">Canales</CardTitle>
             <CardDescription>
-              Conecta WhatsApp, Telegram, correo y widgets a tus agentes.
+              Conecta WhatsApp, Telegram, correo, webhooks y widgets a tus agentes.
             </CardDescription>
           </div>
           <div className="flex items-start gap-2 shrink-0">
@@ -68,7 +76,7 @@ export function ChannelList() {
                   <MessageSquare className="h-5 w-5" />
                 </div>
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium text-sm truncate">{channel.name}</span>
                     <Badge
                       variant={channel.is_active ? "default" : "secondary"}
@@ -76,6 +84,11 @@ export function ChannelList() {
                     >
                       {channel.is_active ? "Activo" : "Inactivo"}
                     </Badge>
+                    {channel.is_verified ? (
+                      <Badge className="text-[10px] bg-emerald-500/15 text-emerald-400 border-emerald-500/30">
+                        Verificado
+                      </Badge>
+                    ) : null}
                   </div>
                   <div className="text-[11px] text-muted-foreground truncate">
                     {channelLabel(channel.channel_type)} · {channel.provider ?? "Sin proveedor"} ·{" "}
@@ -83,11 +96,27 @@ export function ChannelList() {
                   </div>
                 </div>
               </div>
-              <Button variant="ghost" size="icon" className="h-9 w-9" asChild>
-                <Link to={`/canales/${channel.id}`}>
-                  <Eye className="h-4 w-4" />
-                </Link>
-              </Button>
+              <div className="flex items-center gap-1 shrink-0">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9"
+                  title="Probar conexión"
+                  disabled={testingId === channel.id}
+                  onClick={() => handleTest(channel)}
+                >
+                  {testingId === channel.id ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Play className="h-4 w-4" />
+                  )}
+                </Button>
+                <Button variant="ghost" size="icon" className="h-9 w-9" asChild>
+                  <Link to={`/canales/${channel.id}`}>
+                    <Eye className="h-4 w-4" />
+                  </Link>
+                </Button>
+              </div>
             </div>
           ))}
         </CardContent>
@@ -99,10 +128,12 @@ export function ChannelList() {
             <DialogTitle>Nuevo canal</DialogTitle>
           </DialogHeader>
           <ChannelForm
+            bare
             onCancel={() => setCreating(false)}
-            onSaved={() => {
+            onSaved={(created) => {
               setCreating(false);
               refetch();
+              if (created?.id) navigate(`/canales/${created.id}`);
             }}
           />
         </DialogContent>

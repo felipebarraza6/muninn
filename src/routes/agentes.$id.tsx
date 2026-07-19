@@ -242,14 +242,18 @@ export default function AgentDetailPage() {
                 ) : (
                   <Trash2 className="h-4 w-4 mr-1.5" />
                 )}
-                Eliminar
+                {agent.is_active === false ? "Eliminar" : "Desactivar"}
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Eliminar agente</AlertDialogTitle>
+                <AlertDialogTitle>
+                  {agent.is_active === false ? "Eliminar permanentemente" : "Desactivar agente"}
+                </AlertDialogTitle>
                 <AlertDialogDescription>
-                  ¿Eliminar «{agent.name}»? Esta acción no se puede deshacer.
+                  {agent.is_active === false
+                    ? `¿Eliminar «${agent.name}» de forma permanente? No se puede deshacer.`
+                    : `¿Desactivar «${agent.name}»? Dejará de aparecer en el listado y no podrá usarse en chats.`}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -258,16 +262,27 @@ export default function AgentDetailPage() {
                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                   onClick={() => {
                     if (!id) return;
-                    deleteAgent.mutate(id, {
-                      onSuccess: () => {
-                        toast.success("Agente eliminado");
-                        navigate("/agentes");
+                    const hard = agent.is_active === false;
+                    deleteAgent.mutate(
+                      { id, hard },
+                      {
+                        onSuccess: () => {
+                          toast.success(
+                            hard ? "Agente eliminado" : "Agente desactivado",
+                          );
+                          navigate("/agentes");
+                        },
+                        onError: () =>
+                          toast.error(
+                            hard
+                              ? "No se pudo eliminar el agente"
+                              : "No se pudo desactivar el agente",
+                          ),
                       },
-                      onError: () => toast.error("No se pudo eliminar el agente"),
-                    });
+                    );
                   }}
                 >
-                  Eliminar
+                  {agent.is_active === false ? "Eliminar" : "Desactivar"}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>

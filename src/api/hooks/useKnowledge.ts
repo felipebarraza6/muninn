@@ -99,22 +99,21 @@ export interface KnowledgeSearchResult {
 export function useKnowledgeCatalog(filters?: {
   page_size?: number;
   includeInactive?: boolean;
+  /** Sucursal a listar; por defecto la activa. */
+  branch?: string | number | null;
 }) {
-  const branchId = useActiveBranchId();
-  const { includeInactive, page_size } = filters ?? {};
+  const activeBranchId = useActiveBranchId();
+  const { includeInactive, page_size, branch } = filters ?? {};
+  const branchId = branch ?? activeBranchId;
   return useQuery({
-    queryKey: [
-      ...QUERY_KEY,
-      "list",
-      branchId,
-      { page_size, includeInactive: !!includeInactive },
-    ],
+    queryKey: [...QUERY_KEY, "list", branchId, { page_size, includeInactive: !!includeInactive }],
     queryFn: () =>
       GET<AgentKnowledge[] | { count: number; results: AgentKnowledge[] }>(
         ENDPOINTS.knowledge.list,
         {
           params: {
             page_size: page_size ?? 100,
+            ...(branchId ? { branch: branchId } : {}),
             ...(includeInactive ? { include_inactive: "true" } : {}),
           },
         },
@@ -135,10 +134,31 @@ export function useKnowledgeList(filters?: { source_app?: string; q?: string; to
   });
 }
 
-export function useKnowledge(id: string | undefined) {
+function branchParams(branch?: string | number | null) {
+  return branch != null && branch !== "" ? { branch } : undefined;
+}
+
+type KnowledgeIdInput = string | { id: string; branch?: string | number | null };
+
+function resolveKnowledgeIdInput(input: KnowledgeIdInput): {
+  id: string;
+  branch?: string | number | null;
+} {
+  if (typeof input === "string") return { id: input };
+  return input;
+}
+
+export function useKnowledge(
+  id: string | undefined,
+  options?: { branch?: string | number | null },
+) {
+  const branch = options?.branch;
   return useQuery({
-    queryKey: [...QUERY_KEY, id],
-    queryFn: () => GET<AgentKnowledge>(ENDPOINTS.knowledge.detail(id!)),
+    queryKey: [...QUERY_KEY, id, branch ?? null],
+    queryFn: () =>
+      GET<AgentKnowledge>(ENDPOINTS.knowledge.detail(id!), {
+        params: branchParams(branch),
+      }),
     enabled: !!id,
   });
 }
@@ -155,8 +175,18 @@ export function useCreateKnowledge() {
 export function useUpdateKnowledge() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<AgentKnowledge> }) =>
-      PATCH<AgentKnowledge>(ENDPOINTS.knowledge.detail(id), data),
+    mutationFn: ({
+      id,
+      data,
+      branch,
+    }: {
+      id: string;
+      data: Partial<AgentKnowledge>;
+      branch?: string | number | null;
+    }) =>
+      PATCH<AgentKnowledge>(ENDPOINTS.knowledge.detail(id), data, {
+        params: branchParams(branch),
+      }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: QUERY_KEY }),
   });
 }
@@ -164,7 +194,10 @@ export function useUpdateKnowledge() {
 export function useDeleteKnowledge() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => DELETE(ENDPOINTS.knowledge.detail(id)),
+    mutationFn: (input: KnowledgeIdInput) => {
+      const { id, branch } = resolveKnowledgeIdInput(input);
+      return DELETE(ENDPOINTS.knowledge.detail(id), { params: branchParams(branch) });
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: QUERY_KEY }),
   });
 }
@@ -174,13 +207,10 @@ function patchKnowledgeInLists(
   id: string,
   patch: Partial<AgentKnowledge>,
 ) {
-  queryClient.setQueriesData<AgentKnowledge[]>(
-    { queryKey: [...QUERY_KEY, "list"] },
-    (old) => {
-      if (!Array.isArray(old)) return old;
-      return old.map((doc) => (String(doc.id) === id ? { ...doc, ...patch } : doc));
-    },
-  );
+  queryClient.setQueriesData<AgentKnowledge[]>({ queryKey: [...QUERY_KEY, "list"] }, (old) => {
+    if (!Array.isArray(old)) return old;
+    return old.map((doc) => (String(doc.id) === id ? { ...doc, ...patch } : doc));
+  });
   queryClient.setQueryData<AgentKnowledge>([...QUERY_KEY, id], (old) =>
     old ? { ...old, ...patch } : old,
   );
@@ -189,9 +219,18 @@ function patchKnowledgeInLists(
 export function useIndexKnowledge() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) =>
-      POST<KnowledgeIndexResponse>(ENDPOINTS.knowledge.index(id)),
-    onSuccess: (data, id) => {
+    mutationFn: (input: KnowledgeIdInput) => {
+      const { id, branch } = resolveKnowledgeIdInput(input);
+      return POST<KnowledgeIndexResponse>(
+        ENDPOINTS.knowledge.index(id),
+        {},
+        {
+          params: branchParams(branch),
+        },
+      );
+    },
+    onSuccess: (data, variables) => {
+      const { id } = resolveKnowledgeIdInput(variables);
       patchKnowledgeInLists(queryClient, id, {
         ...data,
         is_indexed: false,
@@ -208,9 +247,18 @@ export function useIndexKnowledge() {
 export function useReindexKnowledge() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) =>
-      POST<KnowledgeIndexResponse>(ENDPOINTS.knowledge.reindex(id)),
-    onSuccess: (data, id) => {
+    mutationFn: (input: KnowledgeIdInput) => {
+      const { id, branch } = resolveKnowledgeIdInput(input);
+      return POST<KnowledgeIndexResponse>(
+        ENDPOINTS.knowledge.reindex(id),
+        {},
+        {
+          params: branchParams(branch),
+        },
+      );
+    },
+    onSuccess: (data, variables) => {
+      const { id } = resolveKnowledgeIdInput(variables);
       // El endpoint marca is_indexed=false al encolar; reflejarlo ya en UI.
       patchKnowledgeInLists(queryClient, id, {
         ...data,
@@ -228,17 +276,31 @@ export function useReindexKnowledge() {
 export async function fetchKnowledgeIndexingStatus(
   id: string,
   taskId?: string | null,
+  branch?: string | number | null,
 ): Promise<KnowledgeIndexingStatus> {
   return GET<KnowledgeIndexingStatus>(ENDPOINTS.knowledge.indexingStatus(id), {
-    params: taskId ? { task_id: taskId } : undefined,
+    params: {
+      ...(taskId ? { task_id: taskId } : {}),
+      ...(branchParams(branch) ?? {}),
+    },
   });
 }
 
 export function useUnindexKnowledge() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => POST<AgentKnowledge>(ENDPOINTS.knowledge.unindex(id)),
-    onSuccess: (data, id) => {
+    mutationFn: (input: KnowledgeIdInput) => {
+      const { id, branch } = resolveKnowledgeIdInput(input);
+      return POST<AgentKnowledge>(
+        ENDPOINTS.knowledge.unindex(id),
+        {},
+        {
+          params: branchParams(branch),
+        },
+      );
+    },
+    onSuccess: (data, variables) => {
+      const { id } = resolveKnowledgeIdInput(variables);
       patchKnowledgeInLists(queryClient, id, {
         ...data,
         is_indexed: false,
@@ -269,10 +331,18 @@ export interface KnowledgeChunksResponse {
   chunks: KnowledgeChunk[];
 }
 
-export function useKnowledgeChunks(id: string | undefined, enabled = true) {
+export function useKnowledgeChunks(
+  id: string | undefined,
+  enabled = true,
+  options?: { branch?: string | number | null },
+) {
+  const branch = options?.branch;
   return useQuery({
-    queryKey: [...QUERY_KEY, id, "chunks"],
-    queryFn: () => GET<KnowledgeChunksResponse>(ENDPOINTS.knowledge.chunks(id!)),
+    queryKey: [...QUERY_KEY, id, "chunks", branch ?? null],
+    queryFn: () =>
+      GET<KnowledgeChunksResponse>(ENDPOINTS.knowledge.chunks(id!), {
+        params: branchParams(branch),
+      }),
     enabled: !!id && enabled,
     staleTime: 15_000,
   });

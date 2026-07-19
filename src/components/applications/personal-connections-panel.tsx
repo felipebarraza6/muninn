@@ -11,6 +11,7 @@ import {
   useDisconnectApplication,
   type ExternalAPI,
 } from "@/api/hooks/useExternalAPIs";
+import { useActiveBranchId } from "@/hooks/useActiveBranchId";
 import { toast } from "sonner";
 
 function formatWhen(iso?: string | null): string {
@@ -25,8 +26,14 @@ function formatWhen(iso?: string | null): string {
   }
 }
 
+/**
+ * Cuenta personal de prueba (Studio / Probar).
+ * Sin selector de sucursal: eso vive en Instalación (cuenta de servicio).
+ * Acá solo credentials del usuario actual para probar en Studio.
+ */
 export function PersonalConnectionsPanel({ api }: { api: ExternalAPI }) {
   const apiId = String(api.id);
+  const branchId = useActiveBranchId();
   const { data: connection, isLoading, refetch } = useApplicationConnection(apiId);
   const { data: fieldsData, isLoading: fieldsLoading } = useCredentialFields(apiId);
   const connect = useConnectApplication();
@@ -35,7 +42,6 @@ export function PersonalConnectionsPanel({ api }: { api: ExternalAPI }) {
   const fields = useMemo(() => {
     const fromApi = fieldsData?.fields ?? [];
     if (fromApi.length) return fromApi;
-    // Fallback típico SmartHydro / DentyDesk
     return [
       { name: "email", type: "string", format: "email", required: true },
       { name: "password", type: "string", format: "password", required: true },
@@ -48,7 +54,7 @@ export function PersonalConnectionsPanel({ api }: { api: ExternalAPI }) {
     const next: Record<string, string> = {};
     for (const f of fields) next[f.name] = "";
     setValues(next);
-  }, [fields]);
+  }, [fields, apiId]);
 
   const connected = Boolean(connection?.is_connected);
 
@@ -63,11 +69,15 @@ export function PersonalConnectionsPanel({ api }: { api: ExternalAPI }) {
       if (v) credentials[f.name] = v;
     }
     connect.mutate(
-      { external_api: apiId, credentials },
+      {
+        external_api: apiId,
+        credentials,
+        ...(branchId != null ? { branch: branchId } : {}),
+      },
       {
         onSuccess: (r) => {
           if (r.success) {
-            toast.success(`Cuenta de ${api.name} conectada`);
+            toast.success("Cuenta de prueba conectada");
             setValues((prev) => {
               const cleared = { ...prev };
               for (const k of Object.keys(cleared)) {
@@ -86,7 +96,7 @@ export function PersonalConnectionsPanel({ api }: { api: ExternalAPI }) {
         onError: (err) => {
           toast.error(
             (err as { friendlyMessage?: string })?.friendlyMessage ||
-              "No se pudo conectar la cuenta",
+              "No se pudo conectar la cuenta de prueba",
           );
           void refetch();
         },
@@ -98,7 +108,7 @@ export function PersonalConnectionsPanel({ api }: { api: ExternalAPI }) {
     if (!connection?.id) return;
     disconnect.mutate(connection.id, {
       onSuccess: () => {
-        toast.success("Cuenta desconectada");
+        toast.success("Cuenta de prueba desconectada");
         void refetch();
       },
       onError: () => toast.error("No se pudo desconectar"),
@@ -110,16 +120,18 @@ export function PersonalConnectionsPanel({ api }: { api: ExternalAPI }) {
   }
 
   return (
-    <section className="rounded-xl border bg-card/60 p-4 md:p-5 space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+    <section className="space-y-5">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 border-b border-border/60 pb-3">
         <div>
           <h2 className="text-sm font-medium flex items-center gap-2">
             <KeyRound className="h-4 w-4 text-primary" />
-            Mi cuenta en {api.name}
+            Cuenta de prueba · {api.name}
           </h2>
           <p className="text-xs text-muted-foreground mt-0.5 max-w-xl">
-            Conectá tu usuario y clave una vez. Las skills usan esta cuenta automáticamente; no van
-            a RAG ni al LLM.
+            Credenciales <strong className="text-foreground font-medium">tuyas</strong> solo para
+            Studio / Probar. Los agentes no las usan: ellos van con la{" "}
+            <strong className="text-foreground font-medium">cuenta de servicio</strong> de la
+            pestaña Instalación.
           </p>
         </div>
         <Badge variant={connected ? "default" : "secondary"} className="text-[10px] self-start">
@@ -137,7 +149,7 @@ export function PersonalConnectionsPanel({ api }: { api: ExternalAPI }) {
             <div className="rounded-lg border border-primary/25 bg-primary/5 px-3 py-2 text-xs space-y-1">
               <p className="flex items-center gap-1.5 font-medium">
                 <ShieldCheck className="h-3.5 w-3.5 text-primary" />
-                {connection?.label || "Cuenta guardada"}
+                {connection?.label || "Cuenta de prueba guardada"}
               </p>
               <p className="text-muted-foreground">
                 Última verificación: {formatWhen(connection?.last_verified_at)}
@@ -148,7 +160,7 @@ export function PersonalConnectionsPanel({ api }: { api: ExternalAPI }) {
             </div>
           )}
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2 max-w-2xl">
             {fields.map((f) => {
               const inputType =
                 f.format === "password" || f.name.toLowerCase().includes("password")

@@ -35,6 +35,13 @@ export function useConversation(id: string | undefined) {
   });
 }
 
+export type ChatMessageMetadata = {
+  reply_to_id?: number | string;
+  reply_to_role?: string;
+  reply_to_preview?: string;
+  [key: string]: unknown;
+};
+
 export interface ChatMessageResponse {
   id: string | number;
   sender?: string;
@@ -50,6 +57,7 @@ export interface ChatMessageResponse {
   sources?: unknown[];
   tool_calls?: unknown[];
   tool_results?: unknown[];
+  metadata?: ChatMessageMetadata | null;
 }
 
 export function useConversationMessages(
@@ -67,8 +75,22 @@ export function useConversationMessages(
 export function useSendConversationMessage() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, message }: { id: string; message: string }) =>
-      POST<ChatMessageResponse>(ENDPOINTS.conversations.chat(id), { message }),
+    mutationFn: ({
+      id,
+      message,
+      replyToId,
+    }: {
+      id: string;
+      message: string;
+      replyToId?: string | number | null;
+    }) => {
+      const body: Record<string, unknown> = { message };
+      if (replyToId != null && replyToId !== "") {
+        const n = Number(replyToId);
+        if (Number.isFinite(n)) body.reply_to_id = n;
+      }
+      return POST<ChatMessageResponse>(ENDPOINTS.conversations.chat(id), body);
+    },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         queryKey: ["conversations", variables.id, "messages"],
@@ -81,8 +103,13 @@ export function useSendConversationMessage() {
 export function useCreateConversation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { agent: string | number; title: string; user?: string | number }) =>
-      POST<Conversation>(ENDPOINTS.conversations.list, data),
+    mutationFn: (data: {
+      agent: string | number;
+      title: string;
+      user?: string | number;
+      /** Sucursal del agente; evita rechazo si x-branch-id apunta a otra. */
+      branch?: string | number;
+    }) => POST<Conversation>(ENDPOINTS.conversations.list, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
       queryClient.invalidateQueries({ queryKey: ["unified-conversations"] });

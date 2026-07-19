@@ -155,6 +155,8 @@ export const GET = <T>(url: string, config: ApiRequestConfig = {}) =>
   apiClient.get<T>(url, config).then((r) => r.data);
 export const POST = <T>(url: string, data = {}, config: ApiRequestConfig = {}) =>
   apiClient.post<T>(url, data, config).then((r) => r.data);
+export const PUT = <T>(url: string, data = {}, config: ApiRequestConfig = {}) =>
+  apiClient.put<T>(url, data, config).then((r) => r.data);
 export const PATCH = <T>(url: string, data = {}, config: ApiRequestConfig = {}) =>
   apiClient.patch<T>(url, data, config).then((r) => r.data);
 export const DELETE = <T>(url: string, config: ApiRequestConfig = {}) =>

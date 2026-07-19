@@ -203,7 +203,7 @@ export function ExternalApiEndpointsPanel({
   };
 
   return (
-    <section className={cn("space-y-3", !embedded && "rounded-xl border bg-card/60 p-4 md:p-5")}>
+    <section className="space-y-3">
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
         <div>
           {!embedded && <h2 className="text-sm font-medium">Endpoints ({entries.length})</h2>}
@@ -226,13 +226,13 @@ export function ExternalApiEndpointsPanel({
           {canManage ? "Crea el primero para poder probarlo y usarlo en funciones." : ""}
         </p>
       ) : (
-        <div className="space-y-2">
+        <div className="divide-y divide-border/60">
           {entries.map(([type, endpoint]) => {
             const method = (endpoint.method || "GET").toUpperCase();
             return (
               <div
                 key={type}
-                className="rounded-lg border border-border/80 bg-background/40 px-3 py-2.5"
+                className="py-3 first:pt-0 last:pb-0"
               >
                 <div className="flex flex-wrap items-start gap-2">
                   <div className="min-w-0 flex-1 space-y-1">

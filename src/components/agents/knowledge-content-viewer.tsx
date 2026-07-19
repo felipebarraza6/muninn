@@ -51,6 +51,8 @@ interface KnowledgeContentViewerProps {
   knowledgeType: KnowledgeType;
   /** `agent`: tab Vectores. `catalog` (default): tab Uso entre agentes. */
   context?: KnowledgeViewerContext;
+  /** Sucursal del documento/agente (evita 404 por desajuste con x-branch-id). */
+  branchId?: string | number | null;
 }
 
 function formatUsageDate(value?: string | null) {
@@ -71,7 +73,9 @@ function agentsUsingKnowledge(agents: Agent[], knowledgeId: string): Agent[] {
   return agents.filter((a) =>
     (a.knowledge_documents ?? []).some((doc) => {
       if (doc == null) return false;
-      if (typeof doc === "object" && "id" in doc) return String(doc.id) === id;
+      if (typeof doc === "object" && doc !== null && "id" in (doc as object)) {
+        return String((doc as { id: string | number }).id) === id;
+      }
       return String(doc) === id;
     }),
   );
@@ -494,13 +498,17 @@ function UsagePanel({
 function VectorsPanel({
   knowledgeId,
   enabled,
+  branchId,
 }: {
   knowledgeId: string;
   enabled: boolean;
   indexed?: boolean;
+  branchId?: string | number | null;
 }) {
   // Siempre pedir chunks al abrir: is_indexed puede decir "ok" sin embeddings reales.
-  const { data, isLoading } = useKnowledgeChunks(knowledgeId, enabled);
+  const { data, isLoading } = useKnowledgeChunks(knowledgeId, enabled, {
+    branch: branchId,
+  });
 
   const chunks = data?.chunks ?? [];
   const count = data?.count ?? 0;
@@ -833,6 +841,7 @@ export function KnowledgeContentViewer({
   title,
   knowledgeType,
   context = "catalog",
+  branchId,
 }: KnowledgeContentViewerProps) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -845,7 +854,10 @@ export function KnowledgeContentViewer({
   const [dataColumns, setDataColumns] = useState<string[]>([]);
   const [dataRows, setDataRows] = useState<GridRow[]>([]);
 
-  const { data: doc, isLoading, error, refetch } = useKnowledge(open ? knowledgeId : undefined);
+  const { data: doc, isLoading, error, refetch } = useKnowledge(
+    open ? knowledgeId : undefined,
+    { branch: branchId ?? undefined },
+  );
   const update = useUpdateKnowledge();
 
   const type = doc?.knowledge_type ?? knowledgeType;
@@ -935,6 +947,7 @@ export function KnowledgeContentViewer({
       {
         id: String(doc.id),
         data: { title: editTitle.trim(), content },
+        branch: branchId ?? doc.branch,
       },
       {
         onSuccess: () => {
@@ -1134,6 +1147,7 @@ export function KnowledgeContentViewer({
                     <VectorsPanel
                       knowledgeId={String(doc.id)}
                       enabled={open && viewTab === "vectores"}
+                      branchId={branchId ?? doc.branch}
                     />
                   </div>
                 </ScrollArea>

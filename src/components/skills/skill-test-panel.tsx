@@ -3,20 +3,25 @@ import { FlaskConical, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import {
   useExecuteAgentFunction,
   type AgentFunction,
   type ExecuteResult,
-  type ParameterSource,
 } from "@/api/hooks/useAgentFunctions";
 import {
   coerceParamsFromForm,
+  DATE_WIRE_FORMATS,
   defaultsFromSchema,
+  formatSchemaType,
+  getDateWireFormat,
   isRequiredParam,
-  PARAMETER_SOURCE_LABEL,
+  kindFromProperty,
+  SCHEMA_KIND_HINT,
+  SCHEMA_KIND_PLACEHOLDER,
   prettyJson,
   schemaPropertyEntries,
+  substituteFormulaExpression,
+  wireDateToIso,
 } from "@/lib/skills";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -44,32 +49,23 @@ function saveValues(skillId: string, values: Record<string, string>) {
   }
 }
 
-function sourceOf(
-  sources: Record<string, ParameterSource> | undefined,
-  key: string,
-): ParameterSource["source"] {
-  return sources?.[key]?.source ?? "free";
-}
-
+/**
+ * Probar skill: siempre input libre para todos los parámetros.
+ * Las fuentes (estático / DATA) se configuran por agente al asignar;
+ * aquí se simula pasar valores como lo haría el LLM/usuario.
+ */
 export function SkillTestPanel({ skill }: { skill: AgentFunction }) {
   const execute = useExecuteAgentFunction();
   const skillId = String(skill.id);
-  const sources = skill.config?.parameter_sources;
-  const allEntries = useMemo(
+  const isFormula = skill.implementation_type === "formula";
+  const formulaExpression = (skill.config?.expression || "").trim();
+  const entries = useMemo(
     () => schemaPropertyEntries(skill.parameters_schema),
     [skill.parameters_schema],
   );
-  const freeEntries = useMemo(
-    () => allEntries.filter(([key]) => sourceOf(sources, key) === "free"),
-    [allEntries, sources],
-  );
-  const resolvedEntries = useMemo(
-    () => allEntries.filter(([key]) => sourceOf(sources, key) !== "free"),
-    [allEntries, sources],
-  );
-  const requiredFree = useMemo(
-    () => (skill.parameters_schema?.required ?? []).filter((k) => sourceOf(sources, k) === "free"),
-    [skill.parameters_schema?.required, sources],
+  const requiredKeys = useMemo(
+    () => skill.parameters_schema?.required ?? [],
+    [skill.parameters_schema?.required],
   );
 
   const [values, setValues] = useState<Record<string, string>>(() => ({
@@ -77,6 +73,7 @@ export function SkillTestPanel({ skill }: { skill: AgentFunction }) {
     ...loadValues(skillId),
   }));
   const [result, setResult] = useState<ExecuteResult | null>(null);
+  const [lastParams, setLastParams] = useState<Record<string, unknown> | null>(null);
 
   useEffect(() => {
     setValues({
@@ -84,24 +81,26 @@ export function SkillTestPanel({ skill }: { skill: AgentFunction }) {
       ...loadValues(skillId),
     });
     setResult(null);
+    setLastParams(null);
   }, [skillId, skill.parameters_schema]);
 
   useEffect(() => {
     saveValues(skillId, values);
   }, [skillId, values]);
 
+  const processedExpression = useMemo(() => {
+    if (!isFormula || !formulaExpression || !lastParams) return null;
+    return substituteFormulaExpression(formulaExpression, lastParams);
+  }, [isFormula, formulaExpression, lastParams]);
+
   const run = () => {
-    const missing = requiredFree.filter((k) => !values[k]?.trim());
+    const missing = requiredKeys.filter((k) => !values[k]?.trim());
     if (missing.length) {
-      toast.error(`Completa los parámetros libres: ${missing.join(", ")}`);
+      toast.error(`Completa los parámetros requeridos: ${missing.join(", ")}`);
       return;
     }
-    // Solo enviamos los libres; static/data_document los resuelve el backend.
-    const freeOnly: Record<string, string> = {};
-    for (const [key] of freeEntries) {
-      if (values[key] != null) freeOnly[key] = values[key];
-    }
-    const parameters = coerceParamsFromForm(freeOnly, skill.parameters_schema);
+    const parameters = coerceParamsFromForm(values, skill.parameters_schema);
+    setLastParams(parameters);
     execute.mutate(
       { id: skillId, parameters },
       {
@@ -121,15 +120,16 @@ export function SkillTestPanel({ skill }: { skill: AgentFunction }) {
   };
 
   return (
-    <section className="rounded-xl border bg-card/60 p-4 md:p-5 space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+    <section className="space-y-5">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 border-b border-border/60 pb-3">
         <div>
           <h2 className="text-sm font-medium">Probar skill</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Solo pedimos parámetros libres (los que entregaría el LLM). Los estáticos y de documento
-            se resuelven en el servidor.
+            {isFormula
+              ? "Ingresá valores de prueba para cada variable y ejecutá la fórmula."
+              : "Ingresá los valores a mano (como si los entregara el LLM). En el agente, las fuentes (documento DATA / estático) se configuran al asignar."}
             {skill.uses_personal_connection
-              ? " La autenticación usa tu cuenta de la Aplicación (Mis conexiones)."
+              ? " En prueba se usa tu cuenta de prueba o la cuenta de la instalación; en el agente, solo la de la instalación."
               : ""}
           </p>
         </div>
@@ -145,79 +145,64 @@ export function SkillTestPanel({ skill }: { skill: AgentFunction }) {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="space-y-3 min-w-0">
-          {allEntries.length === 0 ? (
+          {entries.length === 0 ? (
             <p className="text-xs text-muted-foreground rounded-lg border border-dashed px-3 py-6 text-center">
               {skill.uses_personal_connection
                 ? "Sin parámetros de negocio. Se autenticará con tu cuenta de la Aplicación."
                 : "Esta skill no define parámetros. Puedes ejecutarla directo."}
             </p>
           ) : (
-            <>
-              {freeEntries.length === 0 && (
-                <p className="text-xs text-muted-foreground rounded-lg border border-dashed px-3 py-4 text-center">
-                  Todos los parámetros se resuelven automáticamente. Podés ejecutar sin inputs.
-                </p>
-              )}
-              {freeEntries.map(([key, prop]) => {
-                const req = isRequiredParam(skill.parameters_schema, key);
-                const inputType =
-                  prop.format === "password" || key.toLowerCase().includes("password")
-                    ? "password"
-                    : prop.format === "date"
-                      ? "date"
+            entries.map(([key, prop]) => {
+              const req = isRequiredParam(skill.parameters_schema, key);
+              const kind = kindFromProperty(prop);
+              const wire = getDateWireFormat(prop);
+              const wireMeta = DATE_WIRE_FORMATS.find((f) => f.value === wire);
+              const inputType =
+                prop.format === "password" || key.toLowerCase().includes("password")
+                  ? "password"
+                  : kind === "date"
+                    ? "date"
+                    : kind === "datetime"
+                      ? "datetime-local"
                       : "text";
-                return (
-                  <div key={key} className="space-y-1.5">
-                    <Label className="text-xs font-mono flex items-center gap-1.5">
-                      {key}
-                      {req && <span className="text-destructive">*</span>}
-                      {prop.type && (
-                        <span className="text-[10px] text-muted-foreground font-normal">
-                          {prop.type}
-                          {prop.format ? ` · ${prop.format}` : ""}
-                        </span>
-                      )}
-                    </Label>
-                    <Input
-                      type={inputType}
-                      autoComplete="off"
-                      value={values[key] ?? ""}
-                      onChange={(e) => setValues((prev) => ({ ...prev, [key]: e.target.value }))}
-                      placeholder={prop.description || key}
-                      className="h-9 text-sm"
-                    />
-                    {prop.description && (
-                      <p className="text-[11px] text-muted-foreground">{prop.description}</p>
-                    )}
-                  </div>
-                );
-              })}
-              {resolvedEntries.length > 0 && (
-                <div className="rounded-lg border bg-muted/30 px-3 py-2 space-y-1.5">
-                  <p className="text-[11px] font-medium text-muted-foreground">
-                    Resueltos automáticamente
+              const inputMode =
+                kind === "integer" ? "numeric" : kind === "number" ? "decimal" : undefined;
+              const stored = values[key] ?? "";
+              // date picker usa ISO; si el valor guardado está en wire, convertimos para mostrar.
+              const displayValue =
+                kind === "date" && wire !== "YYYY-MM-DD"
+                  ? wireDateToIso(stored, wire) ||
+                    (/^\d{4}-\d{2}-\d{2}$/.test(stored) ? stored : "")
+                  : stored;
+              const placeholder =
+                prop.description ||
+                (kind === "date" ? wireMeta?.example : SCHEMA_KIND_PLACEHOLDER[kind]) ||
+                key;
+              return (
+                <div key={key} className="space-y-1.5">
+                  <Label className="text-xs font-mono flex flex-wrap items-center gap-1.5">
+                    {key}
+                    {req && <span className="text-destructive">*</span>}
+                    <span className="text-[10px] text-muted-foreground font-normal">
+                      {formatSchemaType(prop.type, prop.format, prop)}
+                    </span>
+                  </Label>
+                  <Input
+                    type={inputType}
+                    inputMode={inputMode}
+                    autoComplete="off"
+                    value={displayValue}
+                    onChange={(e) => setValues((prev) => ({ ...prev, [key]: e.target.value }))}
+                    placeholder={placeholder}
+                    className="h-9 text-sm"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    {prop.description || SCHEMA_KIND_HINT[kind]}
+                    {kind === "date" && wire !== "YYYY-MM-DD" ? ` Se enviará como ${wire}.` : ""}
                   </p>
-                  {resolvedEntries.map(([key]) => {
-                    const src = sourceOf(sources, key);
-                    const cfg = sources?.[key];
-                    let detail = PARAMETER_SOURCE_LABEL[src];
-                    if (cfg?.source === "static") {
-                      detail = `Estático: ${String(cfg.value ?? "")}`;
-                    } else if (cfg?.source === "data_document") {
-                      detail = `Documento: ${cfg.document_title}`;
-                    }
-                    return (
-                      <div key={key} className="flex flex-wrap items-center gap-2 text-xs">
-                        <code className="font-mono">{key}</code>
-                        <Badge variant="secondary" className="text-[10px] font-normal">
-                          {detail}
-                        </Badge>
-                      </div>
-                    );
-                  })}
                 </div>
-              )}
-            </>
+              );
+            })
           )}
         </div>
 
@@ -230,20 +215,49 @@ export function SkillTestPanel({ skill }: { skill: AgentFunction }) {
           ) : (
             <div
               className={cn(
-                "rounded-lg border p-3 space-y-2 text-xs",
+                "rounded-lg border p-3 space-y-3 text-xs",
                 result.success
                   ? "border-primary/30 bg-primary/5"
                   : "border-destructive/30 bg-destructive/5",
               )}
             >
               <p className="font-medium">{result.success ? "Éxito" : "Error"}</p>
+
+              {isFormula && formulaExpression && (
+                <div className="space-y-2 rounded-md border bg-background/60 p-2.5">
+                  <div className="space-y-1">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      Fórmula
+                    </p>
+                    <p className="font-mono text-[11px] break-all">{formulaExpression}</p>
+                  </div>
+                  {processedExpression && (
+                    <div className="space-y-1 border-t border-border/50 pt-2">
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        Con valores
+                      </p>
+                      <p className="font-mono text-[11px] break-all text-primary">
+                        {processedExpression}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {result.error && (
                 <p className="text-destructive whitespace-pre-wrap">{result.error}</p>
               )}
               {result.result != null && (
-                <pre className="max-h-72 overflow-auto rounded bg-background/60 p-2 font-mono text-[11px] whitespace-pre-wrap break-all">
-                  {prettyJson(result.result)}
-                </pre>
+                <div className="space-y-1">
+                  {isFormula && (
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      Resultado
+                    </p>
+                  )}
+                  <pre className="max-h-72 overflow-auto rounded bg-background/60 p-2 font-mono text-[11px] whitespace-pre-wrap break-all">
+                    {prettyJson(result.result)}
+                  </pre>
+                </div>
               )}
             </div>
           )}

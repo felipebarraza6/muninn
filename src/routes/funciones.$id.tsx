@@ -37,31 +37,55 @@ import {
   History,
   Plus,
   RefreshCw,
+  RotateCcw,
 } from "lucide-react";
 import {
   useAgentFunction,
   useUpdateAgentFunction,
   useDeleteAgentFunction,
+  useRestoreAgentFunction,
   type ImplementationType,
   type JsonSchema,
-  type ParameterSource,
 } from "@/api/hooks/useAgentFunctions";
 import { useExternalAPIs } from "@/api/hooks/useExternalAPIs";
-import { useKnowledgeCatalog } from "@/api/hooks/useKnowledge";
 import { SkillTestPanel } from "@/components/skills/skill-test-panel";
 import { SkillExecutionHistory } from "@/components/skills/skill-execution-history";
+import { SkillStatsPanel } from "@/components/skills/skill-stats-panel";
 import {
-  guessSearchColumn,
-  guessValueColumn,
+  DATE_WIRE_FORMATS,
+  formatSchemaType,
+  getDateWireFormat,
   IMPLEMENTATION_TYPE_LABEL,
   isRequiredParam,
-  PARAMETER_SOURCE_HINT,
-  PARAMETER_SOURCE_LABEL,
+  kindFromProperty,
+  normalizeSkillScope,
+  propertyFromKind,
+  SCHEMA_KIND_HINT,
+  SCHEMA_KIND_LABEL,
+  type DateWireFormat,
+  type SchemaParamKind,
   parseJsonObject,
   prettyJson,
   schemaPropertyEntries,
+  SKILL_CREATE_TYPES,
+  SKILL_SCOPE_LABEL,
 } from "@/lib/skills";
 import { toast } from "sonner";
+import { FormulaExpressionEditor } from "@/components/skills/formula-expression-editor";
+
+const CREDENTIAL_PARAM_KEYS = new Set([
+  "email",
+  "password",
+  "passwd",
+  "username",
+  "user",
+  "login",
+  "clave",
+  "usuario",
+  "api_key",
+  "client_id",
+  "client_secret",
+]);
 
 type SkillTab = "configuracion" | "parametros" | "probar" | "historial";
 
@@ -72,10 +96,10 @@ export default function FunctionDetailPage() {
   const { data: fn, isLoading, error, refetch } = useAgentFunction(id);
   const update = useUpdateAgentFunction();
   const remove = useDeleteAgentFunction();
+  const restore = useRestoreAgentFunction();
+  const [confirmName, setConfirmName] = useState("");
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const { data: apps = [] } = useExternalAPIs({ includeInactive: false });
-  const { data: knowledgeDocs = [], isLoading: knowledgeLoading } = useKnowledgeCatalog({
-    page_size: 200,
-  });
 
   const tabParam = searchParams.get("tab");
   const tab: SkillTab =
@@ -106,14 +130,41 @@ export default function FunctionDetailPage() {
   const [configJson, setConfigJson] = useState("{}");
   const [schemaJson, setSchemaJson] = useState("{}");
   const [expression, setExpression] = useState("");
-  const [sourcesDraft, setSourcesDraft] = useState<Record<string, ParameterSource>>({});
-  const [newParamName, setNewParamName] = useState("");
-  const [newParamType, setNewParamType] = useState<"string" | "number" | "integer" | "boolean">(
-    "string",
-  );
-  const [newParamDesc, setNewParamDesc] = useState("");
-  const [newParamRequired, setNewParamRequired] = useState(true);
-  const [showAddParam, setShowAddParam] = useState(false);
+  const [paramFormOpen, setParamFormOpen] = useState(false);
+  const [editingParamKey, setEditingParamKey] = useState<string | null>(null);
+  const [paramName, setParamName] = useState("");
+  const [paramKind, setParamKind] = useState<SchemaParamKind>("string");
+  const [paramDateFormat, setParamDateFormat] = useState<DateWireFormat>("YYYY-MM-DD");
+  const [paramDesc, setParamDesc] = useState("");
+  const [paramRequired, setParamRequired] = useState(true);
+
+  const resetParamForm = () => {
+    setEditingParamKey(null);
+    setParamName("");
+    setParamKind("string");
+    setParamDateFormat("YYYY-MM-DD");
+    setParamDesc("");
+    setParamRequired(true);
+  };
+
+  const openAddParam = () => {
+    resetParamForm();
+    setParamFormOpen(true);
+  };
+
+  const openEditParam = (
+    key: string,
+    prop: { type?: string; format?: string; description?: string; [k: string]: unknown },
+  ) => {
+    const kind = kindFromProperty(prop);
+    setEditingParamKey(key);
+    setParamName(key);
+    setParamKind(kind);
+    setParamDateFormat(getDateWireFormat(prop));
+    setParamDesc(typeof prop.description === "string" ? prop.description : "");
+    setParamRequired(isRequiredParam(fn?.parameters_schema, key));
+    setParamFormOpen(true);
+  };
 
   useEffect(() => {
     if (!fn) return;
@@ -128,7 +179,6 @@ export default function FunctionDetailPage() {
     setExpression(fn.config?.expression || "");
     setConfigJson(prettyJson(fn.config ?? {}));
     setSchemaJson(prettyJson(fn.parameters_schema ?? { type: "object", properties: {} }));
-    setSourcesDraft((fn.config?.parameter_sources as Record<string, ParameterSource>) ?? {});
     setEditing(false);
   }, [fn]);
 
@@ -143,38 +193,10 @@ export default function FunctionDetailPage() {
     () => schemaPropertyEntries(fn?.parameters_schema),
     [fn?.parameters_schema],
   );
-
-  /** Documentos DATA de la sucursal de la skill (o de la activa). */
-  const dataDocuments = useMemo(() => {
-    const skillBranch = fn?.branch != null ? String(fn.branch) : null;
-    return knowledgeDocs.filter((d) => {
-      if (d.knowledge_type !== "DATA" || d.is_active === false) return false;
-      if (!skillBranch || d.branch == null) return true;
-      return String(d.branch) === skillBranch;
-    });
-  }, [knowledgeDocs, fn?.branch]);
-
-  const dataDocByTitle = useMemo(() => {
-    const map = new Map<string, (typeof dataDocuments)[number]>();
-    for (const d of dataDocuments) map.set(d.title, d);
-    return map;
-  }, [dataDocuments]);
-
-  const applyDataDocument = (paramKey: string, title: string) => {
-    const doc = dataDocByTitle.get(title);
-    const columns = doc?.columns ?? [];
-    const valueCol = guessValueColumn(columns);
-    const searchCol = guessSearchColumn(columns, valueCol);
-    setSourcesDraft((prev) => ({
-      ...prev,
-      [paramKey]: {
-        source: "data_document",
-        document_title: title,
-        value_column: valueCol,
-        user_input_column: searchCol || undefined,
-      },
-    }));
-  };
+  const formulaVarNames = useMemo(
+    () => paramEntries.map(([key]) => key).filter(Boolean),
+    [paramEntries],
+  );
 
   if (isLoading) {
     return (
@@ -231,7 +253,6 @@ export default function FunctionDetailPage() {
             config: {
               ...prevConfig,
               endpoint_type: endpointType,
-              parameter_sources: sourcesDraft,
             },
           },
         },
@@ -273,7 +294,6 @@ export default function FunctionDetailPage() {
             config: {
               ...prevConfig,
               expression: expression.trim(),
-              parameter_sources: sourcesDraft,
             },
           },
         },
@@ -367,29 +387,16 @@ export default function FunctionDetailPage() {
     );
   };
 
-  const addManualParam = () => {
-    if (!id) return;
-    const key = newParamName.trim().replace(/\s+/g, "_");
+  const saveParam = () => {
+    if (!id || !fn) return;
+    const key = paramName.trim().replace(/\s+/g, "_");
     if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key)) {
       toast.error("Nombre inválido. Usá letras, números y _ (sin empezar con número).");
       return;
     }
-    const credentialKeys = new Set([
-      "email",
-      "password",
-      "passwd",
-      "username",
-      "user",
-      "login",
-      "clave",
-      "usuario",
-      "api_key",
-      "client_id",
-      "client_secret",
-    ]);
-    if (fn.uses_personal_connection && credentialKeys.has(key.toLowerCase())) {
+    if (fn.uses_personal_connection && CREDENTIAL_PARAM_KEYS.has(key.toLowerCase())) {
       toast.error(
-        "Esta skill usa la cuenta del owner. No agregues usuario/clave como parámetros; conectalos en Mi cuenta de la Aplicación.",
+        "Esta skill usa la cuenta de la instalación. No agregues usuario/clave como parámetros; configurá la cuenta en Instalación de la Aplicación.",
       );
       return;
     }
@@ -398,16 +405,31 @@ export default function FunctionDetailPage() {
       properties: {},
     }) as JsonSchema;
     const properties = { ...(current.properties ?? {}) };
-    if (properties[key]) {
+    if (!editingParamKey && properties[key]) {
       toast.error(`Ya existe el parámetro «${key}»`);
       return;
     }
-    properties[key] = {
-      type: newParamType,
-      ...(newParamDesc.trim() ? { description: newParamDesc.trim() } : {}),
-    };
-    const required = Array.isArray(current.required) ? [...current.required] : [];
-    if (newParamRequired && !required.includes(key)) required.push(key);
+    if (editingParamKey && editingParamKey !== key && properties[key]) {
+      toast.error(`Ya existe el parámetro «${key}»`);
+      return;
+    }
+    if (editingParamKey && editingParamKey !== key) {
+      delete properties[editingParamKey];
+    }
+    properties[key] = propertyFromKind({
+      kind: paramKind,
+      description: paramDesc,
+      dateFormat: paramDateFormat,
+    });
+    let required = Array.isArray(current.required) ? [...current.required] : [];
+    if (editingParamKey && editingParamKey !== key) {
+      required = required.map((r) => (r === editingParamKey ? key : r));
+    }
+    if (paramRequired) {
+      if (!required.includes(key)) required.push(key);
+    } else {
+      required = required.filter((r) => r !== key);
+    }
     const nextSchema: JsonSchema = {
       ...current,
       type: "object",
@@ -421,51 +443,11 @@ export default function FunctionDetailPage() {
       },
       {
         onSuccess: () => {
-          toast.success(`Parámetro «${key}» agregado`);
-          setNewParamName("");
-          setNewParamDesc("");
-          setNewParamType("string");
-          setNewParamRequired(true);
-          setShowAddParam(false);
-          void refetch();
-        },
-        onError: (err) =>
-          toast.error(
-            (err as { friendlyMessage?: string })?.friendlyMessage || "No se pudo agregar",
-          ),
-      },
-    );
-  };
-
-  const saveSources = () => {
-    if (!id) return;
-    const prevConfig = (fn.config && typeof fn.config === "object" ? fn.config : {}) as Record<
-      string,
-      unknown
-    >;
-    // Quitar fuentes "free" (default implícito)
-    const cleaned: Record<string, ParameterSource> = {};
-    for (const [k, v] of Object.entries(sourcesDraft)) {
-      if (!v || v.source === "free") continue;
-      cleaned[k] = v;
-    }
-    update.mutate(
-      {
-        id,
-        data: {
-          config: {
-            ...prevConfig,
-            endpoint_type:
-              (typeof prevConfig.endpoint_type === "string"
-                ? prevConfig.endpoint_type
-                : undefined) || fn.config?.endpoint_type,
-            parameter_sources: cleaned,
-          },
-        },
-      },
-      {
-        onSuccess: () => {
-          toast.success("Fuentes de parámetros guardadas");
+          toast.success(
+            editingParamKey ? `Parámetro «${key}» actualizado` : `Parámetro «${key}» agregado`,
+          );
+          resetParamForm();
+          setParamFormOpen(false);
           void refetch();
         },
         onError: (err) =>
@@ -476,40 +458,44 @@ export default function FunctionDetailPage() {
     );
   };
 
-  const setSourceType = (paramKey: string, source: ParameterSource["source"]) => {
-    setSourcesDraft((prev) => {
-      if (source === "free") {
-        const next = { ...prev };
-        delete next[paramKey];
-        return next;
-      }
-      if (source === "static") {
-        return { ...prev, [paramKey]: { source: "static", value: "" } };
-      }
-      // Prefill con el único doc DATA si hay uno solo.
-      const only = dataDocuments.length === 1 ? dataDocuments[0] : null;
-      if (only) {
-        const columns = only.columns ?? [];
-        const valueCol = guessValueColumn(columns);
-        return {
-          ...prev,
-          [paramKey]: {
-            source: "data_document",
-            document_title: only.title,
-            value_column: valueCol,
-            user_input_column: guessSearchColumn(columns, valueCol) || undefined,
+  const deleteParam = (key: string) => {
+    if (!id || !fn) return;
+    const current = (fn.parameters_schema ?? {
+      type: "object",
+      properties: {},
+    }) as JsonSchema;
+    const properties = { ...(current.properties ?? {}) };
+    delete properties[key];
+    const required = (Array.isArray(current.required) ? current.required : []).filter(
+      (r) => r !== key,
+    );
+    update.mutate(
+      {
+        id,
+        data: {
+          parameters_schema: {
+            ...current,
+            type: "object",
+            properties,
+            required,
           },
-        };
-      }
-      return {
-        ...prev,
-        [paramKey]: {
-          source: "data_document",
-          document_title: "",
-          value_column: "",
         },
-      };
-    });
+      },
+      {
+        onSuccess: () => {
+          toast.success(`Parámetro «${key}» eliminado`);
+          if (editingParamKey === key) {
+            resetParamForm();
+            setParamFormOpen(false);
+          }
+          void refetch();
+        },
+        onError: (err) =>
+          toast.error(
+            (err as { friendlyMessage?: string })?.friendlyMessage || "No se pudo eliminar",
+          ),
+      },
+    );
   };
 
   return (
@@ -532,6 +518,9 @@ export default function FunctionDetailPage() {
               <Badge variant={fn.is_active ? "default" : "secondary"} className="text-[10px]">
                 {fn.is_active ? "Activa" : "Inactiva"}
               </Badge>
+              <Badge variant="outline" className="text-[10px] font-normal">
+                {SKILL_SCOPE_LABEL[normalizeSkillScope(fn.scope)] || "—"}
+              </Badge>
               {fn.implementation_type && (
                 <Badge variant="outline" className="text-[10px] font-normal">
                   {IMPLEMENTATION_TYPE_LABEL[fn.implementation_type] || fn.implementation_type}
@@ -552,7 +541,41 @@ export default function FunctionDetailPage() {
               {editing ? "Cancelar" : "Editar"}
             </Button>
           )}
-          <AlertDialog>
+          {fn.is_active === false && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={restore.isPending}
+              onClick={() => {
+                if (!id) return;
+                restore.mutate(id, {
+                  onSuccess: (r) => {
+                    toast.success(r.message || "Skill reactivada");
+                    void refetch();
+                  },
+                  onError: (err) =>
+                    toast.error(
+                      (err as { friendlyMessage?: string })?.friendlyMessage ||
+                        "No se pudo reactivar",
+                    ),
+                });
+              }}
+            >
+              {restore.isPending ? (
+                <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+              ) : (
+                <RotateCcw className="h-4 w-4 mr-1.5" />
+              )}
+              Reactivar
+            </Button>
+          )}
+          <AlertDialog
+            open={deleteOpen}
+            onOpenChange={(open) => {
+              setDeleteOpen(open);
+              if (!open) setConfirmName("");
+            }}
+          >
             <AlertDialogTrigger asChild>
               <Button
                 variant="outline"
@@ -560,38 +583,120 @@ export default function FunctionDetailPage() {
                 className="text-destructive hover:text-destructive"
                 disabled={remove.isPending}
               >
-                <Trash2 className="h-4 w-4 mr-1.5" /> Eliminar
+                <Trash2 className="h-4 w-4 mr-1.5" />
+                {fn.is_active === false ? "Borrar definitivo" : "Desactivar"}
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Eliminar skill</AlertDialogTitle>
-                <AlertDialogDescription>
-                  ¿Eliminar «{fn.name}»? Los agentes que la tengan asignada dejarán de poder usarla.
+                <AlertDialogTitle>
+                  {fn.is_active === false ? "Borrar skill definitivamente" : "Desactivar skill"}
+                </AlertDialogTitle>
+                <AlertDialogDescription asChild>
+                  <div className="space-y-2 text-sm text-muted-foreground">
+                    {fn.is_active === false ? (
+                      <>
+                        <p>
+                          «{fn.name}» ya está desactivada. Esto la borra de forma permanente y no se
+                          puede deshacer. Los agentes perderán la asignación.
+                        </p>
+                        <p>
+                          Escribí el nombre exacto de la skill para confirmar:{" "}
+                          <span className="font-medium text-foreground">{fn.name}</span>
+                        </p>
+                        <Input
+                          value={confirmName}
+                          onChange={(e) => setConfirmName(e.target.value)}
+                          placeholder={fn.name}
+                          autoComplete="off"
+                          className="mt-1"
+                        />
+                      </>
+                    ) : (
+                      <p>
+                        «{fn.name}» se desactivará y dejará de estar disponible para los agentes.
+                        Podés reactivarla después. Solo se borra del todo si confirmás una segunda
+                        vez.
+                      </p>
+                    )}
+                  </div>
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancelar</AlertDialogCancel>
                 <AlertDialogAction
                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  onClick={() => {
+                  disabled={
+                    remove.isPending ||
+                    (fn.is_active === false && confirmName.trim() !== fn.name.trim())
+                  }
+                  onClick={(e) => {
+                    e.preventDefault();
                     if (!id) return;
-                    remove.mutate(id, {
-                      onSuccess: () => {
-                        toast.success("Skill eliminada");
-                        navigate("/skills");
+                    const permanent = fn.is_active === false;
+                    remove.mutate(
+                      { id, permanent },
+                      {
+                        onSuccess: (r) => {
+                          if (r.action === "deleted") {
+                            toast.success(r.message || "Skill eliminada definitivamente");
+                            setDeleteOpen(false);
+                            navigate("/skills");
+                            return;
+                          }
+                          toast.success(r.message || "Skill desactivada");
+                          setDeleteOpen(false);
+                          void refetch();
+                        },
+                        onError: (err) =>
+                          toast.error(
+                            (err as { friendlyMessage?: string })?.friendlyMessage ||
+                              "No se pudo completar la acción",
+                          ),
                       },
-                      onError: () => toast.error("No se pudo eliminar"),
-                    });
+                    );
                   }}
                 >
-                  Eliminar
+                  {fn.is_active === false ? "Borrar definitivamente" : "Desactivar"}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
         </div>
       </header>
+
+      {fn.is_active === false && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2.5 text-xs text-muted-foreground flex flex-col sm:flex-row sm:items-center gap-2 justify-between">
+          <p>
+            Esta skill está <span className="font-medium text-foreground">desactivada</span>. Los
+            agentes no la usan. Podés reactivarla o borrarla definitivamente.
+          </p>
+          <div className="flex flex-wrap gap-2 shrink-0">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              disabled={restore.isPending}
+              onClick={() => {
+                if (!id) return;
+                restore.mutate(id, {
+                  onSuccess: (r) => {
+                    toast.success(r.message || "Skill reactivada");
+                    void refetch();
+                  },
+                  onError: (err) =>
+                    toast.error(
+                      (err as { friendlyMessage?: string })?.friendlyMessage ||
+                        "No se pudo reactivar",
+                    ),
+                });
+              }}
+            >
+              <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reactivar
+            </Button>
+          </div>
+        </div>
+      )}
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as SkillTab)} className="space-y-4">
         <TabsList className="w-full sm:w-auto justify-start flex-wrap h-auto gap-1">
@@ -633,16 +738,17 @@ export default function FunctionDetailPage() {
                   Esta skill usa la cuenta del owner en {fn.external_api_name || "la Aplicación"}.
                 </p>
                 <p>
-                  No agregues usuario ni clave como parámetros. Conectá la cuenta en{" "}
+                  No agregues usuario ni clave como parámetros. Configurá la cuenta de la
+                  instalación en{" "}
                   {fn.external_api ? (
                     <Link
-                      to={`/aplicaciones/${fn.external_api}?tab=cuenta`}
+                      to={`/aplicaciones/${fn.external_api}?tab=instalacion`}
                       className="text-primary underline-offset-2 hover:underline"
                     >
-                      Mi cuenta
+                      Instalación
                     </Link>
                   ) : (
-                    "Aplicaciones → Mi cuenta"
+                    "Aplicaciones → Instalación"
                   )}
                   .
                 </p>
@@ -663,7 +769,7 @@ export default function FunctionDetailPage() {
                     className="font-mono text-sm"
                   />
                 </div>
-                <div className="space-y-2 md:col-span-2">
+                <div className="space-y-2">
                   <Label>Descripción (LLM)</Label>
                   <Textarea
                     value={description}
@@ -671,7 +777,7 @@ export default function FunctionDetailPage() {
                     rows={2}
                   />
                 </div>
-                <div className="space-y-2 md:col-span-2">
+                <div className="space-y-2">
                   <Label>Instrucciones de respuesta</Label>
                   <Textarea
                     value={responseInstructions}
@@ -689,7 +795,7 @@ export default function FunctionDetailPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {(Object.keys(IMPLEMENTATION_TYPE_LABEL) as ImplementationType[]).map((t) => (
+                      {SKILL_CREATE_TYPES.map((t) => (
                         <SelectItem key={t} value={t}>
                           {IMPLEMENTATION_TYPE_LABEL[t]}
                         </SelectItem>
@@ -748,19 +854,14 @@ export default function FunctionDetailPage() {
                     </div>
                   </>
                 ) : implType === "formula" ? (
-                  <div className="space-y-2 md:col-span-2">
-                    <Label>Expresión</Label>
-                    <Input
-                      value={expression}
-                      onChange={(e) => setExpression(e.target.value)}
-                      className="font-mono text-sm"
-                      placeholder="flow_l_s * hours * 3.6"
-                    />
-                    <p className="text-[11px] text-muted-foreground">
-                      Los parámetros del schema se usan como variables. Editá parámetros en la
-                      pestaña correspondiente.
-                    </p>
-                  </div>
+                  <FormulaExpressionEditor
+                    className="md:col-span-2"
+                    value={expression}
+                    onChange={setExpression}
+                    variables={formulaVarNames}
+                    label="Expresión (fórmula)"
+                    emptyVariablesHint="Agregá variables en la pestaña Parámetros para usarlas acá."
+                  />
                 ) : (
                   <>
                     <div className="space-y-2 md:col-span-2">
@@ -820,11 +921,21 @@ export default function FunctionDetailPage() {
                   </div>
                 )}
                 {fn.implementation_type === "formula" && fn.config?.expression && (
-                  <div className="md:col-span-2">
+                  <div className="md:col-span-2 space-y-1.5">
                     <span className="text-muted-foreground text-xs">Expresión</span>
                     <p className="font-medium font-mono text-xs break-all">
                       {fn.config.expression}
                     </p>
+                    {formulaVarNames.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-[10px] text-muted-foreground">Variables:</span>
+                        {formulaVarNames.map((name) => (
+                          <Badge key={name} variant="outline" className="text-[10px] font-mono">
+                            {name}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
                 {fn.description && (
@@ -850,10 +961,14 @@ export default function FunctionDetailPage() {
           <section className="rounded-xl border bg-card/60 p-4 md:p-5 space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
               <div>
-                <h2 className="text-sm font-medium">Parámetros ({paramEntries.length})</h2>
+                <h2 className="text-sm font-medium">
+                  {fn.implementation_type === "formula" ? "Variables" : "Parámetros"} (
+                  {paramEntries.length})
+                </h2>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Schema que ve el LLM. Las fuentes definen cómo se resuelve cada valor antes de
-                  ejecutar la skill.
+                  {fn.implementation_type === "formula"
+                    ? "Estos nombres son los que podés usar en la expresión. Las fuentes (estático / documento DATA) se configuran al asignar desde el agente."
+                    : "Schema que ve el LLM. Las fuentes (estático / documento DATA) se configuran al asignar la skill desde el agente."}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2 shrink-0">
@@ -873,7 +988,14 @@ export default function FunctionDetailPage() {
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => setShowAddParam((v) => !v)}
+                  onClick={() => {
+                    if (paramFormOpen && !editingParamKey) {
+                      setParamFormOpen(false);
+                      resetParamForm();
+                    } else {
+                      openAddParam();
+                    }
+                  }}
                 >
                   <Plus className="h-3.5 w-3.5 mr-1.5" />
                   Agregar parámetro
@@ -881,63 +1003,119 @@ export default function FunctionDetailPage() {
               </div>
             </div>
 
-            {showAddParam && (
+            {paramFormOpen && (
               <div className="rounded-lg border border-dashed p-3 space-y-3">
+                <p className="text-xs font-medium">
+                  {editingParamKey ? `Editar «${editingParamKey}»` : "Nuevo parámetro"}
+                </p>
                 <p className="text-xs text-muted-foreground">
-                  Útil cuando el endpoint no tiene placeholders o para skills fórmula.
+                  Fecha se guarda como texto con el formato que elijas (útil para apps como
+                  Dentidesk).
                 </p>
                 <div className="grid gap-2 sm:grid-cols-2">
                   <div className="space-y-1">
                     <Label className="text-[11px]">Nombre</Label>
                     <Input
                       className="h-8 font-mono text-xs"
-                      value={newParamName}
-                      onChange={(e) => setNewParamName(e.target.value)}
-                      placeholder="well_id"
+                      value={paramName}
+                      onChange={(e) => setParamName(e.target.value)}
+                      placeholder="fecha_cita"
                     />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-[11px]">Tipo</Label>
                     <Select
-                      value={newParamType}
-                      onValueChange={(v) =>
-                        setNewParamType(v as "string" | "number" | "integer" | "boolean")
-                      }
+                      value={paramKind}
+                      onValueChange={(v) => setParamKind(v as SchemaParamKind)}
                     >
                       <SelectTrigger className="h-8">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="string">string</SelectItem>
-                        <SelectItem value="number">number</SelectItem>
-                        <SelectItem value="integer">integer</SelectItem>
-                        <SelectItem value="boolean">boolean</SelectItem>
+                        {(
+                          [
+                            "string",
+                            "number",
+                            "integer",
+                            "boolean",
+                            "date",
+                            "datetime",
+                            "email",
+                          ] as SchemaParamKind[]
+                        ).map((k) => (
+                          <SelectItem key={k} value={k}>
+                            {SCHEMA_KIND_LABEL[k]}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
+                    <p className="text-[10px] text-muted-foreground">
+                      {SCHEMA_KIND_HINT[paramKind]}
+                    </p>
                   </div>
+                  {paramKind === "date" && (
+                    <div className="space-y-1 sm:col-span-2">
+                      <Label className="text-[11px]">Formato de envío</Label>
+                      <Select
+                        value={paramDateFormat}
+                        onValueChange={(v) => setParamDateFormat(v as DateWireFormat)}
+                      >
+                        <SelectTrigger className="h-8">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {DATE_WIRE_FORMATS.map((f) => (
+                            <SelectItem key={f.value} value={f.value}>
+                              {f.label} · ej. {f.example}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-[10px] text-muted-foreground">
+                        Se envía como string con este formato (no como objeto fecha).
+                      </p>
+                    </div>
+                  )}
                   <div className="space-y-1 sm:col-span-2">
                     <Label className="text-[11px]">Descripción</Label>
                     <Input
                       className="h-8"
-                      value={newParamDesc}
-                      onChange={(e) => setNewParamDesc(e.target.value)}
-                      placeholder="ID numérico del pozo"
+                      value={paramDesc}
+                      onChange={(e) => setParamDesc(e.target.value)}
+                      placeholder={
+                        paramKind === "date"
+                          ? `Fecha en formato ${paramDateFormat}`
+                          : "Cómo debe interpretar el LLM este valor"
+                      }
                     />
                   </div>
                   <label className="flex items-center gap-2 text-xs sm:col-span-2">
-                    <Switch checked={newParamRequired} onCheckedChange={setNewParamRequired} />
+                    <Switch checked={paramRequired} onCheckedChange={setParamRequired} />
                     Requerido
                   </label>
                 </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  disabled={update.isPending || !newParamName.trim()}
-                  onClick={addManualParam}
-                >
-                  {update.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Guardar parámetro
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={update.isPending || !paramName.trim()}
+                    onClick={saveParam}
+                  >
+                    {update.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {editingParamKey ? "Guardar cambios" : "Guardar parámetro"}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      resetParamForm();
+                      setParamFormOpen(false);
+                    }}
+                  >
+                    Cancelar
+                  </Button>
+                </div>
               </div>
             )}
 
@@ -951,247 +1129,53 @@ export default function FunctionDetailPage() {
                 </p>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {paramEntries.map(([key, prop]) => {
-                  const src = sourcesDraft[key]?.source ?? "free";
-                  const srcCfg = sourcesDraft[key];
+                  const kind = kindFromProperty(prop);
                   return (
-                    <div key={key} className="rounded-lg border p-3 space-y-2">
+                    <div key={key} className="rounded-lg border p-3 space-y-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <Sparkles className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-medium text-sm font-mono">{key}</span>
+                        <span className="font-medium text-sm font-mono flex-1 min-w-0 truncate">
+                          {key}
+                        </span>
                         <Badge variant="outline" className="text-[10px]">
-                          {prop.type ?? "string"}
-                          {prop.format ? ` · ${prop.format}` : ""}
+                          {formatSchemaType(prop.type, prop.format, prop)}
                         </Badge>
                         {isRequiredParam(fn.parameters_schema, key) && (
                           <Badge variant="default" className="text-[10px]">
                             Requerido
                           </Badge>
                         )}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2"
+                          onClick={() => openEditParam(key, prop)}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-destructive"
+                          disabled={update.isPending}
+                          onClick={() => deleteParam(key)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
                       </div>
+                      <p className="text-[10px] text-muted-foreground">
+                        {SCHEMA_KIND_HINT[kind]}
+                        {kind === "date" ? ` · envío ${getDateWireFormat(prop)}` : ""}
+                      </p>
                       {prop.description && (
                         <p className="text-xs text-muted-foreground">{prop.description}</p>
                       )}
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        <div className="space-y-1">
-                          <Label className="text-[11px]">Fuente</Label>
-                          <Select
-                            value={src}
-                            onValueChange={(v) =>
-                              setSourceType(key, v as ParameterSource["source"])
-                            }
-                          >
-                            <SelectTrigger className="h-8">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="free">{PARAMETER_SOURCE_LABEL.free}</SelectItem>
-                              <SelectItem value="static">
-                                {PARAMETER_SOURCE_LABEL.static}
-                              </SelectItem>
-                              <SelectItem value="data_document">
-                                {PARAMETER_SOURCE_LABEL.data_document}
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <p className="text-[10px] text-muted-foreground">
-                            {PARAMETER_SOURCE_HINT[src]}
-                          </p>
-                        </div>
-                        {src === "static" && srcCfg?.source === "static" && (
-                          <div className="space-y-1">
-                            <Label className="text-[11px]">Valor</Label>
-                            <Input
-                              className="h-8"
-                              value={String(srcCfg.value ?? "")}
-                              onChange={(e) =>
-                                setSourcesDraft((prev) => ({
-                                  ...prev,
-                                  [key]: { source: "static", value: e.target.value },
-                                }))
-                              }
-                            />
-                          </div>
-                        )}
-                        {src === "data_document" && srcCfg?.source === "data_document" && (
-                          <>
-                            <div className="space-y-1 sm:col-span-2">
-                              <Label className="text-[11px]">Documento DATA</Label>
-                              <Select
-                                value={srcCfg.document_title || "__none__"}
-                                onValueChange={(v) => {
-                                  if (v === "__none__") {
-                                    setSourcesDraft((prev) => ({
-                                      ...prev,
-                                      [key]: {
-                                        source: "data_document",
-                                        document_title: "",
-                                        value_column: "",
-                                      },
-                                    }));
-                                    return;
-                                  }
-                                  applyDataDocument(key, v);
-                                }}
-                                disabled={knowledgeLoading}
-                              >
-                                <SelectTrigger className="h-8">
-                                  <SelectValue
-                                    placeholder={
-                                      knowledgeLoading
-                                        ? "Cargando documentos…"
-                                        : "Selecciona un documento"
-                                    }
-                                  />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="__none__">—</SelectItem>
-                                  {srcCfg.document_title &&
-                                    !dataDocByTitle.has(srcCfg.document_title) && (
-                                      <SelectItem value={srcCfg.document_title}>
-                                        {srcCfg.document_title} (guardado)
-                                      </SelectItem>
-                                    )}
-                                  {dataDocuments.map((d) => (
-                                    <SelectItem key={d.id} value={d.title}>
-                                      {d.title}
-                                      {(d.columns?.length ?? 0) > 0
-                                        ? ` (${d.columns!.length} cols)`
-                                        : ""}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              {dataDocuments.length === 0 && !knowledgeLoading && (
-                                <p className="text-[10px] text-muted-foreground">
-                                  No hay documentos tipo DATA en esta sucursal.{" "}
-                                  <Link
-                                    to="/conocimiento"
-                                    className="text-primary underline-offset-2 hover:underline"
-                                  >
-                                    Creá uno en Conocimiento
-                                  </Link>
-                                  .
-                                </p>
-                              )}
-                            </div>
-                            {(() => {
-                              const cols = dataDocByTitle.get(srcCfg.document_title)?.columns ?? [];
-                              const hasCols = cols.length > 0;
-                              return (
-                                <>
-                                  <div className="space-y-1">
-                                    <Label className="text-[11px]">Columna valor (ID)</Label>
-                                    {hasCols ? (
-                                      <Select
-                                        value={srcCfg.value_column || "__none__"}
-                                        onValueChange={(v) =>
-                                          setSourcesDraft((prev) => ({
-                                            ...prev,
-                                            [key]: {
-                                              ...srcCfg,
-                                              value_column: v === "__none__" ? "" : v,
-                                            },
-                                          }))
-                                        }
-                                      >
-                                        <SelectTrigger className="h-8">
-                                          <SelectValue placeholder="Columna ID" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="__none__">—</SelectItem>
-                                          {cols.map((c) => (
-                                            <SelectItem key={c} value={c}>
-                                              {c}
-                                            </SelectItem>
-                                          ))}
-                                        </SelectContent>
-                                      </Select>
-                                    ) : (
-                                      <Input
-                                        className="h-8"
-                                        value={srcCfg.value_column}
-                                        onChange={(e) =>
-                                          setSourcesDraft((prev) => ({
-                                            ...prev,
-                                            [key]: {
-                                              ...srcCfg,
-                                              value_column: e.target.value,
-                                            },
-                                          }))
-                                        }
-                                        placeholder="id"
-                                        disabled={!srcCfg.document_title}
-                                      />
-                                    )}
-                                  </div>
-                                  <div className="space-y-1">
-                                    <Label className="text-[11px]">
-                                      Columna de búsqueda (nombre)
-                                    </Label>
-                                    {hasCols ? (
-                                      <Select
-                                        value={srcCfg.user_input_column || "__none__"}
-                                        onValueChange={(v) =>
-                                          setSourcesDraft((prev) => ({
-                                            ...prev,
-                                            [key]: {
-                                              ...srcCfg,
-                                              user_input_column: v === "__none__" ? undefined : v,
-                                            },
-                                          }))
-                                        }
-                                      >
-                                        <SelectTrigger className="h-8">
-                                          <SelectValue placeholder="Columna nombre" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="__none__">—</SelectItem>
-                                          {cols.map((c) => (
-                                            <SelectItem key={c} value={c}>
-                                              {c}
-                                            </SelectItem>
-                                          ))}
-                                        </SelectContent>
-                                      </Select>
-                                    ) : (
-                                      <Input
-                                        className="h-8"
-                                        value={srcCfg.user_input_column ?? ""}
-                                        onChange={(e) =>
-                                          setSourcesDraft((prev) => ({
-                                            ...prev,
-                                            [key]: {
-                                              ...srcCfg,
-                                              user_input_column: e.target.value || undefined,
-                                            },
-                                          }))
-                                        }
-                                        placeholder="nombre"
-                                        disabled={!srcCfg.document_title}
-                                      />
-                                    )}
-                                  </div>
-                                  {hasCols && (
-                                    <p className="text-[10px] text-muted-foreground sm:col-span-2">
-                                      Columnas detectadas:{" "}
-                                      <code className="text-[10px]">{cols.join(", ")}</code>
-                                    </p>
-                                  )}
-                                </>
-                              );
-                            })()}
-                          </>
-                        )}
-                      </div>
                     </div>
                   );
                 })}
-                <Button onClick={saveSources} disabled={update.isPending}>
-                  {update.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Guardar fuentes
-                </Button>
               </div>
             )}
           </section>
@@ -1212,7 +1196,8 @@ export default function FunctionDetailPage() {
           <SkillTestPanel skill={fn} />
         </TabsContent>
 
-        <TabsContent value="historial" className="mt-0">
+        <TabsContent value="historial" className="mt-0 space-y-4">
+          <SkillStatsPanel skillId={String(fn.id)} />
           <SkillExecutionHistory skillId={String(fn.id)} />
         </TabsContent>
       </Tabs>

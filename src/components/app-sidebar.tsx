@@ -42,6 +42,7 @@ import {
   getBranchesAdminNavLabel,
   getOrganizationsAdminNavLabel,
   canAccessKnowledgeCatalog,
+  canAccessConversations,
 } from "@/lib/authGuards";
 
 type IconComponent = React.ComponentType<{ className?: string; strokeWidth?: number }>;
@@ -60,10 +61,19 @@ const resumenItem: MenuItem = {
   exact: true,
 };
 
-const comunicacionItems: MenuItem[] = [
-  { title: "Conversaciones", url: "/conversaciones", icon: MessageCircle },
-  { title: "Canales", url: "/canales", icon: Share2 },
-];
+const canalesItem: MenuItem = { title: "Canales", url: "/canales", icon: Share2 };
+const conversacionesItem: MenuItem = {
+  title: "Conversaciones",
+  url: "/conversaciones",
+  icon: MessageCircle,
+};
+
+function buildComunicacionItems(): MenuItem[] {
+  const items: MenuItem[] = [];
+  if (canAccessConversations()) items.push(conversacionesItem);
+  items.push(canalesItem);
+  return items;
+}
 
 const baseStudioItems: MenuItem[] = [
   { title: "Chat", url: "/chat", icon: MessageSquarePlus },
@@ -142,15 +152,17 @@ export function AppSidebar() {
   const { isMobile, setOpenMobile } = useSidebar();
   const { data: theme, rawTheme } = useBranchTheme();
   const { data: activeBranch } = useActiveBranch();
-  const branchLogo = resolveThemeLogo(rawTheme ?? theme);
+  const showAdmin = isSuperAdmin();
+  const branchLogo = showAdmin ? null : resolveThemeLogo(rawTheme ?? theme);
   // Título = fantasy_name | Subtítulo = app_name (como antes MUNINN / Agentes)
-  const orgName = isOrganizationOwner()
-    ? getPrimaryOrganizationName() || activeBranch?.organization_name?.trim() || null
-    : null;
+  const orgName =
+    !showAdmin && isOrganizationOwner()
+      ? getPrimaryOrganizationName() || activeBranch?.organization_name?.trim() || null
+      : null;
   const branchDisplayName =
     activeBranch?.fantasy_name?.trim() || activeBranch?.business_name?.trim() || null;
-  // Organizador: título = nombre del holding, subtítulo = sucursal activa.
-  const fantasyName = orgName ?? branchDisplayName;
+  // Superadmin: siempre Muninn. Organizador: holding. Resto: sucursal.
+  const fantasyName = showAdmin ? "Muninn" : (orgName ?? branchDisplayName);
   const appNameRaw = (rawTheme?.app_name || theme?.app_name || "").trim();
   const themeAppName =
     appNameRaw && appNameRaw.toLowerCase() !== "muninn" && appNameRaw.toLowerCase() !== "erp system"
@@ -158,16 +170,18 @@ export function AppSidebar() {
       : null;
   // Sin multi-sucursal: no subtítulo (el título del branding ya basta).
   // Multi / organizador: subtítulo útil (sucursal activa o app_name).
-  const appName = orgName
-    ? (branchDisplayName ?? themeAppName)
-    : isMultiBranchUser()
-      ? themeAppName
-      : null;
-  const showAdmin = isSuperAdmin();
+  const appName = showAdmin
+    ? "Agentes"
+    : orgName
+      ? (branchDisplayName ?? themeAppName)
+      : isMultiBranchUser()
+        ? themeAppName
+        : null;
   const showOrgGestion = !showAdmin && isOrganizationOwner();
   const roleGestionItems = !showAdmin && !showOrgGestion ? buildRoleGestionItems() : [];
   const showRoleGestion = roleGestionItems.length > 0;
   const studioItems = buildStudioItems();
+  const comunicacionItems = buildComunicacionItems();
   const reduceMotion = useReducedMotion();
 
   const isActive = (url: string, exact?: boolean) =>

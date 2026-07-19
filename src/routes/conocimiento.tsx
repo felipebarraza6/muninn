@@ -108,6 +108,7 @@ function KnowledgeCard({
           title={doc.title}
           knowledgeType={doc.knowledge_type}
           context="catalog"
+          branchId={doc.branch}
         />
         <Button
           variant="ghost"

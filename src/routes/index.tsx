@@ -19,6 +19,7 @@ import { useClinicDashboard } from "@/api/hooks/useAnalytics";
 import { formatNumber } from "@/lib/format";
 import { AdminMotionItem, AdminPageMotion } from "@/components/admin/AdminPageMotion";
 import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
+import { canAccessConversations } from "@/lib/authGuards";
 
 interface SummaryItem {
   key: string;
@@ -37,16 +38,23 @@ const TONE_BG: Record<SummaryItem["tone"], string> = {
 };
 
 export default function HomePage() {
+  const showConversations = canAccessConversations();
   const { data: agents = [], isLoading: agentsLoading } = useAgents();
   const { data: channels = [], isLoading: channelsLoading } = useChannels();
   const { data: apis = [], isLoading: apisLoading } = useExternalAPIs();
   const { data: functions = [], isLoading: functionsLoading } = useAgentFunctions();
-  const { data: dashboardData, isLoading: dashboardLoading } = useClinicDashboard();
+  const { data: dashboardData, isLoading: dashboardLoading } = useClinicDashboard({
+    enabled: showConversations,
+  });
 
   const activeConversations = dashboardData?.kpis?.active_conversations ?? 0;
   const humanQueue = dashboardData?.human_conversations ?? [];
   const isLoading =
-    agentsLoading || channelsLoading || apisLoading || functionsLoading || dashboardLoading;
+    agentsLoading ||
+    channelsLoading ||
+    apisLoading ||
+    functionsLoading ||
+    (showConversations && dashboardLoading);
 
   const summaryItems: SummaryItem[] = [
     {
@@ -81,14 +89,18 @@ export default function HomePage() {
       href: "/skills",
       tone: "warning",
     },
-    {
-      key: "conversations",
-      label: "Conversaciones activas",
-      count: activeConversations,
-      icon: MessageSquare,
-      href: "/conversaciones",
-      tone: "primary",
-    },
+    ...(showConversations
+      ? [
+          {
+            key: "conversations",
+            label: "Conversaciones activas",
+            count: activeConversations,
+            icon: MessageSquare,
+            href: "/conversaciones",
+            tone: "primary" as const,
+          },
+        ]
+      : []),
   ];
 
   if (isLoading) {
@@ -136,74 +148,78 @@ export default function HomePage() {
         </section>
       </AdminMotionItem>
 
-      <AdminMotionItem>
-        <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <Card>
-            <CardHeader className="pb-2 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 space-y-0">
-              <div className="min-w-0">
-                <CardTitle className="text-base">Contacto con clientes</CardTitle>
-                <CardDescription>Últimas conversaciones que requieren atención.</CardDescription>
-              </div>
-              <Button asChild variant="ghost" size="sm" className="h-8 self-start">
-                <Link to="/conversaciones">
-                  Ver todas <ArrowRight className="h-3.5 w-3.5 ml-1" />
-                </Link>
-              </Button>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {humanQueue.length === 0 && (
-                <div className="text-center py-8 text-muted-foreground text-sm">
-                  No hay conversaciones pendientes de atención humana.
+      {showConversations && (
+        <AdminMotionItem>
+          <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <Card>
+              <CardHeader className="pb-2 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 space-y-0">
+                <div className="min-w-0">
+                  <CardTitle className="text-base">Contacto con clientes</CardTitle>
+                  <CardDescription>Últimas conversaciones que requieren atención.</CardDescription>
                 </div>
-              )}
-              {humanQueue.slice(0, 5).map((conv) => (
-                <div
-                  key={conv.id}
-                  className="flex items-center justify-between gap-3 rounded-lg border p-3"
-                >
-                  <div className="min-w-0">
-                    <div className="font-medium text-sm truncate">
-                      {conv.external_user_name || "Cliente"}
-                    </div>
-                    <div className="text-[11px] text-muted-foreground">
-                      {conv.message_count ?? 0} mensajes ·{" "}
-                      {conv.last_message_at
-                        ? new Date(conv.last_message_at).toLocaleString("es-CL", {
-                            day: "2-digit",
-                            month: "short",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })
-                        : "—"}
-                    </div>
+                <Button asChild variant="ghost" size="sm" className="h-8 self-start">
+                  <Link to="/conversaciones">
+                    Ver todas <ArrowRight className="h-3.5 w-3.5 ml-1" />
+                  </Link>
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {humanQueue.length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground text-sm">
+                    No hay conversaciones pendientes de atención humana.
                   </div>
-                  <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+                )}
+                {humanQueue.slice(0, 5).map((conv) => (
+                  <div
+                    key={conv.id}
+                    className="flex items-center justify-between gap-3 rounded-lg border p-3"
+                  >
+                    <div className="min-w-0">
+                      <div className="font-medium text-sm truncate">
+                        {conv.external_user_name || "Cliente"}
+                      </div>
+                      <div className="text-[11px] text-muted-foreground">
+                        {conv.message_count ?? 0} mensajes ·{" "}
+                        {conv.last_message_at
+                          ? new Date(conv.last_message_at).toLocaleString("es-CL", {
+                              day: "2-digit",
+                              month: "short",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : "—"}
+                      </div>
+                    </div>
+                    <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
 
-          <Card className="border-primary/30 bg-primary-soft/40">
-            <CardContent className="p-5 flex flex-col sm:flex-row gap-4">
-              <div className="h-10 w-10 rounded-lg bg-primary text-primary-foreground flex items-center justify-center shrink-0">
-                <MessageSquare className="h-5 w-5" />
-              </div>
-              <div className="space-y-1 min-w-0">
-                <div className="text-sm font-semibold text-primary">Revisa las conversaciones</div>
-                <p className="text-sm text-foreground leading-relaxed">
-                  Tienes {formatNumber(activeConversations)} conversaciones activas. Revisa la
-                  bandeja para ver mensajes recientes y tomar control cuando sea necesario.
-                </p>
-                <div className="pt-2">
-                  <Button asChild size="sm">
-                    <Link to="/conversaciones">Ver conversaciones</Link>
-                  </Button>
+            <Card className="border-primary/30 bg-primary-soft/40">
+              <CardContent className="p-5 flex flex-col sm:flex-row gap-4">
+                <div className="h-10 w-10 rounded-lg bg-primary text-primary-foreground flex items-center justify-center shrink-0">
+                  <MessageSquare className="h-5 w-5" />
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        </section>
-      </AdminMotionItem>
+                <div className="space-y-1 min-w-0">
+                  <div className="text-sm font-semibold text-primary">
+                    Revisa las conversaciones
+                  </div>
+                  <p className="text-sm text-foreground leading-relaxed">
+                    Tienes {formatNumber(activeConversations)} conversaciones activas. Revisa la
+                    bandeja para ver mensajes recientes y tomar control cuando sea necesario.
+                  </p>
+                  <div className="pt-2">
+                    <Button asChild size="sm">
+                      <Link to="/conversaciones">Ver conversaciones</Link>
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </section>
+        </AdminMotionItem>
+      )}
     </AdminPageMotion>
   );
 }

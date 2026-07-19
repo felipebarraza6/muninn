@@ -21,6 +21,7 @@ import CanalesDetail from "./routes/canales.$id";
 import APIs from "./routes/apis";
 import APIDetail from "./routes/apis.$id";
 import Funciones from "./routes/funciones";
+import FuncionesNuevo from "./routes/funciones.nuevo";
 import FunctionDetail from "./routes/funciones.$id";
 import { APP_STORE_PATH } from "./lib/applications";
 import Conocimiento from "./routes/conocimiento";
@@ -39,6 +40,7 @@ import { RequireBranchesAdmin } from "./components/auth/RequireBranchesAdmin";
 import { RequireOrganizationsAdmin } from "./components/auth/RequireOrganizationsAdmin";
 import { RequireLlmAdmin } from "./components/auth/RequireLlmAdmin";
 import { RequireKnowledgeCatalog } from "./components/auth/RequireKnowledgeCatalog";
+import { RequireConversations } from "./components/auth/RequireConversations";
 import { ThemeProvider } from "./components/theme/ThemeProvider";
 
 const queryClient = new QueryClient({
@@ -98,8 +100,10 @@ function AnimatedOutlet() {
           <Route path="/apis" element={<Navigate to={APP_STORE_PATH} replace />} />
           <Route path="/apis/:id" element={<ApiDetailRedirect />} />
           <Route path="/skills" element={<Funciones />} />
+          <Route path="/skills/nuevo" element={<FuncionesNuevo />} />
           <Route path="/skills/:id" element={<FunctionDetail />} />
           <Route path="/funciones" element={<Navigate to="/skills" replace />} />
+          <Route path="/funciones/nuevo" element={<Navigate to="/skills/nuevo" replace />} />
           <Route path="/funciones/:id" element={<FunctionDetailRedirect />} />
           <Route path="/configuracion" element={<Configuracion />} />
           <Route path="/perfil" element={<PerfilPage />} />
@@ -136,7 +140,14 @@ function AnimatedOutlet() {
             }
           />
           {/* Rutas ERP ocultas del nav; se mantienen accesibles por URL temporalmente */}
-          <Route path="/conversaciones" element={<Conversaciones />} />
+          <Route
+            path="/conversaciones"
+            element={
+              <RequireConversations>
+                <Conversaciones />
+              </RequireConversations>
+            }
+          />
           <Route path="/campanas" element={<Campanas />} />
           <Route path="/campanas/:id" element={<CampanasDetail />} />
           <Route path="/oportunidades" element={<Oportunidades />} />

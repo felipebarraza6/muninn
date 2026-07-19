@@ -1,100 +1,155 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Loader2, Sparkles, Eye, Plus, ArrowUpRight } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { ArrowUpRight, Calculator, Code2, Loader2, Plug, Plus, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   useAgentFunctions,
-  useCreateAgentFunction,
+  type AgentFunction,
   type ImplementationType,
-  type JsonSchema,
 } from "@/api/hooks/useAgentFunctions";
-import { useExternalAPIs } from "@/api/hooks/useExternalAPIs";
-import { useMyBranchesSelect } from "@/api/hooks/useBranches";
-import { getActiveBranchId, setActiveBranchId } from "@/lib/branchStorage";
-import { toast } from "sonner";
-import { AdminPageMotion } from "@/components/admin/AdminPageMotion";
+import {
+  AdminMotionItem,
+  AdminMotionList,
+  AdminPageMotion,
+} from "@/components/admin/AdminPageMotion";
 import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
 import { canViewInactiveStudioResources } from "@/lib/authGuards";
-import {
-  extractPlaceholders,
-  IMPLEMENTATION_TYPE_HINT,
-  IMPLEMENTATION_TYPE_LABEL,
-  parseJsonObject,
-  prettyJson,
-  slugify,
-} from "@/lib/skills";
+import { IMPLEMENTATION_TYPE_LABEL, normalizeSkillScope, SKILL_SCOPE_LABEL } from "@/lib/skills";
 import { cn } from "@/lib/utils";
 
-type CreateMode = "api" | "formula" | "advanced";
+type ScopeFilter = "all" | "global" | "branch" | "agent";
+type TypeFilter = "all" | "api" | "formula" | "python_code";
 
-type FormulaParamDraft = {
-  name: string;
-  type: "number" | "integer" | "string";
-  description: string;
-  required: boolean;
-};
+const TYPE_FILTERS: { value: TypeFilter; label: string }[] = [
+  { value: "all", label: "Todos" },
+  { value: "api", label: "API" },
+  { value: "formula", label: "Matemática" },
+  { value: "python_code", label: "Python" },
+];
 
-function buildFormulaSchema(params: FormulaParamDraft[]): JsonSchema {
-  const properties: Record<string, { type: string; description?: string }> = {};
-  const required: string[] = [];
-  for (const p of params) {
-    const key = p.name.trim();
-    if (!key) continue;
-    properties[key] = {
-      type: p.type,
-      ...(p.description.trim() ? { description: p.description.trim() } : {}),
-    };
-    if (p.required) required.push(key);
+const SCOPE_FILTERS: { value: ScopeFilter; label: string }[] = [
+  { value: "all", label: "Todos" },
+  { value: "global", label: "Global" },
+  { value: "branch", label: "Sucursal" },
+  { value: "agent", label: "Agente" },
+];
+
+function skillScope(fn: AgentFunction): "global" | "branch" | "agent" {
+  return normalizeSkillScope(fn.scope);
+}
+
+function TypeIcon({ type }: { type?: ImplementationType }) {
+  const cls = "h-5 w-5";
+  switch (type) {
+    case "formula":
+      return <Calculator className={cls} strokeWidth={1.75} />;
+    case "api":
+      return <Plug className={cls} strokeWidth={1.75} />;
+    case "python_code":
+      return <Code2 className={cls} strokeWidth={1.75} />;
+    default:
+      return <Sparkles className={cls} strokeWidth={1.75} />;
   }
-  return { type: "object", properties, required };
+}
+
+function typeIconTone(type?: ImplementationType, active?: boolean) {
+  if (!active) return "bg-muted text-muted-foreground ring-border/60";
+  switch (type) {
+    case "formula":
+      return "bg-primary/15 text-primary ring-primary/25";
+    case "api":
+      return "bg-sky-500/15 text-sky-400 ring-sky-500/25";
+    case "python_code":
+      return "bg-amber-500/15 text-amber-400 ring-amber-500/25";
+    default:
+      return "bg-primary/15 text-primary ring-primary/25";
+  }
+}
+
+function SkillCard({ fn }: { fn: AgentFunction }) {
+  const scope = skillScope(fn);
+  const active = fn.is_active !== false;
+  return (
+    <article
+      className={cn(
+        "group relative flex flex-col rounded-2xl border bg-card/50 p-4 transition-all duration-200",
+        "hover:border-primary/40 hover:bg-card hover:shadow-[0_0_0_1px_hsl(var(--primary)/0.12)]",
+        active ? "border-border/80" : "border-border/50 opacity-75",
+      )}
+    >
+      <div className="flex items-start gap-3.5">
+        <div
+          className={cn(
+            "h-12 w-12 rounded-2xl flex items-center justify-center shrink-0 ring-1 shadow-sm",
+            typeIconTone(fn.implementation_type, active),
+          )}
+        >
+          <TypeIcon type={fn.implementation_type} />
+        </div>
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="font-semibold text-sm leading-snug truncate tracking-tight">
+              {fn.name}
+            </h3>
+            <Badge variant={active ? "default" : "secondary"} className="text-[10px] font-normal">
+              {active ? "Activa" : "Inactiva"}
+            </Badge>
+          </div>
+          <p className="text-[11px] text-muted-foreground truncate font-mono">
+            {fn.slug ?? "sin-slug"}
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            <span className="inline-flex items-center rounded-md border border-border/70 bg-background/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+              {fn.implementation_type
+                ? IMPLEMENTATION_TYPE_LABEL[fn.implementation_type] || fn.implementation_type
+                : "—"}
+            </span>
+            <span className="inline-flex items-center rounded-md border border-border/70 bg-background/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+              {SKILL_SCOPE_LABEL[scope] || scope}
+            </span>
+            {fn.external_api_name && (
+              <span className="inline-flex items-center rounded-md border border-border/70 bg-background/40 px-1.5 py-0.5 text-[10px] text-muted-foreground truncate max-w-[10rem]">
+                {fn.external_api_name}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {fn.description ? (
+        <p className="mt-3 text-[12px] text-muted-foreground line-clamp-2 leading-relaxed flex-1">
+          {fn.description}
+        </p>
+      ) : (
+        <p className="mt-3 text-[12px] text-muted-foreground/60 flex-1">Sin descripción</p>
+      )}
+
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-1.5 border-t border-border/50 pt-3">
+        <Button size="sm" className="h-8" asChild>
+          <Link to={`/skills/${fn.id}`}>
+            Abrir
+            <ArrowUpRight className="h-3.5 w-3.5 ml-1" />
+          </Link>
+        </Button>
+        {!active && (
+          <span className="text-[10px] text-muted-foreground">Desactivada · ver detalle</span>
+        )}
+      </div>
+    </article>
+  );
 }
 
 export default function Funciones() {
-  const navigate = useNavigate();
   const showInactive = canViewInactiveStudioResources();
-  const {
-    data: functionsRaw = [],
-    isLoading,
-    refetch,
-  } = useAgentFunctions({
+  const { data: functionsRaw = [], isLoading } = useAgentFunctions({
     includeInactive: showInactive,
   });
-  const { data: apps = [] } = useExternalAPIs({ includeInactive: false });
-  const { data: branchOptions = [] } = useMyBranchesSelect();
-  const create = useCreateAgentFunction();
-  const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
-
-  // Create wizard state
-  const [mode, setMode] = useState<CreateMode>("api");
-  const [branchId, setBranchId] = useState(() => getActiveBranchId() ?? "");
-  const [name, setName] = useState("");
-  const [slug, setSlug] = useState("");
-  const [slugTouched, setSlugTouched] = useState(false);
-  const [description, setDescription] = useState("");
-  const [responseInstructions, setResponseInstructions] = useState("");
-  const [appId, setAppId] = useState("");
-  const [endpointType, setEndpointType] = useState("");
-  const [expression, setExpression] = useState("");
-  const [formulaParams, setFormulaParams] = useState<FormulaParamDraft[]>([
-    { name: "a", type: "number", description: "", required: true },
-    { name: "b", type: "number", description: "", required: true },
-  ]);
-  const [implType, setImplType] = useState<ImplementationType>("python_code");
-  const [configJson, setConfigJson] = useState("{}");
-  const [schemaJson, setSchemaJson] = useState('{\n  "type": "object",\n  "properties": {}\n}');
+  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>("all");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [appFilter, setAppFilter] = useState<string>("all");
 
   const functions = useMemo(() => {
     if (showInactive) {
@@ -108,234 +163,87 @@ export default function Funciones() {
     return functionsRaw.filter((fn) => fn.is_active !== false);
   }, [functionsRaw, showInactive]);
 
+  const appsWithSkills = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const fn of functions) {
+      if (!fn.external_api) continue;
+      const id = String(fn.external_api);
+      if (!map.has(id)) map.set(id, fn.external_api_name || id);
+    }
+    return Array.from(map.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name, "es"));
+  }, [functions]);
+
+  const typeCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: functions.length };
+    for (const fn of functions) {
+      const t = fn.implementation_type || "unknown";
+      counts[t] = (counts[t] || 0) + 1;
+    }
+    return counts;
+  }, [functions]);
+
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return functions;
-    return functions.filter(
-      (fn) =>
+    return functions.filter((fn) => {
+      const scope = skillScope(fn);
+      if (scopeFilter !== "all" && scope !== scopeFilter) return false;
+      if (typeFilter !== "all" && fn.implementation_type !== typeFilter) return false;
+      if (appFilter !== "all" && String(fn.external_api ?? "") !== appFilter) {
+        return false;
+      }
+      if (!term) return true;
+      return (
         fn.name.toLowerCase().includes(term) ||
         (fn.slug ?? "").toLowerCase().includes(term) ||
         (fn.description ?? "").toLowerCase().includes(term) ||
-        (fn.external_api_name ?? "").toLowerCase().includes(term),
-    );
-  }, [functions, search]);
-
-  const selectedApp = useMemo(() => apps.find((a) => String(a.id) === appId), [apps, appId]);
-  const endpointKeys = useMemo(() => Object.keys(selectedApp?.endpoints ?? {}), [selectedApp]);
-  const selectedEndpoint = endpointType ? selectedApp?.endpoints?.[endpointType] : undefined;
-  const inferredParams = useMemo(() => {
-    if (!selectedEndpoint) return [];
-    return extractPlaceholders({
-      path: selectedEndpoint.path,
-      query_params: selectedEndpoint.query_params,
-      headers: selectedEndpoint.headers,
-      body: selectedEndpoint.body,
+        (fn.external_api_name ?? "").toLowerCase().includes(term) ||
+        (fn.implementation_type
+          ? (IMPLEMENTATION_TYPE_LABEL[fn.implementation_type] || "").toLowerCase()
+          : ""
+        ).includes(term)
+      );
     });
-  }, [selectedEndpoint]);
+  }, [functions, search, scopeFilter, typeFilter, appFilter]);
 
-  useEffect(() => {
-    if (!slugTouched) setSlug(slugify(name));
-  }, [name, slugTouched]);
-
-  useEffect(() => {
-    if (appId && endpointKeys.length && !endpointKeys.includes(endpointType)) {
-      const authKey = selectedApp?.auth_endpoint_key || "";
-      setEndpointType(endpointKeys.find((k) => k !== authKey) || endpointKeys[0] || "");
-    }
-  }, [appId, endpointKeys, endpointType, selectedApp?.auth_endpoint_key]);
-
-  useEffect(() => {
-    if (!open) return;
-    const active = getActiveBranchId() ?? "";
-    if (active && branchOptions.some((b) => String(b.value) === String(active))) {
-      setBranchId(String(active));
-    } else if (branchOptions.length === 1) {
-      setBranchId(String(branchOptions[0].value));
-    } else if (!branchId && branchOptions[0]) {
-      setBranchId(String(branchOptions[0].value));
-    }
-  }, [open, branchOptions, branchId]);
-
-  const resetCreate = () => {
-    setMode("api");
-    setBranchId(getActiveBranchId() ?? "");
-    setName("");
-    setSlug("");
-    setSlugTouched(false);
-    setDescription("");
-    setResponseInstructions("");
-    setAppId("");
-    setEndpointType("");
-    setExpression("");
-    setFormulaParams([
-      { name: "a", type: "number", description: "", required: true },
-      { name: "b", type: "number", description: "", required: true },
-    ]);
-    setImplType("python_code");
-    setConfigJson("{}");
-    setSchemaJson('{\n  "type": "object",\n  "properties": {}\n}');
-  };
-
-  const resolveBranchPayload = (): string | number | undefined => {
-    const id = branchId.trim();
-    if (!id) return undefined;
-    const asNum = Number(id);
-    return Number.isFinite(asNum) && String(asNum) === id ? asNum : id;
-  };
-
-  const submitCreate = (e: React.FormEvent) => {
-    e.preventDefault();
-    const finalSlug = slug.trim() || slugify(name);
-    if (!name.trim() || !finalSlug) {
-      toast.error("Nombre y slug son obligatorios");
-      return;
-    }
-    if (!description.trim()) {
-      toast.error("La descripción es obligatoria (la usa el LLM)");
-      return;
-    }
-    if (!branchId.trim()) {
-      toast.error("Selecciona una sucursal");
-      return;
-    }
-
-    // Asegura x-branch-id (modo «todas» no envía header) + branch en payload (superadmin).
-    setActiveBranchId(branchId.trim(), true, false);
-
-    const branch = resolveBranchPayload();
-    const base = {
-      name: name.trim(),
-      slug: finalSlug,
-      description: description.trim(),
-      response_instructions: responseInstructions.trim() || undefined,
-      is_active: true,
-      branch,
-    };
-
-    if (mode === "api") {
-      if (!appId) {
-        toast.error("Selecciona una Aplicación");
-        return;
-      }
-      if (!endpointType) {
-        toast.error("Selecciona un endpoint");
-        return;
-      }
-      create.mutate(
-        {
-          ...base,
-          implementation_type: "api",
-          external_api: appId,
-          config: { endpoint_type: endpointType },
-        },
-        {
-          onSuccess: (created) => {
-            toast.success("Skill creada. Completa parámetros si hace falta.");
-            setOpen(false);
-            resetCreate();
-            void refetch();
-            if (created?.id) navigate(`/skills/${created.id}`);
-          },
-          onError: (err) => {
-            toast.error(
-              (err as { friendlyMessage?: string })?.friendlyMessage || "No se pudo crear",
-            );
-          },
-        },
-      );
-      return;
-    }
-
-    if (mode === "formula") {
-      if (!expression.trim()) {
-        toast.error("Escribí la expresión de la fórmula");
-        return;
-      }
-      const schema = buildFormulaSchema(formulaParams);
-      if (!Object.keys(schema.properties ?? {}).length) {
-        toast.error("Definí al menos un parámetro para la fórmula");
-        return;
-      }
-      create.mutate(
-        {
-          ...base,
-          implementation_type: "formula",
-          external_api: null,
-          config: { expression: expression.trim() },
-          parameters_schema: schema,
-        },
-        {
-          onSuccess: (created) => {
-            toast.success("Skill fórmula creada");
-            setOpen(false);
-            resetCreate();
-            void refetch();
-            if (created?.id) navigate(`/skills/${created.id}`);
-          },
-          onError: (err) => {
-            toast.error(
-              (err as { friendlyMessage?: string })?.friendlyMessage || "No se pudo crear",
-            );
-          },
-        },
-      );
-      return;
-    }
-
-    const config = parseJsonObject(configJson, "config");
-    if (!config.ok) {
-      toast.error(config.error);
-      return;
-    }
-    const schema = parseJsonObject(schemaJson, "parameters_schema");
-    if (!schema.ok) {
-      toast.error(schema.error);
-      return;
-    }
-    create.mutate(
-      {
-        ...base,
-        implementation_type: implType,
-        config: config.value,
-        parameters_schema: schema.value,
-      },
-      {
-        onSuccess: (created) => {
-          toast.success("Skill creada");
-          setOpen(false);
-          resetCreate();
-          void refetch();
-          if (created?.id) navigate(`/skills/${created.id}`);
-        },
-        onError: (err) => {
-          toast.error((err as { friendlyMessage?: string })?.friendlyMessage || "No se pudo crear");
-        },
-      },
-    );
-  };
-
-  return (
-    <AdminPageMotion className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Skills</h1>
-          <p className="text-sm text-muted-foreground max-w-xl mt-0.5">
-            Capacidades que los agentes ejecutan. Conectalas a Aplicaciones o usá fórmulas directas,
-            y asígnalas desde el detalle de cada agente.
+  const storeHeader = (
+    <div className="relative overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-br from-primary/10 via-card/80 to-card px-5 py-5 md:px-6 md:py-6">
+      <div
+        className="pointer-events-none absolute -right-8 -top-10 h-40 w-40 rounded-full bg-primary/15 blur-3xl"
+        aria-hidden
+      />
+      <div
+        className="pointer-events-none absolute -bottom-12 left-1/3 h-32 w-32 rounded-full bg-teal-500/10 blur-3xl"
+        aria-hidden
+      />
+      <div className="relative flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+        <div className="space-y-1.5 min-w-0">
+          <div className="flex items-center gap-2 text-primary">
+            <Sparkles className="h-4 w-4" strokeWidth={1.75} />
+            <span className="text-[11px] font-medium uppercase tracking-[0.14em]">Catálogo</span>
+          </div>
+          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">Skills</h1>
+          <p className="text-sm text-muted-foreground max-w-lg leading-relaxed">
+            Capacidades que los agentes ejecutan: API, Matemática y Python. Ámbito global, sucursal
+            o agente.
           </p>
         </div>
-        <Button
-          size="sm"
-          onClick={() => setOpen(true)}
-          className="self-start sm:self-auto shrink-0"
-        >
-          <Plus className="h-4 w-4 mr-1.5" /> Nueva skill
+        <Button size="sm" className="shrink-0" asChild>
+          <Link to="/skills/nuevo">
+            <Plus className="h-4 w-4 mr-1.5" />
+            Nueva skill
+          </Link>
         </Button>
       </div>
+    </div>
+  );
 
+  const filters = (
+    <div className="space-y-2.5">
       <div className="flex flex-col sm:flex-row gap-2 sm:max-w-xl">
         <Input
-          placeholder="Buscar por nombre, slug o aplicación…"
+          placeholder="Buscar por nombre, slug, tipo o aplicación…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           disabled={isLoading}
@@ -344,422 +252,127 @@ export default function Funciones() {
         <StudioBranchFilter />
       </div>
 
-      {isLoading ? (
-        <div className="flex items-center justify-center min-h-[200px]">
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] text-muted-foreground w-12 shrink-0">Ámbito</span>
+          {SCOPE_FILTERS.map(({ value, label }) => (
+            <Button
+              key={value}
+              type="button"
+              size="sm"
+              variant={scopeFilter === value ? "default" : "outline"}
+              className="h-7 text-xs"
+              onClick={() => setScopeFilter(value)}
+            >
+              {label}
+            </Button>
+          ))}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] text-muted-foreground w-12 shrink-0">Tipo</span>
+          {TYPE_FILTERS.map(({ value, label }) => {
+            const count = typeCounts[value] ?? 0;
+            const disabled = value !== "all" && count === 0;
+            return (
+              <Button
+                key={value}
+                type="button"
+                size="sm"
+                variant={typeFilter === value ? "default" : "outline"}
+                className="h-7 text-xs"
+                disabled={disabled || isLoading}
+                onClick={() => setTypeFilter(value)}
+              >
+                {label}
+                {value !== "all" && count > 0 && <span className="ml-1 opacity-70">{count}</span>}
+              </Button>
+            );
+          })}
+        </div>
+
+        {appsWithSkills.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] text-muted-foreground w-12 shrink-0">App</span>
+            <Button
+              type="button"
+              size="sm"
+              variant={appFilter === "all" ? "default" : "outline"}
+              className="h-7 text-xs"
+              onClick={() => setAppFilter("all")}
+            >
+              Todas
+            </Button>
+            {appsWithSkills.map((app) => (
+              <Button
+                key={app.id}
+                type="button"
+                size="sm"
+                variant={appFilter === app.id ? "default" : "outline"}
+                className="h-7 text-xs"
+                onClick={() => setAppFilter(app.id)}
+              >
+                {app.name}
+              </Button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  if (isLoading) {
+    return (
+      <AdminPageMotion className="space-y-5">
+        {storeHeader}
+        {filters}
+        <div className="flex items-center justify-center min-h-[240px]">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
-      ) : filtered.length === 0 ? (
-        <div className="rounded-xl border border-dashed py-16 text-center space-y-3">
-          <div className="mx-auto h-12 w-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-            <Sparkles className="h-6 w-6" />
+      </AdminPageMotion>
+    );
+  }
+
+  const hasActiveFilters =
+    Boolean(search.trim()) || scopeFilter !== "all" || typeFilter !== "all" || appFilter !== "all";
+
+  return (
+    <AdminPageMotion className="space-y-5">
+      {storeHeader}
+      {filters}
+
+      {filtered.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-border/80 py-16 text-center space-y-3 bg-card/30">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20">
+            <Sparkles className="h-7 w-7" strokeWidth={1.5} />
           </div>
-          <p className="text-sm text-muted-foreground">
-            {search.trim()
-              ? "Sin resultados para esa búsqueda."
-              : "No hay skills. Crea la primera."}
-          </p>
-          {!search.trim() && (
-            <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
-              <Plus className="h-4 w-4 mr-1.5" /> Nueva skill
+          <div className="space-y-1">
+            <p className="text-sm font-medium">
+              {hasActiveFilters ? "Sin resultados" : "No hay skills"}
+            </p>
+            <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+              {hasActiveFilters
+                ? "Probá otro filtro o búsqueda."
+                : "Creá la primera skill para que tus agentes puedan ejecutar acciones."}
+            </p>
+          </div>
+          {!hasActiveFilters && (
+            <Button size="sm" variant="outline" asChild>
+              <Link to="/skills/nuevo">
+                <Plus className="h-4 w-4 mr-1.5" /> Nueva skill
+              </Link>
             </Button>
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+        <AdminMotionList className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5">
           {filtered.map((fn) => (
-            <article
-              key={fn.id}
-              className={cn(
-                "group flex flex-col rounded-xl border bg-card/60 p-4 transition-colors",
-                "hover:border-primary/35 hover:bg-card",
-                fn.is_active ? "border-border" : "border-border/60 opacity-70 grayscale",
-              )}
-            >
-              <div className="flex items-start gap-3">
-                <div
-                  className={cn(
-                    "h-10 w-10 rounded-lg flex items-center justify-center shrink-0",
-                    fn.is_active
-                      ? "bg-primary-soft text-primary"
-                      : "bg-muted text-muted-foreground",
-                  )}
-                >
-                  <Sparkles className="h-5 w-5" />
-                </div>
-                <div className="min-w-0 flex-1 space-y-1.5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="font-medium text-sm leading-snug truncate">{fn.name}</h3>
-                    <Badge
-                      variant={fn.is_active ? "default" : "secondary"}
-                      className="text-[10px] font-normal"
-                    >
-                      {fn.is_active ? "Activa" : "Inactiva"}
-                    </Badge>
-                  </div>
-                  <p className="text-[11px] text-muted-foreground truncate">
-                    {fn.slug ?? "Sin slug"} ·{" "}
-                    {fn.implementation_type
-                      ? IMPLEMENTATION_TYPE_LABEL[fn.implementation_type] || fn.implementation_type
-                      : "—"}
-                    {fn.external_api_name ? ` · ${fn.external_api_name}` : ""}
-                  </p>
-                </div>
-              </div>
-
-              {fn.description ? (
-                <p className="mt-3 text-[12px] text-muted-foreground line-clamp-2 leading-relaxed flex-1">
-                  {fn.description}
-                </p>
-              ) : (
-                <p className="mt-3 text-[12px] text-muted-foreground/70 italic flex-1">
-                  Sin descripción
-                </p>
-              )}
-
-              <div className="mt-4 flex flex-wrap items-center gap-1 border-t border-border/60 pt-3">
-                <Button variant="ghost" size="sm" className="h-8" asChild>
-                  <Link to={`/skills/${fn.id}`}>
-                    <Eye className="h-3.5 w-3.5 mr-1" />
-                    Abrir
-                    <ArrowUpRight className="h-3.5 w-3.5 ml-1" />
-                  </Link>
-                </Button>
-              </div>
-            </article>
+            <AdminMotionItem key={fn.id}>
+              <SkillCard fn={fn} />
+            </AdminMotionItem>
           ))}
-        </div>
+        </AdminMotionList>
       )}
-
-      <Dialog
-        open={open}
-        onOpenChange={(v) => {
-          setOpen(v);
-          if (!v) resetCreate();
-        }}
-      >
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Nueva skill</DialogTitle>
-          </DialogHeader>
-          <form className="space-y-3" onSubmit={submitCreate}>
-            <div className="space-y-2">
-              <Label>Tipo</Label>
-              <Select value={mode} onValueChange={(v) => setMode(v as CreateMode)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="api">Aplicación (API)</SelectItem>
-                  <SelectItem value="formula">Fórmula / cálculo</SelectItem>
-                  <SelectItem value="advanced">Avanzado (Python / DB / Webhook)</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-[11px] text-muted-foreground">
-                {mode === "api"
-                  ? IMPLEMENTATION_TYPE_HINT.api
-                  : mode === "formula"
-                    ? IMPLEMENTATION_TYPE_HINT.formula
-                    : "Configuración JSON para tipos avanzados ya existentes."}
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Sucursal</Label>
-              <Select
-                value={branchId || "__none__"}
-                onValueChange={(v) => setBranchId(v === "__none__" ? "" : v)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecciona sucursal" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">—</SelectItem>
-                  {branchOptions.map((b) => (
-                    <SelectItem key={String(b.value)} value={String(b.value)}>
-                      {b.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-[11px] text-muted-foreground">
-                Obligatoria. Si estás en modo «todas», elegí dónde crear la skill.
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Nombre</Label>
-              <Input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-                placeholder={
-                  mode === "formula"
-                    ? "ej. Calcular volumen extraído"
-                    : "ej. Horas disponibles Dentidesk"
-                }
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Slug</Label>
-              <Input
-                value={slug}
-                onChange={(e) => {
-                  setSlugTouched(true);
-                  setSlug(e.target.value);
-                }}
-                required
-                className="font-mono text-sm"
-                placeholder="calcular-volumen-extraido"
-              />
-              <p className="text-[11px] text-muted-foreground">
-                Identificador que el LLM usa como nombre de tool.
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label>Descripción (para el LLM)</Label>
-              <Textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={2}
-                required
-                placeholder="Cuándo debe el agente llamar esta skill…"
-              />
-            </div>
-
-            {mode === "api" ? (
-              <>
-                <div className="space-y-2">
-                  <Label>Aplicación</Label>
-                  <Select
-                    value={appId || "__none__"}
-                    onValueChange={(v) => {
-                      setAppId(v === "__none__" ? "" : v);
-                      setEndpointType("");
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecciona" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">—</SelectItem>
-                      {apps.map((a) => (
-                        <SelectItem key={a.id} value={String(a.id)}>
-                          {a.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {apps.length === 0 && (
-                    <p className="text-[11px] text-muted-foreground">
-                      No hay aplicaciones.{" "}
-                      <Link
-                        to="/aplicaciones"
-                        className="text-primary underline-offset-2 hover:underline"
-                      >
-                        Instalá una primero
-                      </Link>
-                      .
-                    </p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label>Endpoint</Label>
-                  <Select
-                    value={endpointType || "__none__"}
-                    onValueChange={(v) => setEndpointType(v === "__none__" ? "" : v)}
-                    disabled={!appId}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecciona endpoint" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">—</SelectItem>
-                      {endpointKeys.map((k) => (
-                        <SelectItem key={k} value={k}>
-                          {k}
-                          {k === selectedApp?.auth_endpoint_key ? " (login)" : ""}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {selectedEndpoint && (
-                    <p className="text-[11px] font-mono text-muted-foreground break-all">
-                      {(selectedEndpoint.method || "GET").toUpperCase()} {selectedEndpoint.path}
-                    </p>
-                  )}
-                  {inferredParams.length > 0 && (
-                    <p className="text-[11px] text-muted-foreground">
-                      Params inferidos:{" "}
-                      <code className="text-[10px]">{inferredParams.join(", ")}</code>. El backend
-                      completa el schema al crear.
-                    </p>
-                  )}
-                </div>
-              </>
-            ) : mode === "formula" ? (
-              <>
-                <div className="space-y-2">
-                  <Label>Expresión</Label>
-                  <Input
-                    value={expression}
-                    onChange={(e) => setExpression(e.target.value)}
-                    className="font-mono text-sm"
-                    placeholder="flow_l_s * hours * 3.6"
-                    required
-                  />
-                  <p className="text-[11px] text-muted-foreground">
-                    Operadores +, -, *, /, **, comparaciones y ternarios. Funciones: abs, round,
-                    min, max, len, int, float, sum.
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <Label>Parámetros (variables)</Label>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs"
-                      onClick={() =>
-                        setFormulaParams((prev) => [
-                          ...prev,
-                          { name: "", type: "number", description: "", required: true },
-                        ])
-                      }
-                    >
-                      <Plus className="h-3 w-3 mr-1" /> Agregar
-                    </Button>
-                  </div>
-                  <div className="space-y-2">
-                    {formulaParams.map((p, idx) => (
-                      <div
-                        key={idx}
-                        className="grid grid-cols-[1fr_auto_auto] gap-2 items-start rounded-lg border p-2"
-                      >
-                        <Input
-                          value={p.name}
-                          onChange={(e) =>
-                            setFormulaParams((prev) =>
-                              prev.map((row, i) =>
-                                i === idx ? { ...row, name: e.target.value } : row,
-                              ),
-                            )
-                          }
-                          placeholder="nombre"
-                          className="h-8 font-mono text-xs"
-                        />
-                        <Select
-                          value={p.type}
-                          onValueChange={(v) =>
-                            setFormulaParams((prev) =>
-                              prev.map((row, i) =>
-                                i === idx ? { ...row, type: v as FormulaParamDraft["type"] } : row,
-                              ),
-                            )
-                          }
-                        >
-                          <SelectTrigger className="h-8 w-[100px]">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="number">number</SelectItem>
-                            <SelectItem value="integer">integer</SelectItem>
-                            <SelectItem value="string">string</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 px-2 text-destructive"
-                          disabled={formulaParams.length <= 1}
-                          onClick={() =>
-                            setFormulaParams((prev) => prev.filter((_, i) => i !== idx))
-                          }
-                        >
-                          ×
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="space-y-2">
-                  <Label>Implementación</Label>
-                  <Select
-                    value={implType}
-                    onValueChange={(v) => setImplType(v as ImplementationType)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(["python_code", "db_query", "webhook"] as const).map((t) => (
-                        <SelectItem key={t} value={t}>
-                          {IMPLEMENTATION_TYPE_LABEL[t]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-[11px] text-muted-foreground">
-                    {IMPLEMENTATION_TYPE_HINT[implType]}
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label>config (JSON)</Label>
-                  <Textarea
-                    value={configJson}
-                    onChange={(e) => setConfigJson(e.target.value)}
-                    rows={4}
-                    className="font-mono text-xs"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>parameters_schema (JSON)</Label>
-                  <Textarea
-                    value={schemaJson}
-                    onChange={(e) => setSchemaJson(e.target.value)}
-                    rows={6}
-                    className="font-mono text-xs"
-                  />
-                  <p className="text-[11px] text-muted-foreground">
-                    Ejemplo:{" "}
-                    <code className="text-[10px]">
-                      {prettyJson({
-                        type: "object",
-                        properties: { date: { type: "string", format: "date" } },
-                        required: ["date"],
-                      }).replace(/\n/g, " ")}
-                    </code>
-                  </p>
-                </div>
-              </>
-            )}
-
-            <div className="space-y-2">
-              <Label>Instrucciones de respuesta (opcional)</Label>
-              <Textarea
-                value={responseInstructions}
-                onChange={(e) => setResponseInstructions(e.target.value)}
-                rows={2}
-                placeholder="Cómo debe responder el agente tras ejecutar…"
-              />
-            </div>
-
-            <div className="flex justify-end gap-2 pt-1">
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={create.isPending}>
-                {create.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Crear
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
     </AdminPageMotion>
   );
 }

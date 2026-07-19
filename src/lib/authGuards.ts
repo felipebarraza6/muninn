@@ -40,9 +40,8 @@ export function showBranchFilterUI(): boolean {
 
 /** Puede cambiar la sucursal activa en el header. */
 export function canSwitchActiveBranch(optionsCount: number): boolean {
-  // Organizador: no usa el switcher del header; filtra con StudioBranchFilter / BranchFilterSelect en admin.
-  if (isOrganizationOwner()) return false;
-  if (isSuperAdmin()) return true;
+  // Superadmin / organizador: no usan el switcher del header (filtran en Studio).
+  if (isSuperAdmin() || isOrganizationOwner()) return false;
   if (optionsCount <= 1) return false;
   const user = getStoredUser();
   if (user?.is_multi_branch === false) return false;
@@ -51,13 +50,13 @@ export function canSwitchActiveBranch(optionsCount: number): boolean {
 
 /**
  * Mostrar selector de sucursal en el header.
- * - Organizador: no (usa StudioBranchFilter en Studio y BranchFilterSelect en admin).
- * - OWNER / usuario de una sola sucursal: no (redundante con el branding).
- * - Multi-sucursal o superadmin: sí.
+ * - Superadmin: no (tema Muninn fijo; filtra con StudioBranchFilter).
+ * - Organizador: no (usa StudioBranchFilter / BranchFilterSelect en admin).
+ * - OWNER / una sola sucursal: no.
+ * - Multi-sucursal operativo: sí.
  */
 export function showHeaderBranchSwitcher(): boolean {
-  if (isOrganizationOwner()) return false;
-  if (isSuperAdmin()) return true;
+  if (isSuperAdmin() || isOrganizationOwner()) return false;
   if (!isMultiBranchUser()) return false;
   return getManagedBranchIds().length > 1;
 }
@@ -180,6 +179,16 @@ export function canAccessBranchesAdmin(): boolean {
   if (isSuperAdmin()) return true;
   if (isOrganizationOwner()) return true;
   return isBranchOwner();
+}
+
+/**
+ * Bandeja de Conversaciones (inbox de clientes).
+ * Exclusivo de usuarios con rol operativo (sucursal/org).
+ * Superadmin de plataforma no la ve: no es bandeja de operación.
+ */
+export function canAccessConversations(): boolean {
+  if (!getStoredUser()) return false;
+  return !isSuperAdmin();
 }
 
 /**

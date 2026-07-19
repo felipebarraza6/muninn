@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { GET, POST, PATCH, DELETE, normalizeListResponse } from "../client";
+import { GET, POST, PATCH, DELETE, GET_ALL_PAGES, normalizeListResponse } from "../client";
 import { ENDPOINTS } from "../endpoints/index";
 import { useActiveBranchId } from "@/hooks/useActiveBranchId";
 
@@ -34,6 +34,8 @@ export interface ExternalAPI {
   api_key?: string;
   api_key_masked?: string | null;
   auth_endpoint_key?: string;
+  /** Endpoint del store «Probar» para validar que el servicio está activo. */
+  health_endpoint_key?: string;
   auth_token_path?: string;
   auth_token_ttl_seconds?: number;
   /** Prefijo Authorization tras login: Bearer | Token (desde auth_config). */
@@ -45,7 +47,30 @@ export interface ExternalAPI {
   endpoints_payload_templates?: Record<string, unknown>;
   endpoints_response_mapping?: Record<string, unknown>;
   is_active: boolean;
+  /** Categoría principal del store (ej. Salud, ERP). */
+  category?: string | null;
+  /** Tags libres para filtrar en el store. */
+  tags?: string[];
+  /** Ancla técnica BranchModelApi. */
   branch?: number | string | null;
+  /** Sucursales con instalación activa. */
+  branches?: (number | string)[];
+  branch_names?: string[];
+  created?: string;
+  modified?: string;
+}
+
+export interface ExternalAPIInstallation {
+  id: string;
+  external_api: string;
+  external_api_name?: string | null;
+  branch: number | string;
+  branch_name?: string | null;
+  label?: string;
+  has_credentials?: boolean;
+  is_active?: boolean;
+  last_verified_at?: string | null;
+  last_error?: string;
   created?: string;
   modified?: string;
 }
@@ -74,6 +99,14 @@ export interface ExternalAPITestResult {
   latency_ms?: number;
   error?: string | null;
   detail?: string;
+  tested?: {
+    mode?: "login" | "base_url" | string;
+    endpoint?: string;
+    method?: string;
+    path?: string;
+    base_url?: string;
+    installation_label?: string | null;
+  };
   /** Request real enviada (url, method, query, headers, body). */
   request?: {
     method?: string;
@@ -93,16 +126,31 @@ export interface ExternalAPITestResult {
   };
 }
 
-export function useExternalAPIs(options?: { includeInactive?: boolean }) {
-  const branchId = useActiveBranchId();
+export function useExternalAPIs(options?: {
+  includeInactive?: boolean;
+  branch?: string | number | null;
+  /**
+   * store = catálogo completo (todas las apps accesibles).
+   * branch = solo apps habilitadas en esa sucursal (default: activa).
+   */
+  scope?: "store" | "branch";
+}) {
+  const activeBranchId = useActiveBranchId();
   const includeInactive = options?.includeInactive ?? false;
+  const scope = options?.scope ?? "branch";
+  const branchId = options?.branch ?? activeBranchId;
   return useQuery({
-    queryKey: [...QUERY_KEY, branchId, { includeInactive }],
-    queryFn: () =>
-      GET<ExternalAPI[] | { count: number; results: ExternalAPI[] }>(
-        ENDPOINTS.integrations.list,
-        includeInactive ? { params: { include_inactive: "true" } } : undefined,
-      ).then((data) => normalizeListResponse<ExternalAPI>(data)),
+    queryKey: [...QUERY_KEY, scope, scope === "store" ? "all" : branchId, { includeInactive }],
+    queryFn: () => {
+      const params: Record<string, string> = {};
+      if (includeInactive) params.include_inactive = "true";
+      if (scope === "store") {
+        params.scope = "store";
+      } else if (branchId) {
+        params.branch = String(branchId);
+      }
+      return GET_ALL_PAGES<ExternalAPI>(ENDPOINTS.integrations.list, { params });
+    },
     staleTime: 2 * 60 * 1000,
   });
 }
@@ -136,7 +184,13 @@ export function useUpdateExternalAPI() {
 export function useDeleteExternalAPI() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => DELETE(ENDPOINTS.integrations.detail(id)),
+    mutationFn: (arg: string | { id: string; hard?: boolean }) => {
+      const id = typeof arg === "string" ? arg : arg.id;
+      const hard = typeof arg === "object" ? Boolean(arg.hard) : false;
+      return DELETE(ENDPOINTS.integrations.detail(id), {
+        params: hard ? { hard: "true" } : undefined,
+      });
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEY }),
   });
 }
@@ -148,6 +202,44 @@ export function useTestExternalAPI() {
   });
 }
 
+export interface SyncSkillsResult {
+  external_api: string;
+  created: number;
+  updated: number;
+  skipped: number;
+  results: Array<{
+    endpoint_key: string;
+    slug?: string;
+    name?: string;
+    id?: string;
+    created?: boolean;
+    updated?: boolean;
+    skipped?: boolean;
+    reason?: string;
+  }>;
+}
+
+export function useSyncExternalAPISkills() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      body,
+    }: {
+      id: string;
+      body?: {
+        update_existing?: boolean;
+        skip_auth_endpoint?: boolean;
+        endpoint_keys?: string[];
+      };
+    }) => POST<SyncSkillsResult>(ENDPOINTS.integrations.syncSkills(id), body ?? {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: QUERY_KEY });
+      qc.invalidateQueries({ queryKey: ["ai-agents", "agent-functions"] });
+    },
+  });
+}
+
 export function useExternalAPIStatus(id: string | undefined) {
   return useQuery({
     queryKey: [...QUERY_KEY, id, "status"],
@@ -156,7 +248,52 @@ export function useExternalAPIStatus(id: string | undefined) {
   });
 }
 
+const INSTALLATIONS_KEY = ["ai-agents", "external-api-installations"];
 const CONNECTIONS_KEY = ["ai-agents", "application-connections"];
+
+export function useExternalAPIInstallations(externalApiId: string | undefined) {
+  return useQuery({
+    queryKey: [...INSTALLATIONS_KEY, externalApiId],
+    queryFn: () =>
+      GET_ALL_PAGES<ExternalAPIInstallation>(ENDPOINTS.externalApiInstallations.list, {
+        params: { external_api: externalApiId! },
+      }),
+    enabled: !!externalApiId,
+    staleTime: 30_000,
+  });
+}
+
+export function useConnectInstallation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, credentials }: { id: string; credentials: Record<string, string> }) =>
+      POST<{
+        success: boolean;
+        error?: string | null;
+        token_preview?: string | null;
+        installation: ExternalAPIInstallation;
+      }>(ENDPOINTS.externalApiInstallations.connect(id), { credentials }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: INSTALLATIONS_KEY });
+      qc.invalidateQueries({ queryKey: QUERY_KEY });
+    },
+  });
+}
+
+export function useDisconnectInstallationAccount() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      POST<{ success: boolean; installation: ExternalAPIInstallation }>(
+        ENDPOINTS.externalApiInstallations.disconnect(id),
+        {},
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: INSTALLATIONS_KEY });
+      qc.invalidateQueries({ queryKey: QUERY_KEY });
+    },
+  });
+}
 
 export interface ApplicationUserConnection {
   id: string;
@@ -180,6 +317,7 @@ export interface CredentialField {
   required?: boolean;
 }
 
+/** Cuenta del usuario en la sucursal activa (una instalación). */
 export function useApplicationConnection(externalApiId: string | undefined) {
   const branchId = useActiveBranchId();
   return useQuery({
@@ -187,10 +325,28 @@ export function useApplicationConnection(externalApiId: string | undefined) {
     queryFn: () =>
       GET<ApplicationUserConnection[] | { count: number; results: ApplicationUserConnection[] }>(
         ENDPOINTS.applicationConnections.list,
-        { params: { external_api: externalApiId! } },
+        {
+          params: {
+            external_api: externalApiId!,
+            ...(branchId ? { branch: String(branchId) } : {}),
+          },
+        },
       ).then((data) => {
         const list = normalizeListResponse<ApplicationUserConnection>(data);
         return list[0] ?? null;
+      }),
+    enabled: !!externalApiId,
+    staleTime: 30_000,
+  });
+}
+
+/** Todas las cuentas del usuario para una app (una por sucursal instalada). */
+export function useApplicationConnectionsForApi(externalApiId: string | undefined) {
+  return useQuery({
+    queryKey: [...CONNECTIONS_KEY, "installations", externalApiId],
+    queryFn: () =>
+      GET_ALL_PAGES<ApplicationUserConnection>(ENDPOINTS.applicationConnections.list, {
+        params: { external_api: externalApiId!, scope: "installations" },
       }),
     enabled: !!externalApiId,
     staleTime: 30_000,
@@ -214,13 +370,25 @@ export function useCredentialFields(externalApiId: string | undefined) {
 export function useConnectApplication() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { external_api: string; credentials: Record<string, string> }) =>
+    mutationFn: (body: {
+      external_api: string;
+      credentials: Record<string, string>;
+      /** Sucursal de la instalación donde guardar la cuenta. */
+      branch?: string | number;
+    }) =>
       POST<{
         success: boolean;
         error?: string | null;
         token_preview?: string | null;
         connection: ApplicationUserConnection;
-      }>(ENDPOINTS.applicationConnections.connect, body),
+      }>(ENDPOINTS.applicationConnections.connect, {
+        ...body,
+        ...(body.branch != null
+          ? {
+              branch: Number.isNaN(Number(body.branch)) ? body.branch : Number(body.branch),
+            }
+          : {}),
+      }),
     onSuccess: () => qc.invalidateQueries({ queryKey: CONNECTIONS_KEY }),
   });
 }

@@ -90,6 +90,13 @@ export const ENDPOINTS = {
     detail: (id: string) => `/ai-agents/external-apis/${id}/`,
     status: (id: string) => `/ai-agents/external-apis/${id}/status/`,
     testConnection: (id: string) => `/ai-agents/external-apis/${id}/test_connection/`,
+    syncSkills: (id: string) => `/ai-agents/external-apis/${id}/sync-skills/`,
+  },
+  externalApiInstallations: {
+    list: "/ai-agents/external-api-installations/",
+    detail: (id: string) => `/ai-agents/external-api-installations/${id}/`,
+    connect: (id: string) => `/ai-agents/external-api-installations/${id}/connect/`,
+    disconnect: (id: string) => `/ai-agents/external-api-installations/${id}/disconnect/`,
   },
   applicationConnections: {
     list: "/ai-agents/application-connections/",
@@ -102,7 +109,11 @@ export const ENDPOINTS = {
     list: "/ai-agents/agent-functions/",
     detail: (id: string) => `/ai-agents/agent-functions/${id}/`,
     execute: (id: string) => `/ai-agents/agent-functions/${id}/execute/`,
+    previewFormula: "/ai-agents/agent-functions/preview-formula/",
+    previewPython: "/ai-agents/agent-functions/preview-python/",
     resolveIds: (id: string) => `/ai-agents/agent-functions/${id}/resolve-ids/`,
+    restore: (id: string) => `/ai-agents/agent-functions/${id}/restore/`,
+    stats: (id: string) => `/ai-agents/agent-functions/${id}/stats/`,
     logs: "/ai-agents/function-execution-logs/",
   },
   channels: {
@@ -113,6 +124,7 @@ export const ENDPOINTS = {
     regenerateSecret: (id: string) => `/ai-agents/channels/${id}/regenerate_secret/`,
     simulate: (id: string) => `/ai-agents/channels/${id}/simulate/`,
     sessions: (id: string) => `/ai-agents/channels/${id}/sessions/`,
+    testConnection: (id: string) => `/ai-agents/channels/${id}/test_connection/`,
   },
   agents: {
     list: "/ai-agents/agents/",
@@ -122,6 +134,9 @@ export const ENDPOINTS = {
     testLLM: (id: string) => `/ai-agents/agents/${id}/test_llm/`,
     planLimits: "/ai-agents/agents/plan_limits/",
     opsHealth: "/ai-agents/agents/ops-health/",
+    skillConfigs: (id: string) => `/ai-agents/agents/${id}/skill-configs/`,
+    skillConfig: (id: string, skillId: string) =>
+      `/ai-agents/agents/${id}/skill-config/${skillId}/`,
   },
   llm: {
     providers: "/ai-agents/llm-providers/",

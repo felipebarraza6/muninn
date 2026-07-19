@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate, Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -35,15 +35,24 @@ import {
   Settings2,
   Route,
   KeyRound,
+  Sparkles,
+  RefreshCw,
+  ArrowUpRight,
+  X,
+  Store,
 } from "lucide-react";
 import {
   useExternalAPI,
+  useExternalAPIs,
   useUpdateExternalAPI,
   useDeleteExternalAPI,
+  useSyncExternalAPISkills,
   type ExternalAPIAuthType,
   type ExternalAPIEndpoint,
 } from "@/api/hooks/useExternalAPIs";
-import { canManageExternalApis } from "@/lib/authGuards";
+import { useAdminBranches, useMyBranchesSelect } from "@/api/hooks/useBranches";
+import { useAgentFunctions } from "@/api/hooks/useAgentFunctions";
+import { canManageExternalApis, isOrganizationOwner, isSuperAdmin } from "@/lib/authGuards";
 import {
   AUTH_HEADER_PREFIX_OPTIONS,
   AUTH_TYPE_HINT,
@@ -53,25 +62,88 @@ import {
 } from "@/lib/external-api";
 import { APP_STORE_PATH } from "@/lib/applications";
 import { AppIcon } from "@/components/applications/app-icon";
+import { AppInstallationsPanel } from "@/components/applications/app-installations-panel";
 import { PersonalConnectionsPanel } from "@/components/applications/personal-connections-panel";
 import { ExternalApiEndpointsPanel } from "@/components/external-apis/endpoint-editor";
 import { ExternalApiTestPanel } from "@/components/external-apis/external-api-test-panel";
+import { IMPLEMENTATION_TYPE_LABEL } from "@/lib/skills";
 import { toast } from "sonner";
 
-type ApiDetailTab = "configuracion" | "endpoints" | "cuenta" | "probar";
+type ApiDetailTab = "configuracion" | "instalacion" | "endpoints" | "skills" | "cuenta" | "probar";
 
 export default function APIDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const canManage = canManageExternalApis();
+  const isGlobalAdmin = isSuperAdmin();
+  const isOrgOwner = isOrganizationOwner();
   const { data: api, isLoading, error, refetch } = useExternalAPI(id);
+  const { data: storeApps = [] } = useExternalAPIs({
+    scope: "store",
+    includeInactive: true,
+  });
   const update = useUpdateExternalAPI();
   const remove = useDeleteExternalAPI();
+  const syncSkills = useSyncExternalAPISkills();
+  const { data: adminBranches = [] } = useAdminBranches({
+    enabled: isGlobalAdmin || isOrgOwner,
+  });
+  const { data: myBranches = [] } = useMyBranchesSelect();
+  const {
+    data: linkedSkills = [],
+    isLoading: skillsLoading,
+    refetch: refetchSkills,
+  } = useAgentFunctions({ externalApiId: id, includeInactive: true });
+
+  const categorySuggestions = useMemo(() => {
+    const set = new Set<string>();
+    for (const a of storeApps) {
+      const c = (a.category || "").trim();
+      if (c) set.add(c);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
+  }, [storeApps]);
+
+  const tagSuggestions = useMemo(() => {
+    const set = new Set<string>();
+    for (const a of storeApps) {
+      for (const t of a.tags ?? []) {
+        const tag = String(t || "").trim();
+        if (tag) set.add(tag);
+      }
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
+  }, [storeApps]);
+
+  const branchOptions = useMemo(() => {
+    const fromMy = myBranches.map((b) => ({
+      id: String(b.value),
+      label: b.label,
+    }));
+    if (isGlobalAdmin || isOrgOwner) {
+      const fromAdmin = adminBranches.map((b) => ({
+        id: String(b.id),
+        label: b.fantasy_name?.trim() || b.business_name || String(b.id),
+      }));
+      const byId = new Map<string, { id: string; label: string }>();
+      for (const opt of [...fromAdmin, ...fromMy]) {
+        if (!byId.has(opt.id)) byId.set(opt.id, opt);
+      }
+      return Array.from(byId.values()).sort((a, b) =>
+        a.label.localeCompare(b.label, "es", { sensitivity: "base" }),
+      );
+    }
+    return fromMy;
+  }, [adminBranches, isGlobalAdmin, isOrgOwner, myBranches]);
 
   const tabParam = searchParams.get("tab");
   const tab: ApiDetailTab =
-    tabParam === "endpoints" || tabParam === "probar" || tabParam === "cuenta"
+    tabParam === "endpoints" ||
+    tabParam === "probar" ||
+    tabParam === "cuenta" ||
+    tabParam === "skills" ||
+    tabParam === "instalacion"
       ? tabParam
       : "configuracion";
   const setTab = (next: ApiDetailTab) => {
@@ -86,6 +158,14 @@ export default function APIDetailPage() {
     );
   };
 
+  const installedBranchIds = useMemo(() => {
+    if (!api) return [] as string[];
+    const fromM2m = (api.branches ?? []).map(String);
+    if (fromM2m.length) return fromM2m;
+    return api.branch != null ? [String(api.branch)] : [];
+  }, [api]);
+  const installedBranchCount = installedBranchIds.length;
+
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -99,6 +179,8 @@ export default function APIDetailPage() {
   const [authPassword, setAuthPassword] = useState("");
   const [authAccessToken, setAuthAccessToken] = useState("");
   const [authEndpointKey, setAuthEndpointKey] = useState("");
+  /** Endpoint usado por el botón Probar del store. */
+  const [healthEndpointKey, setHealthEndpointKey] = useState("");
   const [authTokenPath, setAuthTokenPath] = useState("access_token");
   const [authTokenTtl, setAuthTokenTtl] = useState("0");
   /** Prefijo Authorization tras login: Bearer (JWT) o Token (DRF). */
@@ -108,6 +190,9 @@ export default function APIDetailPage() {
   const [retryPolicyJson, setRetryPolicyJson] = useState(
     '{\n  "max_retries": 3,\n  "backoff": 2\n}',
   );
+  const [category, setCategory] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagDraft, setTagDraft] = useState("");
 
   useEffect(() => {
     if (!api) return;
@@ -119,6 +204,7 @@ export default function APIDetailPage() {
     setIsActive(api.is_active !== false);
     setApiKey("");
     setAuthEndpointKey(api.auth_endpoint_key || "");
+    setHealthEndpointKey(api.health_endpoint_key || "");
     setAuthTokenPath(api.auth_token_path || "access_token");
     setAuthTokenTtl(String(api.auth_token_ttl_seconds ?? 0));
     setDefaultHeadersJson(prettyJson(api.default_headers ?? {}));
@@ -130,7 +216,18 @@ export default function APIDetailPage() {
     setAuthAccessToken("");
     setAuthHeaderPrefix(api.auth_header_prefix === "Token" ? "Token" : "Bearer");
     setAuthConfigTouched(false);
+    setCategory(api.category || "");
+    setTags((api.tags ?? []).map(String).filter(Boolean));
+    setTagDraft("");
   }, [api]);
+
+  const addTag = (raw: string) => {
+    const tag = raw.trim().slice(0, 32);
+    if (!tag || tags.length >= 8) return;
+    if (tags.some((t) => t.toLowerCase() === tag.toLowerCase())) return;
+    setTags((prev) => [...prev, tag]);
+    setTagDraft("");
+  };
 
   const handleAuthTypeChange = (v: ExternalAPIAuthType) => {
     setAuthType(v);
@@ -214,6 +311,13 @@ export default function APIDetailPage() {
       setTab("endpoints");
       return;
     }
+    if (healthEndpointKey.trim() && !endpointKeys.includes(healthEndpointKey.trim())) {
+      toast.error(
+        `El endpoint de prueba «${healthEndpointKey}» no existe. Créalo en la pestaña Endpoints.`,
+      );
+      setTab("endpoints");
+      return;
+    }
 
     const timeout = Number(timeoutSeconds);
     const ttl = Number(authTokenTtl);
@@ -243,9 +347,12 @@ export default function APIDetailPage() {
           // Incluir endpoints actuales: el serializer valida auth_endpoint_key ∈ endpoints
           endpoints: api.endpoints ?? {},
           auth_endpoint_key: authType === "endpoint_auth" ? authEndpointKey.trim() : "",
+          health_endpoint_key: healthEndpointKey.trim(),
           auth_token_path:
             authType === "endpoint_auth" ? authTokenPath.trim() || "access_token" : "",
           auth_token_ttl_seconds: authType === "endpoint_auth" && Number.isFinite(ttl) ? ttl : 0,
+          category: category.trim() || null,
+          tags,
           ...(apiKey.trim() ? { api_key: apiKey.trim() } : {}),
           ...(auth_config ? { auth_config } : {}),
         },
@@ -279,6 +386,23 @@ export default function APIDetailPage() {
   };
 
   const endpointCount = endpointKeys.length;
+  const skillCount = linkedSkills.length;
+
+  const handleSyncSkills = () => {
+    if (!id || !canManage) return;
+    syncSkills.mutate(
+      { id, body: { update_existing: true, skip_auth_endpoint: true } },
+      {
+        onSuccess: (data) => {
+          toast.success(
+            `Skills sincronizadas: ${data.created} nuevas, ${data.updated} actualizadas`,
+          );
+          void refetchSkills();
+        },
+        onError: () => toast.error("No se pudieron sincronizar las skills"),
+      },
+    );
+  };
 
   return (
     <div className="px-4 md:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto space-y-6">
@@ -296,10 +420,21 @@ export default function APIDetailPage() {
                 {api.name}
               </h1>
               <Badge variant={api.is_active ? "default" : "secondary"} className="text-[10px]">
-                {api.is_active ? "Instalada" : "Inactiva"}
+                {api.is_active ? "Activa" : "Inactiva"}
               </Badge>
+              {api.category ? (
+                <Badge
+                  variant="outline"
+                  className="text-[10px] font-normal border-primary/30 text-primary"
+                >
+                  {api.category}
+                </Badge>
+              ) : null}
               <Badge variant="outline" className="text-[10px] font-normal">
                 {endpointCount} endpoint{endpointCount === 1 ? "" : "s"}
+              </Badge>
+              <Badge variant="outline" className="text-[10px] font-normal">
+                {skillCount} skill{skillCount === 1 ? "" : "s"}
               </Badge>
               {!canManage && (
                 <Badge variant="outline" className="text-[10px] gap-1 font-normal">
@@ -334,14 +469,19 @@ export default function APIDetailPage() {
                   className="text-destructive hover:text-destructive"
                   disabled={remove.isPending}
                 >
-                  <Trash2 className="h-4 w-4 mr-1.5" /> Eliminar
+                  <Trash2 className="h-4 w-4 mr-1.5" />{" "}
+                  {api.is_active === false ? "Eliminar" : "Desactivar"}
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Eliminar aplicación</AlertDialogTitle>
+                  <AlertDialogTitle>
+                    {api.is_active === false ? "Eliminar permanentemente" : "Desactivar aplicación"}
+                  </AlertDialogTitle>
                   <AlertDialogDescription>
-                    ¿Eliminar «{api.name}»? Las skills que la usen pueden dejar de funcionar.
+                    {api.is_active === false
+                      ? `¿Eliminar «${api.name}» de forma permanente? No se puede deshacer.`
+                      : `¿Desactivar «${api.name}»? Quedará marcada como inactiva en el store. Las skills vinculadas pueden dejar de usarse.`}
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -350,16 +490,21 @@ export default function APIDetailPage() {
                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                     onClick={() => {
                       if (!id) return;
-                      remove.mutate(id, {
-                        onSuccess: () => {
-                          toast.success("Aplicación eliminada");
-                          navigate(APP_STORE_PATH);
+                      const hard = api.is_active === false;
+                      remove.mutate(
+                        { id, hard },
+                        {
+                          onSuccess: () => {
+                            toast.success(hard ? "Aplicación eliminada" : "Aplicación desactivada");
+                            navigate(APP_STORE_PATH);
+                          },
+                          onError: () =>
+                            toast.error(hard ? "No se pudo eliminar" : "No se pudo desactivar"),
                         },
-                        onError: () => toast.error("No se pudo eliminar"),
-                      });
+                      );
                     }}
                   >
-                    Eliminar
+                    {api.is_active === false ? "Eliminar" : "Desactivar"}
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
@@ -374,6 +519,15 @@ export default function APIDetailPage() {
             <Settings2 className="h-3.5 w-3.5" />
             Configuración
           </TabsTrigger>
+          <TabsTrigger value="instalacion" className="gap-1.5 flex-1 sm:flex-none">
+            <Store className="h-3.5 w-3.5" />
+            Instalación
+            {installedBranchCount > 0 ? (
+              <span className="text-[10px] text-muted-foreground tabular-nums">
+                ({installedBranchCount})
+              </span>
+            ) : null}
+          </TabsTrigger>
           <TabsTrigger value="endpoints" className="gap-1.5 flex-1 sm:flex-none">
             <Route className="h-3.5 w-3.5" />
             Endpoints
@@ -383,10 +537,17 @@ export default function APIDetailPage() {
               </span>
             ) : null}
           </TabsTrigger>
+          <TabsTrigger value="skills" className="gap-1.5 flex-1 sm:flex-none">
+            <Sparkles className="h-3.5 w-3.5" />
+            Skills
+            {skillCount > 0 ? (
+              <span className="text-[10px] text-muted-foreground tabular-nums">({skillCount})</span>
+            ) : null}
+          </TabsTrigger>
           {api.auth_type === "endpoint_auth" && (
             <TabsTrigger value="cuenta" className="gap-1.5 flex-1 sm:flex-none">
               <KeyRound className="h-3.5 w-3.5" />
-              Mi cuenta
+              Cuenta de prueba
             </TabsTrigger>
           )}
           <TabsTrigger value="probar" className="gap-1.5 flex-1 sm:flex-none">
@@ -395,12 +556,22 @@ export default function APIDetailPage() {
           </TabsTrigger>
         </TabsList>
 
+        <TabsContent value="instalacion" className="mt-0">
+          <AppInstallationsPanel
+            api={api}
+            branchOptions={branchOptions}
+            canManage={canManage}
+            onSaved={() => void refetch()}
+          />
+        </TabsContent>
+
         <TabsContent value="configuracion" className="mt-0">
-          <section className="rounded-xl border bg-card/60 p-4 md:p-5 space-y-4">
-            <div>
+          <section className="space-y-5">
+            <div className="border-b border-border/60 pb-3">
               <h2 className="text-sm font-medium">Configuración general</h2>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Nombre, URL base, autenticación y conexión. Luego definí las rutas en Endpoints.
+                Nombre, URL base y autenticación del catálogo. La instalación (cuenta de servicio) y
+                la cuenta de prueba van en sus pestañas.
               </p>
             </div>
 
@@ -455,6 +626,55 @@ export default function APIDetailPage() {
                     onChange={(e) => setDescription(e.target.value)}
                     rows={2}
                   />
+                </div>
+                <div className="space-y-2">
+                  <Label>Categoría</Label>
+                  <Input
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    placeholder="ej. Salud, ERP, Logística"
+                    list="api-detail-category-suggestions"
+                  />
+                  <datalist id="api-detail-category-suggestions">
+                    {categorySuggestions.map((c) => (
+                      <option key={c} value={c} />
+                    ))}
+                  </datalist>
+                </div>
+                <div className="space-y-2">
+                  <Label>Tags</Label>
+                  <Input
+                    value={tagDraft}
+                    onChange={(e) => setTagDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === ",") {
+                        e.preventDefault();
+                        addTag(tagDraft);
+                      }
+                    }}
+                    placeholder="Enter para agregar (máx. 8)"
+                    list="api-detail-tag-suggestions"
+                  />
+                  <datalist id="api-detail-tag-suggestions">
+                    {tagSuggestions.map((t) => (
+                      <option key={t} value={t} />
+                    ))}
+                  </datalist>
+                  {tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {tags.map((tag) => (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => setTags((prev) => prev.filter((t) => t !== tag))}
+                          className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-muted/50 px-2 py-0.5 text-[11px]"
+                        >
+                          {tag}
+                          <X className="h-3 w-3" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label>Timeout (s)</Label>
@@ -537,10 +757,11 @@ export default function APIDetailPage() {
                         endpoint hace login, de dónde sale el token y el prefijo del header. En el
                         endpoint de login usa placeholders (
                         <code className="text-[10px]">{"{{email}}"}</code>,{" "}
-                        <code className="text-[10px]">{"{{password}}"}</code>, etc.). Cada owner
-                        vincula su cuenta en la pestaña{" "}
-                        <strong className="text-foreground">Mi cuenta</strong>; las skills
-                        reutilizan esa sesión sin pedir usuario/clave como parámetros.
+                        <code className="text-[10px]">{"{{password}}"}</code>, etc.). La{" "}
+                        <strong className="text-foreground">cuenta de la instalación</strong>{" "}
+                        (pestaña Instalación) es la que usan los agentes;{" "}
+                        <strong className="text-foreground">Cuenta de prueba</strong> solo sirve
+                        para Studio / Probar.
                       </p>
                     </div>
                     <div className="space-y-2">
@@ -622,6 +843,31 @@ export default function APIDetailPage() {
                   </>
                 )}
                 <div className="space-y-2 md:col-span-2">
+                  <Label>Endpoint de prueba (store · Probar)</Label>
+                  <Select
+                    value={healthEndpointKey || "__none__"}
+                    onValueChange={(v) => setHealthEndpointKey(v === "__none__" ? "" : v)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Elegí endpoint" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">
+                        Automático (login si hay auth, si no GET base_url)
+                      </SelectItem>
+                      {endpointKeys.map((k) => (
+                        <SelectItem key={k} value={k}>
+                          {k}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground">
+                    El botón Probar del store llama este endpoint para validar que el servicio está
+                    activo. Si requiere auth, usa la cuenta de la instalación.
+                  </p>
+                </div>
+                <div className="space-y-2 md:col-span-2">
                   <Label>default_headers (JSON)</Label>
                   <Textarea
                     value={defaultHeadersJson}
@@ -638,6 +884,17 @@ export default function APIDetailPage() {
                     rows={3}
                     className="font-mono text-xs"
                   />
+                </div>
+                <div className="md:col-span-2 rounded-lg border border-border/70 bg-muted/20 px-3 py-2.5 text-xs text-muted-foreground flex flex-col sm:flex-row sm:items-center gap-2 justify-between">
+                  <span>
+                    Las sucursales donde se instala la app se gestionan en la pestaña{" "}
+                    <strong className="text-foreground font-medium">Instalación</strong> (
+                    {installedBranchCount} actual
+                    {installedBranchCount === 1 ? "" : "es"}).
+                  </span>
+                  <Button size="sm" variant="outline" onClick={() => setTab("instalacion")}>
+                    Ir a Instalación
+                  </Button>
                 </div>
                 <label className="flex items-center gap-2 text-sm md:col-span-2">
                   <Switch checked={isActive} onCheckedChange={setIsActive} />
@@ -666,6 +923,59 @@ export default function APIDetailPage() {
                   <span className="text-muted-foreground text-xs">URL base</span>
                   <p className="font-medium font-mono text-xs break-all">{api.base_url ?? "—"}</p>
                 </div>
+                <div className="md:col-span-2 space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground text-xs">Instalada en</span>
+                    <button
+                      type="button"
+                      className="text-[11px] text-primary hover:underline"
+                      onClick={() => setTab("instalacion")}
+                    >
+                      Gestionar instalaciones
+                    </button>
+                  </div>
+                  {(api.branch_names ?? []).length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {api.branch_names!.map((name) => (
+                        <Badge key={name} variant="outline" className="font-normal text-[11px]">
+                          {name}
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="font-medium text-muted-foreground">Sin sucursales</p>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <span className="text-muted-foreground text-xs">Categoría</span>
+                  {api.category ? (
+                    <Badge
+                      variant="outline"
+                      className="font-normal text-[11px] border-primary/30 text-primary"
+                    >
+                      {api.category}
+                    </Badge>
+                  ) : (
+                    <p className="font-medium">—</p>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <span className="text-muted-foreground text-xs">Tags</span>
+                  {(api.tags ?? []).length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {(api.tags ?? []).map((tag) => (
+                        <span
+                          key={tag}
+                          className="inline-flex items-center rounded-full bg-muted/70 px-2 py-0.5 text-[11px] text-muted-foreground"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="font-medium">—</p>
+                  )}
+                </div>
                 <div>
                   <span className="text-muted-foreground text-xs">Timeout</span>
                   <p className="font-medium">{api.timeout_seconds ?? "—"}s</p>
@@ -690,6 +1000,12 @@ export default function APIDetailPage() {
                     </div>
                   </>
                 )}
+                <div>
+                  <span className="text-muted-foreground text-xs">Endpoint de prueba</span>
+                  <p className="font-medium font-mono text-xs">
+                    {api.health_endpoint_key || "Automático"}
+                  </p>
+                </div>
                 {api.description && (
                   <div className="md:col-span-2">
                     <span className="text-muted-foreground text-xs">Descripción</span>
@@ -710,8 +1026,8 @@ export default function APIDetailPage() {
         </TabsContent>
 
         <TabsContent value="endpoints" className="mt-0">
-          <section className="rounded-xl border bg-card/60 p-4 md:p-5 space-y-4">
-            <div>
+          <section className="space-y-5">
+            <div className="border-b border-border/60 pb-3">
               <h2 className="text-sm font-medium">Endpoints</h2>
               <p className="text-xs text-muted-foreground mt-0.5">
                 Rutas de la aplicación que usan las skills. Si usás auth Login, creá primero el
@@ -730,6 +1046,107 @@ export default function APIDetailPage() {
                   : ""
               }
             />
+          </section>
+        </TabsContent>
+
+        <TabsContent value="skills" className="mt-0">
+          <section className="space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-start gap-3 justify-between border-b border-border/60 pb-3">
+              <div>
+                <h2 className="text-sm font-medium">Skills vinculadas</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Skills que usan esta aplicación. Podés generar skills API automáticamente desde
+                  los endpoints (se omiten login/credenciales).
+                </p>
+              </div>
+              {canManage && (
+                <div className="flex flex-wrap gap-2 shrink-0">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleSyncSkills}
+                    disabled={syncSkills.isPending || endpointCount === 0}
+                  >
+                    {syncSkills.isPending ? (
+                      <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4 mr-1.5" />
+                    )}
+                    Generar desde endpoints
+                  </Button>
+                  <Button size="sm" variant="outline" asChild>
+                    <Link to="/funciones/nuevo">
+                      Nueva skill
+                      <ArrowUpRight className="h-3.5 w-3.5 ml-1" />
+                    </Link>
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {skillsLoading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground py-6">
+                <Loader2 className="h-4 w-4 animate-spin" /> Cargando skills…
+              </div>
+            ) : linkedSkills.length === 0 ? (
+              <div className="py-10 text-center space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Todavía no hay skills vinculadas a esta aplicación.
+                </p>
+                {canManage && endpointCount > 0 && (
+                  <Button size="sm" onClick={handleSyncSkills} disabled={syncSkills.isPending}>
+                    Generar skills desde endpoints
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <ul className="divide-y divide-border/60">
+                {linkedSkills.map((fn) => {
+                  const endpointType =
+                    fn.implementation_type === "api" &&
+                    fn.config &&
+                    typeof fn.config === "object" &&
+                    "endpoint_type" in fn.config
+                      ? String((fn.config as { endpoint_type?: string }).endpoint_type || "")
+                      : "";
+                  return (
+                    <li key={fn.id}>
+                      <Link
+                        to={`/funciones/${fn.id}`}
+                        className="flex items-start gap-3 py-3 -mx-1 px-1 rounded-md hover:bg-muted/35 transition-colors group"
+                      >
+                        <div className="min-w-0 flex-1 space-y-0.5">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-sm font-medium truncate group-hover:text-primary transition-colors">
+                              {fn.name}
+                            </span>
+                            <Badge variant="outline" className="text-[10px] font-normal">
+                              {IMPLEMENTATION_TYPE_LABEL[fn.implementation_type ?? "api"] ??
+                                fn.implementation_type}
+                            </Badge>
+                            {fn.is_active === false && (
+                              <Badge variant="secondary" className="text-[10px]">
+                                Inactiva
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-muted-foreground font-mono truncate">
+                            {fn.slug}
+                            {endpointType ? ` · ${endpointType}` : ""}
+                          </p>
+                          {fn.description ? (
+                            <p className="text-xs text-muted-foreground line-clamp-1">
+                              {fn.description}
+                            </p>
+                          ) : null}
+                        </div>
+                        <ArrowUpRight className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5 opacity-50 group-hover:opacity-100" />
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </section>
         </TabsContent>
 

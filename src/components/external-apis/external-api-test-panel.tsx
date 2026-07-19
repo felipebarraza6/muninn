@@ -379,8 +379,8 @@ export function ExternalApiTestPanel({ api, onExit }: ExternalApiTestPanelProps)
   };
 
   return (
-    <section className="rounded-xl border bg-card/60 p-4 md:p-5 space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+    <section className="space-y-5">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 border-b border-border/60 pb-3">
         <div>
           <h2 className="text-sm font-medium">Modo prueba</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
