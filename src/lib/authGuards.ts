@@ -34,6 +34,8 @@ export function isMultiBranchUser(): boolean {
 /** Mostrar selector/filtro de sucursal en UI (header o toolbar). */
 export function showBranchFilterUI(): boolean {
   if (isSuperAdmin()) return true;
+  // Organizador: Studio (canales, agentes, bandeja) filtra por sucursal del holding.
+  if (isOrganizationOwner()) return true;
   if (isMultiBranchUser()) return true;
   return getManagedBranchIds().length > 1;
 }
@@ -224,6 +226,51 @@ export function canManageExternalApis(): boolean {
 }
 
 /**
+ * Puede entrar al catálogo de Skills (`/skills`).
+ * - Superadmin: sí
+ * - Organizador: sí
+ * - Roles operativos: no (usan Skills solo desde el Agente en esta versión)
+ */
+export function canAccessSkills(): boolean {
+  if (isSuperAdmin()) return true;
+  return isOrganizationOwner();
+}
+
+/**
+ * Crear / editar / desactivar / reactivar Skills.
+ * Misma política que acceso al catálogo.
+ */
+export function canManageSkills(): boolean {
+  return canAccessSkills();
+}
+
+/**
+ * Borrado físico definitivo de una skill.
+ * Solo superadmin; el organizador desactiva y puede reactivar.
+ */
+export function canHardDeleteSkills(): boolean {
+  return isSuperAdmin();
+}
+
+/**
+ * Puede editar/desactivar/reactivar una skill concreta.
+ * - Superadmin: sí
+ * - Organizador: solo si `can_edit` del API o `created_by` es él
+ * - Skills de plataforma (sin autoría propia): solo lectura
+ */
+export function canEditOwnedSkill(skill: {
+  can_edit?: boolean;
+  created_by?: string | number | null;
+}): boolean {
+  if (isSuperAdmin()) return true;
+  if (!canManageSkills()) return false;
+  if (typeof skill.can_edit === "boolean") return skill.can_edit;
+  const user = getStoredUser();
+  if (!user?.id || skill.created_by == null || skill.created_by === "") return false;
+  return String(skill.created_by) === String(user.id);
+}
+
+/**
  * Scope de OWNER de tienda (rol), sin ser organizador ni superadmin.
  */
 export function isStoreOwnerScope(): boolean {
@@ -253,9 +300,13 @@ export function canViewInactiveAgents(): boolean {
 }
 
 /**
- * Label del menú: "Mi Sucursal" si OWNER de una sola tienda; si no "Sucursales".
+ * Label del menú:
+ * - Organizador: "Sucursales/Clientes" (stores del holding)
+ * - OWNER de una sola tienda: "Mi Sucursal"
+ * - Resto: "Sucursales"
  */
 export function getBranchesAdminNavLabel(): string {
+  if (isOrganizationOwner()) return "Sucursales/Clientes";
   if (isStoreOwnerScope() && !isMultiBranchUser()) return "Mi Sucursal";
   return "Sucursales";
 }
@@ -285,24 +336,18 @@ export function canMutateBranch(branchId: string | number | null | undefined): b
 
 /**
  * Puede entrar a /admin/llm.
- * - Superadmin / organizador: gestión
- * - OWNER de sucursal: solo lectura
+ * Solo superadmin (plataforma). El organizador no necesita gestionar LLMs.
  */
 export function canAccessLlmAdmin(): boolean {
-  if (isSuperAdmin()) return true;
-  if (isOrganizationOwner()) return true;
-  return isBranchOwner();
+  return isSuperAdmin();
 }
 
 /**
  * Crear / editar / eliminar proveedores LLM.
- * - Superadmin: global
- * - Organizador: stores de su holding
- * - OWNER de sucursal: no
+ * Solo superadmin.
  */
 export function canManageLlmProviders(): boolean {
-  if (isSuperAdmin()) return true;
-  return isOrganizationOwner();
+  return isSuperAdmin();
 }
 
 /** Alias: configurar provider (incluye create/edit). */
@@ -312,12 +357,10 @@ export function canConfigureLlmProvider(): boolean {
 
 /**
  * Agregar / editar modelos.
- * - Superadmin / organizador: sí
- * - OWNER de sucursal: no
+ * Solo superadmin.
  */
 export function canMutateLlmModels(): boolean {
-  if (isSuperAdmin()) return true;
-  return isOrganizationOwner();
+  return isSuperAdmin();
 }
 
 /** Sync de catálogo remoto: superadmin y organizador. */

@@ -56,12 +56,7 @@ function ChatMarkdownInner({ content, className, inverted = false }: ChatMarkdow
           strong: ({ children }) => <strong className="chat-md__strong">{children}</strong>,
           em: ({ children }) => <em className="chat-md__em">{children}</em>,
           a: ({ href, children }) => (
-            <a
-              href={href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="chat-md__a"
-            >
+            <a href={href} target="_blank" rel="noopener noreferrer" className="chat-md__a">
               {children}
             </a>
           ),
@@ -94,12 +89,8 @@ function ChatMarkdownInner({ content, className, inverted = false }: ChatMarkdow
               <table className="chat-md__table">{children}</table>
             </div>
           ),
-          th: (props: ComponentPropsWithoutRef<"th">) => (
-            <th className="chat-md__th" {...props} />
-          ),
-          td: (props: ComponentPropsWithoutRef<"td">) => (
-            <td className="chat-md__td" {...props} />
-          ),
+          th: (props: ComponentPropsWithoutRef<"th">) => <th className="chat-md__th" {...props} />,
+          td: (props: ComponentPropsWithoutRef<"td">) => <td className="chat-md__td" {...props} />,
         }}
       >
         {source}

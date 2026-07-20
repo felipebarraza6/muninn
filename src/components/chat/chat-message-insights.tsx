@@ -232,7 +232,11 @@ export function MessageInsights({
             onClick={() => setOpenRag((v) => !v)}
             className="w-full flex items-center gap-1.5 px-2.5 py-2 text-[11px] font-medium text-primary hover:bg-primary-soft/50 transition-colors"
           >
-            {openRag ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+            {openRag ? (
+              <ChevronDown className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronRight className="h-3.5 w-3.5" />
+            )}
             <Database className="h-3.5 w-3.5" />
             <span className="flex-1 text-left">
               RAG · {ragSources.length} chunk{ragSources.length === 1 ? "" : "s"} recuperado

@@ -1,13 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import {
-  Check,
-  Database,
-  Loader2,
-  Sparkles,
-  Wrench,
-  X,
-} from "lucide-react";
+import { Check, Database, Loader2, Sparkles, Wrench, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ToolCallDetail, ToolResultDetail } from "@/components/chat/chat-message-insights";
 
@@ -36,13 +29,7 @@ export type LiveStreamStep = {
 
 const softEase = [0.25, 0.1, 0.25, 1] as const;
 
-function StageIcon({
-  kind,
-  className,
-}: {
-  kind: LiveStreamStep["icon"];
-  className?: string;
-}) {
+function StageIcon({ kind, className }: { kind: LiveStreamStep["icon"]; className?: string }) {
   const cls = cn("h-3.5 w-3.5 shrink-0", className);
   if (kind === "database") return <Database className={cls} />;
   if (kind === "wrench") return <Wrench className={cls} />;
@@ -133,9 +120,7 @@ export function ChatProcessingIndicator({
       }));
 
   const current =
-    stages.find((s) => s.status === "active") ||
-    stages[stages.length - 1] ||
-    stages[0];
+    stages.find((s) => s.status === "active") || stages[stages.length - 1] || stages[0];
 
   return (
     <motion.div
@@ -257,8 +242,7 @@ export function MessageActivityTrail({
       {labels.map((label, i) => {
         const result = results[i];
         const failed =
-          typeof result?.content === "string" &&
-          /error|fail|denied|invalid/i.test(result.content);
+          typeof result?.content === "string" && /error|fail|denied|invalid/i.test(result.content);
         return (
           <span
             key={`${label}-${i}`}

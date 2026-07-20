@@ -27,7 +27,14 @@ function mergeBranchOptions(sources: BranchOption[]): BranchOption[] {
  * Organizador: lista admin del holding (como Sucursales) + my-branches.
  * Al cambiar, setea x-branch-id y refresca Studio.
  */
-export function StudioBranchFilter({ className }: { className?: string }) {
+export function StudioBranchFilter({
+  className,
+  triggerClassName,
+}: {
+  className?: string;
+  /** Override del trigger (p. ej. bandeja compacta). */
+  triggerClassName?: string;
+}) {
   const qc = useQueryClient();
   const isGlobalAdmin = isSuperAdmin();
   const isOrgOwner = isOrganizationOwner();
@@ -91,7 +98,7 @@ export function StudioBranchFilter({ className }: { className?: string }) {
       includeAll={false}
       value={value}
       options={options}
-      triggerClassName="h-9 w-full sm:w-[200px]"
+      triggerClassName={cn("h-9 w-full sm:w-[200px]", triggerClassName)}
       onValueChange={(id) => {
         startTransition(() => {
           setActiveBranchId(id, true, false);

@@ -38,15 +38,19 @@ function formatWhen(iso?: string | null): string {
   }
 }
 
-function serverInstalledIds(api: ExternalAPI, installations: ExternalAPIInstallation[]): string[] {
+function serverInstalledIds(
+  api: ExternalAPI,
+  installations: ExternalAPIInstallation[],
+  installationsLoaded: boolean,
+): string[] {
   const ids = new Set<string>();
   for (const inst of installations) {
     if (inst.is_active !== false) ids.add(String(inst.branch));
   }
-  // Fallback mientras carga el listado de instalaciones.
-  if (ids.size === 0) {
+  // Solo fallback mientras carga: si ya cargó y está vacío, es «sin instalaciones»
+  // (no usar api.branch: es ancla técnica y reaparecía la sucursal desinstalada).
+  if (ids.size === 0 && !installationsLoaded) {
     for (const b of api.branches ?? []) ids.add(String(b));
-    if (!api.branches?.length && api.branch != null) ids.add(String(api.branch));
   }
   return Array.from(ids);
 }
@@ -71,6 +75,7 @@ export function AppInstallationsPanel({
     data: installations = [],
     refetch: refetchInstallations,
     isLoading: installationsLoading,
+    isFetched: installationsFetched,
     isError: installationsError,
     error: installationsErr,
   } = useExternalAPIInstallations(String(api.id));
@@ -86,7 +91,10 @@ export function AppInstallationsPanel({
   const [accountBranchId, setAccountBranchId] = useState<string | null>(null);
   const [credValues, setCredValues] = useState<Record<string, string>>({});
 
-  const serverIds = useMemo(() => serverInstalledIds(api, installations), [api, installations]);
+  const serverIds = useMemo(
+    () => serverInstalledIds(api, installations, installationsFetched && !installationsError),
+    [api, installations, installationsFetched, installationsError],
+  );
   const selected = optimisticIds ?? serverIds;
 
   // Si el servidor converge con lo optimista, soltar el override.
@@ -129,10 +137,6 @@ export function AppInstallationsPanel({
 
   const persistBranches = (nextIds: string[]) => {
     if (!canManage || update.isPending) return;
-    if (nextIds.length === 0) {
-      toast.error("Debe quedar al menos una sucursal instalada");
-      return;
-    }
     const prev = selected;
     setOptimisticIds(nextIds);
     update.mutate(
@@ -147,9 +151,12 @@ export function AppInstallationsPanel({
           void refetchInstallations();
           onSaved?.();
         },
-        onError: () => {
+        onError: (err) => {
           setOptimisticIds(prev);
-          toast.error("No se pudieron actualizar las instalaciones");
+          toast.error(
+            (err as { friendlyMessage?: string })?.friendlyMessage ||
+              "No se pudieron actualizar las instalaciones",
+          );
         },
       },
     );
@@ -158,10 +165,6 @@ export function AppInstallationsPanel({
   const toggle = (id: string) => {
     if (!canManage || update.isPending) return;
     const isOn = selected.includes(id);
-    if (isOn && selected.length <= 1) {
-      toast.error("Debe quedar al menos una sucursal instalada");
-      return;
-    }
     const next = isOn ? selected.filter((x) => x !== id) : [...selected, id];
     persistBranches(next);
   };
@@ -245,9 +248,10 @@ export function AppInstallationsPanel({
           {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> : null}
         </h2>
         <p className="text-xs text-muted-foreground max-w-2xl leading-relaxed">
-          Tocá una sucursal para instalar o desinstalar (queda al menos una). En cada instalación
-          configurá la <strong className="text-foreground font-medium">cuenta de servicio</strong>{" "}
-          que usan los agentes.
+          Tocá una sucursal para instalar o desinstalar. La app puede quedar sin instalaciones. En
+          cada una configurá la{" "}
+          <strong className="text-foreground font-medium">cuenta de servicio</strong> que usan los
+          agentes.
         </p>
       </div>
 
@@ -288,13 +292,10 @@ export function AppInstallationsPanel({
             <button
               type="button"
               className="text-muted-foreground hover:underline disabled:opacity-50"
-              disabled={saving}
-              onClick={() => {
-                const first = branchOptions[0]?.id;
-                if (first) persistBranches([first]);
-              }}
+              disabled={saving || selected.length === 0}
+              onClick={() => persistBranches([])}
             >
-              Solo una
+              Ninguna
             </button>
           </div>
         )}

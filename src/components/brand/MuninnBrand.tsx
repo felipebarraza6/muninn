@@ -20,6 +20,8 @@ interface MuninnBrandProps {
   to?: string | null;
   onClick?: () => void;
   compact?: boolean;
+  /** `stacked`: logo arriba, título abajo (login org). Default horizontal. */
+  layout?: "horizontal" | "stacked";
   className?: string;
 }
 
@@ -27,6 +29,7 @@ interface MuninnBrandProps {
  * Shell de marca:
  * - Con sucursal: título = fantasy_name, subtítulo = app_name; logo sucursal o Muninn.
  * - Sin sucursal: título = MUNINN, subtítulo = Agentes (+ mark Muninn).
+ * - stacked: logo arriba + nombre abajo (sin forzar subtítulo).
  */
 export function MuninnBrand({
   branchLabel,
@@ -36,14 +39,18 @@ export function MuninnBrand({
   to,
   onClick,
   compact = false,
+  layout = "horizontal",
   className,
 }: MuninnBrandProps) {
+  const stacked = layout === "stacked";
   const branchName = branchLabel?.trim() || "";
   const inBranch = Boolean(branchName);
   const title = inBranch ? branchName : "MUNINN";
-  const subtitle = inBranch
-    ? appName?.trim() || tagline?.trim() || null
-    : tagline?.trim() || "Agentes";
+  const subtitle = stacked
+    ? appName?.trim() || null
+    : inBranch
+      ? appName?.trim() || tagline?.trim() || null
+      : tagline?.trim() || "Agentes";
 
   const [logoFailed, setLogoFailed] = useState(false);
   useEffect(() => {
@@ -59,8 +66,8 @@ export function MuninnBrand({
           showBranchLogo
             ? "border-border bg-muted p-0.5"
             : "border-primary/40 bg-primary/20 dark:bg-primary/15",
-          compact ? "h-8 w-8" : "h-9 w-9",
-          "group-data-[collapsible=icon]:!h-8 group-data-[collapsible=icon]:!w-8",
+          stacked ? "h-16 w-16 rounded-2xl" : compact ? "h-8 w-8" : "h-9 w-9",
+          !stacked && "group-data-[collapsible=icon]:!h-8 group-data-[collapsible=icon]:!w-8",
         )}
       >
         {showBranchLogo ? (
@@ -77,19 +84,28 @@ export function MuninnBrand({
             aria-hidden
             className={cn(
               "object-contain opacity-95 brightness-0 dark:invert",
-              compact ? "h-5 w-5" : "h-6 w-6",
-              "group-data-[collapsible=icon]:!h-5 group-data-[collapsible=icon]:!w-5",
+              stacked ? "h-9 w-9" : compact ? "h-5 w-5" : "h-6 w-6",
+              !stacked && "group-data-[collapsible=icon]:!h-5 group-data-[collapsible=icon]:!w-5",
             )}
           />
         )}
       </span>
 
       {!compact && (
-        <div className="flex min-w-0 flex-col leading-tight group-data-[collapsible=icon]:hidden">
+        <div
+          className={cn(
+            "flex min-w-0 flex-col leading-tight",
+            stacked ? "items-center text-center" : "group-data-[collapsible=icon]:hidden",
+          )}
+        >
           <span
             className={cn(
-              "truncate font-semibold text-foreground",
-              inBranch ? "text-sm tracking-tight" : "text-[15px] tracking-[0.04em]",
+              "font-semibold text-foreground",
+              stacked
+                ? "text-lg tracking-tight"
+                : inBranch
+                  ? "truncate text-sm tracking-tight"
+                  : "truncate text-[15px] tracking-[0.04em]",
             )}
           >
             {title}
@@ -97,8 +113,12 @@ export function MuninnBrand({
           {subtitle && (
             <span
               className={cn(
-                "mt-0.5 truncate text-[9.5px] uppercase tracking-[0.14em]",
-                inBranch ? "text-muted-foreground" : "text-primary/90",
+                "mt-0.5 uppercase tracking-[0.14em]",
+                stacked
+                  ? "text-[10px] text-muted-foreground"
+                  : inBranch
+                    ? "truncate text-[9.5px] text-muted-foreground"
+                    : "truncate text-[9.5px] text-primary/90",
               )}
             >
               {subtitle}
@@ -115,31 +135,24 @@ export function MuninnBrand({
       : title
     : `Muninn — ${subtitle || "Agentes"}`;
 
+  const shellClass = cn(
+    "flex min-w-0",
+    stacked
+      ? "flex-col items-center gap-3"
+      : "items-center gap-2.5 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:px-0",
+    className,
+  );
+
   if (to) {
     return (
-      <Link
-        to={to}
-        onClick={onClick}
-        className={cn(
-          "flex items-center gap-2.5 min-w-0",
-          "group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:px-0",
-          className,
-        )}
-        aria-label={aria}
-      >
+      <Link to={to} onClick={onClick} className={shellClass} aria-label={aria}>
         {content}
       </Link>
     );
   }
 
   return (
-    <div
-      className={cn(
-        "flex items-center gap-2.5 min-w-0",
-        "group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:px-0",
-        className,
-      )}
-    >
+    <div className={shellClass} aria-label={aria}>
       {content}
     </div>
   );

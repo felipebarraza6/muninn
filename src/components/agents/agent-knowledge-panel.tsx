@@ -29,7 +29,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { KnowledgeContentViewer } from "./knowledge-content-viewer";
 import { toast } from "sonner";
 import { KNOWLEDGE_TYPE_ICON, KNOWLEDGE_TYPE_LABEL } from "@/lib/knowledge-types";
-import { canAccessKnowledgeCatalog } from "@/lib/authGuards";
+import { canAccessKnowledgeCatalog, canViewInactiveStudioResources } from "@/lib/authGuards";
 
 interface AgentKnowledgePanelProps {
   agentId: string;
@@ -43,17 +43,20 @@ function docId(doc: AgentKnowledge | string | number | { id?: string | number })
 export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
   const { data: agent, isLoading: isLoadingAgent, refetch: refetchAgent } = useAgent(agentId);
   const agentBranchId = agent?.branch ?? null;
+  // includeInactive: para poder ver/desasignar docs ya inactivos del agente.
+  // En el diálogo «Asignar» solo se ofrecen activos (availableDocs).
   const {
     data: catalogRaw = [],
     isLoading: isLoadingKnowledge,
     refetch: refetchCatalog,
-  } = useKnowledgeCatalog({ branch: agentBranchId });
+  } = useKnowledgeCatalog({
+    branch: agentBranchId,
+    includeInactive: canViewInactiveStudioResources(),
+  });
   const catalog = useMemo(() => {
     if (agentBranchId == null) return catalogRaw;
     const branchKey = String(agentBranchId);
-    return catalogRaw.filter(
-      (doc) => doc.branch == null || String(doc.branch) === branchKey,
-    );
+    return catalogRaw.filter((doc) => doc.branch == null || String(doc.branch) === branchKey);
   }, [catalogRaw, agentBranchId]);
   const updateAgent = useUpdateAgent();
   const indexKnowledge = useIndexKnowledge();
@@ -130,9 +133,7 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
               queryKey: ["ai-agents", "knowledge", id, "chunks"],
             });
             if (status.has_vectors) {
-              toast.success(
-                `«${title}» listo: ${status.embeddings_count} vectores generados`,
-              );
+              toast.success(`«${title}» listo: ${status.embeddings_count} vectores generados`);
             } else if (status.chunks_count > 0) {
               toast.warning(
                 `«${title}» se dividió en fragmentos, pero no se pudieron crear los vectores. Revisa el modelo de embedding en la configuración de la sucursal.`,
@@ -199,8 +200,9 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
     return catalog.filter((doc) => assignedIds.has(String(doc.id)));
   }, [catalog, assignedIds]);
 
+  /** Solo conocimiento activo se puede asignar (inactivos van a borrarse / no usan RAG). */
   const availableDocs = useMemo(() => {
-    return catalog.filter((doc) => !assignedIds.has(String(doc.id)));
+    return catalog.filter((doc) => !assignedIds.has(String(doc.id)) && doc.is_active !== false);
   }, [catalog, assignedIds]);
 
   const filteredAssigned = useMemo(() => {
@@ -378,9 +380,7 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
           if (data.indexing_task_id) {
             indexingTaskIds.current.set(id, data.indexing_task_id);
           }
-          toast.message(
-            `Reindexando${title ? ` «${title}»` : ""}… te avisamos cuando esté listo`,
-          );
+          toast.message(`Reindexando${title ? ` «${title}»` : ""}… te avisamos cuando esté listo`);
         },
         onError: () => {
           toast.error("No se pudo reindexar");
@@ -525,10 +525,7 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
                           {doc.embeddings_count != null ? ` · ${doc.embeddings_count}` : ""}
                         </Badge>
                       ) : withChunksOnly ? (
-                        <Badge
-                          variant="outline"
-                          className="text-[10px] gap-1 text-warning"
-                        >
+                        <Badge variant="outline" className="text-[10px] gap-1 text-warning">
                           <XCircle className="h-3 w-3" /> Sin vectores
                         </Badge>
                       ) : (
@@ -648,9 +645,7 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
                         <p className="font-medium text-sm truncate">{doc.title}</p>
                         <p className="text-[11px] text-muted-foreground truncate">
                           {KNOWLEDGE_TYPE_LABEL[doc.knowledge_type]}
-                          {hasKnowledgeVectors(doc)
-                            ? " · Con vectores"
-                            : " · Sin vectores"}
+                          {hasKnowledgeVectors(doc) ? " · Con vectores" : " · Sin vectores"}
                         </p>
                       </div>
                     </div>

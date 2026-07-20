@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
+import { canManageSkills } from "@/lib/authGuards";
 import {
   ArrowLeft,
   ArrowRight,
@@ -98,6 +99,7 @@ function clearFormulaDraft() {
 
 export default function FuncionesNuevoPage() {
   const navigate = useNavigate();
+  const canManage = canManageSkills();
   const { data: apps = [] } = useExternalAPIs({ includeInactive: false });
   const { data: branchOptions = [] } = useMyBranchesSelect();
   const { data: agents = [] } = useAgents({ is_active: true });
@@ -484,6 +486,10 @@ export default function FuncionesNuevoPage() {
       )}
     </div>
   );
+
+  if (!canManage) {
+    return <Navigate to="/skills" replace />;
+  }
 
   return (
     <AdminPageMotion>

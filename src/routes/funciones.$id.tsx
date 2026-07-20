@@ -72,6 +72,7 @@ import {
 } from "@/lib/skills";
 import { toast } from "sonner";
 import { FormulaExpressionEditor } from "@/components/skills/formula-expression-editor";
+import { canEditOwnedSkill, canHardDeleteSkills } from "@/lib/authGuards";
 
 const CREDENTIAL_PARAM_KEYS = new Set([
   "email",
@@ -93,7 +94,9 @@ export default function FunctionDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const canHardDelete = canHardDeleteSkills();
   const { data: fn, isLoading, error, refetch } = useAgentFunction(id);
+  const canManage = Boolean(fn && canEditOwnedSkill(fn));
   const update = useUpdateAgentFunction();
   const remove = useDeleteAgentFunction();
   const restore = useRestoreAgentFunction();
@@ -535,13 +538,13 @@ export default function FunctionDetailPage() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2 self-start">
-          {tab === "configuracion" && (
+          {canManage && tab === "configuracion" && (
             <Button variant="outline" size="sm" onClick={() => setEditing((v) => !v)}>
               <Pencil className="h-4 w-4 mr-1.5" />
               {editing ? "Cancelar" : "Editar"}
             </Button>
           )}
-          {fn.is_active === false && (
+          {canManage && fn.is_active === false && (
             <Button
               variant="outline"
               size="sm"
@@ -569,132 +572,155 @@ export default function FunctionDetailPage() {
               Reactivar
             </Button>
           )}
-          <AlertDialog
-            open={deleteOpen}
-            onOpenChange={(open) => {
-              setDeleteOpen(open);
-              if (!open) setConfirmName("");
-            }}
-          >
-            <AlertDialogTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-destructive hover:text-destructive"
-                disabled={remove.isPending}
-              >
-                <Trash2 className="h-4 w-4 mr-1.5" />
-                {fn.is_active === false ? "Borrar definitivo" : "Desactivar"}
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>
-                  {fn.is_active === false ? "Borrar skill definitivamente" : "Desactivar skill"}
-                </AlertDialogTitle>
-                <AlertDialogDescription asChild>
-                  <div className="space-y-2 text-sm text-muted-foreground">
-                    {fn.is_active === false ? (
-                      <>
-                        <p>
-                          «{fn.name}» ya está desactivada. Esto la borra de forma permanente y no se
-                          puede deshacer. Los agentes perderán la asignación.
-                        </p>
-                        <p>
-                          Escribí el nombre exacto de la skill para confirmar:{" "}
-                          <span className="font-medium text-foreground">{fn.name}</span>
-                        </p>
-                        <Input
-                          value={confirmName}
-                          onChange={(e) => setConfirmName(e.target.value)}
-                          placeholder={fn.name}
-                          autoComplete="off"
-                          className="mt-1"
-                        />
-                      </>
-                    ) : (
-                      <p>
-                        «{fn.name}» se desactivará y dejará de estar disponible para los agentes.
-                        Podés reactivarla después. Solo se borra del todo si confirmás una segunda
-                        vez.
-                      </p>
-                    )}
-                  </div>
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                <AlertDialogAction
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  disabled={
-                    remove.isPending ||
-                    (fn.is_active === false && confirmName.trim() !== fn.name.trim())
-                  }
-                  onClick={(e) => {
-                    e.preventDefault();
-                    if (!id) return;
-                    const permanent = fn.is_active === false;
-                    remove.mutate(
-                      { id, permanent },
-                      {
-                        onSuccess: (r) => {
-                          if (r.action === "deleted") {
-                            toast.success(r.message || "Skill eliminada definitivamente");
-                            setDeleteOpen(false);
-                            navigate("/skills");
-                            return;
-                          }
-                          toast.success(r.message || "Skill desactivada");
-                          setDeleteOpen(false);
-                          void refetch();
-                        },
-                        onError: (err) =>
-                          toast.error(
-                            (err as { friendlyMessage?: string })?.friendlyMessage ||
-                              "No se pudo completar la acción",
-                          ),
-                      },
-                    );
-                  }}
+          {canManage && (fn.is_active !== false || canHardDelete) && (
+            <AlertDialog
+              open={deleteOpen}
+              onOpenChange={(open) => {
+                setDeleteOpen(open);
+                if (!open) setConfirmName("");
+              }}
+            >
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  disabled={remove.isPending}
                 >
-                  {fn.is_active === false ? "Borrar definitivamente" : "Desactivar"}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+                  <Trash2 className="h-4 w-4 mr-1.5" />
+                  {fn.is_active === false ? "Borrar definitivo" : "Desactivar"}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>
+                    {fn.is_active === false ? "Borrar skill definitivamente" : "Desactivar skill"}
+                  </AlertDialogTitle>
+                  <AlertDialogDescription asChild>
+                    <div className="space-y-2 text-sm text-muted-foreground">
+                      {fn.is_active === false ? (
+                        <>
+                          <p>
+                            «{fn.name}» ya está desactivada. Esto la borra de forma permanente y no
+                            se puede deshacer. Los agentes perderán la asignación.
+                          </p>
+                          <p>
+                            Escribí el nombre exacto de la skill para confirmar:{" "}
+                            <span className="font-medium text-foreground">{fn.name}</span>
+                          </p>
+                          <Input
+                            value={confirmName}
+                            onChange={(e) => setConfirmName(e.target.value)}
+                            placeholder={fn.name}
+                            autoComplete="off"
+                            className="mt-1"
+                          />
+                        </>
+                      ) : (
+                        <p>
+                          «{fn.name}» se desactivará y dejará de estar disponible para los agentes.
+                          Podés reactivarla después
+                          {canHardDelete
+                            ? ". Solo se borra del todo si confirmás una segunda vez."
+                            : "."}
+                        </p>
+                      )}
+                    </div>
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    disabled={
+                      remove.isPending ||
+                      (fn.is_active === false && confirmName.trim() !== fn.name.trim())
+                    }
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (!id) return;
+                      const permanent = fn.is_active === false;
+                      if (permanent && !canHardDelete) {
+                        toast.error("Solo un super administrador puede borrar definitivamente");
+                        return;
+                      }
+                      remove.mutate(
+                        { id, permanent },
+                        {
+                          onSuccess: (r) => {
+                            if (r.action === "deleted") {
+                              toast.success(r.message || "Skill eliminada definitivamente");
+                              setDeleteOpen(false);
+                              navigate("/skills");
+                              return;
+                            }
+                            toast.success(r.message || "Skill desactivada");
+                            setDeleteOpen(false);
+                            void refetch();
+                          },
+                          onError: (err) =>
+                            toast.error(
+                              (err as { friendlyMessage?: string })?.friendlyMessage ||
+                                "No se pudo completar la acción",
+                            ),
+                        },
+                      );
+                    }}
+                  >
+                    {fn.is_active === false ? "Borrar definitivamente" : "Desactivar"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
         </div>
       </header>
+
+      {!canManage && (
+        <div className="rounded-lg border border-border/70 bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
+          Skill de plataforma / de otro autor:{" "}
+          <span className="font-medium text-foreground">solo lectura</span>. Podés usarla en
+          agentes; para cambios pedile al superadministrador o creá una skill propia.
+        </div>
+      )}
 
       {fn.is_active === false && (
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2.5 text-xs text-muted-foreground flex flex-col sm:flex-row sm:items-center gap-2 justify-between">
           <p>
             Esta skill está <span className="font-medium text-foreground">desactivada</span>. Los
-            agentes no la usan. Podés reactivarla o borrarla definitivamente.
+            agentes no la usan.
+            {canManage
+              ? canHardDelete
+                ? " Podés reactivarla o borrarla definitivamente."
+                : " Podés reactivarla si fue un error."
+              : ""}
           </p>
-          <div className="flex flex-wrap gap-2 shrink-0">
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 text-xs"
-              disabled={restore.isPending}
-              onClick={() => {
-                if (!id) return;
-                restore.mutate(id, {
-                  onSuccess: (r) => {
-                    toast.success(r.message || "Skill reactivada");
-                    void refetch();
-                  },
-                  onError: (err) =>
-                    toast.error(
-                      (err as { friendlyMessage?: string })?.friendlyMessage ||
-                        "No se pudo reactivar",
-                    ),
-                });
-              }}
-            >
-              <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reactivar
-            </Button>
-          </div>
+          {canManage && (
+            <div className="flex flex-wrap gap-2 shrink-0">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs"
+                disabled={restore.isPending}
+                onClick={() => {
+                  if (!id) return;
+                  restore.mutate(id, {
+                    onSuccess: (r) => {
+                      toast.success(r.message || "Skill reactivada");
+                      void refetch();
+                    },
+                    onError: (err) =>
+                      toast.error(
+                        (err as { friendlyMessage?: string })?.friendlyMessage ||
+                          "No se pudo reactivar",
+                      ),
+                  });
+                }}
+              >
+                <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reactivar
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
@@ -971,39 +997,41 @@ export default function FunctionDetailPage() {
                     : "Schema que ve el LLM. Las fuentes (estático / documento DATA) se configuran al asignar la skill desde el agente."}
                 </p>
               </div>
-              <div className="flex flex-wrap gap-2 shrink-0">
-                {fn.implementation_type === "api" && (
+              {canManage && (
+                <div className="flex flex-wrap gap-2 shrink-0">
+                  {fn.implementation_type === "api" && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={update.isPending}
+                      onClick={regenerateSchemaFromEndpoint}
+                    >
+                      <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                      Regenerar desde endpoint
+                    </Button>
+                  )}
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    disabled={update.isPending}
-                    onClick={regenerateSchemaFromEndpoint}
+                    onClick={() => {
+                      if (paramFormOpen && !editingParamKey) {
+                        setParamFormOpen(false);
+                        resetParamForm();
+                      } else {
+                        openAddParam();
+                      }
+                    }}
                   >
-                    <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-                    Regenerar desde endpoint
+                    <Plus className="h-3.5 w-3.5 mr-1.5" />
+                    Agregar parámetro
                   </Button>
-                )}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    if (paramFormOpen && !editingParamKey) {
-                      setParamFormOpen(false);
-                      resetParamForm();
-                    } else {
-                      openAddParam();
-                    }
-                  }}
-                >
-                  <Plus className="h-3.5 w-3.5 mr-1.5" />
-                  Agregar parámetro
-                </Button>
-              </div>
+                </div>
+              )}
             </div>
 
-            {paramFormOpen && (
+            {canManage && paramFormOpen && (
               <div className="rounded-lg border border-dashed p-3 space-y-3">
                 <p className="text-xs font-medium">
                   {editingParamKey ? `Editar «${editingParamKey}»` : "Nuevo parámetro"}
@@ -1146,25 +1174,29 @@ export default function FunctionDetailPage() {
                             Requerido
                           </Badge>
                         )}
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 px-2"
-                          onClick={() => openEditParam(key, prop)}
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 px-2 text-destructive"
-                          disabled={update.isPending}
-                          onClick={() => deleteParam(key)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                        {canManage && (
+                          <>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2"
+                              onClick={() => openEditParam(key, prop)}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2 text-destructive"
+                              disabled={update.isPending}
+                              onClick={() => deleteParam(key)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </>
+                        )}
                       </div>
                       <p className="text-[10px] text-muted-foreground">
                         {SCHEMA_KIND_HINT[kind]}

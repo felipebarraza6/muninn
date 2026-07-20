@@ -247,7 +247,8 @@ export function useBranchTheme(branchIdOverride?: string | null) {
   ]);
 
   const muninnTheme = useMemo(
-    () => (isSuperAdmin() ? resolveEffectiveTheme({ ...MUNINN_DEFAULT_THEME }, "Muninn") : undefined),
+    () =>
+      isSuperAdmin() ? resolveEffectiveTheme({ ...MUNINN_DEFAULT_THEME }, "Muninn") : undefined,
     [],
   );
 

@@ -41,6 +41,7 @@ import { RequireOrganizationsAdmin } from "./components/auth/RequireOrganization
 import { RequireLlmAdmin } from "./components/auth/RequireLlmAdmin";
 import { RequireKnowledgeCatalog } from "./components/auth/RequireKnowledgeCatalog";
 import { RequireConversations } from "./components/auth/RequireConversations";
+import { RequireSkills } from "./components/auth/RequireSkills";
 import { ThemeProvider } from "./components/theme/ThemeProvider";
 
 const queryClient = new QueryClient({
@@ -99,9 +100,30 @@ function AnimatedOutlet() {
           <Route path="/aplicaciones/:id" element={<APIDetail />} />
           <Route path="/apis" element={<Navigate to={APP_STORE_PATH} replace />} />
           <Route path="/apis/:id" element={<ApiDetailRedirect />} />
-          <Route path="/skills" element={<Funciones />} />
-          <Route path="/skills/nuevo" element={<FuncionesNuevo />} />
-          <Route path="/skills/:id" element={<FunctionDetail />} />
+          <Route
+            path="/skills"
+            element={
+              <RequireSkills>
+                <Funciones />
+              </RequireSkills>
+            }
+          />
+          <Route
+            path="/skills/nuevo"
+            element={
+              <RequireSkills>
+                <FuncionesNuevo />
+              </RequireSkills>
+            }
+          />
+          <Route
+            path="/skills/:id"
+            element={
+              <RequireSkills>
+                <FunctionDetail />
+              </RequireSkills>
+            }
+          />
           <Route path="/funciones" element={<Navigate to="/skills" replace />} />
           <Route path="/funciones/nuevo" element={<Navigate to="/skills/nuevo" replace />} />
           <Route path="/funciones/:id" element={<FunctionDetailRedirect />} />

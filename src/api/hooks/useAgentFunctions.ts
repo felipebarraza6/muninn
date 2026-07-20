@@ -63,6 +63,10 @@ export interface AgentFunction {
   external_api_name?: string | null;
   /** True si la app usa endpoint_auth: la skill usa la cuenta del owner. */
   uses_personal_connection?: boolean;
+  /** Autor (user id). Organizador solo edita las suyas. */
+  created_by?: number | string | null;
+  /** Backend: si el usuario actual puede editar/desactivar esta skill. */
+  can_edit?: boolean;
   config?: AgentFunctionConfig;
   parameters_schema?: JsonSchema;
   return_schema?: Record<string, unknown>;

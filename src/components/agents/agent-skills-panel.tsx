@@ -53,10 +53,7 @@ function TypeIcon({ type }: { type?: ImplementationType }) {
 }
 
 /** Skills visibles según apps del agente: globales, sin app, o de apps elegidas. */
-function isSkillAssignable(
-  fn: AgentFunction,
-  selectedAppIds: Set<string>,
-): boolean {
+function isSkillAssignable(fn: AgentFunction, selectedAppIds: Set<string>): boolean {
   const scope = normalizeSkillScope(fn.scope);
   if (scope === "global") return true;
   if (!fn.external_api) return true;
@@ -196,9 +193,7 @@ export function AgentSkillsPanel({ agentId }: AgentSkillsPanelProps) {
         id: agentId,
         data: {
           external_apis: nextIds,
-          ...(nextSkillIds.length !== assignedIds.size
-            ? { functions: nextSkillIds }
-            : {}),
+          ...(nextSkillIds.length !== assignedIds.size ? { functions: nextSkillIds } : {}),
         },
       },
       {
@@ -396,13 +391,7 @@ export function AgentSkillsPanel({ agentId }: AgentSkillsPanelProps) {
                   >
                     <Settings2 className="h-4 w-4" />
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-8"
-                    asChild
-                    title="Ver en catálogo"
-                  >
+                  <Button size="sm" variant="ghost" className="h-8" asChild title="Ver en catálogo">
                     <Link to={`/skills/${id}`}>
                       <Eye className="h-4 w-4" />
                     </Link>

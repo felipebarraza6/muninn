@@ -1,11 +1,28 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowUpRight, Calculator, Code2, Loader2, Plug, Plus, Sparkles } from "lucide-react";
+import {
+  ArrowUpRight,
+  Calculator,
+  Code2,
+  Loader2,
+  Plug,
+  Plus,
+  RotateCcw,
+  Sparkles,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   useAgentFunctions,
+  useRestoreAgentFunction,
   type AgentFunction,
   type ImplementationType,
 } from "@/api/hooks/useAgentFunctions";
@@ -15,26 +32,17 @@ import {
   AdminPageMotion,
 } from "@/components/admin/AdminPageMotion";
 import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
-import { canViewInactiveStudioResources } from "@/lib/authGuards";
+import {
+  canEditOwnedSkill,
+  canManageSkills,
+  canViewInactiveStudioResources,
+} from "@/lib/authGuards";
 import { IMPLEMENTATION_TYPE_LABEL, normalizeSkillScope, SKILL_SCOPE_LABEL } from "@/lib/skills";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 type ScopeFilter = "all" | "global" | "branch" | "agent";
 type TypeFilter = "all" | "api" | "formula" | "python_code";
-
-const TYPE_FILTERS: { value: TypeFilter; label: string }[] = [
-  { value: "all", label: "Todos" },
-  { value: "api", label: "API" },
-  { value: "formula", label: "Matemática" },
-  { value: "python_code", label: "Python" },
-];
-
-const SCOPE_FILTERS: { value: ScopeFilter; label: string }[] = [
-  { value: "all", label: "Todos" },
-  { value: "global", label: "Global" },
-  { value: "branch", label: "Sucursal" },
-  { value: "agent", label: "Agente" },
-];
 
 function skillScope(fn: AgentFunction): "global" | "branch" | "agent" {
   return normalizeSkillScope(fn.scope);
@@ -68,9 +76,18 @@ function typeIconTone(type?: ImplementationType, active?: boolean) {
   }
 }
 
-function SkillCard({ fn }: { fn: AgentFunction }) {
+function SkillCard({
+  fn,
+  onRestore,
+  restoring,
+}: {
+  fn: AgentFunction;
+  onRestore: (id: string) => void;
+  restoring: boolean;
+}) {
   const scope = skillScope(fn);
   const active = fn.is_active !== false;
+  const canEdit = canEditOwnedSkill(fn);
   return (
     <article
       className={cn(
@@ -133,8 +150,21 @@ function SkillCard({ fn }: { fn: AgentFunction }) {
             <ArrowUpRight className="h-3.5 w-3.5 ml-1" />
           </Link>
         </Button>
-        {!active && (
-          <span className="text-[10px] text-muted-foreground">Desactivada · ver detalle</span>
+        {!active && canEdit && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8"
+            disabled={restoring}
+            onClick={() => onRestore(fn.id)}
+          >
+            {restoring ? (
+              <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+            ) : (
+              <RotateCcw className="h-3.5 w-3.5 mr-1" />
+            )}
+            Reactivar
+          </Button>
         )}
       </div>
     </article>
@@ -142,17 +172,21 @@ function SkillCard({ fn }: { fn: AgentFunction }) {
 }
 
 export default function Funciones() {
-  const showInactive = canViewInactiveStudioResources();
+  const canSeeInactive = canViewInactiveStudioResources();
+  const canManage = canManageSkills();
+  const [includeInactive, setIncludeInactive] = useState(canSeeInactive);
   const { data: functionsRaw = [], isLoading } = useAgentFunctions({
-    includeInactive: showInactive,
+    includeInactive: canSeeInactive && includeInactive,
   });
+  const restore = useRestoreAgentFunction();
+  const [restoringId, setRestoringId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [scopeFilter, setScopeFilter] = useState<ScopeFilter>("all");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [appFilter, setAppFilter] = useState<string>("all");
 
   const functions = useMemo(() => {
-    if (showInactive) {
+    if (canSeeInactive && includeInactive) {
       return [...functionsRaw].sort((a, b) => {
         const aActive = a.is_active !== false ? 0 : 1;
         const bActive = b.is_active !== false ? 0 : 1;
@@ -161,7 +195,7 @@ export default function Funciones() {
       });
     }
     return functionsRaw.filter((fn) => fn.is_active !== false);
-  }, [functionsRaw, showInactive]);
+  }, [functionsRaw, canSeeInactive, includeInactive]);
 
   const appsWithSkills = useMemo(() => {
     const map = new Map<string, string>();
@@ -173,15 +207,6 @@ export default function Funciones() {
     return Array.from(map.entries())
       .map(([id, name]) => ({ id, name }))
       .sort((a, b) => a.name.localeCompare(b.name, "es"));
-  }, [functions]);
-
-  const typeCounts = useMemo(() => {
-    const counts: Record<string, number> = { all: functions.length };
-    for (const fn of functions) {
-      const t = fn.implementation_type || "unknown";
-      counts[t] = (counts[t] || 0) + 1;
-    }
-    return counts;
   }, [functions]);
 
   const filtered = useMemo(() => {
@@ -207,6 +232,22 @@ export default function Funciones() {
     });
   }, [functions, search, scopeFilter, typeFilter, appFilter]);
 
+  const handleRestore = (id: string) => {
+    setRestoringId(id);
+    restore.mutate(id, {
+      onSuccess: (r) => {
+        toast.success(r.message || "Skill reactivada");
+        setRestoringId(null);
+      },
+      onError: (err) => {
+        toast.error(
+          (err as { friendlyMessage?: string })?.friendlyMessage || "No se pudo reactivar",
+        );
+        setRestoringId(null);
+      },
+    });
+  };
+
   const storeHeader = (
     <div className="relative overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-br from-primary/10 via-card/80 to-card px-5 py-5 md:px-6 md:py-6">
       <div
@@ -229,94 +270,85 @@ export default function Funciones() {
             o agente.
           </p>
         </div>
-        <Button size="sm" className="shrink-0" asChild>
-          <Link to="/skills/nuevo">
-            <Plus className="h-4 w-4 mr-1.5" />
-            Nueva skill
-          </Link>
-        </Button>
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          {canSeeInactive && (
+            <Button
+              size="sm"
+              variant={includeInactive ? "secondary" : "outline"}
+              onClick={() => setIncludeInactive((v) => !v)}
+            >
+              {includeInactive ? "Ocultar inactivos" : "Ver inactivos"}
+            </Button>
+          )}
+          {canManage && (
+            <Button size="sm" asChild>
+              <Link to="/skills/nuevo">
+                <Plus className="h-4 w-4 mr-1.5" />
+                Nueva skill
+              </Link>
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );
 
   const filters = (
-    <div className="space-y-2.5">
-      <div className="flex flex-col sm:flex-row gap-2 sm:max-w-xl">
-        <Input
-          placeholder="Buscar por nombre, slug, tipo o aplicación…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+    <div className="flex flex-col lg:flex-row gap-2 lg:items-center">
+      <Input
+        placeholder="Buscar por nombre, slug, tipo o aplicación…"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        disabled={isLoading}
+        className="h-9 flex-1 min-w-0 lg:max-w-sm"
+      />
+      <div className="flex flex-wrap items-center gap-2">
+        <Select
+          value={scopeFilter}
+          onValueChange={(v) => setScopeFilter(v as ScopeFilter)}
           disabled={isLoading}
-          className="h-9 flex-1 min-w-0"
-        />
-        <StudioBranchFilter />
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-[11px] text-muted-foreground w-12 shrink-0">Ámbito</span>
-          {SCOPE_FILTERS.map(({ value, label }) => (
-            <Button
-              key={value}
-              type="button"
-              size="sm"
-              variant={scopeFilter === value ? "default" : "outline"}
-              className="h-7 text-xs"
-              onClick={() => setScopeFilter(value)}
-            >
-              {label}
-            </Button>
-          ))}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-[11px] text-muted-foreground w-12 shrink-0">Tipo</span>
-          {TYPE_FILTERS.map(({ value, label }) => {
-            const count = typeCounts[value] ?? 0;
-            const disabled = value !== "all" && count === 0;
-            return (
-              <Button
-                key={value}
-                type="button"
-                size="sm"
-                variant={typeFilter === value ? "default" : "outline"}
-                className="h-7 text-xs"
-                disabled={disabled || isLoading}
-                onClick={() => setTypeFilter(value)}
-              >
-                {label}
-                {value !== "all" && count > 0 && <span className="ml-1 opacity-70">{count}</span>}
-              </Button>
-            );
-          })}
-        </div>
-
+        >
+          <SelectTrigger className="h-9 w-[140px]">
+            <SelectValue placeholder="Ámbito" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Ámbito: todos</SelectItem>
+            <SelectItem value="global">Global</SelectItem>
+            <SelectItem value="branch">Sucursal</SelectItem>
+            <SelectItem value="agent">Agente</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select
+          value={typeFilter}
+          onValueChange={(v) => setTypeFilter(v as TypeFilter)}
+          disabled={isLoading}
+        >
+          <SelectTrigger className="h-9 w-[150px]">
+            <SelectValue placeholder="Tipo" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tipo: todos</SelectItem>
+            <SelectItem value="api">API</SelectItem>
+            <SelectItem value="formula">Matemática</SelectItem>
+            <SelectItem value="python_code">Python</SelectItem>
+          </SelectContent>
+        </Select>
         {appsWithSkills.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] text-muted-foreground w-12 shrink-0">App</span>
-            <Button
-              type="button"
-              size="sm"
-              variant={appFilter === "all" ? "default" : "outline"}
-              className="h-7 text-xs"
-              onClick={() => setAppFilter("all")}
-            >
-              Todas
-            </Button>
-            {appsWithSkills.map((app) => (
-              <Button
-                key={app.id}
-                type="button"
-                size="sm"
-                variant={appFilter === app.id ? "default" : "outline"}
-                className="h-7 text-xs"
-                onClick={() => setAppFilter(app.id)}
-              >
-                {app.name}
-              </Button>
-            ))}
-          </div>
+          <Select value={appFilter} onValueChange={setAppFilter} disabled={isLoading}>
+            <SelectTrigger className="h-9 w-[160px]">
+              <SelectValue placeholder="App" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">App: todas</SelectItem>
+              {appsWithSkills.map((app) => (
+                <SelectItem key={app.id} value={app.id}>
+                  {app.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         )}
+        <StudioBranchFilter />
       </div>
     </div>
   );
@@ -356,7 +388,7 @@ export default function Funciones() {
                 : "Creá la primera skill para que tus agentes puedan ejecutar acciones."}
             </p>
           </div>
-          {!hasActiveFilters && (
+          {!hasActiveFilters && canManage && (
             <Button size="sm" variant="outline" asChild>
               <Link to="/skills/nuevo">
                 <Plus className="h-4 w-4 mr-1.5" /> Nueva skill
@@ -368,7 +400,7 @@ export default function Funciones() {
         <AdminMotionList className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5">
           {filtered.map((fn) => (
             <AdminMotionItem key={fn.id}>
-              <SkillCard fn={fn} />
+              <SkillCard fn={fn} onRestore={handleRestore} restoring={restoringId === fn.id} />
             </AdminMotionItem>
           ))}
         </AdminMotionList>

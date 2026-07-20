@@ -36,9 +36,10 @@ export type ChatStreamHandlers = {
   onError?: (data: { error?: string; detail?: string }) => void;
 };
 
-function parseSseChunk(
-  buffer: string,
-): { events: { event: string; data: string }[]; rest: string } {
+function parseSseChunk(buffer: string): {
+  events: { event: string; data: string }[];
+  rest: string;
+} {
   const parts = buffer.split("\n\n");
   const rest = parts.pop() ?? "";
   const events: { event: string; data: string }[] = [];

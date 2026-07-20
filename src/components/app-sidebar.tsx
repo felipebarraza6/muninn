@@ -43,6 +43,7 @@ import {
   getOrganizationsAdminNavLabel,
   canAccessKnowledgeCatalog,
   canAccessConversations,
+  canAccessSkills,
 } from "@/lib/authGuards";
 
 type IconComponent = React.ComponentType<{ className?: string; strokeWidth?: number }>;
@@ -92,12 +93,14 @@ function buildStudioItems(): MenuItem[] {
       icon: BookOpen,
     });
   }
-  const appsIdx = items.findIndex((i) => i.url === "/aplicaciones");
-  items.splice(appsIdx >= 0 ? appsIdx : items.length, 0, {
-    title: "Skills",
-    url: "/skills",
-    icon: Sparkles,
-  });
+  if (canAccessSkills()) {
+    const appsIdx = items.findIndex((i) => i.url === "/aplicaciones");
+    items.splice(appsIdx >= 0 ? appsIdx : items.length, 0, {
+      title: "Skills",
+      url: "/skills",
+      icon: Sparkles,
+    });
+  }
   return items;
 }
 
@@ -112,12 +115,6 @@ const usersOnlyItems: MenuItem[] = [{ title: "Usuarios", url: "/admin/usuarios",
 
 const llmOnlyItems: MenuItem[] = [{ title: "LLM", url: "/admin/llm", icon: Cpu }];
 
-const orgGestionBaseItems: MenuItem[] = [
-  { title: "Sucursales", url: "/admin/sucursales", icon: Building2 },
-  { title: "Usuarios", url: "/admin/usuarios", icon: Users },
-  { title: "LLM", url: "/admin/llm", icon: Cpu },
-];
-
 function buildOrgGestionItems(): MenuItem[] {
   return [
     {
@@ -125,7 +122,12 @@ function buildOrgGestionItems(): MenuItem[] {
       url: "/admin/organizaciones",
       icon: Network,
     },
-    ...orgGestionBaseItems,
+    {
+      title: getBranchesAdminNavLabel(),
+      url: "/admin/sucursales",
+      icon: Building2,
+    },
+    { title: "Usuarios", url: "/admin/usuarios", icon: Users },
   ];
 }
 
@@ -153,27 +155,30 @@ export function AppSidebar() {
   const { data: theme, rawTheme } = useBranchTheme();
   const { data: activeBranch } = useActiveBranch();
   const showAdmin = isSuperAdmin();
+  const isOrgOwner = !showAdmin && isOrganizationOwner();
   const branchLogo = showAdmin ? null : resolveThemeLogo(rawTheme ?? theme);
-  // Título = fantasy_name | Subtítulo = app_name (como antes MUNINN / Agentes)
-  const orgName =
-    !showAdmin && isOrganizationOwner()
-      ? getPrimaryOrganizationName() || activeBranch?.organization_name?.trim() || null
-      : null;
+  // Título: superadmin → Muninn | organizador → holding | resto → sucursal
+  const orgName = isOrgOwner
+    ? getPrimaryOrganizationName() || activeBranch?.organization_name?.trim() || null
+    : null;
   const branchDisplayName =
     activeBranch?.fantasy_name?.trim() || activeBranch?.business_name?.trim() || null;
-  // Superadmin: siempre Muninn. Organizador: holding. Resto: sucursal.
-  const fantasyName = showAdmin ? "Muninn" : (orgName ?? branchDisplayName);
+  const fantasyName = showAdmin
+    ? "Muninn"
+    : isOrgOwner
+      ? orgName || "Organización"
+      : branchDisplayName;
   const appNameRaw = (rawTheme?.app_name || theme?.app_name || "").trim();
   const themeAppName =
     appNameRaw && appNameRaw.toLowerCase() !== "muninn" && appNameRaw.toLowerCase() !== "erp system"
       ? appNameRaw
       : null;
-  // Sin multi-sucursal: no subtítulo (el título del branding ya basta).
-  // Multi / organizador: subtítulo útil (sucursal activa o app_name).
+  // Organizador: sin subtítulo de clínica — el foco es la organización.
+  // Multi-sucursal operativo: app_name del theme. Superadmin: Agentes.
   const appName = showAdmin
     ? "Agentes"
-    : orgName
-      ? (branchDisplayName ?? themeAppName)
+    : isOrgOwner
+      ? null
       : isMultiBranchUser()
         ? themeAppName
         : null;

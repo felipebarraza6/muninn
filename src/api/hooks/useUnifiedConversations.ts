@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { GET, POST, normalizeListResponse } from "../client";
 import { ENDPOINTS } from "../endpoints/index";
-import { getActiveBranchIdInt } from "@/lib/branchStorage";
+import { useActiveBranchId } from "@/hooks/useActiveBranchId";
 
 export interface UnifiedConversation {
   id: string | number;
@@ -42,8 +42,10 @@ export interface UnifiedMessage {
 const QUERY_KEY = "unified-conversations";
 
 function useBranchId(): number | undefined {
-  const id = getActiveBranchIdInt();
-  return id ?? undefined;
+  const id = useActiveBranchId();
+  if (id == null || id === "") return undefined;
+  const n = Number(id);
+  return Number.isFinite(n) ? n : undefined;
 }
 
 export function useUnifiedConversations(filters?: { status?: string }) {

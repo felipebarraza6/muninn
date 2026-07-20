@@ -273,6 +273,9 @@
 /* Markdown compacto dentro de burbujas de chat */
 .chat-md {
   min-width: 0;
+  max-width: 100%;
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
 .chat-md > :first-child {

@@ -132,6 +132,9 @@ export function AgentForm({ agent, onCancel, onSaved }: AgentFormProps) {
       semantic_weight: values.semantic_weight,
       use_semantic_search: values.use_semantic_search,
       is_active: values.is_active,
+      // Mantener status alineado: el backend antes podía ignorar is_active=true
+      // si el agente seguía con status INACTIVE.
+      status: values.is_active ? "ACTIVE" : "INACTIVE",
     };
 
     if (isEditing && agent) {

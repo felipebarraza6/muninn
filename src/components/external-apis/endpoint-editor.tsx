@@ -230,10 +230,7 @@ export function ExternalApiEndpointsPanel({
           {entries.map(([type, endpoint]) => {
             const method = (endpoint.method || "GET").toUpperCase();
             return (
-              <div
-                key={type}
-                className="py-3 first:pt-0 last:pb-0"
-              >
+              <div key={type} className="py-3 first:pt-0 last:pb-0">
                 <div className="flex flex-wrap items-start gap-2">
                   <div className="min-w-0 flex-1 space-y-1">
                     <div className="flex flex-wrap items-center gap-2">

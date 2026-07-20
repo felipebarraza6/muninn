@@ -209,7 +209,7 @@ export function ChatPane({ conversation, onTakeControl, onSend, onOpenDetails, o
             return (
               <div
                 key={m.id}
-                className={cn("flex gap-2", isPatient ? "justify-start" : "justify-end")}
+                className={cn("flex gap-2 w-full", isPatient ? "justify-start" : "justify-end")}
               >
                 {isPatient && (
                   <Avatar className="h-7 w-7 shrink-0 self-end">
@@ -223,10 +223,19 @@ export function ChatPane({ conversation, onTakeControl, onSend, onOpenDetails, o
                     </AvatarFallback>
                   </Avatar>
                 )}
-                <div className={cn("flex flex-col group", isPatient ? "items-start" : "items-end")}>
+                {/*
+                  max-w en la columna (no en la burbuja): si el % vive en un
+                  flex-col shrink-wrap, la burbuja queda ~1 letra de ancho.
+                */}
+                <div
+                  className={cn(
+                    "flex flex-col group min-w-0 max-w-[min(78%,32rem)]",
+                    isPatient ? "items-start" : "items-end",
+                  )}
+                >
                   <div
                     className={cn(
-                      "max-w-[78%] rounded-2xl px-3.5 py-2 text-sm shadow-sm",
+                      "w-fit max-w-full rounded-2xl px-3.5 py-2 text-sm shadow-sm",
                       tone,
                       isPatient ? "rounded-bl-sm" : "rounded-br-sm",
                     )}

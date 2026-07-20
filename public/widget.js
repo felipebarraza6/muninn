@@ -51,7 +51,7 @@
     position: "fixed",
     zIndex: "2147483000",
     fontFamily:
-      'ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif',
+      "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
   });
 
   var isLeft = position === "bottom-left";

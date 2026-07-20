@@ -213,9 +213,9 @@ export function useChannelSessions(id: string | undefined) {
   return useQuery({
     queryKey: [...QUERY_KEY, id, "sessions"],
     queryFn: async () => {
-      const data = await GET<
-        ChannelSession[] | { count?: number; results: ChannelSession[] }
-      >(ENDPOINTS.channels.sessions(id!));
+      const data = await GET<ChannelSession[] | { count?: number; results: ChannelSession[] }>(
+        ENDPOINTS.channels.sessions(id!),
+      );
       if (Array.isArray(data)) return data;
       return data.results ?? [];
     },

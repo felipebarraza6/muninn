@@ -24,13 +24,15 @@ import {
   FlaskConical,
   Sparkles,
   Trash2,
+  RotateCcw,
   type LucideIcon,
 } from "lucide-react";
-import { useAgent, useDeleteAgent, useTestAgentLLM } from "@/api/hooks/useAgents";
+import { useAgent, useDeleteAgent, useUpdateAgent, useTestAgentLLM } from "@/api/hooks/useAgents";
 import { AgentKnowledgePanel } from "@/components/agents/agent-knowledge-panel";
 import { AgentSkillsPanel } from "@/components/agents/agent-skills-panel";
 import { AgentForm } from "@/components/agents/agent-form";
 import { AdminPageMotion } from "@/components/admin/AdminPageMotion";
+import { isSuperAdmin } from "@/lib/authGuards";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -107,7 +109,9 @@ export default function AgentDetailPage() {
   const section = parseSection(searchParams.get("sec"));
   const { data: agent, isLoading, error, refetch } = useAgent(id);
   const deleteAgent = useDeleteAgent();
+  const updateAgent = useUpdateAgent();
   const testLlm = useTestAgentLLM();
+  const canHardDelete = isSuperAdmin();
   const [testMessage, setTestMessage] = useState("Hola, ¿quién eres?");
   const [testResult, setTestResult] = useState<string | null>(null);
 
@@ -229,64 +233,134 @@ export default function AgentDetailPage() {
           >
             <Settings className="h-4 w-4 mr-1.5" /> Configurar
           </Button>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-destructive hover:text-destructive"
-                disabled={deleteAgent.isPending}
-              >
-                {deleteAgent.isPending ? (
-                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-                ) : (
-                  <Trash2 className="h-4 w-4 mr-1.5" />
-                )}
-                {agent.is_active === false ? "Eliminar" : "Desactivar"}
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>
-                  {agent.is_active === false ? "Eliminar permanentemente" : "Desactivar agente"}
-                </AlertDialogTitle>
-                <AlertDialogDescription>
-                  {agent.is_active === false
-                    ? `¿Eliminar «${agent.name}» de forma permanente? No se puede deshacer.`
-                    : `¿Desactivar «${agent.name}»? Dejará de aparecer en el listado y no podrá usarse en chats.`}
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                <AlertDialogAction
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  onClick={() => {
-                    if (!id) return;
-                    const hard = agent.is_active === false;
-                    deleteAgent.mutate(
-                      { id, hard },
-                      {
-                        onSuccess: () => {
-                          toast.success(
-                            hard ? "Agente eliminado" : "Agente desactivado",
-                          );
-                          navigate("/agentes");
-                        },
-                        onError: () =>
-                          toast.error(
-                            hard
-                              ? "No se pudo eliminar el agente"
-                              : "No se pudo desactivar el agente",
-                          ),
-                      },
-                    );
-                  }}
+          {agent.is_active === false ? (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={updateAgent.isPending}
+              onClick={() => {
+                if (!id) return;
+                updateAgent.mutate(
+                  { id, data: { is_active: true, status: "ACTIVE" } },
+                  {
+                    onSuccess: (saved) => {
+                      if (saved?.is_active === false) {
+                        toast.error("El servidor no reactivó el agente. Intenta de nuevo.");
+                        refetch();
+                        return;
+                      }
+                      toast.success("Agente reactivado");
+                      refetch();
+                    },
+                    onError: () => toast.error("No se pudo reactivar el agente"),
+                  },
+                );
+              }}
+            >
+              {updateAgent.isPending ? (
+                <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+              ) : (
+                <RotateCcw className="h-4 w-4 mr-1.5" />
+              )}
+              Reactivar
+            </Button>
+          ) : (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  disabled={deleteAgent.isPending}
                 >
-                  {agent.is_active === false ? "Eliminar" : "Desactivar"}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+                  {deleteAgent.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4 mr-1.5" />
+                  )}
+                  Desactivar
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Desactivar agente</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    ¿Desactivar «{agent.name}»? Podrás verlo con «Ver inactivos» y reactivarlo
+                    después.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    onClick={() => {
+                      if (!id) return;
+                      deleteAgent.mutate(
+                        { id, hard: false },
+                        {
+                          onSuccess: () => {
+                            toast.success("Agente desactivado");
+                            navigate("/agentes");
+                          },
+                          onError: () => toast.error("No se pudo desactivar el agente"),
+                        },
+                      );
+                    }}
+                  >
+                    Desactivar
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+          {agent.is_active === false && canHardDelete && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  disabled={deleteAgent.isPending}
+                >
+                  {deleteAgent.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4 mr-1.5" />
+                  )}
+                  Eliminar
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Eliminar permanentemente</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    ¿Eliminar «{agent.name}» de forma permanente? No se puede deshacer.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    onClick={() => {
+                      if (!id) return;
+                      deleteAgent.mutate(
+                        { id, hard: true },
+                        {
+                          onSuccess: () => {
+                            toast.success("Agente eliminado");
+                            navigate("/agentes");
+                          },
+                          onError: () => toast.error("No se pudo eliminar el agente"),
+                        },
+                      );
+                    }}
+                  >
+                    Eliminar
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
         </div>
       </header>
 
@@ -294,12 +368,7 @@ export default function AgentDetailPage() {
 
       <div className="relative min-h-[280px]">
         <AnimatePresence mode="wait" initial={false}>
-          <motion.div
-            key={section}
-            role="tabpanel"
-            className="space-y-4"
-            {...(panelMotion ?? {})}
-          >
+          <motion.div key={section} role="tabpanel" className="space-y-4" {...(panelMotion ?? {})}>
             {section === "modelo" && (
               <>
                 <Card>

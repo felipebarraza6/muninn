@@ -209,14 +209,12 @@ export function parseFaqPairs(content?: string): { question: string; answer: str
 }
 
 /** Texto corto para cards del catálogo (sin JSON crudo en DATA). */
-export function knowledgeCardPreview(
-  doc: {
-    knowledge_type: KnowledgeType;
-    summary?: string | null;
-    content?: string | null;
-    columns?: string[] | null;
-  },
-): string {
+export function knowledgeCardPreview(doc: {
+  knowledge_type: KnowledgeType;
+  summary?: string | null;
+  content?: string | null;
+  columns?: string[] | null;
+}): string {
   if (doc.summary?.trim()) return doc.summary.trim();
 
   if (doc.knowledge_type === "DATA") {
@@ -227,9 +225,9 @@ export function knowledgeCardPreview(
             try {
               let parsed = JSON.parse((doc.content || "").trim() || "[]");
               if (!Array.isArray(parsed)) parsed = [parsed];
-              const first = parsed.find(
-                (row: unknown) => row && typeof row === "object",
-              ) as Record<string, unknown> | undefined;
+              const first = parsed.find((row: unknown) => row && typeof row === "object") as
+                | Record<string, unknown>
+                | undefined;
               return first ? Object.keys(first) : [];
             } catch {
               return [];
@@ -240,9 +238,7 @@ export function knowledgeCardPreview(
     try {
       let parsed = JSON.parse((doc.content || "").trim() || "[]");
       if (!Array.isArray(parsed)) parsed = [parsed];
-      rowCount = parsed.filter(
-        (row: unknown) => row && typeof row === "object",
-      ).length;
+      rowCount = parsed.filter((row: unknown) => row && typeof row === "object").length;
     } catch {
       rowCount = 0;
     }
@@ -251,8 +247,7 @@ export function knowledgeCardPreview(
       columns.length > 0
         ? columns.slice(0, 4).join(", ") + (columns.length > 4 ? "…" : "")
         : "sin columnas";
-    const rowsLabel =
-      rowCount === 1 ? "1 fila" : `${rowCount || 0} filas`;
+    const rowsLabel = rowCount === 1 ? "1 fila" : `${rowCount || 0} filas`;
     return `${rowsLabel} · ${colsLabel}`;
   }
 
@@ -263,9 +258,7 @@ export function knowledgeCardPreview(
     if (pairs.length === 0) return "Sin preguntas aún";
     const first = pairs[0].question.trim() || pairs[0].answer.trim();
     const more =
-      pairs.length > 1
-        ? ` · +${pairs.length - 1} pregunta${pairs.length === 2 ? "" : "s"}`
-        : "";
+      pairs.length > 1 ? ` · +${pairs.length - 1} pregunta${pairs.length === 2 ? "" : "s"}` : "";
     return (first.slice(0, 100) + (first.length > 100 ? "…" : "") + more).trim();
   }
 

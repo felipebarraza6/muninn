@@ -1071,8 +1071,8 @@ export default function AdminLlmPage() {
                       {pBranches.length > 1 && (
                         <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1.5">
                           Atención: una sola API key se comparte entre todas las sucursales
-                          marcadas. Si una se rompe (key inválida), fallan los agentes de
-                          todas. Preferí un proveedor LLM por sucursal.
+                          marcadas. Si una se rompe (key inválida), fallan los agentes de todas.
+                          Preferí un proveedor LLM por sucursal.
                         </p>
                       )}
                     </div>

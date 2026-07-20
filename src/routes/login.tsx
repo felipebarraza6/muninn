@@ -23,13 +23,7 @@ export default function Login() {
   const [searchParams] = useSearchParams();
   const slug = slugParam || searchParams.get("slug") || undefined;
 
-  const {
-    flat,
-    scope,
-    isAppDefault,
-    stores,
-    isLoading: themeLoading,
-  } = useResolvePublicLoginTheme(slug);
+  const { flat, scope, isAppDefault, isLoading: themeLoading } = useResolvePublicLoginTheme(slug);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -62,34 +56,31 @@ export default function Login() {
     return appName || flat?.organization_name || undefined;
   }, [isAppDefault, scope, fantasyName, flat?.branch_name, flat?.organization_name, appName]);
 
+  // Portal organización: solo logo + nombre (sin tagline / subtítulos).
+  const isOrgPortal = scope === "organization" && !flat?.branch_id;
+  const isBranchLogin = scope === "branch" && Boolean(flat?.branch_id);
+
   const brandSubtitle = useMemo(() => {
-    if (isAppDefault) return undefined;
+    if (isAppDefault || isOrgPortal) return undefined;
     if (scope === "branch") {
       // Abajo del nombre fantasía: app_name (si es distinto)
       if (appName && appName !== brandTitle) return appName;
       return flat?.tagline || undefined;
     }
     return flat?.tagline || undefined;
-  }, [isAppDefault, scope, appName, brandTitle, flat?.tagline]);
+  }, [isAppDefault, isOrgPortal, scope, appName, brandTitle, flat?.tagline]);
 
-  const subtitle =
-    flat?.login_subtitle ||
-    flat?.subtitle ||
-    flat?.login_welcome_message ||
-    flat?.welcome_message ||
-    (isAppDefault
-      ? "Accede a tu panel de agentes"
-      : scope === "organization"
-        ? "Ingresá a tu portal"
-        : "Accede a tu panel");
-
-  // Solo el portal de organización muestra el listado de sucursales
-  const isOrgPortal = scope === "organization" && !flat?.branch_id;
-  const isBranchLogin = scope === "branch" && Boolean(flat?.branch_id);
+  const subtitle = isOrgPortal
+    ? null
+    : flat?.login_subtitle ||
+      flat?.subtitle ||
+      flat?.login_welcome_message ||
+      flat?.welcome_message ||
+      (isAppDefault ? "Accede a tu panel de agentes" : "Accede a tu panel");
 
   const organizationLogo = resolveMediaUrl(flat?.organization_logo_url) || null;
-  // Logo del holding: en login de sucursal (crédito org) y en portal org si tiene.
-  const hasOrganizationLogo = Boolean(organizationLogo) && (isBranchLogin || isOrgPortal);
+  // Crédito del holding solo en login de sucursal (en portal org el logo ya está arriba).
+  const hasOrganizationLogo = Boolean(organizationLogo) && isBranchLogin;
   const orgName = flat?.organization_name?.trim() || null;
 
   // Sucursal → Powered by organización. Portal org / Muninn → GitHub.
@@ -104,7 +95,9 @@ export default function Login() {
       </div>
 
       <Card className="w-full max-w-sm border border-border/50 bg-card/80 backdrop-blur">
-        <CardHeader className="space-y-5 text-center">
+        <CardHeader
+          className={isOrgPortal ? "space-y-0 pb-2 text-center" : "space-y-5 text-center"}
+        >
           <div className="flex justify-center">
             {themeLoading ? (
               <Loader2 className="h-10 w-10 animate-spin text-muted-foreground" />
@@ -113,18 +106,14 @@ export default function Login() {
                 branchLabel={brandTitle}
                 appName={brandSubtitle}
                 branchLogoUrl={isAppDefault ? null : branchLogo}
-                className="justify-center scale-110"
+                layout={isOrgPortal ? "stacked" : "horizontal"}
+                className={isOrgPortal ? "justify-center" : "justify-center scale-110"}
               />
             )}
           </div>
-          <div className="space-y-2">
+          {!isOrgPortal && subtitle && (
             <CardDescription className="text-muted-foreground">{subtitle}</CardDescription>
-            {isOrgPortal && stores.length > 0 && (
-              <p className="text-[11px] text-muted-foreground">
-                {stores.length} sucursal{stores.length === 1 ? "" : "es"} en este portal
-              </p>
-            )}
-          </div>
+          )}
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
@@ -188,30 +177,32 @@ export default function Login() {
 
       {socialLinks.length > 0 && <LoginSocialLinks links={socialLinks} className="mt-5" />}
 
-      <div className="mt-6 flex flex-col items-center gap-2">
-        {hasOrganizationLogo && (
-          <img
-            src={organizationLogo!}
-            alt={orgName || "Organización"}
-            className="h-7 max-w-[140px] object-contain opacity-80"
-          />
-        )}
-        <p className="text-[10px] uppercase tracking-wider text-muted-foreground/70">
-          Powered by{" "}
-          {showGithubCredit ? (
-            <a
-              href={GITHUB_CREDIT_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline-offset-2 hover:text-foreground hover:underline"
-            >
-              {GITHUB_CREDIT_LABEL}
-            </a>
-          ) : (
-            orgName || "Muninn"
+      {!isOrgPortal && (
+        <div className="mt-6 flex flex-col items-center gap-2">
+          {hasOrganizationLogo && (
+            <img
+              src={organizationLogo!}
+              alt={orgName || "Organización"}
+              className="h-7 max-w-[140px] object-contain opacity-80"
+            />
           )}
-        </p>
-      </div>
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground/70">
+            Powered by{" "}
+            {showGithubCredit ? (
+              <a
+                href={GITHUB_CREDIT_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline-offset-2 hover:text-foreground hover:underline"
+              >
+                {GITHUB_CREDIT_LABEL}
+              </a>
+            ) : (
+              orgName || "Muninn"
+            )}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

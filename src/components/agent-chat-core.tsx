@@ -356,9 +356,7 @@ export function AgentChatCore({
 
     try {
       const agentBranch =
-        agent.branch != null && String(agent.branch).trim() !== ""
-          ? String(agent.branch)
-          : null;
+        agent.branch != null && String(agent.branch).trim() !== "" ? String(agent.branch) : null;
       // Alinear x-branch-id con la sucursal del agente (evita PK inválida).
       if (agentBranch && getActiveBranchId() !== agentBranch) {
         setActiveBranchId(agentBranch, true, false);
@@ -442,8 +440,7 @@ export function AgentChatCore({
     const text = (overrides?.text ?? input).trim();
     if (!text || isBusy || isCreating) return;
 
-    const activeReply =
-      overrides && "reply" in overrides ? overrides.reply : replyTo;
+    const activeReply = overrides && "reply" in overrides ? overrides.reply : replyTo;
     const replyToId = activeReply?.id ?? null;
 
     const activeId = conversationId ?? (await ensureConversationId());
@@ -513,11 +510,7 @@ export function AgentChatCore({
           onStatus: (ev) => {
             const stage = ev.stage || "status";
             const icon: LiveStreamStep["icon"] =
-              stage === "rag"
-                ? "database"
-                : stage === "writing"
-                  ? "loader"
-                  : "sparkles";
+              stage === "rag" ? "database" : stage === "writing" ? "loader" : "sparkles";
             upsertStep(`status-${stage}`, ev.label || stage, ev.detail, icon, {
               demoteActive: "all",
             });
@@ -551,8 +544,7 @@ export function AgentChatCore({
           id: data.id ?? makeId("agent"),
           role: "agent",
           content: data.message ?? data.content ?? data.text ?? "",
-          created:
-            data.created_at ?? data.created ?? data.timestamp ?? new Date().toISOString(),
+          created: data.created_at ?? data.created ?? data.timestamp ?? new Date().toISOString(),
           rag_sources: data.rag_sources ?? data.sources,
           tool_calls: data.tool_calls,
           tool_results: data.tool_results,
@@ -567,11 +559,7 @@ export function AgentChatCore({
       if ((err as Error)?.name === "AbortError") return;
       // Fallback al POST clásico si el stream no está disponible.
       const msg = (err as Error)?.message || "";
-      if (
-        /stream|SSE|event-stream|Failed to fetch|406|Not Acceptable|Accept header/i.test(
-          msg,
-        )
-      ) {
+      if (/stream|SSE|event-stream|Failed to fetch|406|Not Acceptable|Accept header/i.test(msg)) {
         try {
           const data = await sendMessage.mutateAsync({
             id: activeId,
@@ -586,10 +574,7 @@ export function AgentChatCore({
                 role: data.sender?.toLowerCase() === "user" ? "user" : "agent",
                 content: data.message ?? data.content ?? data.text ?? "",
                 created:
-                  data.created_at ??
-                  data.created ??
-                  data.timestamp ??
-                  new Date().toISOString(),
+                  data.created_at ?? data.created ?? data.timestamp ?? new Date().toISOString(),
                 rag_sources: data.rag_sources ?? data.sources,
                 tool_calls: data.tool_calls,
                 tool_results: data.tool_results,
@@ -981,7 +966,9 @@ export function AgentChatCore({
                   <span className="capitalize">
                     Estado:{" "}
                     <span className="text-foreground/70">
-                      {(currentConversation.display_status || currentConversation.status).toLowerCase()}
+                      {(
+                        currentConversation.display_status || currentConversation.status
+                      ).toLowerCase()}
                     </span>
                   </span>
                 )}
@@ -1129,15 +1116,9 @@ export function AgentChatCore({
                     <ChatMessageActions
                       text={msg.content}
                       align={msg.role === "user" ? "end" : "start"}
-                      onReply={
-                        msg.role !== "system" && !isBusy
-                          ? () => startReply(msg)
-                          : undefined
-                      }
+                      onReply={msg.role !== "system" && !isBusy ? () => startReply(msg) : undefined}
                       onResend={
-                        msg.role === "user" && !isBusy
-                          ? () => resendMessage(msg)
-                          : undefined
+                        msg.role === "user" && !isBusy ? () => resendMessage(msg) : undefined
                       }
                     />
                   </div>
@@ -1229,18 +1210,9 @@ export function AgentChatCore({
               type="submit"
               size="icon"
               className="h-9 w-9 rounded-full shrink-0"
-              disabled={
-                !input.trim() ||
-                isBusy ||
-                isCreating ||
-                (!conversationId && !isDraftNew)
-              }
+              disabled={!input.trim() || isBusy || isCreating || (!conversationId && !isDraftNew)}
             >
-              {isBusy ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
+              {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             </Button>
           </form>
         </div>

@@ -381,8 +381,8 @@ function ChunkCard({ chunk, total }: { chunk: KnowledgeChunk; total: number }) {
             </div>
           ) : (
             <div className="rounded-md border border-dashed border-border/60 bg-muted/20 p-2.5 text-[11px] text-muted-foreground leading-snug">
-              Este fragmento se creó, pero no tiene vector. Reindexa el documento o revisa el
-              modelo de embedding de la sucursal.
+              Este fragmento se creó, pero no tiene vector. Reindexa el documento o revisa el modelo
+              de embedding de la sucursal.
             </div>
           )}
         </div>
@@ -541,9 +541,8 @@ function VectorsPanel({
     <div className="space-y-4">
       {withEmbedding === 0 && (
         <div className="rounded-lg border border-warning/40 bg-warning-soft/40 px-3 py-2.5 text-[12px] text-muted-foreground">
-          Hay {count} fragmento{count === 1 ? "" : "s"}, pero{" "}
-          <strong>aún no hay vectores</strong>. Reindexa de nuevo o revisa el modelo de embedding
-          de la sucursal.
+          Hay {count} fragmento{count === 1 ? "" : "s"}, pero <strong>aún no hay vectores</strong>.
+          Reindexa de nuevo o revisa el modelo de embedding de la sucursal.
         </div>
       )}
       <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-3">
@@ -854,10 +853,12 @@ export function KnowledgeContentViewer({
   const [dataColumns, setDataColumns] = useState<string[]>([]);
   const [dataRows, setDataRows] = useState<GridRow[]>([]);
 
-  const { data: doc, isLoading, error, refetch } = useKnowledge(
-    open ? knowledgeId : undefined,
-    { branch: branchId ?? undefined },
-  );
+  const {
+    data: doc,
+    isLoading,
+    error,
+    refetch,
+  } = useKnowledge(open ? knowledgeId : undefined, { branch: branchId ?? undefined });
   const update = useUpdateKnowledge();
 
   const type = doc?.knowledge_type ?? knowledgeType;

@@ -12,7 +12,11 @@ export function AppIcon({
 }) {
   const palette = appIconPalette(name);
   const sizeCls =
-    size === "lg" ? "h-16 w-16 text-lg" : size === "sm" ? "h-9 w-9 text-[11px]" : "h-12 w-12 text-sm";
+    size === "lg"
+      ? "h-16 w-16 text-lg"
+      : size === "sm"
+        ? "h-9 w-9 text-[11px]"
+        : "h-12 w-12 text-sm";
 
   return (
     <div

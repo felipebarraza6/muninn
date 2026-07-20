@@ -19,7 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { useAgents, type Agent } from "@/api/hooks/useAgents";
 import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
-import { canViewInactiveStudioResources } from "@/lib/authGuards";
+import { canViewInactiveStudioResources, isOrganizationOwner } from "@/lib/authGuards";
 import { cn } from "@/lib/utils";
 
 const ACCENTS = [
@@ -58,8 +58,12 @@ function accentFor(seed: string) {
 
 export function AgentList() {
   const canSeeInactive = canViewInactiveStudioResources();
-  /** Por defecto solo activos: al «eliminar» (soft-delete) el agente desaparece del listado. */
-  const [includeInactive, setIncludeInactive] = useState(false);
+  const isOrgOwner = isOrganizationOwner();
+  /**
+   * Organizador: por defecto ve activos + inactivos de sus sucursales (para reactivar).
+   * Resto con permiso: toggle; por defecto solo activos.
+   */
+  const [includeInactive, setIncludeInactive] = useState(isOrgOwner);
   const { data: agentsRaw = [], isLoading } = useAgents(
     canSeeInactive && includeInactive ? { includeInactive: true } : { is_active: true },
   );
@@ -198,8 +202,7 @@ export function AgentList() {
 function AgentCard({ agent, reduceMotion }: { agent: Agent; reduceMotion: boolean }) {
   const accent = accentFor(String(agent.id) + (agent.name || ""));
   const isInactive = agent.is_active === false;
-  const modelLabel =
-    agent.llm_model_name || agent.model_name || agent.llm_model_id || "Sin modelo";
+  const modelLabel = agent.llm_model_name || agent.model_name || agent.llm_model_id || "Sin modelo";
   const providerLabel = agent.llm_provider_name || agent.llm_provider_type || null;
   const knowledgeCount = Array.isArray(agent.knowledge_documents)
     ? agent.knowledge_documents.length
@@ -241,9 +244,7 @@ function AgentCard({ agent, reduceMotion }: { agent: Agent; reduceMotion: boolea
           <div
             className={cn(
               "relative flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ring-1",
-              isInactive
-                ? "bg-muted text-muted-foreground ring-border/60"
-                : accent.avatar,
+              isInactive ? "bg-muted text-muted-foreground ring-border/60" : accent.avatar,
             )}
           >
             <Bot className="h-6 w-6" strokeWidth={1.75} />
@@ -259,9 +260,7 @@ function AgentCard({ agent, reduceMotion }: { agent: Agent; reduceMotion: boolea
               <h3
                 className={cn(
                   "font-semibold text-[15px] leading-snug truncate transition-colors",
-                  isInactive
-                    ? "text-muted-foreground"
-                    : "group-hover:text-primary",
+                  isInactive ? "text-muted-foreground" : "group-hover:text-primary",
                 )}
               >
                 {agent.name}
@@ -304,9 +303,7 @@ function AgentCard({ agent, reduceMotion }: { agent: Agent; reduceMotion: boolea
         <div
           className={cn(
             "rounded-xl border px-3 py-2.5 space-y-2",
-            isInactive
-              ? "border-border/40 bg-muted/30"
-              : "border-border/50 bg-muted/25",
+            isInactive ? "border-border/40 bg-muted/30" : "border-border/50 bg-muted/25",
           )}
         >
           <div className="flex items-start gap-2 min-w-0">

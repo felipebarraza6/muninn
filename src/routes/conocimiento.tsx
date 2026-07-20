@@ -1,39 +1,60 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { CheckCircle2, FileSpreadsheet, Loader2, Plus, Trash2, Users } from "lucide-react";
+import {
+  CheckCircle2,
+  FileSpreadsheet,
+  Loader2,
+  Plus,
+  RotateCcw,
+  Trash2,
+  Users,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   useKnowledgeCatalog,
   useDeleteKnowledge,
+  useUpdateKnowledge,
   isKnowledgeIndexed,
   type AgentKnowledge,
 } from "@/api/hooks/useKnowledge";
 import { useAgents } from "@/api/hooks/useAgents";
 import { KnowledgeContentViewer } from "@/components/agents/knowledge-content-viewer";
 import { KnowledgeCreateDialog } from "@/components/knowledge/knowledge-create-dialog";
-import {
-  knowledgeCardPreview,
-  knowledgeTypeLabel,
-  knowledgeTypeMeta,
-} from "@/lib/knowledge-types";
+import { knowledgeCardPreview, knowledgeTypeLabel, knowledgeTypeMeta } from "@/lib/knowledge-types";
 import { toast } from "sonner";
 import { AdminPageMotion } from "@/components/admin/AdminPageMotion";
 import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
-import { canViewInactiveStudioResources } from "@/lib/authGuards";
+import { canViewInactiveStudioResources, isSuperAdmin } from "@/lib/authGuards";
 import { cn } from "@/lib/utils";
 
 function KnowledgeCard({
   doc,
   agentCount,
   indexed,
-  onDelete,
+  canRestore,
+  restoring,
+  onDeactivate,
+  onRestore,
 }: {
   doc: AgentKnowledge;
   agentCount: number;
   indexed: boolean;
-  onDelete: () => void;
+  canRestore: boolean;
+  restoring: boolean;
+  onDeactivate: () => void;
+  onRestore: () => void;
 }) {
   const { label, Icon, style } = knowledgeTypeMeta(doc.knowledge_type);
   const preview = knowledgeCardPreview(doc);
@@ -75,9 +96,7 @@ function KnowledgeCard({
               variant="outline"
               className={cn(
                 "text-[10px] gap-1 font-normal",
-                agentCount > 0
-                  ? "border-primary/30 text-primary"
-                  : "text-muted-foreground",
+                agentCount > 0 ? "border-primary/30 text-primary" : "text-muted-foreground",
               )}
             >
               <Users className="h-3 w-3" />
@@ -110,15 +129,36 @@ function KnowledgeCard({
           context="catalog"
           branchId={doc.branch}
         />
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 text-destructive ml-auto"
-          onClick={onDelete}
-          title="Eliminar"
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
+        <div className="ml-auto flex items-center gap-1">
+          {inactive && canRestore && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8"
+              disabled={restoring}
+              onClick={onRestore}
+              title="Reactivar"
+            >
+              {restoring ? (
+                <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+              ) : (
+                <RotateCcw className="h-3.5 w-3.5 mr-1" />
+              )}
+              Reactivar
+            </Button>
+          )}
+          {!inactive && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-destructive"
+              onClick={onDeactivate}
+              title="Desactivar"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
     </article>
   );
@@ -126,16 +166,22 @@ function KnowledgeCard({
 
 export default function Conocimiento() {
   const showInactive = canViewInactiveStudioResources();
-  const { data: docsRaw = [], isLoading, refetch } = useKnowledgeCatalog(
-    showInactive ? { includeInactive: true } : undefined,
-  );
+  const canRestore = isSuperAdmin();
+  const {
+    data: docsRaw = [],
+    isLoading,
+    refetch,
+  } = useKnowledgeCatalog(showInactive ? { includeInactive: true } : undefined);
   const { data: agents = [] } = useAgents(
     showInactive ? { includeInactive: true } : { is_active: true },
   );
   const remove = useDeleteKnowledge();
+  const update = useUpdateKnowledge();
 
   const [q, setQ] = useState("");
   const [creating, setCreating] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<AgentKnowledge | null>(null);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
 
   const docs = useMemo(() => {
     if (showInactive) {
@@ -218,16 +264,77 @@ export default function Conocimiento() {
               doc={doc}
               agentCount={agentCountByDoc.get(String(doc.id)) ?? 0}
               indexed={isKnowledgeIndexed(doc)}
-              onDelete={() =>
-                remove.mutate(String(doc.id), {
-                  onSuccess: () => toast.success("Eliminado"),
-                  onError: () => toast.error("No se pudo eliminar"),
-                })
-              }
+              canRestore={canRestore}
+              restoring={restoringId === String(doc.id)}
+              onDeactivate={() => setPendingDelete(doc)}
+              onRestore={() => {
+                const id = String(doc.id);
+                setRestoringId(id);
+                update.mutate(
+                  { id, data: { is_active: true }, branch: doc.branch },
+                  {
+                    onSuccess: () => {
+                      toast.success("Conocimiento reactivado");
+                      setRestoringId(null);
+                      void refetch();
+                    },
+                    onError: () => {
+                      toast.error("No se pudo reactivar");
+                      setRestoringId(null);
+                    },
+                  },
+                );
+              }}
             />
           ))}
         </div>
       )}
+
+      <AlertDialog
+        open={Boolean(pendingDelete)}
+        onOpenChange={(open) => {
+          if (!open) setPendingDelete(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Desactivar conocimiento?</AlertDialogTitle>
+            <AlertDialogDescription>
+              «{pendingDelete?.title}» se desactivará y dejará de estar disponible para los agentes.
+              No se borra: un superadministrador puede reactivarlo después si hace falta.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={remove.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={remove.isPending || !pendingDelete}
+              onClick={(e) => {
+                e.preventDefault();
+                if (!pendingDelete) return;
+                remove.mutate(
+                  { id: String(pendingDelete.id), branch: pendingDelete.branch },
+                  {
+                    onSuccess: () => {
+                      toast.success("Conocimiento desactivado");
+                      setPendingDelete(null);
+                    },
+                    onError: () => toast.error("No se pudo desactivar"),
+                  },
+                );
+              }}
+            >
+              {remove.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Desactivando…
+                </>
+              ) : (
+                "Desactivar"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <KnowledgeCreateDialog
         open={creating}

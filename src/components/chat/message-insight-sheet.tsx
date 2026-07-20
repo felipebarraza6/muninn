@@ -14,7 +14,13 @@ import {
   Wrench,
   XCircle,
 } from "lucide-react";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -171,8 +177,8 @@ function DocumentationSection() {
         <div className="px-4 pb-4 space-y-3 border-t border-border/50 pt-3">
           <ul className="space-y-2.5 text-sm text-muted-foreground leading-relaxed">
             <li>
-              <span className="font-medium text-foreground">RAG:</span> busca trozos (chunks) de
-              tus documentos con embeddings y los usa como contexto antes de responder.
+              <span className="font-medium text-foreground">RAG:</span> busca trozos (chunks) de tus
+              documentos con embeddings y los usa como contexto antes de responder.
             </li>
             <li>
               <span className="font-medium text-foreground">Chunk:</span> fragmento indexado. Ver
@@ -341,10 +347,7 @@ export function MessageInsightSheet({
   );
   const topScore = scores.length ? Math.max(...scores) : undefined;
 
-  const verdict = useMemo(
-    () => computeVerdict(ragSources, toolCalls),
-    [ragSources, toolCalls],
-  );
+  const verdict = useMemo(() => computeVerdict(ragSources, toolCalls), [ragSources, toolCalls]);
   const style = VERDICT_STYLES[verdict.level];
   const VerdictIcon = style.icon;
   const reduceMotion = useReducedMotion();
@@ -405,7 +408,9 @@ export function MessageInsightSheet({
                         <span className="text-base font-semibold">{verdict.title}</span>
                         <Badge variant="outline" className={cn("text-[11px]", style.badge)}>
                           {ragSources.length} chunk{ragSources.length === 1 ? "" : "s"}
-                          {toolCalls.length > 0 ? ` · ${toolCalls.length} skill${toolCalls.length === 1 ? "" : "s"}` : ""}
+                          {toolCalls.length > 0
+                            ? ` · ${toolCalls.length} skill${toolCalls.length === 1 ? "" : "s"}`
+                            : ""}
                         </Badge>
                       </div>
                       <p className="text-sm text-muted-foreground">{verdict.detail}</p>
@@ -514,16 +519,11 @@ export function MessageInsightSheet({
                                 </div>
                                 <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-x-3">
                                   <span>{chunkLabel(src, i)}</span>
-                                  {kind && (
-                                    <span className="uppercase tracking-wide">{kind}</span>
-                                  )}
+                                  {kind && <span className="uppercase tracking-wide">{kind}</span>}
                                 </div>
                               </div>
                               <span
-                                className={cn(
-                                  "text-sm font-mono font-semibold shrink-0",
-                                  tone,
-                                )}
+                                className={cn("text-sm font-mono font-semibold shrink-0", tone)}
                               >
                                 {score != null ? `${Math.round(score * 100)}%` : scoreLabel(src)}
                               </span>
@@ -595,12 +595,11 @@ export function MessageInspectButton({
   variant?: "icon" | "chip";
 }) {
   const hasData = chunkCount > 0 || toolCount > 0;
-  const title =
-    hasData
-      ? `Análisis · ${chunkCount > 0 ? `${chunkCount} fuentes` : ""}${
-          chunkCount > 0 && toolCount > 0 ? " · " : ""
-        }${toolCount > 0 ? `${toolCount} skills` : ""}`
-      : "Ver análisis técnico del mensaje";
+  const title = hasData
+    ? `Análisis · ${chunkCount > 0 ? `${chunkCount} fuentes` : ""}${
+        chunkCount > 0 && toolCount > 0 ? " · " : ""
+      }${toolCount > 0 ? `${toolCount} skills` : ""}`
+    : "Ver análisis técnico del mensaje";
 
   if (variant === "icon") {
     return (

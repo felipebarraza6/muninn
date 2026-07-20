@@ -30,7 +30,8 @@ export function SkillExecutionHistory({ skillId }: { skillId: string }) {
         <div>
           <h2 className="text-sm font-medium">Historial de ejecuciones</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Pruebas manuales, chat del agente y canales. Click en una fila para ver el detalle.
+            Ejecuciones de esta skill en la sucursal activa (pruebas, chat y canales). No es un
+            historial global.
           </p>
         </div>
         <Button

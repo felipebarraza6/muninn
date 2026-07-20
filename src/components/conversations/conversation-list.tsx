@@ -11,6 +11,8 @@ import {
   type Conversation,
   type ConversationBucket,
 } from "@/lib/mock-data";
+import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
+import { isOrganizationOwnerScope } from "@/lib/authGuards";
 import { initials, avatarColor } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -78,15 +80,25 @@ export function ConversationList({
 
   const subFilters = CONVERSATION_SUBFILTERS[bucket];
   const bucketMeta = CONVERSATION_BUCKETS.find((b) => b.id === bucket)!;
+  // Solo organizador del holding: OWNER multi-sucursal / admin local usan el switcher del header.
+  const showOrgBranchFilter = isOrganizationOwnerScope();
 
   return (
     <>
       <div className="border-b px-4 pt-4 pb-3 space-y-3 shrink-0">
-        <div className="flex items-baseline justify-between">
-          <h2 className="font-display text-base font-semibold">Bandeja</h2>
-          <span className="text-[11px] text-muted-foreground">
-            {filtered.length}/{inBucket.length}
-          </span>
+        <div className="flex items-center justify-between gap-2 min-w-0">
+          <div className="flex items-baseline gap-2 min-w-0">
+            <h2 className="font-display text-base font-semibold shrink-0">Bandeja</h2>
+            <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
+              {filtered.length}/{inBucket.length}
+            </span>
+          </div>
+          {showOrgBranchFilter ? (
+            <StudioBranchFilter
+              className="shrink-0"
+              triggerClassName="h-8 w-[10.5rem] sm:w-[11rem] text-xs"
+            />
+          ) : null}
         </div>
 
         {/* Segmento de bandejas */}
