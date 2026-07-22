@@ -1,4 +1,4 @@
-import { Search, Bot, Sparkles, Inbox, Archive, MessageCircle, Globe } from "lucide-react";
+import { Search, Sparkles, Inbox, Archive, Bot } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -10,9 +10,10 @@ import {
   matchesSubFilter,
   type Conversation,
   type ConversationBucket,
-} from "@/lib/mock-data";
+} from "@/lib/conversation-types";
+import { channelIcon, channelLabel } from "@/lib/channels";
 import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
-import { isOrganizationOwnerScope } from "@/lib/authGuards";
+import { isOrganizationOwnerScope, isSuperAdmin } from "@/lib/authGuards";
 import { initials, avatarColor } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -33,22 +34,6 @@ const BUCKET_ICONS: Record<ConversationBucket, typeof Inbox> = {
   ai: Sparkles,
   archived: Archive,
 };
-
-function channelIcon(channelType?: string) {
-  const t = (channelType || "").toLowerCase();
-  if (t.includes("whatsapp")) return MessageCircle;
-  if (t.includes("web")) return Globe;
-  return Bot;
-}
-
-function channelLabel(channelType?: string, channelName?: string) {
-  if (channelName) return channelName;
-  const t = (channelType || "").toLowerCase();
-  if (t.includes("whatsapp")) return "WhatsApp";
-  if (t.includes("web_embed")) return "Widget web";
-  if (t.includes("web")) return "Web";
-  return t || "Canal";
-}
 
 export function ConversationList({
   conversations,
@@ -80,8 +65,8 @@ export function ConversationList({
 
   const subFilters = CONVERSATION_SUBFILTERS[bucket];
   const bucketMeta = CONVERSATION_BUCKETS.find((b) => b.id === bucket)!;
-  // Solo organizador del holding: OWNER multi-sucursal / admin local usan el switcher del header.
-  const showOrgBranchFilter = isOrganizationOwnerScope();
+  // Superadmin / organizador: mismo filtro Studio. OWNER multi-sucursal usa el switcher del header.
+  const showOrgBranchFilter = isSuperAdmin() || isOrganizationOwnerScope();
 
   return (
     <>

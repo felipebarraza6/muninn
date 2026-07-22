@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
 import {
   Send,
   Sparkles,
@@ -7,10 +6,6 @@ import {
   ShieldAlert,
   ThumbsUp,
   ThumbsDown,
-  Megaphone,
-  Bot,
-  MessageCircle,
-  Globe,
   Info,
   CheckCircle2,
 } from "lucide-react";
@@ -26,12 +21,18 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { StatusBadge } from "@/components/status-badge";
-import { snippets, campaigns, type Conversation } from "@/lib/mock-data";
+import type { ChatMessage, Conversation } from "@/lib/conversation-types";
+import { channelIcon, channelLabel } from "@/lib/channels";
 import { initials, avatarColor } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { ChatMarkdown } from "@/components/chat/chat-markdown";
 import { ChatCopyButton } from "@/components/chat/chat-copy-button";
+import {
+  MessageInsightSheet,
+  MessageInspectButton,
+  type InsightMessage,
+} from "@/components/chat/message-insight-sheet";
 
 interface Props {
   conversation: Conversation;
@@ -41,26 +42,22 @@ interface Props {
   onResolve?: () => void;
 }
 
-function channelIcon(channelType?: string) {
-  const t = (channelType || "").toLowerCase();
-  if (t.includes("whatsapp")) return MessageCircle;
-  if (t.includes("web")) return Globe;
-  return Bot;
-}
-
-function channelLabel(channelType?: string, channelName?: string) {
-  if (channelName) return channelName;
-  const t = (channelType || "").toLowerCase();
-  if (t.includes("whatsapp")) return "WhatsApp";
-  if (t.includes("web_embed")) return "Widget web";
-  if (t.includes("web")) return "Web";
-  return t || "Canal";
+function toInsightMessage(m: ChatMessage): InsightMessage {
+  return {
+    id: m.id,
+    content: m.text,
+    created: m.created,
+    rag_sources: m.rag_sources,
+    tool_calls: m.tool_calls,
+    tool_results: m.tool_results,
+  };
 }
 
 export function ChatPane({ conversation, onTakeControl, onSend, onOpenDetails, onResolve }: Props) {
   const [draft, setDraft] = useState("");
   const [feedback, setFeedback] = useState<Record<string, "up" | "down">>({});
   const [showSuggestion, setShowSuggestion] = useState(true);
+  const [inspectMessage, setInspectMessage] = useState<InsightMessage | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -68,6 +65,7 @@ export function ChatPane({ conversation, onTakeControl, onSend, onOpenDetails, o
     setDraft("");
     setFeedback({});
     setShowSuggestion(true);
+    setInspectMessage(null);
   }, [conversation.id]);
 
   useEffect(() => {
@@ -84,20 +82,6 @@ export function ChatPane({ conversation, onTakeControl, onSend, onOpenDetails, o
     toast.success("Respuesta enviada");
   };
 
-  const showSnippets = draft.startsWith("/");
-  const snippetMatches = useMemo(() => {
-    if (!showSnippets) return [];
-    const q = draft.toLowerCase();
-    return snippets.filter(
-      (s) => s.shortcut.toLowerCase().startsWith(q) || s.label.toLowerCase().includes(q.slice(1)),
-    );
-  }, [draft, showSnippets]);
-
-  const insertSnippet = (text: string) => {
-    setDraft(text);
-    setTimeout(() => textareaRef.current?.focus(), 0);
-  };
-
   const handleFeedback = (msgId: string, kind: "up" | "down") => {
     setFeedback((prev) => ({ ...prev, [msgId]: kind }));
     toast.success(kind === "up" ? "Buena respuesta marcada" : "Marcada para revisar");
@@ -106,10 +90,6 @@ export function ChatPane({ conversation, onTakeControl, onSend, onOpenDetails, o
   const isChannel = conversation.source === "channel";
   const isAiControlled = conversation.controlledBy === "ai";
   const canReply = !isChannel || conversation.isWaitingHuman === true;
-  const campaignMatch =
-    !isChannel && conversation.campaign
-      ? campaigns.find((c) => c.name === conversation.campaign)
-      : undefined;
   const ChannelIcon = channelIcon(conversation.channelType);
 
   return (
@@ -141,15 +121,14 @@ export function ChatPane({ conversation, onTakeControl, onSend, onOpenDetails, o
                 Oportunidad · {formatCLP(conversation.estimatedValue)}
               </span>
             )}
-            {campaignMatch && (
-              <Link
-                to={`/campanas/${campaignMatch.id}`}
-                title={`Campaña: ${campaignMatch.name}`}
-                className="hidden lg:inline-flex items-center gap-1 rounded-full bg-primary-soft text-primary px-2 py-0.5 text-[10px] font-medium hover:underline"
+            {conversation.campaign ? (
+              <span
+                title={`Campaña: ${conversation.campaign}`}
+                className="hidden lg:inline-flex items-center gap-1 rounded-full bg-primary-soft text-primary px-2 py-0.5 text-[10px] font-medium"
               >
-                <Megaphone className="h-3 w-3" /> {campaignMatch.name}
-              </Link>
-            )}
+                {conversation.campaign}
+              </span>
+            ) : null}
           </div>
           <div className="text-[11px] text-muted-foreground truncate">
             {conversation.phone} · {conversation.branch}
@@ -206,6 +185,9 @@ export function ChatPane({ conversation, onTakeControl, onSend, onOpenDetails, o
                   : "bg-bubble-patient text-bubble-patient-foreground";
             const isAi = m.sender === "ai";
             const fb = feedback[m.id];
+            const ragCount = Array.isArray(m.rag_sources) ? m.rag_sources.length : 0;
+            const toolCount = Array.isArray(m.tool_calls) ? m.tool_calls.length : 0;
+            const canInspect = isAi || ragCount > 0 || toolCount > 0;
             return (
               <div
                 key={m.id}
@@ -223,10 +205,6 @@ export function ChatPane({ conversation, onTakeControl, onSend, onOpenDetails, o
                     </AvatarFallback>
                   </Avatar>
                 )}
-                {/*
-                  max-w en la columna (no en la burbuja): si el % vive en un
-                  flex-col shrink-wrap, la burbuja queda ~1 letra de ancho.
-                */}
                 <div
                   className={cn(
                     "flex flex-col group min-w-0 max-w-[min(78%,32rem)]",
@@ -241,8 +219,16 @@ export function ChatPane({ conversation, onTakeControl, onSend, onOpenDetails, o
                     )}
                   >
                     <ChatMarkdown content={m.text} />
-                    <div className="text-[10px] opacity-50 text-right mt-1 font-medium">
-                      {m.time}
+                    <div className="flex items-center justify-end gap-1.5 mt-1">
+                      {typeof m.response_time_ms === "number" && m.response_time_ms > 0 ? (
+                        <span
+                          className="text-[10px] opacity-60 tabular-nums"
+                          title="Latencia de respuesta"
+                        >
+                          {m.response_time_ms} ms
+                        </span>
+                      ) : null}
+                      <span className="text-[10px] opacity-50 font-medium">{m.time}</span>
                     </div>
                   </div>
                   <div
@@ -252,6 +238,14 @@ export function ChatPane({ conversation, onTakeControl, onSend, onOpenDetails, o
                     )}
                   >
                     <ChatCopyButton text={m.text} />
+                    {canInspect && (
+                      <MessageInspectButton
+                        chunkCount={ragCount}
+                        toolCount={toolCount}
+                        variant="icon"
+                        onClick={() => setInspectMessage(toInsightMessage(m))}
+                      />
+                    )}
                     {isAi && (
                       <>
                         <button
@@ -287,6 +281,14 @@ export function ChatPane({ conversation, onTakeControl, onSend, onOpenDetails, o
           })}
         </div>
       </ScrollArea>
+
+      <MessageInsightSheet
+        open={Boolean(inspectMessage)}
+        onOpenChange={(open) => {
+          if (!open) setInspectMessage(null);
+        }}
+        message={inspectMessage}
+      />
 
       {/* Composer compacto */}
       <div className="border-t bg-card px-4 py-3 shrink-0">
@@ -330,32 +332,6 @@ export function ChatPane({ conversation, onTakeControl, onSend, onOpenDetails, o
             </div>
           ) : (
             <div className="relative">
-              {showSnippets && snippetMatches.length > 0 && (
-                <div className="absolute bottom-full left-0 right-0 mb-2 z-10 rounded-lg border bg-popover shadow-lg overflow-hidden">
-                  <ul className="max-h-56 overflow-y-auto">
-                    {snippetMatches.map((s) => (
-                      <li key={s.id}>
-                        <button
-                          type="button"
-                          onClick={() => insertSnippet(s.text)}
-                          className="w-full text-left px-3 py-2 hover:bg-muted/60 transition-colors"
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className="text-[11px] font-mono font-semibold text-primary">
-                              {s.shortcut}
-                            </span>
-                            <span className="text-xs font-medium">{s.label}</span>
-                          </div>
-                          <p className="text-[11px] text-muted-foreground truncate mt-0.5">
-                            {s.text}
-                          </p>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
               <div className="flex items-end gap-2 rounded-lg border bg-background focus-within:border-primary/60 transition-colors">
                 <Textarea
                   ref={textareaRef}
@@ -367,16 +343,6 @@ export function ChatPane({ conversation, onTakeControl, onSend, onOpenDetails, o
                   rows={1}
                   className="resize-none border-0 bg-transparent focus-visible:ring-0 min-h-[40px] max-h-32 py-2.5"
                   onKeyDown={(e) => {
-                    if (
-                      e.key === "Enter" &&
-                      showSnippets &&
-                      snippetMatches.length > 0 &&
-                      !e.shiftKey
-                    ) {
-                      e.preventDefault();
-                      insertSnippet(snippetMatches[0].text);
-                      return;
-                    }
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
                       send();

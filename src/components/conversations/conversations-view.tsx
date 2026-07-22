@@ -8,7 +8,7 @@ import {
   type Conversation,
   type ConversationBucket,
   type ConversationStatus,
-} from "@/lib/mock-data";
+} from "@/lib/conversation-types";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, Info, Loader2 } from "lucide-react";
@@ -73,6 +73,12 @@ function mapApiMessage(api: UnifiedMessage, source?: "channel" | "internal"): Ch
     sender: mapRoleToSender(api.role, source),
     text: api.content ?? "",
     time: formatHHmm(api.created),
+    created: api.created,
+    tokens_used: api.tokens_used,
+    rag_sources: api.rag_sources,
+    tool_calls: api.tool_calls,
+    tool_results: api.tool_results,
+    response_time_ms: api.response_time_ms,
   };
 }
 

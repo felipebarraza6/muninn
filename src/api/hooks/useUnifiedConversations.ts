@@ -37,6 +37,7 @@ export interface UnifiedMessage {
   tool_calls?: unknown[];
   tool_results?: unknown[];
   rag_sources?: unknown[];
+  response_time_ms?: number | null;
 }
 
 const QUERY_KEY = "unified-conversations";

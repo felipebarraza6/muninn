@@ -102,7 +102,15 @@ export function StudioBranchFilter({
       onValueChange={(id) => {
         startTransition(() => {
           setActiveBranchId(id, true, false);
-          void qc.invalidateQueries();
+          // Solo Studio / bandeja — evita refetch storm de toda la app.
+          for (const queryKey of [
+            ["ai-agents"],
+            ["conversations"],
+            ["unified-conversations"],
+            ["branches"],
+          ] as const) {
+            void qc.invalidateQueries({ queryKey: [...queryKey] });
+          }
         });
       }}
     />

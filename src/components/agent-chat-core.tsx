@@ -46,7 +46,6 @@ import {
 } from "@/api/hooks/useUnifiedConversations";
 import { streamConversationChat } from "@/api/chat-stream";
 import { toast } from "sonner";
-import { getActiveBranchId, setActiveBranchId } from "@/lib/branchStorage";
 import { useQueryClient } from "@tanstack/react-query";
 
 interface ChatMessage {
@@ -207,14 +206,8 @@ export function AgentChatCore({
       .filter(Boolean);
   }, [agent?.functions, allFunctions]);
 
-  // Si el agente es de otra sucursal, alinear el switcher antes de crear el chat.
-  useEffect(() => {
-    if (!agent?.branch) return;
-    const agentBranch = String(agent.branch);
-    if (getActiveBranchId() !== agentBranch) {
-      setActiveBranchId(agentBranch, true, false);
-    }
-  }, [agent?.branch, agent?.id]);
+  const agentBranchId =
+    agent?.branch != null && String(agent.branch).trim() !== "" ? String(agent.branch) : null;
 
   const [conversationId, setConversationId] = useState<string | null>(conversationIdFromUrl);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -228,6 +221,8 @@ export function AgentChatCore({
   const [inspectMessage, setInspectMessage] = useState<InsightMessage | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [liveSteps, setLiveSteps] = useState<LiveStreamStep[]>([]);
+  const streamingMsgIdRef = useRef<string | null>(null);
+  const streamingDraftRef = useRef("");
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
   const initializedRef = useRef(false);
   const skipAutoSelectRef = useRef(false);
@@ -355,17 +350,11 @@ export function AgentChatCore({
     setCreateError(null);
 
     try {
-      const agentBranch =
-        agent.branch != null && String(agent.branch).trim() !== "" ? String(agent.branch) : null;
-      // Alinear x-branch-id con la sucursal del agente (evita PK inválida).
-      if (agentBranch && getActiveBranchId() !== agentBranch) {
-        setActiveBranchId(agentBranch, true, false);
-      }
       const data = await createConversation.mutateAsync({
         agent: agentId,
         title: `Chat con ${agent.name}`,
         user: getCurrentUserId(),
-        ...(agentBranch ? { branch: agentBranch } : {}),
+        ...(agentBranchId ? { branch: agentBranchId } : {}),
       });
       const id = String(data.id);
       lastRemoteMessagesRef.current = "";
@@ -382,7 +371,7 @@ export function AgentChatCore({
       isCreatingRef.current = false;
       setIsCreating(false);
     }
-  }, [agent, agentId, createConversation, mergeSearchParams]);
+  }, [agent, agentBranchId, agentId, createConversation, mergeSearchParams]);
 
   const doCreateConversation = useCallback(() => {
     void ensureConversationId().then((id) => {
@@ -502,6 +491,9 @@ export function AgentChatCore({
       });
     };
 
+    streamingDraftRef.current = "";
+    streamingMsgIdRef.current = null;
+
     try {
       const data = await streamConversationChat(
         activeId,
@@ -534,22 +526,51 @@ export function AgentChatCore({
               ),
             );
           },
+          onDelta: (ev) => {
+            const chunk = ev.text || "";
+            if (!chunk) return;
+            streamingDraftRef.current += chunk;
+            setMessages((prev) => {
+              const sid = streamingMsgIdRef.current;
+              if (sid && prev.some((m) => m.id === sid)) {
+                return prev.map((m) =>
+                  m.id === sid ? { ...m, content: (m.content || "") + chunk } : m,
+                );
+              }
+              const id = makeId("agent-stream");
+              streamingMsgIdRef.current = id;
+              return [
+                ...prev,
+                {
+                  id,
+                  role: "agent" as const,
+                  content: chunk,
+                  created: new Date().toISOString(),
+                },
+              ];
+            });
+          },
         },
-        { replyToId, signal: abort.signal },
+        { replyToId, signal: abort.signal, branchId: agentBranchId },
       );
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: data.id ?? makeId("agent"),
-          role: "agent",
-          content: data.message ?? data.content ?? data.text ?? "",
+      const finalContent = data.message ?? data.content ?? data.text ?? streamingDraftRef.current;
+      const streamId = streamingMsgIdRef.current;
+      setMessages((prev) => {
+        const finalMsg = {
+          id: data.id ?? streamId ?? makeId("agent"),
+          role: "agent" as const,
+          content: finalContent,
           created: data.created_at ?? data.created ?? data.timestamp ?? new Date().toISOString(),
           rag_sources: data.rag_sources ?? data.sources,
           tool_calls: data.tool_calls,
           tool_results: data.tool_results,
-        },
-      ]);
+        };
+        if (streamId && prev.some((m) => m.id === streamId)) {
+          return prev.map((m) => (m.id === streamId ? { ...m, ...finalMsg } : m));
+        }
+        return [...prev, finalMsg];
+      });
       void queryClient.invalidateQueries({ queryKey: ["conversations"] });
       void queryClient.invalidateQueries({ queryKey: ["unified-conversations"] });
       void queryClient.invalidateQueries({
@@ -594,6 +615,8 @@ export function AgentChatCore({
     } finally {
       setIsStreaming(false);
       setLiveSteps([]);
+      streamingDraftRef.current = "";
+      streamingMsgIdRef.current = null;
       streamAbortRef.current = null;
     }
   };

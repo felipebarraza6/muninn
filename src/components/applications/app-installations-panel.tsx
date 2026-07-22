@@ -314,7 +314,8 @@ export function AppInstallationsPanel({
         {filtered.map((b) => {
           const installed = selected.includes(b.id);
           const inst = installByBranch.get(b.id);
-          const hasCreds = Boolean(inst?.has_credentials);
+          const needsReconnect = Boolean(inst?.needs_reconnect || inst?.credentials_unreadable);
+          const hasCreds = Boolean(inst?.has_credentials) && !needsReconnect;
           return (
             <div
               key={b.id}
@@ -353,32 +354,48 @@ export function AppInstallationsPanel({
               </button>
 
               {installed && showAccount && (
-                <div className="flex flex-wrap items-center gap-2 pl-7">
-                  <Badge
-                    variant={hasCreds ? "default" : "secondary"}
-                    className="text-[10px] font-normal"
-                  >
-                    {hasCreds ? `Con cuenta: ${inst?.label || "servicio"}` : "Sin cuenta"}
-                  </Badge>
-                  {canManage && (
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline disabled:opacity-50"
-                      disabled={installationsLoading || installationsError}
-                      onClick={() => {
-                        if (!inst?.id) {
-                          toast.error(
-                            "Todavía no hay fila de instalación para esta sucursal. Reintentá cargar o reinstalá.",
-                          );
-                          void refetchInstallations();
-                          return;
-                        }
-                        setAccountBranchId(b.id);
-                      }}
+                <div className="flex flex-col gap-1.5 pl-7">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge
+                      variant={needsReconnect ? "destructive" : hasCreds ? "default" : "secondary"}
+                      className="text-[10px] font-normal"
                     >
-                      <KeyRound className="h-3 w-3" />
-                      {hasCreds ? "Gestionar cuenta" : "Conectar cuenta de servicio"}
-                    </button>
+                      {needsReconnect
+                        ? "Credenciales inválidas — reconectar"
+                        : hasCreds
+                          ? `Con cuenta: ${inst?.label || "servicio"}`
+                          : "Sin cuenta"}
+                    </Badge>
+                    {canManage && (
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline disabled:opacity-50"
+                        disabled={installationsLoading || installationsError}
+                        onClick={() => {
+                          if (!inst?.id) {
+                            toast.error(
+                              "Todavía no hay fila de instalación para esta sucursal. Reintentá cargar o reinstalá.",
+                            );
+                            void refetchInstallations();
+                            return;
+                          }
+                          setAccountBranchId(b.id);
+                        }}
+                      >
+                        <KeyRound className="h-3 w-3" />
+                        {needsReconnect
+                          ? "Reconectar cuenta"
+                          : hasCreds
+                            ? "Gestionar cuenta"
+                            : "Conectar cuenta de servicio"}
+                      </button>
+                    )}
+                  </div>
+                  {needsReconnect && (
+                    <p className="text-[11px] text-destructive/90 leading-snug">
+                      {inst?.last_error ||
+                        "Las credenciales no se pueden leer (posible cambio de clave). Volvé a conectar la cuenta."}
+                    </p>
                   )}
                 </div>
               )}

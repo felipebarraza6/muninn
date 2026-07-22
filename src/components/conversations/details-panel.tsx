@@ -1,19 +1,11 @@
-import {
-  Sparkles,
-  AlertTriangle,
-  Phone,
-  MapPin,
-  Bot,
-  MessageCircle,
-  Globe,
-  Clock,
-} from "lucide-react";
+import { Sparkles, AlertTriangle, Phone, MapPin, Clock, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { StatusBadge } from "@/components/status-badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ChevronDown } from "lucide-react";
-import type { Conversation } from "@/lib/mock-data";
+import type { Conversation } from "@/lib/conversation-types";
+import { channelIcon, channelLabel } from "@/lib/channels";
 import { initials, avatarColor } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -22,30 +14,10 @@ interface Props {
   conversation: Conversation;
   onTakeControl: () => void;
   onResolve: () => void;
+  onDerive?: () => void;
 }
 
-function channelIcon(channelType?: string) {
-  const t = (channelType || "").toLowerCase();
-  if (t.includes("whatsapp")) return MessageCircle;
-  if (t.includes("web")) return Globe;
-  return Bot;
-}
-
-function channelLabel(channelType?: string, channelName?: string) {
-  if (channelName) return channelName;
-  const t = (channelType || "").toLowerCase();
-  if (t.includes("whatsapp")) return "WhatsApp";
-  if (t.includes("web_embed")) return "Widget web";
-  if (t.includes("web")) return "Web";
-  return t || "Canal";
-}
-
-export function ConversationDetailsPanel({
-  conversation,
-  onTakeControl,
-  onResolve,
-  onDerive,
-}: Props) {
+export function ConversationDetailsPanel({ conversation, onTakeControl, onResolve }: Props) {
   const isChannel = conversation.source === "channel";
   const ChannelIcon = channelIcon(conversation.channelType);
 

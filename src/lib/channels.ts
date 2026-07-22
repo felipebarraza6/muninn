@@ -1,3 +1,5 @@
+import type { LucideIcon } from "lucide-react";
+import { Bot, Globe, MessageCircle } from "lucide-react";
 import type { ChannelTestResult } from "@/api/hooks/useChannels";
 
 const CHANNEL_LABELS: Record<string, string> = {
@@ -17,8 +19,17 @@ const CHANNEL_LABELS: Record<string, string> = {
   push_web: "Push web",
 };
 
-export function channelLabel(type?: string) {
+export function channelLabel(type?: string, channelName?: string) {
+  if (channelName) return channelName;
   return CHANNEL_LABELS[type ?? ""] ?? type ?? "Canal";
+}
+
+/** Icono Lucide según tipo de canal (bandeja / detalle). */
+export function channelIcon(channelType?: string): LucideIcon {
+  const t = (channelType || "").toLowerCase();
+  if (t.includes("whatsapp")) return MessageCircle;
+  if (t.includes("web")) return Globe;
+  return Bot;
 }
 
 export function formatChannelTestToast(result: ChannelTestResult): {

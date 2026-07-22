@@ -184,13 +184,12 @@ export function canAccessBranchesAdmin(): boolean {
 }
 
 /**
- * Bandeja de Conversaciones (inbox de clientes).
- * Exclusivo de usuarios con rol operativo (sucursal/org).
- * Superadmin de plataforma no la ve: no es bandeja de operación.
+ * Bandeja de Conversaciones (inbox de clientes / canales).
+ * - Roles operativos: operación día a día.
+ * - Superadmin: sí (análisis de producción real, filtrando por sucursal como Studio).
  */
 export function canAccessConversations(): boolean {
-  if (!getStoredUser()) return false;
-  return !isSuperAdmin();
+  return Boolean(getStoredUser());
 }
 
 /**

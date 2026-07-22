@@ -68,6 +68,33 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: "dist",
       sourcemap: mode === "development",
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (!id.includes("node_modules")) {
+              // Separar admin del chat/studio para bajar el bundle inicial.
+              if (id.includes("/src/routes/admin.")) return "admin";
+              if (
+                id.includes("/src/routes/agentes") ||
+                id.includes("/src/routes/chat") ||
+                id.includes("/src/components/agent-chat") ||
+                id.includes("/src/components/conversations/")
+              ) {
+                return "studio-chat";
+              }
+              return undefined;
+            }
+            if (id.includes("react-dom") || id.includes("/react/") || id.includes("react-router")) {
+              return "vendor-react";
+            }
+            if (id.includes("@tanstack")) return "vendor-query";
+            if (id.includes("framer-motion")) return "vendor-motion";
+            if (id.includes("recharts") || id.includes("d3-")) return "vendor-charts";
+            if (id.includes("@radix-ui")) return "vendor-radix";
+            return undefined;
+          },
+        },
+      },
     },
   };
 });

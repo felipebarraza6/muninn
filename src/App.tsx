@@ -1,40 +1,11 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HelmetProvider } from "react-helmet-async";
 import { AnimatePresence, motion } from "framer-motion";
 import RootLayout from "./routes/__root";
-import Dashboard from "./routes/index";
-import Conversaciones from "./routes/conversaciones";
-import Campanas from "./routes/campanas";
-import CampanasDetail from "./routes/campanas.$id";
-import Oportunidades from "./routes/oportunidades";
-import Reportes from "./routes/reportes";
-import Configuracion from "./routes/configuracion";
-import MetricasDetail from "./routes/metricas.$id";
-import Agentes from "./routes/agentes";
-import AgentesNuevo from "./routes/agentes.nuevo";
-import AgentesDetail from "./routes/agentes.$id";
-import AgentesChat from "./routes/agentes.$id.chat";
-import ChatPage from "./routes/chat";
-import Canales from "./routes/canales";
-import CanalesDetail from "./routes/canales.$id";
-import APIs from "./routes/apis";
-import APIDetail from "./routes/apis.$id";
-import Funciones from "./routes/funciones";
-import FuncionesNuevo from "./routes/funciones.nuevo";
-import FunctionDetail from "./routes/funciones.$id";
 import { APP_STORE_PATH } from "./lib/applications";
-import Conocimiento from "./routes/conocimiento";
-import ConocimientoDatos from "./routes/conocimiento.datos";
-import EmbedChat from "./routes/embed.chat.$id";
-import Login from "./routes/login";
-import AdminLlmPage from "./routes/admin.llm";
-import AdminOrganizacionesPage from "./routes/admin.organizaciones";
-import AdminSucursalesPage from "./routes/admin.sucursales";
-import AdminUsuariosPage from "./routes/admin.usuarios";
-import PerfilPage from "./routes/perfil";
 import { RequireAuth, RedirectIfAuthenticated } from "./components/auth/RequireAuth";
-import { RequireSuperAdmin } from "./components/auth/RequireSuperAdmin";
 import { RequireUsersAdmin } from "./components/auth/RequireUsersAdmin";
 import { RequireBranchesAdmin } from "./components/auth/RequireBranchesAdmin";
 import { RequireOrganizationsAdmin } from "./components/auth/RequireOrganizationsAdmin";
@@ -44,11 +15,49 @@ import { RequireConversations } from "./components/auth/RequireConversations";
 import { RequireSkills } from "./components/auth/RequireSkills";
 import { ThemeProvider } from "./components/theme/ThemeProvider";
 
+const Dashboard = lazy(() => import("./routes/index"));
+const Conversaciones = lazy(() => import("./routes/conversaciones"));
+const Campanas = lazy(() => import("./routes/campanas"));
+const CampanasDetail = lazy(() => import("./routes/campanas.$id"));
+const Oportunidades = lazy(() => import("./routes/oportunidades"));
+const Reportes = lazy(() => import("./routes/reportes"));
+const Configuracion = lazy(() => import("./routes/configuracion"));
+const MetricasDetail = lazy(() => import("./routes/metricas.$id"));
+const Agentes = lazy(() => import("./routes/agentes"));
+const AgentesNuevo = lazy(() => import("./routes/agentes.nuevo"));
+const AgentesDetail = lazy(() => import("./routes/agentes.$id"));
+const AgentesChat = lazy(() => import("./routes/agentes.$id.chat"));
+const ChatPage = lazy(() => import("./routes/chat"));
+const Canales = lazy(() => import("./routes/canales"));
+const CanalesDetail = lazy(() => import("./routes/canales.$id"));
+const APIs = lazy(() => import("./routes/apis"));
+const APIDetail = lazy(() => import("./routes/apis.$id"));
+const Funciones = lazy(() => import("./routes/funciones"));
+const FuncionesNuevo = lazy(() => import("./routes/funciones.nuevo"));
+const FunctionDetail = lazy(() => import("./routes/funciones.$id"));
+const Conocimiento = lazy(() => import("./routes/conocimiento"));
+const ConocimientoDatos = lazy(() => import("./routes/conocimiento.datos"));
+const EmbedChat = lazy(() => import("./routes/embed.chat.$id"));
+const Login = lazy(() => import("./routes/login"));
+const AdminLlmPage = lazy(() => import("./routes/admin.llm"));
+const AdminOrganizacionesPage = lazy(() => import("./routes/admin.organizaciones"));
+const AdminSucursalesPage = lazy(() => import("./routes/admin.sucursales"));
+const AdminUsuariosPage = lazy(() => import("./routes/admin.usuarios"));
+const PerfilPage = lazy(() => import("./routes/perfil"));
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: { retry: 1, refetchOnWindowFocus: false },
   },
 });
+
+function RouteFallback() {
+  return (
+    <div className="flex min-h-[40vh] items-center justify-center text-sm text-muted-foreground">
+      Cargando…
+    </div>
+  );
+}
 
 function ApiDetailRedirect() {
   const { id } = useParams<{ id: string }>();
@@ -71,111 +80,113 @@ function AnimatedOutlet() {
         exit={{ opacity: 0, y: -8 }}
         transition={{ duration: 0.18, ease: "easeOut" }}
       >
-        <Routes location={location}>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/agentes" element={<Agentes />} />
-          <Route path="/agentes/nuevo" element={<AgentesNuevo />} />
-          <Route path="/agentes/:id" element={<AgentesDetail />} />
-          <Route path="/agentes/:id/chat" element={<AgentesChat />} />
-          <Route path="/chat" element={<ChatPage />} />
-          <Route path="/canales" element={<Canales />} />
-          <Route path="/canales/:id" element={<CanalesDetail />} />
-          <Route
-            path="/conocimiento"
-            element={
-              <RequireKnowledgeCatalog>
-                <Conocimiento />
-              </RequireKnowledgeCatalog>
-            }
-          />
-          <Route
-            path="/conocimiento/datos"
-            element={
-              <RequireKnowledgeCatalog>
-                <ConocimientoDatos />
-              </RequireKnowledgeCatalog>
-            }
-          />
-          <Route path="/aplicaciones" element={<APIs />} />
-          <Route path="/aplicaciones/:id" element={<APIDetail />} />
-          <Route path="/apis" element={<Navigate to={APP_STORE_PATH} replace />} />
-          <Route path="/apis/:id" element={<ApiDetailRedirect />} />
-          <Route
-            path="/skills"
-            element={
-              <RequireSkills>
-                <Funciones />
-              </RequireSkills>
-            }
-          />
-          <Route
-            path="/skills/nuevo"
-            element={
-              <RequireSkills>
-                <FuncionesNuevo />
-              </RequireSkills>
-            }
-          />
-          <Route
-            path="/skills/:id"
-            element={
-              <RequireSkills>
-                <FunctionDetail />
-              </RequireSkills>
-            }
-          />
-          <Route path="/funciones" element={<Navigate to="/skills" replace />} />
-          <Route path="/funciones/nuevo" element={<Navigate to="/skills/nuevo" replace />} />
-          <Route path="/funciones/:id" element={<FunctionDetailRedirect />} />
-          <Route path="/configuracion" element={<Configuracion />} />
-          <Route path="/perfil" element={<PerfilPage />} />
-          <Route
-            path="/admin/organizaciones"
-            element={
-              <RequireOrganizationsAdmin>
-                <AdminOrganizacionesPage />
-              </RequireOrganizationsAdmin>
-            }
-          />
-          <Route
-            path="/admin/llm"
-            element={
-              <RequireLlmAdmin>
-                <AdminLlmPage />
-              </RequireLlmAdmin>
-            }
-          />
-          <Route
-            path="/admin/sucursales"
-            element={
-              <RequireBranchesAdmin>
-                <AdminSucursalesPage />
-              </RequireBranchesAdmin>
-            }
-          />
-          <Route
-            path="/admin/usuarios"
-            element={
-              <RequireUsersAdmin>
-                <AdminUsuariosPage />
-              </RequireUsersAdmin>
-            }
-          />
-          {/* Rutas ERP ocultas del nav; se mantienen accesibles por URL temporalmente */}
-          <Route
-            path="/conversaciones"
-            element={
-              <RequireConversations>
-                <Conversaciones />
-              </RequireConversations>
-            }
-          />
-          <Route path="/campanas" element={<Campanas />} />
-          <Route path="/campanas/:id" element={<CampanasDetail />} />
-          <Route path="/oportunidades" element={<Oportunidades />} />
-          <Route path="/reportes" element={<Reportes />} />
-          <Route path="/metricas/:id" element={<MetricasDetail />} />
-        </Routes>
+        <Suspense fallback={<RouteFallback />}>
+          <Routes location={location}>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/agentes" element={<Agentes />} />
+            <Route path="/agentes/nuevo" element={<AgentesNuevo />} />
+            <Route path="/agentes/:id" element={<AgentesDetail />} />
+            <Route path="/agentes/:id/chat" element={<AgentesChat />} />
+            <Route path="/chat" element={<ChatPage />} />
+            <Route path="/canales" element={<Canales />} />
+            <Route path="/canales/:id" element={<CanalesDetail />} />
+            <Route
+              path="/conocimiento"
+              element={
+                <RequireKnowledgeCatalog>
+                  <Conocimiento />
+                </RequireKnowledgeCatalog>
+              }
+            />
+            <Route
+              path="/conocimiento/datos"
+              element={
+                <RequireKnowledgeCatalog>
+                  <ConocimientoDatos />
+                </RequireKnowledgeCatalog>
+              }
+            />
+            <Route path="/aplicaciones" element={<APIs />} />
+            <Route path="/aplicaciones/:id" element={<APIDetail />} />
+            <Route path="/apis" element={<Navigate to={APP_STORE_PATH} replace />} />
+            <Route path="/apis/:id" element={<ApiDetailRedirect />} />
+            <Route
+              path="/skills"
+              element={
+                <RequireSkills>
+                  <Funciones />
+                </RequireSkills>
+              }
+            />
+            <Route
+              path="/skills/nuevo"
+              element={
+                <RequireSkills>
+                  <FuncionesNuevo />
+                </RequireSkills>
+              }
+            />
+            <Route
+              path="/skills/:id"
+              element={
+                <RequireSkills>
+                  <FunctionDetail />
+                </RequireSkills>
+              }
+            />
+            <Route path="/funciones" element={<Navigate to="/skills" replace />} />
+            <Route path="/funciones/nuevo" element={<Navigate to="/skills/nuevo" replace />} />
+            <Route path="/funciones/:id" element={<FunctionDetailRedirect />} />
+            <Route path="/configuracion" element={<Configuracion />} />
+            <Route path="/perfil" element={<PerfilPage />} />
+            <Route
+              path="/admin/organizaciones"
+              element={
+                <RequireOrganizationsAdmin>
+                  <AdminOrganizacionesPage />
+                </RequireOrganizationsAdmin>
+              }
+            />
+            <Route
+              path="/admin/llm"
+              element={
+                <RequireLlmAdmin>
+                  <AdminLlmPage />
+                </RequireLlmAdmin>
+              }
+            />
+            <Route
+              path="/admin/sucursales"
+              element={
+                <RequireBranchesAdmin>
+                  <AdminSucursalesPage />
+                </RequireBranchesAdmin>
+              }
+            />
+            <Route
+              path="/admin/usuarios"
+              element={
+                <RequireUsersAdmin>
+                  <AdminUsuariosPage />
+                </RequireUsersAdmin>
+              }
+            />
+            {/* Rutas ERP ocultas del nav; se mantienen accesibles por URL temporalmente */}
+            <Route
+              path="/conversaciones"
+              element={
+                <RequireConversations>
+                  <Conversaciones />
+                </RequireConversations>
+              }
+            />
+            <Route path="/campanas" element={<Campanas />} />
+            <Route path="/campanas/:id" element={<CampanasDetail />} />
+            <Route path="/oportunidades" element={<Oportunidades />} />
+            <Route path="/reportes" element={<Reportes />} />
+            <Route path="/metricas/:id" element={<MetricasDetail />} />
+          </Routes>
+        </Suspense>
       </motion.div>
     </AnimatePresence>
   );
@@ -183,31 +194,33 @@ function AnimatedOutlet() {
 
 function AppRoutes() {
   return (
-    <Routes>
-      <Route
-        path="/login"
-        element={
-          <RedirectIfAuthenticated>
-            <Login />
-          </RedirectIfAuthenticated>
-        }
-      />
-      <Route
-        path="/login/:slug"
-        element={
-          <RedirectIfAuthenticated>
-            <Login />
-          </RedirectIfAuthenticated>
-        }
-      />
-      <Route path="/embed/chat/:id" element={<EmbedChat />} />
-      <Route element={<RequireAuth />}>
-        <Route element={<RootLayout />}>
-          <Route path="/*" element={<AnimatedOutlet />} />
+    <Suspense fallback={<RouteFallback />}>
+      <Routes>
+        <Route
+          path="/login"
+          element={
+            <RedirectIfAuthenticated>
+              <Login />
+            </RedirectIfAuthenticated>
+          }
+        />
+        <Route
+          path="/login/:slug"
+          element={
+            <RedirectIfAuthenticated>
+              <Login />
+            </RedirectIfAuthenticated>
+          }
+        />
+        <Route path="/embed/chat/:id" element={<EmbedChat />} />
+        <Route element={<RequireAuth />}>
+          <Route element={<RootLayout />}>
+            <Route path="/*" element={<AnimatedOutlet />} />
+          </Route>
         </Route>
-      </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Suspense>
   );
 }
 

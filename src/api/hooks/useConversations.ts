@@ -109,7 +109,13 @@ export function useCreateConversation() {
       user?: string | number;
       /** Sucursal del agente; evita rechazo si x-branch-id apunta a otra. */
       branch?: string | number;
-    }) => POST<Conversation>(ENDPOINTS.conversations.list, data),
+    }) =>
+      POST<Conversation>(ENDPOINTS.conversations.list, data, {
+        headers:
+          data.branch != null && String(data.branch).trim() !== ""
+            ? { "x-branch-id": String(data.branch) }
+            : undefined,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
       queryClient.invalidateQueries({ queryKey: ["unified-conversations"] });

@@ -68,6 +68,9 @@ export interface ExternalAPIInstallation {
   branch_name?: string | null;
   label?: string;
   has_credentials?: boolean;
+  /** Blob cifrado ilegible (SECRET_KEY rotada). */
+  credentials_unreadable?: boolean;
+  needs_reconnect?: boolean;
   is_active?: boolean;
   last_verified_at?: string | null;
   last_error?: string;

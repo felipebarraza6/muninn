@@ -28,10 +28,15 @@ export type ChatStreamFinalEvent = ChatMessageResponse & {
   tokens_used?: number;
 };
 
+export type ChatStreamDeltaEvent = {
+  text?: string;
+};
+
 export type ChatStreamHandlers = {
   onStatus?: (data: ChatStreamStatusEvent) => void;
   onToolStart?: (data: ChatStreamToolEvent) => void;
   onToolEnd?: (data: ChatStreamToolEvent) => void;
+  onDelta?: (data: ChatStreamDeltaEvent) => void;
   onFinal?: (data: ChatStreamFinalEvent) => void;
   onError?: (data: { error?: string; detail?: string }) => void;
 };
@@ -59,6 +64,8 @@ function parseSseChunk(buffer: string): {
 export type StreamChatOptions = {
   replyToId?: string | number | null;
   signal?: AbortSignal;
+  /** Sucursal del agente; no muta el switcher global. */
+  branchId?: string | null;
 };
 
 /** POST chat con stream=true (SSE). */
@@ -79,9 +86,11 @@ export async function streamConversationChat(
   };
   if (token) headers.Authorization = `Token ${token}`;
 
-  const activeBranchId = getActiveBranchId();
-  if (activeBranchId && getBranchMode() === "branch") {
-    headers["x-branch-id"] = activeBranchId;
+  const branchForRequest =
+    (opts.branchId != null && String(opts.branchId).trim() !== "" ? String(opts.branchId) : null) ||
+    getActiveBranchId();
+  if (branchForRequest && (opts.branchId || getBranchMode() === "branch")) {
+    headers["x-branch-id"] = branchForRequest;
   }
 
   const body: Record<string, unknown> = { message, stream: true };
@@ -143,6 +152,8 @@ export async function streamConversationChat(
         handlers.onToolStart?.(payload as ChatStreamToolEvent);
       } else if (event === "tool_end") {
         handlers.onToolEnd?.(payload as ChatStreamToolEvent);
+      } else if (event === "delta") {
+        handlers.onDelta?.(payload as ChatStreamDeltaEvent);
       } else if (event === "final") {
         finalPayload = payload as unknown as ChatStreamFinalEvent;
         handlers.onFinal?.(finalPayload);
