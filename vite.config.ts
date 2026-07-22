@@ -84,13 +84,18 @@ export default defineConfig(({ mode }) => {
               }
               return undefined;
             }
-            if (id.includes("react-dom") || id.includes("/react/") || id.includes("react-router")) {
+            // React + Radix juntos: separarlos crea chunk circular (TDZ en runtime).
+            if (
+              /node_modules[/\\](react|react-dom|scheduler|react-router|react-router-dom)([/\\]|$)/.test(
+                id,
+              ) ||
+              /node_modules[/\\]@radix-ui[/\\]/.test(id)
+            ) {
               return "vendor-react";
             }
             if (id.includes("@tanstack")) return "vendor-query";
             if (id.includes("framer-motion")) return "vendor-motion";
             if (id.includes("recharts") || id.includes("d3-")) return "vendor-charts";
-            if (id.includes("@radix-ui")) return "vendor-radix";
             return undefined;
           },
         },
