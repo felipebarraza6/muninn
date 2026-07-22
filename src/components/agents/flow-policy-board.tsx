@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -48,6 +48,11 @@ type SkillNodeData = {
 const COL = { slots: 32, skills: 420 };
 const ROW_SLOT = 96;
 const ROW_SKILL = 118;
+
+/** Referencias estables: objetos inline en <ReactFlow> disparan loop en StoreUpdater. */
+const PRO_OPTIONS = { hideAttribution: true } as const;
+const DEFAULT_EDGE_OPTIONS = { type: "default" as const };
+const FIT_VIEW_OPTS = { padding: 0.18, duration: 220 };
 
 function SlotNode({ data }: NodeProps<Node<SlotNodeData>>) {
   return (
@@ -170,7 +175,6 @@ function buildGraph(
     for (const id of sk.capture) linkCount.set(id, (linkCount.get(id) ?? 0) + 1);
   }
 
-  // Datos más usados arriba (más legible en policies densas como WM).
   const orderedSlots = [...slots].sort((a, b) => {
     const ai = slugifySlotId(a.id);
     const bi = slugifySlotId(b.id);
@@ -228,7 +232,6 @@ function buildGraph(
         source: `slot:${slotId}`,
         target: `skill:${sk.slug}`,
         targetHandle: "in",
-        // Sin label: la leyenda evita el amontonamiento de WM.
         style: {
           stroke: "hsl(38 92% 52%)",
           strokeWidth: alsoCap ? 2.4 : 1.8,
@@ -306,32 +309,47 @@ function BoardCanvas({
     [slots, skills, focusSkill, showIdle],
   );
   const positionsRef = useRef(new Map<string, { x: number; y: number }>());
-  const fittedSigRef = useRef<string | null>(null);
+  const appliedSigRef = useRef<string | null>(null);
+  const layoutKeyRef = useRef<string | null>(null);
+  const readyRef = useRef(false);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
   useEffect(() => {
+    if (appliedSigRef.current === signature) return;
+    appliedSigRef.current = signature;
+
     const next = buildGraph(slots, skills, positionsRef.current, focusSkill, showIdle);
     for (const n of next.nodes) positionsRef.current.set(n.id, n.position);
     setNodes(next.nodes);
     setEdges(next.edges);
 
-    // Re-encuadrar solo cuando cambia el set de nodos (no al enfocar).
     const layoutKey = graphSignature(slots, skills, null, showIdle);
-    if (fittedSigRef.current !== layoutKey && next.nodes.length > 0) {
-      fittedSigRef.current = layoutKey;
-      requestAnimationFrame(() => fitView({ padding: 0.18, duration: 220 }));
+    if (readyRef.current && layoutKeyRef.current !== layoutKey && next.nodes.length > 0) {
+      layoutKeyRef.current = layoutKey;
+      // Encajar solo cuando cambia el set de nodos (no al enfocar una skill).
+      requestAnimationFrame(() => {
+        fitView(FIT_VIEW_OPTS);
+      });
+    } else if (!layoutKeyRef.current) {
+      layoutKeyRef.current = layoutKey;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- sync por firma
-  }, [signature]);
+  }, [signature, slots, skills, focusSkill, showIdle, setNodes, setEdges, fitView]);
+
+  const onInit = useCallback(() => {
+    readyRef.current = true;
+    if (positionsRef.current.size > 0) {
+      requestAnimationFrame(() => fitView(FIT_VIEW_OPTS));
+    }
+  }, [fitView]);
 
   const onNodeDragStop = useCallback((_: unknown, node: Node) => {
     positionsRef.current.set(node.id, node.position);
   }, []);
 
   const onNodeClick = useCallback(
-    (_: React.MouseEvent, node: Node) => {
+    (_: MouseEvent, node: Node) => {
       if (!node.id.startsWith("skill:")) {
         onFocusSkill(null);
         return;
@@ -368,7 +386,7 @@ function BoardCanvas({
   );
 
   const onEdgeClick = useCallback(
-    (_: React.MouseEvent, edge: Edge) => {
+    (_: MouseEvent, edge: Edge) => {
       const [kind, skillSlug, other] = edge.id.split(":");
       if (!skillSlug || !other) return;
       if (kind === "req") onToggleRequires(skillSlug, other);
@@ -378,12 +396,18 @@ function BoardCanvas({
     [onToggleCapture, onTogglePrerequisite, onToggleRequires],
   );
 
+  const minimapNodeColor = useCallback(
+    (n: Node) => (n.type === "slot" ? "#d97706" : "#2dd4bf"),
+    [],
+  );
+
   return (
     <ReactFlow
       nodes={nodes}
       edges={edges}
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
+      onInit={onInit}
       onNodeDragStop={onNodeDragStop}
       onNodeClick={onNodeClick}
       onPaneClick={onPaneClick}
@@ -391,8 +415,8 @@ function BoardCanvas({
       onEdgeClick={onEdgeClick}
       nodeTypes={NODE_TYPES}
       colorMode="dark"
-      proOptions={{ hideAttribution: true }}
-      defaultEdgeOptions={{ type: "bezier" }}
+      proOptions={PRO_OPTIONS}
+      defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
       deleteKeyCode={null}
       nodesDraggable
       elementsSelectable
@@ -403,7 +427,7 @@ function BoardCanvas({
       <Controls className="!border-border !bg-card !shadow-md" />
       <MiniMap
         className="!border-border !bg-card/90"
-        nodeColor={(n) => (n.type === "slot" ? "#d97706" : "#2dd4bf")}
+        nodeColor={minimapNodeColor}
         maskColor="rgba(0,0,0,0.55)"
       />
     </ReactFlow>
