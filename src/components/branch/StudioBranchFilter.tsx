@@ -139,8 +139,12 @@ export function StudioBranchFilter({
         // Solo cambiar sucursal: los hooks ya tienen branchId en queryKey y refetch solos.
         // Invalidar aquí provocaba refetch doble + flash de lista vacía.
         startTransition(() => {
-          if (next === GLOBAL_BRANCH_ID) setGlobalBranchMode(true);
-          else setActiveBranchId(next, true, false);
+          if (next === GLOBAL_BRANCH_ID) {
+            // Quitar pin de store (también limpia localStorage de una tienda concreta).
+            setGlobalBranchMode(true);
+          } else {
+            setActiveBranchId(next, true, false);
+          }
         });
       }}
     />
