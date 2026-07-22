@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   GitBranch,
   Loader2,
@@ -9,7 +9,9 @@ import {
   X,
   MessageCircleQuestion,
   ListChecks,
+  LayoutGrid,
   Sparkles,
+  Link2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,105 +19,28 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAgent, useAgentSkillConfigs, useUpdateAgent } from "@/api/hooks/useAgents";
 import { useAgentFunctions } from "@/api/hooks/useAgentFunctions";
+import { FlowPolicyBoard } from "@/components/agents/flow-policy-board";
 import {
+  SLOT_EXAMPLES,
+  draftsToPolicy,
   emptyFlowPolicy,
   flowPolicyIsActive,
   normalizeFlowPolicy,
+  policyToSkillDrafts,
+  policyToSlotDrafts,
+  slugifySlotId,
   type FlowPolicy,
-  type FlowPolicySkillRule,
-  type FlowPolicySlot,
+  type SkillRuleDraft,
+  type SlotDraft,
 } from "@/lib/flowPolicy";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 type Props = { agentId: string };
-
-type SlotDraft = {
-  id: string;
-  ask: string;
-  defaultValue: string;
-};
-
-type SkillRuleDraft = {
-  slug: string;
-  name: string;
-  enabled: boolean;
-  requires: string[];
-  capture: string[];
-  prerequisites: string[];
-};
-
-function slugifyId(raw: string): string {
-  return raw
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .slice(0, 48);
-}
-
-function policyToSlotDrafts(policy: FlowPolicy): SlotDraft[] {
-  return Object.entries(policy.slots ?? {}).map(([id, slot]) => ({
-    id,
-    ask: String(slot?.ask ?? ""),
-    defaultValue: slot?.default != null ? String(slot.default) : "",
-  }));
-}
-
-function policyToSkillDrafts(
-  policy: FlowPolicy,
-  assigned: { slug: string; name: string }[],
-): SkillRuleDraft[] {
-  const bySlug = new Map(assigned.map((a) => [a.slug, a]));
-  const slugs = new Set([
-    ...assigned.map((a) => a.slug),
-    ...Object.keys(policy.skills ?? {}),
-  ]);
-  return Array.from(slugs)
-    .sort()
-    .map((slug) => {
-      const rule = policy.skills?.[slug];
-      const hasRule = Boolean(rule);
-      return {
-        slug,
-        name: bySlug.get(slug)?.name || slug,
-        enabled: hasRule,
-        requires: [...(rule?.requires ?? [])],
-        capture: [...(rule?.capture ?? [])],
-        prerequisites: [...(rule?.prerequisites ?? [])],
-      };
-    });
-}
-
-function draftsToPolicy(slots: SlotDraft[], skills: SkillRuleDraft[]): FlowPolicy {
-  const slotMap: Record<string, FlowPolicySlot> = {};
-  for (const s of slots) {
-    const id = slugifyId(s.id);
-    if (!id) continue;
-    const slot: FlowPolicySlot = {
-      aliases: [id, id.charAt(0).toUpperCase() + id.slice(1)],
-      ask: s.ask.trim() || `¿Podés indicar ${id}?`,
-    };
-    if (s.defaultValue.trim()) slot.default = s.defaultValue.trim();
-    slotMap[id] = slot;
-  }
-
-  const skillMap: Record<string, FlowPolicySkillRule> = {};
-  for (const sk of skills) {
-    if (!sk.enabled) continue;
-    const rule: FlowPolicySkillRule = {};
-    if (sk.requires.length) rule.requires = sk.requires;
-    if (sk.capture.length) rule.capture = sk.capture;
-    if (sk.prerequisites.length) rule.prerequisites = sk.prerequisites;
-    skillMap[sk.slug] = rule;
-  }
-
-  return { version: 1, slots: slotMap, skills: skillMap };
-}
+type LinkMode = "requires" | "capture" | "prerequisites";
 
 function ToggleChip({
   label,
@@ -152,6 +77,10 @@ function ToggleChip({
   );
 }
 
+function toggleList(list: string[], value: string): string[] {
+  return list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
+}
+
 export function AgentFlowPolicyPanel({ agentId }: Props) {
   const { data: agent, isLoading, refetch } = useAgent(agentId);
   const agentBranchId = agent?.branch ?? null;
@@ -159,10 +88,7 @@ export function AgentFlowPolicyPanel({ agentId }: Props) {
   const { data: skillConfigs = [] } = useAgentSkillConfigs(agentId);
   const updateAgent = useUpdateAgent();
 
-  const savedPolicy = useMemo(
-    () => normalizeFlowPolicy(agent?.flow_policy),
-    [agent?.flow_policy],
-  );
+  const savedPolicy = useMemo(() => normalizeFlowPolicy(agent?.flow_policy), [agent?.flow_policy]);
 
   const assignedSkills = useMemo(() => {
     const ids = new Set((agent?.functions ?? []).map(String));
@@ -185,6 +111,8 @@ export function AgentFlowPolicyPanel({ agentId }: Props) {
   const [dirty, setDirty] = useState(false);
   const [newSlotAsk, setNewSlotAsk] = useState("");
   const [newSlotId, setNewSlotId] = useState("");
+  const [linkMode, setLinkMode] = useState<LinkMode>("requires");
+  const [tab, setTab] = useState("pizarra");
 
   useEffect(() => {
     if (dirty) return;
@@ -192,35 +120,63 @@ export function AgentFlowPolicyPanel({ agentId }: Props) {
     setSkills(policyToSkillDrafts(savedPolicy, assignedSkills));
   }, [savedPolicy, assignedSkills, dirty]);
 
-  const slotIds = useMemo(
-    () => slots.map((s) => slugifyId(s.id)).filter(Boolean),
-    [slots],
-  );
+  const slotIds = useMemo(() => slots.map((s) => slugifySlotId(s.id)).filter(Boolean), [slots]);
   const draftPolicy = useMemo(() => draftsToPolicy(slots, skills), [slots, skills]);
   const active = flowPolicyIsActive(draftPolicy);
+  const markDirty = useCallback(() => setDirty(true), []);
 
-  const markDirty = () => setDirty(true);
+  const enableSkill = useCallback((slug: string) => {
+    setSkills((prev) => {
+      const cur = prev.find((s) => s.slug === slug);
+      if (cur?.enabled) return prev;
+      return prev.map((s) => (s.slug === slug ? { ...s, enabled: true } : s));
+    });
+    setDirty(true);
+  }, []);
+
+  const onToggleRequires = useCallback((skill: string, slot: string) => {
+    setSkills((prev) =>
+      prev.map((s) => (s.slug === skill ? { ...s, requires: toggleList(s.requires, slot) } : s)),
+    );
+    setDirty(true);
+  }, []);
+
+  const onToggleCapture = useCallback((skill: string, slot: string) => {
+    setSkills((prev) =>
+      prev.map((s) => (s.slug === skill ? { ...s, capture: toggleList(s.capture, slot) } : s)),
+    );
+    setDirty(true);
+  }, []);
+
+  const onTogglePrerequisite = useCallback((skill: string, other: string) => {
+    setSkills((prev) =>
+      prev.map((s) =>
+        s.slug === skill ? { ...s, prerequisites: toggleList(s.prerequisites, other) } : s,
+      ),
+    );
+    setDirty(true);
+  }, []);
 
   const save = (next: FlowPolicy) => {
     updateAgent.mutate(
       { id: agentId, data: { flow_policy: next } },
       {
         onSuccess: () => {
-          toast.success("Flujo conversacional guardado");
+          toast.success("Conversación guardada");
           setDirty(false);
           refetch();
         },
-        onError: () => toast.error("No se pudo guardar el flujo"),
+        onError: () => toast.error("No se pudo guardar"),
       },
     );
   };
 
   const handleSave = () => {
-    if (slots.some((s) => !slugifyId(s.id))) {
-      toast.error("Cada dato debe tener un identificador (ej. fecha, profesional).");
+    if (slots.some((s) => !slugifySlotId(s.id))) {
+      toast.error("Cada dato necesita un identificador (ej. fecha).");
       return;
     }
-    const ids = slots.map((s) => slugifyId(s.id));
+    const ids = slots.map((s) => slugifySlotId(s.id));
     if (new Set(ids).size !== ids.length) {
       toast.error("Hay datos con el mismo identificador.");
       return;
@@ -243,25 +199,29 @@ export function AgentFlowPolicyPanel({ agentId }: Props) {
     setDirty(false);
   };
 
-  const addSlot = () => {
-    const ask = newSlotAsk.trim();
-    const id = slugifyId(newSlotId || ask);
+  const addSlot = (preset?: (typeof SLOT_EXAMPLES)[number]) => {
+    const ask = (preset?.ask ?? newSlotAsk).trim();
+    const id = slugifySlotId(preset?.id ?? (newSlotId || ask));
     if (!id) {
-      toast.error("Escribí una pregunta o un nombre corto para el dato.");
+      toast.error("Escribí una pregunta o elegí un ejemplo.");
       return;
     }
-    if (slots.some((s) => slugifyId(s.id) === id)) {
+    if (slots.some((s) => slugifySlotId(s.id) === id)) {
       toast.error("Ese dato ya existe.");
       return;
     }
-    setSlots((prev) => [...prev, { id, ask: ask || `¿Podés indicar ${id}?`, defaultValue: "" }]);
+    setSlots((prev) => [
+      ...prev,
+      {
+        id,
+        ask: ask || `¿Podés indicar ${id}?`,
+        defaultValue: preset?.defaultValue ?? "",
+      },
+    ]);
     setNewSlotAsk("");
     setNewSlotId("");
     markDirty();
   };
-
-  const toggleListValue = (list: string[], value: string): string[] =>
-    list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
 
   if (isLoading || !agent) {
     return (
@@ -279,13 +239,11 @@ export function AgentFlowPolicyPanel({ agentId }: Props) {
             <div className="space-y-1 max-w-2xl">
               <CardTitle className="text-base flex items-center gap-2">
                 <GitBranch className="h-4 w-4 text-primary" />
-                Flujo de la conversación
+                Conversación guiada
               </CardTitle>
               <CardDescription className="text-sm leading-relaxed">
-                Acá definís <strong className="text-foreground/90 font-medium">qué datos</strong>{" "}
-                debe reunir el agente antes de ejecutar una skill. Si falta algo, el agente{" "}
-                <strong className="text-foreground/90 font-medium">pregunta al usuario</strong>{" "}
-                en lugar de llamar la herramienta a medias.
+                El agente reúne datos y recién ahí ejecuta skills. Sin JSON: datos, reglas o la
+                pizarra para conectar cajas.
               </CardDescription>
             </div>
             <Badge variant={active ? "default" : "secondary"} className="font-normal">
@@ -293,54 +251,151 @@ export function AgentFlowPolicyPanel({ agentId }: Props) {
             </Badge>
           </div>
         </CardHeader>
-        <CardContent>
-          <ol className="grid gap-3 sm:grid-cols-3 text-sm">
-            <li className="rounded-xl border border-border/70 bg-muted/15 p-3 space-y-1.5">
-              <div className="flex items-center gap-2 text-primary">
-                <MessageCircleQuestion className="h-4 w-4" />
-                <span className="text-xs font-semibold uppercase tracking-wide">1. Datos</span>
-              </div>
-              <p className="text-[13px] text-muted-foreground leading-snug">
-                Creá los datos que necesitás (fecha, profesional, RUT…). Cada uno tiene una
-                pregunta clara para el usuario.
-              </p>
-            </li>
-            <li className="rounded-xl border border-border/70 bg-muted/15 p-3 space-y-1.5">
-              <div className="flex items-center gap-2 text-primary">
-                <ListChecks className="h-4 w-4" />
-                <span className="text-xs font-semibold uppercase tracking-wide">2. Skills</span>
-              </div>
-              <p className="text-[13px] text-muted-foreground leading-snug">
-                Por cada skill, marcá qué datos son obligatorios antes de ejecutarla y cuáles
-                conviene recordar para después.
-              </p>
-            </li>
-            <li className="rounded-xl border border-border/70 bg-muted/15 p-3 space-y-1.5">
-              <div className="flex items-center gap-2 text-primary">
-                <Sparkles className="h-4 w-4" />
-                <span className="text-xs font-semibold uppercase tracking-wide">3. En chat</span>
-              </div>
-              <p className="text-[13px] text-muted-foreground leading-snug">
-                Si el usuario pide agendar sin fecha, el agente pregunta la fecha y recién
-                entonces llama la skill.
-              </p>
-            </li>
-          </ol>
+        <CardContent className="grid gap-2 sm:grid-cols-3 text-[12px] text-muted-foreground">
+          <div className="flex gap-2 rounded-lg border border-border/60 bg-muted/15 px-3 py-2">
+            <MessageCircleQuestion className="h-4 w-4 shrink-0 text-amber-400 mt-0.5" />
+            <span>
+              <strong className="text-foreground/90">Datos</strong> = lo que preguntamos (fecha,
+              profesional…).
+            </span>
+          </div>
+          <div className="flex gap-2 rounded-lg border border-border/60 bg-muted/15 px-3 py-2">
+            <ListChecks className="h-4 w-4 shrink-0 text-primary mt-0.5" />
+            <span>
+              <strong className="text-foreground/90">Reglas</strong> = qué pide cada skill antes de
+              correr.
+            </span>
+          </div>
+          <div className="flex gap-2 rounded-lg border border-border/60 bg-muted/15 px-3 py-2">
+            <LayoutGrid className="h-4 w-4 shrink-0 text-sky-400 mt-0.5" />
+            <span>
+              <strong className="text-foreground/90">Pizarra</strong> = unís cajas con el mouse.
+            </span>
+          </div>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Datos que pedimos</CardTitle>
-          <CardDescription>
-            Son las piezas de información del flujo (slots). Ejemplo: profesional, fecha, RUT.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {slots.length === 0 ? (
-            <p className="text-sm text-muted-foreground rounded-lg border border-dashed border-border/70 px-3 py-6 text-center">
-              Todavía no hay datos. Agregá el primero abajo (ej. pregunta: «¿Para qué día?»).
+      <Tabs value={tab} onValueChange={setTab} className="space-y-3">
+        <TabsList className="grid w-full grid-cols-3 h-10">
+          <TabsTrigger value="pizarra" className="gap-1.5 text-xs sm:text-sm">
+            <LayoutGrid className="h-3.5 w-3.5" />
+            Pizarra
+          </TabsTrigger>
+          <TabsTrigger value="datos" className="gap-1.5 text-xs sm:text-sm">
+            <MessageCircleQuestion className="h-3.5 w-3.5" />
+            Datos
+            <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-normal">
+              {slots.length}
+            </Badge>
+          </TabsTrigger>
+          <TabsTrigger value="reglas" className="gap-1.5 text-xs sm:text-sm">
+            <Sparkles className="h-3.5 w-3.5" />
+            Reglas
+            <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-normal">
+              {skills.filter((s) => s.enabled).length}
+            </Badge>
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="pizarra" className="space-y-3 mt-0">
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-muted/20 px-3 py-2">
+            <Link2 className="h-4 w-4 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground mr-1">Al unir, crear:</span>
+            {(
+              [
+                ["requires", "Obligatorio", "amber"],
+                ["capture", "Recordar", "mint"],
+                ["prerequisites", "Antes (skill→skill)", "sky"],
+              ] as const
+            ).map(([mode, label, tone]) => (
+              <ToggleChip
+                key={mode}
+                label={label}
+                tone={tone}
+                active={linkMode === mode}
+                onToggle={() => setLinkMode(mode)}
+              />
+            ))}
+            <span className="text-[11px] text-muted-foreground ml-auto hidden sm:inline">
+              Clic en una línea para quitarla
+            </span>
+          </div>
+          <FlowPolicyBoard
+            slots={slots}
+            skills={skills}
+            linkMode={linkMode}
+            onEnableSkill={enableSkill}
+            onToggleRequires={onToggleRequires}
+            onToggleCapture={onToggleCapture}
+            onTogglePrerequisite={onTogglePrerequisite}
+          />
+          {slots.length === 0 && (
+            <p className="text-xs text-muted-foreground text-center">
+              Tip: andá a{" "}
+              <button
+                type="button"
+                className="text-primary underline"
+                onClick={() => setTab("datos")}
+              >
+                Datos
+              </button>{" "}
+              y sumá un ejemplo en un clic.
             </p>
+          )}
+        </TabsContent>
+
+        <TabsContent value="datos" className="space-y-3 mt-0">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">¿Qué es cada campo?</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-2 sm:grid-cols-3 text-[12px]">
+              <div className="rounded-lg border border-amber-500/25 bg-amber-500/5 p-3 space-y-1">
+                <p className="font-semibold text-amber-200">Identificador</p>
+                <p className="text-muted-foreground leading-snug">
+                  Nombre interno corto, sin espacios. Ej:{" "}
+                  <code className="text-[10px] text-foreground/80">fecha</code>,{" "}
+                  <code className="text-[10px] text-foreground/80">profesional</code>.
+                </p>
+              </div>
+              <div className="rounded-lg border border-primary/25 bg-primary/5 p-3 space-y-1">
+                <p className="font-semibold text-primary">Pregunta al usuario</p>
+                <p className="text-muted-foreground leading-snug">
+                  Lo que dice el agente en el chat. Ej: «¿Para qué día necesitás la hora?»
+                </p>
+              </div>
+              <div className="rounded-lg border border-sky-500/25 bg-sky-500/5 p-3 space-y-1">
+                <p className="font-semibold text-sky-200">Valor por defecto</p>
+                <p className="text-muted-foreground leading-snug">
+                  Opcional. Si el usuario no responde, se usa esto (ej. motivo = «Consulta
+                  general»).
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="flex flex-wrap gap-1.5">
+            <span className="text-[11px] text-muted-foreground self-center mr-1">Ejemplos:</span>
+            {SLOT_EXAMPLES.map((ex) => (
+              <Button
+                key={ex.id}
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-7 text-[11px]"
+                disabled={slots.some((s) => slugifySlotId(s.id) === ex.id)}
+                onClick={() => addSlot(ex)}
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                {ex.id}
+              </Button>
+            ))}
+          </div>
+
+          {slots.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-border/70 px-4 py-10 text-center text-sm text-muted-foreground">
+              Todavía no hay datos. Tocá un ejemplo arriba o creá uno abajo.
+            </div>
           ) : (
             <ul className="space-y-2">
               {slots.map((slot, idx) => (
@@ -351,9 +406,7 @@ export function AgentFlowPolicyPanel({ agentId }: Props) {
                   <div className="flex flex-wrap items-start gap-2">
                     <div className="grid flex-1 gap-2 sm:grid-cols-2 min-w-[12rem]">
                       <div className="space-y-1">
-                        <Label className="text-[11px] text-muted-foreground">
-                          Identificador
-                        </Label>
+                        <Label className="text-[11px] text-muted-foreground">Identificador</Label>
                         <Input
                           value={slot.id}
                           onChange={(e) => {
@@ -391,7 +444,7 @@ export function AgentFlowPolicyPanel({ agentId }: Props) {
                       variant="ghost"
                       className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
                       onClick={() => {
-                        const removed = slugifyId(slot.id);
+                        const removed = slugifySlotId(slot.id);
                         setSlots((prev) => prev.filter((_, i) => i !== idx));
                         setSkills((prev) =>
                           prev.map((sk) => ({
@@ -408,16 +461,12 @@ export function AgentFlowPolicyPanel({ agentId }: Props) {
                     </Button>
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-[11px] text-muted-foreground">
-                      Pregunta al usuario
-                    </Label>
+                    <Label className="text-[11px] text-muted-foreground">Pregunta al usuario</Label>
                     <Textarea
                       value={slot.ask}
                       onChange={(e) => {
                         const v = e.target.value;
-                        setSlots((prev) =>
-                          prev.map((s, i) => (i === idx ? { ...s, ask: v } : s)),
-                        );
+                        setSlots((prev) => prev.map((s, i) => (i === idx ? { ...s, ask: v } : s)));
                         markDirty();
                       }}
                       rows={2}
@@ -431,7 +480,7 @@ export function AgentFlowPolicyPanel({ agentId }: Props) {
           )}
 
           <div className="rounded-xl border border-dashed border-border/80 p-3 space-y-2">
-            <p className="text-xs font-medium text-foreground">Agregar dato</p>
+            <p className="text-xs font-medium">Agregar dato a mano</p>
             <div className="grid gap-2 sm:grid-cols-[1fr_10rem_auto]">
               <Input
                 value={newSlotAsk}
@@ -445,36 +494,32 @@ export function AgentFlowPolicyPanel({ agentId }: Props) {
                 placeholder="id: profesional"
                 className="h-9 font-mono text-xs"
               />
-              <Button type="button" size="sm" className="h-9" onClick={addSlot}>
+              <Button type="button" size="sm" className="h-9" onClick={() => addSlot()}>
                 <Plus className="h-3.5 w-3.5 mr-1" />
                 Agregar
               </Button>
             </div>
-            <p className="text-[11px] text-muted-foreground">
-              Si no ponés identificador, se genera desde la pregunta (ej. «profesional»).
-            </p>
           </div>
-        </CardContent>
-      </Card>
+        </TabsContent>
 
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Reglas por skill</CardTitle>
-          <CardDescription>
-            Activá una skill y marcá qué datos exige.{" "}
-            <span className="text-amber-300/90">Obligatorios</span> = debe tenerlos antes de
-            ejecutar. <span className="text-primary/90">Recordar</span> = guardar para el resto
-            del chat. <span className="text-sky-300/90">Antes</span> = otra skill que debió
-            correr primero.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
+        <TabsContent value="reglas" className="space-y-3 mt-0">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Leyenda</CardTitle>
+              <CardDescription>
+                Activá una skill y marcá chips.{" "}
+                <span className="text-amber-300/90">Obligatorios</span> antes de ejecutar ·{" "}
+                <span className="text-primary/90">Recordar</span> para el resto del chat ·{" "}
+                <span className="text-sky-300/90">Antes</span> = otra skill previa.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+
           {skills.length === 0 ? (
-            <p className="text-sm text-muted-foreground rounded-lg border border-dashed border-border/70 px-3 py-6 text-center">
-              Este agente no tiene skills asignadas. Andá a la pestaña{" "}
-              <strong className="text-foreground/80 font-medium">Skills</strong> y agregá
-              alguna.
-            </p>
+            <div className="rounded-xl border border-dashed border-border/70 px-4 py-10 text-center text-sm text-muted-foreground">
+              Este agente no tiene skills. Andá a la pestaña{" "}
+              <strong className="text-foreground/80">Skills</strong> del agente y asigná alguna.
+            </div>
           ) : (
             <ul className="space-y-2">
               {skills.map((sk) => (
@@ -499,9 +544,7 @@ export function AgentFlowPolicyPanel({ agentId }: Props) {
                       className="h-8"
                       onClick={() => {
                         setSkills((prev) =>
-                          prev.map((s) =>
-                            s.slug === sk.slug ? { ...s, enabled: !s.enabled } : s,
-                          ),
+                          prev.map((s) => (s.slug === sk.slug ? { ...s, enabled: !s.enabled } : s)),
                         );
                         markDirty();
                       }}
@@ -514,13 +557,13 @@ export function AgentFlowPolicyPanel({ agentId }: Props) {
                     <div className="space-y-3">
                       {slotIds.length === 0 ? (
                         <p className="text-[12px] text-muted-foreground">
-                          Primero creá al menos un dato arriba.
+                          Primero creá datos en la pestaña Datos.
                         </p>
                       ) : (
                         <>
                           <div className="space-y-1.5">
                             <p className="text-[11px] font-medium text-amber-200/90">
-                              Obligatorios antes de ejecutar
+                              Obligatorios
                             </p>
                             <div className="flex flex-wrap gap-1.5">
                               {slotIds.map((id) => (
@@ -533,10 +576,7 @@ export function AgentFlowPolicyPanel({ agentId }: Props) {
                                     setSkills((prev) =>
                                       prev.map((s) =>
                                         s.slug === sk.slug
-                                          ? {
-                                              ...s,
-                                              requires: toggleListValue(s.requires, id),
-                                            }
+                                          ? { ...s, requires: toggleList(s.requires, id) }
                                           : s,
                                       ),
                                     );
@@ -547,9 +587,7 @@ export function AgentFlowPolicyPanel({ agentId }: Props) {
                             </div>
                           </div>
                           <div className="space-y-1.5">
-                            <p className="text-[11px] font-medium text-primary/90">
-                              Recordar en la conversación
-                            </p>
+                            <p className="text-[11px] font-medium text-primary/90">Recordar</p>
                             <div className="flex flex-wrap gap-1.5">
                               {slotIds.map((id) => (
                                 <ToggleChip
@@ -561,10 +599,7 @@ export function AgentFlowPolicyPanel({ agentId }: Props) {
                                     setSkills((prev) =>
                                       prev.map((s) =>
                                         s.slug === sk.slug
-                                          ? {
-                                              ...s,
-                                              capture: toggleListValue(s.capture, id),
-                                            }
+                                          ? { ...s, capture: toggleList(s.capture, id) }
                                           : s,
                                       ),
                                     );
@@ -576,11 +611,10 @@ export function AgentFlowPolicyPanel({ agentId }: Props) {
                           </div>
                         </>
                       )}
-
                       {skills.filter((s) => s.slug !== sk.slug).length > 0 && (
                         <div className="space-y-1.5">
                           <p className="text-[11px] font-medium text-sky-200/90">
-                            Debe ejecutarse antes (opcional)
+                            Debe ejecutarse antes
                           </p>
                           <div className="flex flex-wrap gap-1.5">
                             {skills
@@ -597,7 +631,7 @@ export function AgentFlowPolicyPanel({ agentId }: Props) {
                                         s.slug === sk.slug
                                           ? {
                                               ...s,
-                                              prerequisites: toggleListValue(
+                                              prerequisites: toggleList(
                                                 s.prerequisites,
                                                 other.slug,
                                               ),
@@ -618,8 +652,8 @@ export function AgentFlowPolicyPanel({ agentId }: Props) {
               ))}
             </ul>
           )}
-        </CardContent>
-      </Card>
+        </TabsContent>
+      </Tabs>
 
       <div className="sticky bottom-3 z-10 flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-background/95 p-2.5 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/80">
         <Button size="sm" disabled={updateAgent.isPending || !dirty} onClick={handleSave}>
@@ -628,7 +662,7 @@ export function AgentFlowPolicyPanel({ agentId }: Props) {
           ) : (
             <Save className="h-3.5 w-3.5 mr-1.5" />
           )}
-          Guardar flujo
+          Guardar
         </Button>
         <Button
           size="sm"
@@ -647,7 +681,7 @@ export function AgentFlowPolicyPanel({ agentId }: Props) {
           onClick={handleClear}
         >
           <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-          Quitar todas las reglas
+          Vaciar
         </Button>
         {dirty && (
           <span className="text-[11px] text-muted-foreground ml-auto">Cambios sin guardar</span>
