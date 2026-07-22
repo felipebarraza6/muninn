@@ -33,10 +33,38 @@ export function generateMemorablePassword(_numWords = 3): string {
   return generateSecurePassword(14);
 }
 
+/**
+ * Copia texto al portapapeles.
+ * Usa Clipboard API cuando hay contexto seguro; si no (HTTP en LAN),
+ * cae a execCommand — navigator.clipboard falla fuera de localhost/HTTPS.
+ */
 export async function copyToClipboard(text: string): Promise<boolean> {
+  const value = String(text ?? "");
+  if (!value) return false;
+
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(value);
+      return true;
+    } catch {
+      // seguir al fallback
+    }
+  }
+
   try {
-    await navigator.clipboard.writeText(text);
-    return true;
+    const ta = document.createElement("textarea");
+    ta.value = value;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    ta.style.top = "0";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    ta.setSelectionRange(0, value.length);
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
   } catch {
     return false;
   }

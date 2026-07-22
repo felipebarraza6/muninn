@@ -246,6 +246,26 @@ export function useBranchTheme(branchIdOverride?: string | null) {
     themeHintLabel,
   ]);
 
+  /**
+   * Branding de tenant aún no resuelto.
+   * Evita mostrar cuervo Muninn / colores SA mientras carga logo/colores de org o store.
+   */
+  const brandPending =
+    !isSuperAdmin() &&
+    (query.isLoading ||
+      (Boolean(orgId) && orgThemeQuery.isLoading && !orgThemeQuery.data && !query.data));
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (isSuperAdmin() || !brandPending) {
+      root.dataset.brandReady = "true";
+      delete root.dataset.brandPending;
+      return;
+    }
+    root.dataset.brandPending = "true";
+    delete root.dataset.brandReady;
+  }, [brandPending]);
+
   const muninnTheme = useMemo(
     () =>
       isSuperAdmin() ? resolveEffectiveTheme({ ...MUNINN_DEFAULT_THEME }, "Muninn") : undefined,
@@ -258,6 +278,7 @@ export function useBranchTheme(branchIdOverride?: string | null) {
     rawTheme: isSuperAdmin() ? { ...MUNINN_DEFAULT_THEME } : (themeWithOrgAssets ?? query.data),
     branchLabel: isSuperAdmin() ? "Muninn" : themeHintLabel,
     isFetching: query.isFetching || orgThemeQuery.isFetching,
+    brandPending,
   };
 }
 
@@ -278,7 +299,10 @@ export function useResolvePublicLoginTheme(slug?: string | null) {
 
   const raw = query.data ?? null;
   const flat = useMemo(() => (raw ? flattenPublicLoginTheme(raw) : null), [raw]);
-  const isAppDefault = !raw || !hasUsablePublicBranding(raw);
+  // Con slug: nunca pitch Muninn mientras carga (evita flash crow→org).
+  const isAppDefault = query.isLoading
+    ? !slug
+    : !raw || !hasUsablePublicBranding(raw);
 
   const effectiveTheme = useMemo(() => {
     if (isAppDefault) {
@@ -288,18 +312,23 @@ export function useResolvePublicLoginTheme(slug?: string | null) {
   }, [flat, isAppDefault, slug]);
 
   useEffect(() => {
-    if (query.isLoading) return;
+    if (query.isLoading) {
+      document.documentElement.dataset.brandPending = "true";
+      delete document.documentElement.dataset.brandReady;
+      return;
+    }
 
     const ctx = loginContextFromPublicTheme(raw, { host, slug });
     persistLoginPortalContext(ctx);
 
     if (isAppDefault) {
       applyResolvedBranchTheme({ ...MUNINN_DEFAULT_THEME }, "Muninn");
-      return;
-    }
-    if (flat) {
+    } else if (flat) {
       applyResolvedBranchTheme(flat as BranchThemeLike, flat.app_name || slug);
     }
+
+    document.documentElement.dataset.brandReady = "true";
+    delete document.documentElement.dataset.brandPending;
   }, [query.isLoading, raw, flat, isAppDefault, host, slug]);
 
   return {
@@ -312,6 +341,7 @@ export function useResolvePublicLoginTheme(slug?: string | null) {
     stores: raw?.stores ?? [],
     branchId: raw?.branch_id != null ? String(raw.branch_id) : null,
     organizationId: raw?.organization_id != null ? String(raw.organization_id) : null,
+    brandPending: query.isLoading,
   };
 }
 

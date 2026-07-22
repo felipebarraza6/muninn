@@ -52,7 +52,14 @@ import {
 } from "@/api/hooks/useExternalAPIs";
 import { useAdminBranches, useMyBranchesSelect } from "@/api/hooks/useBranches";
 import { useAgentFunctions } from "@/api/hooks/useAgentFunctions";
-import { canManageExternalApis, isOrganizationOwner, isSuperAdmin } from "@/lib/authGuards";
+import {
+  canManageExternalApis,
+  canViewExternalApiEndpoints,
+  canViewExternalApiInstallations,
+  canViewExternalApiSkillsInStore,
+  isOrganizationOwner,
+  isSuperAdmin,
+} from "@/lib/authGuards";
 import {
   AUTH_HEADER_PREFIX_OPTIONS,
   AUTH_TYPE_HINT,
@@ -76,6 +83,9 @@ export default function APIDetailPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const canManage = canManageExternalApis();
+  const canViewEndpoints = canViewExternalApiEndpoints();
+  const canViewSkillsTab = canViewExternalApiSkillsInStore();
+  const canViewInstallations = canViewExternalApiInstallations();
   const isGlobalAdmin = isSuperAdmin();
   const isOrgOwner = isOrganizationOwner();
   const { data: api, isLoading, error, refetch } = useExternalAPI(id);
@@ -87,14 +97,17 @@ export default function APIDetailPage() {
   const remove = useDeleteExternalAPI();
   const syncSkills = useSyncExternalAPISkills();
   const { data: adminBranches = [] } = useAdminBranches({
-    enabled: isGlobalAdmin || isOrgOwner,
+    enabled: canViewInstallations && (isGlobalAdmin || isOrgOwner),
   });
   const { data: myBranches = [] } = useMyBranchesSelect();
   const {
     data: linkedSkills = [],
     isLoading: skillsLoading,
     refetch: refetchSkills,
-  } = useAgentFunctions({ externalApiId: id, includeInactive: true });
+  } = useAgentFunctions({
+    externalApiId: canViewSkillsTab && id ? id : "",
+    includeInactive: true,
+  });
 
   const categorySuggestions = useMemo(() => {
     const set = new Set<string>();
@@ -138,7 +151,7 @@ export default function APIDetailPage() {
   }, [adminBranches, isGlobalAdmin, isOrgOwner, myBranches]);
 
   const tabParam = searchParams.get("tab");
-  const tab: ApiDetailTab =
+  const requestedTab: ApiDetailTab =
     tabParam === "endpoints" ||
     tabParam === "probar" ||
     tabParam === "cuenta" ||
@@ -146,7 +159,20 @@ export default function APIDetailPage() {
     tabParam === "instalacion"
       ? tabParam
       : "configuracion";
+
+  const tab: ApiDetailTab = (() => {
+    if (requestedTab === "endpoints" && !canViewEndpoints) return "configuracion";
+    if (requestedTab === "skills" && !canViewSkillsTab) return "configuracion";
+    if (requestedTab === "instalacion" && !canViewInstallations) return "configuracion";
+    if (requestedTab === "probar" && !canManage) return "configuracion";
+    return requestedTab;
+  })();
+
   const setTab = (next: ApiDetailTab) => {
+    if (next === "endpoints" && !canViewEndpoints) return;
+    if (next === "skills" && !canViewSkillsTab) return;
+    if (next === "instalacion" && !canViewInstallations) return;
+    if (next === "probar" && !canManage) return;
     setSearchParams(
       (prev) => {
         const p = new URLSearchParams(prev);
@@ -193,6 +219,7 @@ export default function APIDetailPage() {
   const [category, setCategory] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [tagDraft, setTagDraft] = useState("");
+  const [iconUrl, setIconUrl] = useState("");
 
   useEffect(() => {
     if (!api) return;
@@ -219,6 +246,7 @@ export default function APIDetailPage() {
     setCategory(api.category || "");
     setTags((api.tags ?? []).map(String).filter(Boolean));
     setTagDraft("");
+    setIconUrl(api.icon_url || "");
   }, [api]);
 
   const addTag = (raw: string) => {
@@ -344,8 +372,8 @@ export default function APIDetailPage() {
           is_active: isActive,
           default_headers: headers.value,
           retry_policy: retry.value,
-          // Incluir endpoints actuales: el serializer valida auth_endpoint_key ∈ endpoints
-          endpoints: api.endpoints ?? {},
+          // No reenviar endpoints: evita revalidar bodies legacy (p.ej. arrays) al
+          // guardar solo general/icono. auth_endpoint_key se valida contra instance.
           auth_endpoint_key: authType === "endpoint_auth" ? authEndpointKey.trim() : "",
           health_endpoint_key: healthEndpointKey.trim(),
           auth_token_path:
@@ -353,6 +381,7 @@ export default function APIDetailPage() {
           auth_token_ttl_seconds: authType === "endpoint_auth" && Number.isFinite(ttl) ? ttl : 0,
           category: category.trim() || null,
           tags,
+          icon_url: iconUrl.trim(),
           ...(apiKey.trim() ? { api_key: apiKey.trim() } : {}),
           ...(auth_config ? { auth_config } : {}),
         },
@@ -413,7 +442,11 @@ export default function APIDetailPage() {
           </Link>
         </Button>
         <div className="flex-1 min-w-0 flex items-start gap-3">
-          <AppIcon name={api.name} size="lg" />
+          <AppIcon
+            name={api.name}
+            size="lg"
+            src={api.icon_display_url || api.icon_url || api.icon}
+          />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-xl md:text-2xl font-semibold tracking-tight truncate">
@@ -430,12 +463,16 @@ export default function APIDetailPage() {
                   {api.category}
                 </Badge>
               ) : null}
-              <Badge variant="outline" className="text-[10px] font-normal">
-                {endpointCount} endpoint{endpointCount === 1 ? "" : "s"}
-              </Badge>
-              <Badge variant="outline" className="text-[10px] font-normal">
-                {skillCount} skill{skillCount === 1 ? "" : "s"}
-              </Badge>
+              {canViewEndpoints && (
+                <Badge variant="outline" className="text-[10px] font-normal">
+                  {endpointCount} endpoint{endpointCount === 1 ? "" : "s"}
+                </Badge>
+              )}
+              {canViewSkillsTab && (
+                <Badge variant="outline" className="text-[10px] font-normal">
+                  {skillCount} skill{skillCount === 1 ? "" : "s"}
+                </Badge>
+              )}
               {!canManage && (
                 <Badge variant="outline" className="text-[10px] gap-1 font-normal">
                   <Lock className="h-3 w-3" /> Solo lectura
@@ -519,51 +556,61 @@ export default function APIDetailPage() {
             <Settings2 className="h-3.5 w-3.5" />
             Configuración
           </TabsTrigger>
-          <TabsTrigger value="instalacion" className="gap-1.5 flex-1 sm:flex-none">
-            <Store className="h-3.5 w-3.5" />
-            Instalación
-            {installedBranchCount > 0 ? (
-              <span className="text-[10px] text-muted-foreground tabular-nums">
-                ({installedBranchCount})
-              </span>
-            ) : null}
-          </TabsTrigger>
-          <TabsTrigger value="endpoints" className="gap-1.5 flex-1 sm:flex-none">
-            <Route className="h-3.5 w-3.5" />
-            Endpoints
-            {endpointCount > 0 ? (
-              <span className="text-[10px] text-muted-foreground tabular-nums">
-                ({endpointCount})
-              </span>
-            ) : null}
-          </TabsTrigger>
-          <TabsTrigger value="skills" className="gap-1.5 flex-1 sm:flex-none">
-            <Sparkles className="h-3.5 w-3.5" />
-            Skills
-            {skillCount > 0 ? (
-              <span className="text-[10px] text-muted-foreground tabular-nums">({skillCount})</span>
-            ) : null}
-          </TabsTrigger>
+          {canViewInstallations && (
+            <TabsTrigger value="instalacion" className="gap-1.5 flex-1 sm:flex-none">
+              <Store className="h-3.5 w-3.5" />
+              Instalación
+              {installedBranchCount > 0 ? (
+                <span className="text-[10px] text-muted-foreground tabular-nums">
+                  ({installedBranchCount})
+                </span>
+              ) : null}
+            </TabsTrigger>
+          )}
+          {canViewEndpoints && (
+            <TabsTrigger value="endpoints" className="gap-1.5 flex-1 sm:flex-none">
+              <Route className="h-3.5 w-3.5" />
+              Endpoints
+              {endpointCount > 0 ? (
+                <span className="text-[10px] text-muted-foreground tabular-nums">
+                  ({endpointCount})
+                </span>
+              ) : null}
+            </TabsTrigger>
+          )}
+          {canViewSkillsTab && (
+            <TabsTrigger value="skills" className="gap-1.5 flex-1 sm:flex-none">
+              <Sparkles className="h-3.5 w-3.5" />
+              Skills
+              {skillCount > 0 ? (
+                <span className="text-[10px] text-muted-foreground tabular-nums">({skillCount})</span>
+              ) : null}
+            </TabsTrigger>
+          )}
           {api.auth_type === "endpoint_auth" && (
             <TabsTrigger value="cuenta" className="gap-1.5 flex-1 sm:flex-none">
               <KeyRound className="h-3.5 w-3.5" />
               Cuenta de prueba
             </TabsTrigger>
           )}
-          <TabsTrigger value="probar" className="gap-1.5 flex-1 sm:flex-none">
-            <FlaskConical className="h-3.5 w-3.5" />
-            Probar
-          </TabsTrigger>
+          {canManage && (
+            <TabsTrigger value="probar" className="gap-1.5 flex-1 sm:flex-none">
+              <FlaskConical className="h-3.5 w-3.5" />
+              Probar
+            </TabsTrigger>
+          )}
         </TabsList>
 
-        <TabsContent value="instalacion" className="mt-0">
-          <AppInstallationsPanel
-            api={api}
-            branchOptions={branchOptions}
-            canManage={canManage}
-            onSaved={() => void refetch()}
-          />
-        </TabsContent>
+        {canViewInstallations && (
+          <TabsContent value="instalacion" className="mt-0">
+            <AppInstallationsPanel
+              api={api}
+              branchOptions={branchOptions}
+              canManage={canManage}
+              onSaved={() => void refetch()}
+            />
+          </TabsContent>
+        )}
 
         <TabsContent value="configuracion" className="mt-0">
           <section className="space-y-5">
@@ -575,7 +622,7 @@ export default function APIDetailPage() {
               </p>
             </div>
 
-            {canManage && endpointCount === 0 && (
+            {canManage && canViewEndpoints && endpointCount === 0 && (
               <div className="rounded-lg border border-primary/25 bg-primary/5 px-3 py-2.5 text-xs text-muted-foreground flex flex-col sm:flex-row sm:items-center gap-2 justify-between">
                 <span>Siguiente paso: crea al menos un endpoint (login, listados, etc.).</span>
                 <Button size="sm" variant="outline" onClick={() => setTab("endpoints")}>
@@ -618,6 +665,27 @@ export default function APIDetailPage() {
                     onChange={(e) => setBaseUrl(e.target.value)}
                     className="font-mono text-sm"
                   />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Icono (URL)</Label>
+                  <Input
+                    value={iconUrl}
+                    onChange={(e) => setIconUrl(e.target.value)}
+                    placeholder="https://…/logo.png"
+                    className="font-mono text-sm"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    URL pública del logo. Se muestra en el store; si está vacío, se usan iniciales.
+                  </p>
+                  {(iconUrl.trim() || api.icon_display_url) && (
+                    <div className="pt-1">
+                      <AppIcon
+                        name={name || api.name}
+                        src={iconUrl.trim() || api.icon_display_url}
+                        size="sm"
+                      />
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-2 md:col-span-2">
                   <Label>Descripción</Label>
@@ -749,7 +817,7 @@ export default function APIDetailPage() {
                     />
                   </div>
                 )}
-                {authType === "endpoint_auth" && (
+                {canViewEndpoints && authType === "endpoint_auth" && (
                   <>
                     <div className="md:col-span-2 rounded-lg border border-border/80 bg-muted/20 px-3 py-2.5">
                       <p className="text-xs text-muted-foreground">
@@ -842,31 +910,33 @@ export default function APIDetailPage() {
                     </div>
                   </>
                 )}
-                <div className="space-y-2 md:col-span-2">
-                  <Label>Endpoint de prueba (store · Probar)</Label>
-                  <Select
-                    value={healthEndpointKey || "__none__"}
-                    onValueChange={(v) => setHealthEndpointKey(v === "__none__" ? "" : v)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Elegí endpoint" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">
-                        Automático (login si hay auth, si no GET base_url)
-                      </SelectItem>
-                      {endpointKeys.map((k) => (
-                        <SelectItem key={k} value={k}>
-                          {k}
+                {canViewEndpoints && (
+                  <div className="space-y-2 md:col-span-2">
+                    <Label>Endpoint de prueba (store · Probar)</Label>
+                    <Select
+                      value={healthEndpointKey || "__none__"}
+                      onValueChange={(v) => setHealthEndpointKey(v === "__none__" ? "" : v)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Elegí endpoint" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">
+                          Automático (login si hay auth, si no GET base_url)
                         </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-[11px] text-muted-foreground">
-                    El botón Probar del store llama este endpoint para validar que el servicio está
-                    activo. Si requiere auth, usa la cuenta de la instalación.
-                  </p>
-                </div>
+                        {endpointKeys.map((k) => (
+                          <SelectItem key={k} value={k}>
+                            {k}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[11px] text-muted-foreground">
+                      El botón Probar del store llama este endpoint para validar que el servicio está
+                      activo. Si requiere auth, usa la cuenta de la instalación.
+                    </p>
+                  </div>
+                )}
                 <div className="space-y-2 md:col-span-2">
                   <Label>default_headers (JSON)</Label>
                   <Textarea
@@ -885,17 +955,19 @@ export default function APIDetailPage() {
                     className="font-mono text-xs"
                   />
                 </div>
-                <div className="md:col-span-2 rounded-lg border border-border/70 bg-muted/20 px-3 py-2.5 text-xs text-muted-foreground flex flex-col sm:flex-row sm:items-center gap-2 justify-between">
-                  <span>
-                    Las sucursales donde se instala la app se gestionan en la pestaña{" "}
-                    <strong className="text-foreground font-medium">Instalación</strong> (
-                    {installedBranchCount} actual
-                    {installedBranchCount === 1 ? "" : "es"}).
-                  </span>
-                  <Button size="sm" variant="outline" onClick={() => setTab("instalacion")}>
-                    Ir a Instalación
-                  </Button>
-                </div>
+                {canViewInstallations && (
+                  <div className="md:col-span-2 rounded-lg border border-border/70 bg-muted/20 px-3 py-2.5 text-xs text-muted-foreground flex flex-col sm:flex-row sm:items-center gap-2 justify-between">
+                    <span>
+                      Las sucursales donde se instala la app se gestionan en la pestaña{" "}
+                      <strong className="text-foreground font-medium">Instalación</strong> (
+                      {installedBranchCount} actual
+                      {installedBranchCount === 1 ? "" : "es"}).
+                    </span>
+                    <Button size="sm" variant="outline" onClick={() => setTab("instalacion")}>
+                      Ir a Instalación
+                    </Button>
+                  </div>
+                )}
                 <label className="flex items-center gap-2 text-sm md:col-span-2">
                   <Switch checked={isActive} onCheckedChange={setIsActive} />
                   Activa
@@ -926,24 +998,32 @@ export default function APIDetailPage() {
                 <div className="md:col-span-2 space-y-1.5">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-muted-foreground text-xs">Instalada en</span>
-                    <button
-                      type="button"
-                      className="text-[11px] text-primary hover:underline"
-                      onClick={() => setTab("instalacion")}
-                    >
-                      Gestionar instalaciones
-                    </button>
+                    {canViewInstallations && (
+                      <button
+                        type="button"
+                        className="text-[11px] text-primary hover:underline"
+                        onClick={() => setTab("instalacion")}
+                      >
+                        Gestionar instalaciones
+                      </button>
+                    )}
                   </div>
-                  {(api.branch_names ?? []).length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5">
-                      {api.branch_names!.map((name) => (
-                        <Badge key={name} variant="outline" className="font-normal text-[11px]">
-                          {name}
-                        </Badge>
-                      ))}
-                    </div>
+                  {canViewInstallations ? (
+                    (api.branch_names ?? []).length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {api.branch_names!.map((name) => (
+                          <Badge key={name} variant="outline" className="font-normal text-[11px]">
+                            {name}
+                          </Badge>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="font-medium text-muted-foreground">Sin sucursales</p>
+                    )
                   ) : (
-                    <p className="font-medium text-muted-foreground">Sin sucursales</p>
+                    <p className="font-medium text-muted-foreground">
+                      Disponible según tu sucursal activa
+                    </p>
                   )}
                 </div>
                 <div className="space-y-1.5">
@@ -986,7 +1066,7 @@ export default function APIDetailPage() {
                     <p className="font-medium font-mono text-xs">{api.api_key_masked}</p>
                   </div>
                 )}
-                {api.auth_type === "endpoint_auth" && (
+                {canViewEndpoints && api.auth_type === "endpoint_auth" && (
                   <>
                     <div>
                       <span className="text-muted-foreground text-xs">Endpoint auth</span>
@@ -1000,12 +1080,14 @@ export default function APIDetailPage() {
                     </div>
                   </>
                 )}
-                <div>
-                  <span className="text-muted-foreground text-xs">Endpoint de prueba</span>
-                  <p className="font-medium font-mono text-xs">
-                    {api.health_endpoint_key || "Automático"}
-                  </p>
-                </div>
+                {canViewEndpoints && (
+                  <div>
+                    <span className="text-muted-foreground text-xs">Endpoint de prueba</span>
+                    <p className="font-medium font-mono text-xs">
+                      {api.health_endpoint_key || "Automático"}
+                    </p>
+                  </div>
+                )}
                 {api.description && (
                   <div className="md:col-span-2">
                     <span className="text-muted-foreground text-xs">Descripción</span>
@@ -1025,7 +1107,8 @@ export default function APIDetailPage() {
           </section>
         </TabsContent>
 
-        <TabsContent value="endpoints" className="mt-0">
+        {canViewEndpoints && (
+          <TabsContent value="endpoints" className="mt-0">
           <section className="space-y-5">
             <div className="border-b border-border/60 pb-3">
               <h2 className="text-sm font-medium">Endpoints</h2>
@@ -1048,7 +1131,9 @@ export default function APIDetailPage() {
             />
           </section>
         </TabsContent>
+        )}
 
+        {canViewSkillsTab && (
         <TabsContent value="skills" className="mt-0">
           <section className="space-y-5">
             <div className="flex flex-col sm:flex-row sm:items-start gap-3 justify-between border-b border-border/60 pb-3">
@@ -1149,6 +1234,7 @@ export default function APIDetailPage() {
             )}
           </section>
         </TabsContent>
+        )}
 
         {api.auth_type === "endpoint_auth" && (
           <TabsContent value="cuenta" className="mt-0">
@@ -1156,9 +1242,11 @@ export default function APIDetailPage() {
           </TabsContent>
         )}
 
-        <TabsContent value="probar" className="mt-0">
-          <ExternalApiTestPanel api={api} onExit={() => setTab("configuracion")} />
-        </TabsContent>
+        {canManage && (
+          <TabsContent value="probar" className="mt-0">
+            <ExternalApiTestPanel api={api} onExit={() => setTab("configuracion")} />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

@@ -432,3 +432,162 @@
 .chat-md__th {
   font-weight: 600;
 }
+
+/* Login landing — movimiento suave del “enjambre” (solo Muninn) */
+@keyframes login-float-a {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -11px, 0);
+  }
+}
+
+@keyframes login-float-b {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(6px, -7px, 0);
+  }
+}
+
+@keyframes login-float-c {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(-5px, -9px, 0);
+  }
+}
+
+@keyframes login-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.4;
+  }
+  50% {
+    transform: translate3d(14px, -10px, 0) scale(1.05);
+    opacity: 0.7;
+  }
+}
+
+@keyframes login-pulse-ring {
+  0% {
+    transform: scale(0.92);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(1.45);
+    opacity: 0;
+  }
+}
+
+/* Highlight que cruza en bucle sin “corte” al reiniciar */
+@keyframes login-flow-sweep {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(220%);
+  }
+}
+
+.login-float-a {
+  animation: login-float-a 4.2s ease-in-out infinite;
+}
+.login-float-b {
+  animation: login-float-b 5.8s ease-in-out infinite;
+  animation-delay: 0.4s;
+}
+.login-float-c {
+  animation: login-float-c 7.1s ease-in-out infinite;
+  animation-delay: 1.2s;
+}
+.login-float-d {
+  animation: login-float-a 6.4s ease-in-out infinite;
+  animation-delay: 2.1s;
+}
+.login-float-e {
+  animation: login-float-b 8s ease-in-out infinite;
+  animation-delay: 0.8s;
+}
+
+.login-drift {
+  animation: login-drift 9s ease-in-out infinite;
+}
+
+.login-drift-slow {
+  animation: login-drift 13s ease-in-out infinite;
+  animation-delay: 2.4s;
+}
+
+.login-pulse-ring {
+  animation: login-pulse-ring 3.4s ease-out infinite;
+}
+
+.login-flow-track {
+  position: relative;
+  overflow: hidden;
+  height: 2px;
+  border-radius: 9999px;
+  background: color-mix(in oklab, var(--primary) 18%, transparent);
+}
+
+.login-flow-sweep {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 40%;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--primary) 90%, transparent),
+    transparent
+  );
+  animation: login-flow-sweep 2.8s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-float-a,
+  .login-float-b,
+  .login-float-c,
+  .login-float-d,
+  .login-float-e,
+  .login-drift,
+  .login-drift-slow,
+  .login-pulse-ring,
+  .login-flow-sweep {
+    animation: none !important;
+  }
+}
+
+/*
+ * Branding / rutas: evitar flash crow→org y saltos de color.
+ * data-brand-pending lo setea useBranchTheme mientras llega el tema del tenant.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    transition:
+      --primary 0.35s ease,
+      --primary-soft 0.35s ease,
+      --primary-deep 0.35s ease,
+      --accent 0.35s ease,
+      --ring 0.35s ease,
+      --sidebar-primary 0.35s ease,
+      --sidebar-accent 0.35s ease;
+  }
+
+  html[data-brand-pending="true"] #root {
+    opacity: 0.94;
+  }
+
+  html[data-brand-ready="true"] #root {
+    opacity: 1;
+    transition: opacity 0.4s ease;
+  }
+}

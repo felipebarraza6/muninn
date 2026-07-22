@@ -152,7 +152,7 @@ function buildRoleGestionItems(): MenuItem[] {
 export function AppSidebar() {
   const { pathname } = useLocation();
   const { isMobile, setOpenMobile } = useSidebar();
-  const { data: theme, rawTheme } = useBranchTheme();
+  const { data: theme, rawTheme, brandPending } = useBranchTheme();
   const { data: activeBranch } = useActiveBranch();
   const showAdmin = isSuperAdmin();
   const isOrgOwner = !showAdmin && isOrganizationOwner();
@@ -251,9 +251,10 @@ export function AppSidebar() {
         <MuninnBrand
           to="/"
           onClick={handleNavClick}
-          branchLabel={fantasyName}
-          appName={appName}
-          branchLogoUrl={branchLogo}
+          branchLabel={showAdmin ? null : fantasyName}
+          appName={showAdmin ? "Agentes" : appName}
+          branchLogoUrl={showAdmin ? null : branchLogo}
+          pending={!showAdmin && brandPending}
           className="px-2 py-2.5 group-data-[collapsible=icon]:!px-0 group-data-[collapsible=icon]:!py-2"
         />
       </SidebarHeader>

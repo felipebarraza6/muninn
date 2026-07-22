@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { GET, POST, PATCH, DELETE, normalizeListResponse } from "../client";
 import { ENDPOINTS } from "../endpoints/index";
 import { useActiveBranchId } from "@/hooks/useActiveBranchId";
@@ -87,7 +87,7 @@ export interface ChannelTestResult {
 export function useChannels(filters?: { is_active?: boolean; channel_type?: string }) {
   const branchId = useActiveBranchId();
   return useQuery({
-    queryKey: [...QUERY_KEY, branchId, filters],
+    queryKey: [...QUERY_KEY, branchId ?? "all", filters],
     queryFn: () =>
       GET<Channel[] | { count: number; results: Channel[] }>(ENDPOINTS.channels.list, {
         params: {
@@ -97,6 +97,7 @@ export function useChannels(filters?: { is_active?: boolean; channel_type?: stri
         },
       }).then((data) => normalizeListResponse<Channel>(data)),
     staleTime: 2 * 60 * 1000,
+    placeholderData: keepPreviousData,
   });
 }
 

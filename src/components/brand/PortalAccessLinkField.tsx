@@ -8,6 +8,7 @@ import {
   portalAccessHint,
   type PortalAccessSource,
 } from "@/lib/portalAccessUrl";
+import { copyToClipboard } from "@/lib/password";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -32,14 +33,14 @@ export function PortalAccessLinkField({
   const [copied, setCopied] = useState(false);
 
   const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      toast.success("Link copiado");
-      window.setTimeout(() => setCopied(false), 1600);
-    } catch {
+    const ok = await copyToClipboard(url);
+    if (!ok) {
       toast.error("No se pudo copiar");
+      return;
     }
+    setCopied(true);
+    toast.success("Link copiado");
+    window.setTimeout(() => setCopied(false), 1600);
   };
 
   return (

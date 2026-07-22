@@ -28,6 +28,8 @@ import { AdminPageMotion } from "@/components/admin/AdminPageMotion";
 import { BranchFilterSelect } from "@/components/branch/BranchFilterSelect";
 import {
   canManageExternalApis,
+  canViewExternalApiEndpoints,
+  canViewExternalApiInstallations,
   isOrganizationOwner,
   isSuperAdmin,
   showBranchFilterUI,
@@ -55,11 +57,15 @@ function appEnabledInBranch(api: ExternalAPI, branchId: string): boolean {
 function AppStoreCard({
   api,
   canManage,
+  showEndpointCount,
+  showBranchCount,
   testPending,
   onTest,
 }: {
   api: ExternalAPI;
   canManage: boolean;
+  showEndpointCount: boolean;
+  showBranchCount: boolean;
   testPending: boolean;
   onTest: () => void;
 }) {
@@ -79,7 +85,10 @@ function AppStoreCard({
       )}
     >
       <div className="flex items-start gap-3.5">
-        <AppIcon name={api.name} />
+        <AppIcon
+          name={api.name}
+          src={api.icon_display_url || api.icon_url || api.icon}
+        />
         <div className="min-w-0 flex-1 space-y-1.5">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="font-semibold text-sm leading-snug truncate tracking-tight">
@@ -105,15 +114,19 @@ function AppStoreCard({
             <span className="inline-flex items-center rounded-md border border-border/70 bg-background/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">
               {AUTH_TYPE_LABEL[api.auth_type ?? "none"] ?? api.auth_type}
             </span>
-            <span className="inline-flex items-center rounded-md border border-border/70 bg-background/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">
-              {count} endpoint{count === 1 ? "" : "s"}
-            </span>
-            <span
-              className="inline-flex items-center rounded-md border border-primary/25 bg-primary/8 px-1.5 py-0.5 text-[10px] text-primary"
-              title={branchNames.join(", ") || undefined}
-            >
-              {branchCount} sucursal{branchCount === 1 ? "" : "es"}
-            </span>
+            {showEndpointCount && (
+              <span className="inline-flex items-center rounded-md border border-border/70 bg-background/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                {count} endpoint{count === 1 ? "" : "s"}
+              </span>
+            )}
+            {showBranchCount && (
+              <span
+                className="inline-flex items-center rounded-md border border-primary/25 bg-primary/8 px-1.5 py-0.5 text-[10px] text-primary"
+                title={branchNames.join(", ") || undefined}
+              >
+                {branchCount} sucursal{branchCount === 1 ? "" : "es"}
+              </span>
+            )}
           </div>
           {visibleTags.length > 0 && (
             <div className="flex flex-wrap gap-1 pt-0.5">
@@ -182,6 +195,8 @@ export default function APIs() {
   const navigate = useNavigate();
   const reduceMotion = useReducedMotion();
   const canManage = canManageExternalApis();
+  const showEndpointMeta = canViewExternalApiEndpoints();
+  const showBranchMeta = canViewExternalApiInstallations();
   const showBranchFilter = showBranchFilterUI();
   const isGlobalAdmin = isSuperAdmin();
   const isOrgOwner = isOrganizationOwner();
@@ -495,6 +510,8 @@ export default function APIs() {
                 <AppStoreCard
                   api={api}
                   canManage={canManage}
+                  showEndpointCount={showEndpointMeta}
+                  showBranchCount={showBranchMeta}
                   testPending={testingId === String(api.id) && test.isPending}
                   onTest={() => {
                     setTestingId(String(api.id));

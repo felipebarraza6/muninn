@@ -24,6 +24,7 @@ import {
   showHeaderBranchSwitcher,
 } from "@/lib/authGuards";
 import { getActiveBranchId, getBranchMode, setActiveBranchId } from "@/lib/branchStorage";
+import { cn } from "@/lib/utils";
 
 type PageMeta = {
   breadcrumb: { label: string; to?: string }[];
@@ -252,11 +253,16 @@ function PageHeader() {
 
 export default function RootLayout() {
   // Aplica theme de la sucursal activa en toda la shell
-  useBranchTheme();
+  const { brandPending } = useBranchTheme();
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen w-full bg-background">
+      <div
+        className={cn(
+          "flex min-h-screen w-full bg-background transition-opacity duration-300",
+          brandPending && "opacity-[0.97]",
+        )}
+      >
         <AppSidebar />
         <SidebarInset className="flex flex-1 flex-col min-w-0">
           <PageHeader />

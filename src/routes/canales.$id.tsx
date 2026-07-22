@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate, Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,7 +20,6 @@ import {
 import {
   ArrowLeft,
   Loader2,
-  MessageSquare,
   Copy,
   Check,
   RefreshCw,
@@ -55,7 +54,7 @@ import {
   getInAppEmbedUrl,
   getWidgetScriptCode,
 } from "@/lib/channelEmbed";
-import { channelLabel, formatChannelTestToast } from "@/lib/channels";
+import { channelAccent, channelIcon, channelLabel, formatChannelTestToast } from "@/lib/channels";
 import { Switch } from "@/components/ui/switch";
 import {
   Select,
@@ -65,9 +64,66 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 const TABS = ["configuracion", "webhook", "probar", "sesiones", "instalacion"] as const;
 type TabId = (typeof TABS)[number];
+
+function ChannelPanel({
+  title,
+  description,
+  actions,
+  children,
+  className,
+}: {
+  title: string;
+  description?: string;
+  actions?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <section
+      className={cn(
+        "rounded-2xl border border-border/60 bg-card/40 overflow-hidden",
+        className,
+      )}
+    >
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 px-4 sm:px-5 py-4 border-b border-border/50">
+        <div className="min-w-0 space-y-0.5">
+          <h2 className="text-sm font-semibold tracking-tight">{title}</h2>
+          {description ? (
+            <p className="text-xs text-muted-foreground leading-relaxed">{description}</p>
+          ) : null}
+        </div>
+        {actions ? <div className="flex flex-wrap gap-2 shrink-0">{actions}</div> : null}
+      </div>
+      <div className="px-4 sm:px-5 py-4 space-y-4">{children}</div>
+    </section>
+  );
+}
+
+function ChannelSubSection({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-3 pt-4 first:pt-0 border-t border-border/40 first:border-0">
+      <div className="space-y-0.5">
+        <h3 className="text-sm font-medium">{title}</h3>
+        {description ? (
+          <p className="text-xs text-muted-foreground leading-relaxed">{description}</p>
+        ) : null}
+      </div>
+      {children}
+    </div>
+  );
+}
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -228,16 +284,26 @@ export default function ChannelDetailPage() {
   const inAppUrl = getInAppEmbedUrl(channel.id);
   const iframeCode = getIframeCode(channel.id);
   const scriptCode = getWidgetScriptCode(channel.id);
+  const accent = channelAccent(channel.channel_type);
+  const ChannelIcon = channelIcon(channel.channel_type);
 
   return (
     <div className="px-4 md:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto space-y-6">
-      <header className="flex flex-wrap items-center gap-3">
-        <Button variant="outline" size="sm" asChild>
+      <header className="flex flex-wrap items-start gap-4">
+        <Button variant="outline" size="sm" asChild className="mt-1">
           <Link to="/canales">
             <ArrowLeft className="h-4 w-4 mr-1.5" /> Volver
           </Link>
         </Button>
-        <div className="flex-1 min-w-0">
+        <div
+          className={cn(
+            "flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ring-1",
+            accent.avatar,
+          )}
+        >
+          <ChannelIcon className="h-6 w-6" strokeWidth={1.75} />
+        </div>
+        <div className="flex-1 min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-2xl md:text-3xl font-semibold tracking-tight truncate">
               {channel.name}
@@ -317,21 +383,17 @@ export default function ChannelDetailPage() {
           <TabsTrigger value="sesiones">Sesiones</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="configuracion" className="space-y-4 mt-4">
-          <Card>
-            <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
-              <div>
-                <CardTitle className="text-base">Configuración</CardTitle>
-                <CardDescription>
-                  Campos tipados del proveedor · {channelLabel(channel.channel_type)}
-                </CardDescription>
-              </div>
-              {!editing ? (
+        <TabsContent value="configuracion" className="mt-4">
+          <ChannelPanel
+            title="Configuración"
+            description={`Campos tipados del proveedor · ${channelLabel(channel.channel_type)}`}
+            actions={
+              !editing ? (
                 <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
                   <Pencil className="h-3.5 w-3.5 mr-1.5" /> Editar
                 </Button>
               ) : (
-                <div className="flex gap-2">
+                <>
                   <Button
                     size="sm"
                     variant="outline"
@@ -350,233 +412,213 @@ export default function ChannelDetailPage() {
                     {update.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
                     Guardar
                   </Button>
-                </div>
-              )}
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Nombre</Label>
-                  <Input
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    disabled={!editing}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Agente asignado</Label>
-                  <Select
-                    value={agentId || "__none__"}
-                    onValueChange={(v) => setAgentId(v === "__none__" ? "" : v)}
-                    disabled={!editing}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecciona un agente" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">Ninguno</SelectItem>
-                      {agents.map((a) => (
-                        <SelectItem key={a.id} value={String(a.id)}>
-                          {a.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
+                </>
+              )
+            }
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Mensaje de bienvenida</Label>
+                <Label>Nombre</Label>
                 <Input
-                  value={welcomeMessage}
-                  onChange={(e) => setWelcomeMessage(e.target.value)}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
                   disabled={!editing}
                 />
               </div>
-
-              <div className="flex items-center justify-between rounded-lg border p-3">
-                <div>
-                  <Label>Activo</Label>
-                  <p className="text-xs text-muted-foreground">Puede recibir/enviar mensajes</p>
-                </div>
-                <Switch checked={isActive} onCheckedChange={setIsActive} disabled={!editing} />
-              </div>
-
               <div className="space-y-2">
-                <Label>Credenciales / configuración</Label>
-                {editing ? (
-                  <ChannelConfigFields
-                    fields={fields}
-                    values={configValues}
-                    onChange={(k, v) => setConfigValues((prev) => ({ ...prev, [k]: v }))}
-                  />
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                    {fields.length === 0 && (
-                      <p className="text-muted-foreground col-span-full">Sin campos adicionales.</p>
-                    )}
-                    {fields.map((f) => {
-                      const val = channel.config_masked?.[f.key];
-                      return (
-                        <div key={f.key} className="space-y-1">
-                          <span className="text-muted-foreground">{f.label}</span>
-                          <div className="rounded-md border bg-muted/30 px-3 py-2 font-mono text-xs truncate">
-                            {val === undefined || val === null || val === "" ? "—" : String(val)}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                <Label>Agente asignado</Label>
+                <Select
+                  value={agentId || "__none__"}
+                  onValueChange={(v) => setAgentId(v === "__none__" ? "" : v)}
+                  disabled={!editing}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona un agente" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Ninguno</SelectItem>
+                    {agents.map((a) => (
+                      <SelectItem key={a.id} value={String(a.id)}>
+                        {a.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Mensaje de bienvenida</Label>
+              <Input
+                value={welcomeMessage}
+                onChange={(e) => setWelcomeMessage(e.target.value)}
+                disabled={!editing}
+              />
+            </div>
+
+            <div className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/20 px-3 py-3">
+              <div>
+                <Label>Activo</Label>
+                <p className="text-xs text-muted-foreground">Puede recibir/enviar mensajes</p>
+              </div>
+              <Switch checked={isActive} onCheckedChange={setIsActive} disabled={!editing} />
+            </div>
+
+            <ChannelSubSection title="Credenciales / configuración">
+              {editing ? (
+                <ChannelConfigFields
+                  fields={fields}
+                  values={configValues}
+                  onChange={(k, v) => setConfigValues((prev) => ({ ...prev, [k]: v }))}
+                />
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                  {fields.length === 0 && (
+                    <p className="text-muted-foreground col-span-full">Sin campos adicionales.</p>
+                  )}
+                  {fields.map((f) => {
+                    const val = channel.config_masked?.[f.key];
+                    return (
+                      <div key={f.key} className="space-y-1">
+                        <span className="text-muted-foreground text-xs">{f.label}</span>
+                        <div className="rounded-lg border border-border/50 bg-muted/30 px-3 py-2 font-mono text-xs truncate">
+                          {val === undefined || val === null || val === "" ? "—" : String(val)}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </ChannelSubSection>
+          </ChannelPanel>
         </TabsContent>
 
-        <TabsContent value="webhook" className="space-y-4 mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Webhook</CardTitle>
-              <CardDescription>
-                URL pública para mensajes entrantes. Configúrala en el proveedor externo.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {channel.webhook_url ? (
-                <div className="space-y-1.5">
-                  <div className="text-sm text-muted-foreground">Webhook URL</div>
-                  <div className="flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2">
-                    <MessageSquare className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <span className="text-sm font-mono truncate flex-1">{channel.webhook_url}</span>
-                    <CopyButton text={channel.webhook_url} />
-                  </div>
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  Sin webhook URL (se genera al guardar).
-                </p>
-              )}
-
+        <TabsContent value="webhook" className="mt-4">
+          <ChannelPanel
+            title="Webhook"
+            description="URL pública para mensajes entrantes. Configurala en el proveedor externo."
+          >
+            {channel.webhook_url ? (
               <div className="space-y-1.5">
-                <div className="text-sm text-muted-foreground">Webhook secret</div>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 rounded-md border bg-muted/30 px-3 py-2 font-mono text-sm truncate">
-                    {freshSecret ? freshSecret : "•••••••• (solo se muestra al regenerar)"}
-                  </div>
-                  {freshSecret && <CopyButton text={freshSecret} />}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={regenerate.isPending}
-                    onClick={() =>
-                      regenerate.mutate(channel.id, {
-                        onSuccess: (data) => {
-                          setFreshSecret(data.webhook_secret);
-                          toast.success("Secret regenerado — cópialo ahora");
-                          refetch();
-                        },
-                        onError: () => toast.error("No se pudo regenerar"),
-                      })
-                    }
-                  >
-                    {regenerate.isPending ? (
-                      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                    ) : (
-                      <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-                    )}
-                    Regenerar
-                  </Button>
+                <div className="text-xs text-muted-foreground">Webhook URL</div>
+                <div className="flex items-center gap-2 rounded-lg border border-border/50 bg-muted/30 px-3 py-2">
+                  <ChannelIcon className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span className="text-sm font-mono truncate flex-1">{channel.webhook_url}</span>
+                  <CopyButton text={channel.webhook_url} />
                 </div>
               </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Sin webhook URL (se genera al guardar).
+              </p>
+            )}
 
-              {(channel.channel_type === "whatsapp" ||
-                channel.channel_type === "messenger" ||
-                channel.channel_type === "instagram") && (
-                <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm space-y-1">
-                  <p className="font-medium text-primary">Handshake Meta</p>
-                  <p className="text-muted-foreground">
-                    En la consola de Meta usa esta URL de callback y el{" "}
-                    <code className="text-xs">verify_token</code> que configuraste en Credenciales.
-                    Meta hará un GET con <code className="text-xs">hub.challenge</code>.
-                  </p>
+            <div className="space-y-1.5">
+              <div className="text-xs text-muted-foreground">Webhook secret</div>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 rounded-lg border border-border/50 bg-muted/30 px-3 py-2 font-mono text-sm truncate">
+                  {freshSecret ? freshSecret : "•••••••• (solo se muestra al regenerar)"}
                 </div>
-              )}
+                {freshSecret && <CopyButton text={freshSecret} />}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={regenerate.isPending}
+                  onClick={() =>
+                    regenerate.mutate(channel.id, {
+                      onSuccess: (data) => {
+                        setFreshSecret(data.webhook_secret);
+                        toast.success("Secret regenerado — cópialo ahora");
+                        refetch();
+                      },
+                      onError: () => toast.error("No se pudo regenerar"),
+                    })
+                  }
+                >
+                  {regenerate.isPending ? (
+                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                  )}
+                  Regenerar
+                </Button>
+              </div>
+            </div>
 
-              {channel.channel_type === "telegram" && (
-                <div className="rounded-lg border p-3 text-sm text-muted-foreground">
-                  Telegram usa el header{" "}
-                  <code className="text-xs">X-Telegram-Bot-Api-Secret-Token</code> con el webhook
-                  secret. Configura el webhook del bot apuntando a la URL de arriba.
-                </div>
-              )}
-            </CardContent>
-          </Card>
+            {(channel.channel_type === "whatsapp" ||
+              channel.channel_type === "messenger" ||
+              channel.channel_type === "instagram") && (
+              <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm space-y-1">
+                <p className="font-medium text-primary">Handshake Meta</p>
+                <p className="text-muted-foreground text-xs leading-relaxed">
+                  En la consola de Meta usá esta URL de callback y el{" "}
+                  <code className="text-xs">verify_token</code> que configuraste en Credenciales.
+                  Meta hará un GET con <code className="text-xs">hub.challenge</code>.
+                </p>
+              </div>
+            )}
+
+            {channel.channel_type === "telegram" && (
+              <div className="rounded-xl border border-border/60 p-3 text-sm text-muted-foreground">
+                Telegram usa el header{" "}
+                <code className="text-xs">X-Telegram-Bot-Api-Secret-Token</code> con el webhook
+                secret. Configurá el webhook del bot apuntando a la URL de arriba.
+              </div>
+            )}
+          </ChannelPanel>
         </TabsContent>
 
         {isWeb && (
-          <TabsContent value="instalacion" className="space-y-4 mt-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Instalar en tu web</CardTitle>
-                <CardDescription>
-                  Burbuja flotante (recomendado) o iframe directo — tipo chat widget.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-1.5">
-                  <div className="text-sm text-muted-foreground">URL pública</div>
-                  <div className="flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2">
-                    <span className="text-sm font-mono truncate flex-1">{embedUrl}</span>
-                    <CopyButton text={embedUrl} />
+          <TabsContent value="instalacion" className="mt-4">
+            <ChannelPanel
+              title="Instalar en tu web"
+              description="Burbuja flotante (recomendado) o iframe directo — tipo chat widget."
+            >
+              <div className="space-y-1.5">
+                <div className="text-xs text-muted-foreground">URL pública</div>
+                <div className="flex items-center gap-2 rounded-lg border border-border/50 bg-muted/30 px-3 py-2">
+                  <span className="text-sm font-mono truncate flex-1">{embedUrl}</span>
+                  <CopyButton text={embedUrl} />
+                </div>
+              </div>
+
+              <ChannelSubSection
+                title="Script flotante (recomendado)"
+                description='Pegalo antes de </body>. Aparece una burbuja que abre el chat.'
+              >
+                <div className="relative rounded-lg border border-border/50 bg-muted/30 p-3">
+                  <pre className="text-xs font-mono whitespace-pre-wrap pr-8">{scriptCode}</pre>
+                  <div className="absolute top-2 right-2">
+                    <CopyButton text={scriptCode} />
                   </div>
                 </div>
+              </ChannelSubSection>
 
-                <div className="space-y-1.5">
-                  <div className="text-sm font-medium">Script flotante (recomendado)</div>
-                  <p className="text-xs text-muted-foreground">
-                    Pega esto antes de <code>&lt;/body&gt;</code>. Aparece una burbuja que abre el
-                    chat.
-                  </p>
-                  <div className="relative rounded-md border bg-muted/30 p-3">
-                    <pre className="text-xs font-mono whitespace-pre-wrap pr-8">{scriptCode}</pre>
-                    <div className="absolute top-2 right-2">
-                      <CopyButton text={scriptCode} />
-                    </div>
+              <ChannelSubSection title="Iframe directo">
+                <div className="relative rounded-lg border border-border/50 bg-muted/30 p-3">
+                  <pre className="text-xs font-mono whitespace-pre-wrap pr-8">{iframeCode}</pre>
+                  <div className="absolute top-2 right-2">
+                    <CopyButton text={iframeCode} />
                   </div>
                 </div>
+              </ChannelSubSection>
 
-                <div className="space-y-1.5">
-                  <div className="text-sm font-medium">Iframe directo</div>
-                  <div className="relative rounded-md border bg-muted/30 p-3">
-                    <pre className="text-xs font-mono whitespace-pre-wrap pr-8">{iframeCode}</pre>
-                    <div className="absolute top-2 right-2">
-                      <CopyButton text={iframeCode} />
-                    </div>
-                  </div>
-                </div>
-
-                <Button variant="outline" size="sm" asChild>
-                  <a href={inAppUrl} target="_blank" rel="noreferrer">
-                    <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
-                    Abrir a pantalla completa
-                  </a>
-                </Button>
-              </CardContent>
-            </Card>
+              <Button variant="outline" size="sm" asChild>
+                <a href={inAppUrl} target="_blank" rel="noreferrer">
+                  <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
+                  Abrir a pantalla completa
+                </a>
+              </Button>
+            </ChannelPanel>
           </TabsContent>
         )}
 
-        <TabsContent value="probar" className="space-y-4 mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Probar conexión</CardTitle>
-              <CardDescription>
-                Valida credenciales contra el proveedor real (sin enviar a usuarios finales salvo
-                webhooks de notify).
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-wrap gap-2">
-              <Button onClick={handleTest} disabled={testConnection.isPending}>
+        <TabsContent value="probar" className="mt-4">
+          <ChannelPanel
+            title="Probar canal"
+            description="Validá credenciales, simulá inbound o enviá un mensaje de prueba."
+            actions={
+              <Button size="sm" onClick={handleTest} disabled={testConnection.isPending}>
                 {testConnection.isPending ? (
                   <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
                 ) : (
@@ -584,30 +626,24 @@ export default function ChannelDetailPage() {
                 )}
                 Probar conexión
               </Button>
-            </CardContent>
-          </Card>
+            }
+          >
+            {isWeb && (
+              <ChannelSubSection
+                title="Preview del chat"
+                description="Widget embebido con el endpoint público."
+              >
+                <div className="rounded-xl border border-border/50 overflow-hidden bg-background/50">
+                  <EmbedChatPanel channelId={String(channel.id)} compact />
+                </div>
+              </ChannelSubSection>
+            )}
 
-          {isWeb && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Preview del chat</CardTitle>
-                <CardDescription>Widget embebido con el endpoint público.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <EmbedChatPanel channelId={String(channel.id)} compact />
-              </CardContent>
-            </Card>
-          )}
-
-          {supportsInbound && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Simular mensaje entrante</CardTitle>
-                <CardDescription>
-                  Dispara el router del agente sin pasar por el proveedor externo.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
+            {supportsInbound && (
+              <ChannelSubSection
+                title="Simular mensaje entrante"
+                description="Dispara el router del agente sin pasar por el proveedor externo."
+              >
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div className="space-y-2">
                     <Label>Usuario externo</Label>
@@ -645,19 +681,14 @@ export default function ChannelDetailPage() {
                   )}
                   Simular
                 </Button>
-              </CardContent>
-            </Card>
-          )}
+              </ChannelSubSection>
+            )}
 
-          {supportsOutbound && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Enviar mensaje de prueba</CardTitle>
-                <CardDescription>
-                  Envía un mensaje real por el canal (WhatsApp, Telegram, email, etc.).
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
+            {supportsOutbound && (
+              <ChannelSubSection
+                title="Enviar mensaje de prueba"
+                description="Envía un mensaje real por el canal (WhatsApp, Telegram, email, etc.)."
+              >
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div className="space-y-2">
                     <Label>Destinatario (external_user_id)</Label>
@@ -698,85 +729,77 @@ export default function ChannelDetailPage() {
                   )}
                   Enviar
                 </Button>
-              </CardContent>
-            </Card>
-          )}
+              </ChannelSubSection>
+            )}
 
-          {lastResult != null && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Último resultado</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <pre className="text-xs font-mono whitespace-pre-wrap bg-muted/40 rounded-md p-3 max-h-80 overflow-auto">
+            {lastResult != null && (
+              <ChannelSubSection title="Último resultado">
+                <pre className="text-xs font-mono whitespace-pre-wrap bg-muted/40 rounded-lg border border-border/40 p-3 max-h-80 overflow-auto">
                   {JSON.stringify(lastResult, null, 2)}
                 </pre>
-              </CardContent>
-            </Card>
-          )}
+              </ChannelSubSection>
+            )}
+          </ChannelPanel>
         </TabsContent>
 
-        <TabsContent value="sesiones" className="space-y-4 mt-4">
-          <Card>
-            <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
-              <div>
-                <CardTitle className="text-base">Sesiones</CardTitle>
-                <CardDescription>Conversaciones activas en este canal.</CardDescription>
-              </div>
+        <TabsContent value="sesiones" className="mt-4">
+          <ChannelPanel
+            title="Sesiones"
+            description="Conversaciones activas en este canal."
+            actions={
               <Button size="sm" variant="outline" onClick={() => refetchSessions()}>
                 <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Actualizar
               </Button>
-            </CardHeader>
-            <CardContent>
-              {sessionsLoading ? (
-                <div className="flex justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : sessions.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-6 text-center">
-                  Aún no hay sesiones. Usa «Simular» o el widget para generar una.
-                </p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b text-left text-muted-foreground">
-                        <th className="py-2 pr-3 font-medium">Usuario</th>
-                        <th className="py-2 pr-3 font-medium">Estado</th>
-                        <th className="py-2 pr-3 font-medium">Msgs</th>
-                        <th className="py-2 font-medium">Último</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sessions.map((s) => (
-                        <tr key={s.id} className="border-b border-border/60">
-                          <td className="py-2 pr-3">
-                            <div className="font-medium">
-                              {s.external_user_name || s.external_user_id}
+            }
+          >
+            {sessionsLoading ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : sessions.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-6 text-center">
+                Aún no hay sesiones. Usá «Simular» o el widget para generar una.
+              </p>
+            ) : (
+              <div className="overflow-x-auto -mx-1">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border/60 text-left text-muted-foreground">
+                      <th className="py-2 pr-3 font-medium">Usuario</th>
+                      <th className="py-2 pr-3 font-medium">Estado</th>
+                      <th className="py-2 pr-3 font-medium">Msgs</th>
+                      <th className="py-2 font-medium">Último</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sessions.map((s) => (
+                      <tr key={s.id} className="border-b border-border/40">
+                        <td className="py-2.5 pr-3">
+                          <div className="font-medium">
+                            {s.external_user_name || s.external_user_id}
+                          </div>
+                          {s.external_user_name ? (
+                            <div className="text-xs text-muted-foreground font-mono">
+                              {s.external_user_id}
                             </div>
-                            {s.external_user_name ? (
-                              <div className="text-xs text-muted-foreground font-mono">
-                                {s.external_user_id}
-                              </div>
-                            ) : null}
-                          </td>
-                          <td className="py-2 pr-3">
-                            <Badge variant="outline" className="text-[10px]">
-                              {s.status}
-                            </Badge>
-                          </td>
-                          <td className="py-2 pr-3">{s.message_count ?? 0}</td>
-                          <td className="py-2 text-muted-foreground text-xs">
-                            {s.last_message_at ? new Date(s.last_message_at).toLocaleString() : "—"}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                          ) : null}
+                        </td>
+                        <td className="py-2.5 pr-3">
+                          <Badge variant="outline" className="text-[10px]">
+                            {s.status}
+                          </Badge>
+                        </td>
+                        <td className="py-2.5 pr-3 tabular-nums">{s.message_count ?? 0}</td>
+                        <td className="py-2.5 text-muted-foreground text-xs">
+                          {s.last_message_at ? new Date(s.last_message_at).toLocaleString() : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </ChannelPanel>
         </TabsContent>
       </Tabs>
     </div>

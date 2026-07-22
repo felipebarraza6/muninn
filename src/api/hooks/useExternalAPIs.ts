@@ -18,7 +18,8 @@ export interface ExternalAPIEndpoint {
   path?: string;
   query_params?: Record<string, unknown>;
   headers?: Record<string, unknown>;
-  body?: Record<string, unknown>;
+  /** Objeto o array JSON (algunas APIs envían lista en el body). */
+  body?: Record<string, unknown> | unknown[] | null;
   response_mapping?: Record<string, unknown>;
 }
 
@@ -51,6 +52,14 @@ export interface ExternalAPI {
   category?: string | null;
   /** Tags libres para filtrar en el store. */
   tags?: string[];
+  /** Archivo subido (write / multipart). */
+  icon?: string | null;
+  /** URL pública del logo. */
+  /** Path del ImageField (archivo subido). */
+  icon?: string | null;
+  icon_url?: string;
+  /** URL lista para UI: archivo subido o icon_url. */
+  icon_display_url?: string | null;
   /** Ancla técnica BranchModelApi. */
   branch?: number | string | null;
   /** Sucursales con instalación activa. */
@@ -133,7 +142,8 @@ export function useExternalAPIs(options?: {
   includeInactive?: boolean;
   branch?: string | number | null;
   /**
-   * store = catálogo completo (todas las apps accesibles).
+   * store = catálogo accesible según cascada del backend
+   *   (superadmin → todas; org → allowed-apps; rol → org ∩ role-apps).
    * branch = solo apps habilitadas en esa sucursal (default: activa).
    */
   scope?: "store" | "branch";

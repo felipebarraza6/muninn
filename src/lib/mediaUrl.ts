@@ -13,10 +13,10 @@ export function resolveMediaUrl(url: string | null | undefined): string {
   if (/^https?:\/\//i.test(raw)) {
     try {
       const parsed = new URL(raw);
+      // Siempre path relativo para /media: el SPA (localhost o 172.x) proxea al API.
+      // Evita logos rotos cuando el backend devuelve http://127.0.0.1:8000/media/...
       if (parsed.pathname.startsWith("/media/")) {
-        if (import.meta.env.DEV) {
-          return `${parsed.pathname}${parsed.search}`;
-        }
+        return `${parsed.pathname}${parsed.search}`;
       }
       return raw;
     } catch {

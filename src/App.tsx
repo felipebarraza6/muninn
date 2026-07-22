@@ -14,6 +14,7 @@ import { RequireKnowledgeCatalog } from "./components/auth/RequireKnowledgeCatal
 import { RequireConversations } from "./components/auth/RequireConversations";
 import { RequireSkills } from "./components/auth/RequireSkills";
 import { ThemeProvider } from "./components/theme/ThemeProvider";
+import { PageLoader } from "./components/ui/page-loader";
 
 const Dashboard = lazy(() => import("./routes/index"));
 const Conversaciones = lazy(() => import("./routes/conversaciones"));
@@ -39,6 +40,8 @@ const Conocimiento = lazy(() => import("./routes/conocimiento"));
 const ConocimientoDatos = lazy(() => import("./routes/conocimiento.datos"));
 const EmbedChat = lazy(() => import("./routes/embed.chat.$id"));
 const Login = lazy(() => import("./routes/login"));
+const ForgotPassword = lazy(() => import("./routes/forgot-password"));
+const ResetPassword = lazy(() => import("./routes/reset-password"));
 const AdminLlmPage = lazy(() => import("./routes/admin.llm"));
 const AdminOrganizacionesPage = lazy(() => import("./routes/admin.organizaciones"));
 const AdminSucursalesPage = lazy(() => import("./routes/admin.sucursales"));
@@ -52,11 +55,7 @@ const queryClient = new QueryClient({
 });
 
 function RouteFallback() {
-  return (
-    <div className="flex min-h-[40vh] items-center justify-center text-sm text-muted-foreground">
-      Cargando…
-    </div>
-  );
+  return <PageLoader label="Cargando" />;
 }
 
 function ApiDetailRedirect() {
@@ -75,10 +74,11 @@ function AnimatedOutlet() {
     <AnimatePresence mode="wait">
       <motion.div
         key={location.pathname}
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -8 }}
-        transition={{ duration: 0.18, ease: "easeOut" }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1], delay: 0.03 }}
+        className="min-h-0"
       >
         <Suspense fallback={<RouteFallback />}>
           <Routes location={location}>
@@ -209,6 +209,39 @@ function AppRoutes() {
           element={
             <RedirectIfAuthenticated>
               <Login />
+            </RedirectIfAuthenticated>
+          }
+        />
+        <Route
+          path="/forgot-password"
+          element={
+            <RedirectIfAuthenticated>
+              <ForgotPassword />
+            </RedirectIfAuthenticated>
+          }
+        />
+        <Route
+          path="/forgot-password/:slug"
+          element={
+            <RedirectIfAuthenticated>
+              <ForgotPassword />
+            </RedirectIfAuthenticated>
+          }
+        />
+        <Route
+          path="/reset-password/:token"
+          element={
+            <RedirectIfAuthenticated>
+              <ResetPassword />
+            </RedirectIfAuthenticated>
+          }
+        />
+        {/* Compat con emails viejos que usaban /app/reset-password/... */}
+        <Route
+          path="/app/reset-password/:token"
+          element={
+            <RedirectIfAuthenticated>
+              <ResetPassword />
             </RedirectIfAuthenticated>
           }
         />

@@ -52,6 +52,27 @@ export function parseJsonObject(
   }
 }
 
+/** Body de endpoint: objeto `{…}` o array `[…]`. */
+export function parseJsonObjectOrArray(
+  raw: string,
+  label = "JSON",
+):
+  | { ok: true; value: Record<string, unknown> | unknown[] }
+  | { ok: false; error: string } {
+  const trimmed = raw.trim();
+  if (!trimmed) return { ok: true, value: {} };
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (Array.isArray(parsed)) return { ok: true, value: parsed };
+    if (parsed && typeof parsed === "object") {
+      return { ok: true, value: parsed as Record<string, unknown> };
+    }
+    return { ok: false, error: `${label} debe ser un objeto { … } o un array [ … ]` };
+  } catch {
+    return { ok: false, error: `${label} inválido` };
+  }
+}
+
 export function formatTestResultToast(result: {
   success?: boolean;
   status_code?: number;

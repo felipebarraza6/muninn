@@ -185,11 +185,35 @@ export function canAccessBranchesAdmin(): boolean {
 
 /**
  * Bandeja de Conversaciones (inbox de clientes / canales).
- * - Roles operativos: operación día a día.
- * - Superadmin: sí (análisis de producción real, filtrando por sucursal como Studio).
+ * - Root (superadmin): sí (análisis; filtrar por sucursal).
+ * - Organizador: sí (solo stores de su holding).
+ * - OWNER / roles de sucursal: sí (sus sucursales).
  */
 export function canAccessConversations(): boolean {
-  return Boolean(getStoredUser());
+  if (!getStoredUser()) return false;
+  if (isSuperAdmin()) return true;
+  if (isOrganizationOwner()) return true;
+  // OWNER, ADMIN_LOCAL, EMPLOYEE, etc. con asignación activa
+  return getStoredBranches().some((b) => b.is_active !== false);
+}
+
+/**
+ * Intervención operativa (tomar control, responder, cerrar).
+ * Superadmin: solo lectura/análisis; organizador y negocio: sí.
+ */
+export function canInterveneInConversations(): boolean {
+  if (!canAccessConversations()) return false;
+  if (isSuperAdmin()) return false;
+  return true;
+}
+
+export type HomeDashboardKind = "platform" | "organization" | "business";
+
+/** Qué Resumen mostrar en `/` según rol. */
+export function getHomeDashboardKind(): HomeDashboardKind {
+  if (isSuperAdmin()) return "platform";
+  if (isOrganizationOwner()) return "organization";
+  return "business";
 }
 
 /**
@@ -208,6 +232,8 @@ export function canAccessKnowledgeCatalog(): boolean {
 /**
  * Puede ver Aplicaciones (lista / detalle).
  * Studio: cualquier usuario autenticado con acceso a la sucursal.
+ * El catálogo (`scope=store`) lo filtra el backend por cascada:
+ * superadmin → todas; org → allowed-apps; usuario → org ∩ role-apps.
  */
 export function canAccessExternalApis(): boolean {
   return Boolean(getStoredUser());
@@ -220,6 +246,48 @@ export function canAccessExternalApis(): boolean {
  * - OWNER u otros roles: solo lectura
  */
 export function canManageExternalApis(): boolean {
+  if (isSuperAdmin()) return true;
+  return isOrganizationOwner();
+}
+
+/**
+ * Ver/editar la pestaña Endpoints del store.
+ * Solo superadmin: es la definición técnica del catálogo.
+ */
+export function canViewExternalApiEndpoints(): boolean {
+  return isSuperAdmin();
+}
+
+/**
+ * Ver la pestaña Skills dentro del detalle de una app.
+ * Mismo criterio que el catálogo `/skills` (superadmin / organizador).
+ * OWNER de sucursal y roles operativos: no.
+ */
+export function canViewExternalApiSkillsInStore(): boolean {
+  return canAccessSkills();
+}
+
+/**
+ * Ver instalaciones multi-sucursal (conteos / pestaña Instalación).
+ * Superadmin y organizador; OWNER de tienda no ve el mapa de sucursales.
+ */
+export function canViewExternalApiInstallations(): boolean {
+  return canManageExternalApis();
+}
+
+/**
+ * Superadmin designa qué apps del store ve una organización
+ * (`PUT …/organizations/{id}/allowed-apps/`).
+ */
+export function canDesignateOrganizationApps(): boolean {
+  return isSuperAdmin();
+}
+
+/**
+ * Organizador (o superadmin) designa apps por rol hacia adentro
+ * (`PUT …/organizations/{id}/role-apps/`).
+ */
+export function canDesignateOrganizationRoleApps(): boolean {
   if (isSuperAdmin()) return true;
   return isOrganizationOwner();
 }

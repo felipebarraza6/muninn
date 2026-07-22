@@ -21,7 +21,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { ExternalAPIEndpoint } from "@/api/hooks/useExternalAPIs";
-import { HTTP_METHODS, parseJsonObject, prettyJson } from "@/lib/external-api";
+import { HTTP_METHODS, parseJsonObject, parseJsonObjectOrArray, prettyJson } from "@/lib/external-api";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -115,7 +115,7 @@ function draftToEndpoint(draft: Draft): ExternalAPIEndpoint | null {
     toast.error(headers.error);
     return null;
   }
-  const body = parseJsonObject(draft.body, "body");
+  const body = parseJsonObjectOrArray(draft.body, "body");
   if (!body.ok) {
     toast.error(body.error);
     return null;

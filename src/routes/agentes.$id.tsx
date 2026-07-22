@@ -23,6 +23,7 @@ import {
   BookOpen,
   FlaskConical,
   Sparkles,
+  GitBranch,
   Trash2,
   RotateCcw,
   type LucideIcon,
@@ -30,6 +31,7 @@ import {
 import { useAgent, useDeleteAgent, useUpdateAgent, useTestAgentLLM } from "@/api/hooks/useAgents";
 import { AgentKnowledgePanel } from "@/components/agents/agent-knowledge-panel";
 import { AgentSkillsPanel } from "@/components/agents/agent-skills-panel";
+import { AgentFlowPolicyPanel } from "@/components/agents/agent-flow-policy-panel";
 import { AgentForm } from "@/components/agents/agent-form";
 import { AdminPageMotion } from "@/components/admin/AdminPageMotion";
 import { isSuperAdmin } from "@/lib/authGuards";
@@ -40,6 +42,7 @@ const AGENT_SECTIONS = [
   { id: "modelo", label: "Modelo", icon: Settings },
   { id: "rag", label: "RAG", icon: BookOpen },
   { id: "skills", label: "Skills", icon: Sparkles },
+  { id: "flujo", label: "Conversación", icon: GitBranch },
   { id: "test", label: "Test LLM", icon: FlaskConical },
 ] as const;
 
@@ -77,7 +80,7 @@ function AgentSectionNav({
             aria-selected={active}
             onClick={() => onChange(section.id)}
             className={cn(
-              "relative z-[1] flex flex-1 min-w-[7.5rem] items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+              "relative z-[1] flex flex-1 min-w-[6.5rem] items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
               active ? "text-primary" : "text-muted-foreground hover:text-foreground",
             )}
           >
@@ -424,6 +427,8 @@ export default function AgentDetailPage() {
             {section === "rag" && <AgentKnowledgePanel agentId={id!} />}
 
             {section === "skills" && <AgentSkillsPanel agentId={id!} />}
+
+            {section === "flujo" && <AgentFlowPolicyPanel agentId={id!} />}
 
             {section === "test" && (
               <Card>

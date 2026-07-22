@@ -40,6 +40,8 @@ interface Props {
   onSend: (text: string) => void;
   onOpenDetails: () => void;
   onResolve?: () => void;
+  /** Superadmin: solo lectura + insights; sin tomar control ni responder. */
+  analysisOnly?: boolean;
 }
 
 function toInsightMessage(m: ChatMessage): InsightMessage {
@@ -53,7 +55,14 @@ function toInsightMessage(m: ChatMessage): InsightMessage {
   };
 }
 
-export function ChatPane({ conversation, onTakeControl, onSend, onOpenDetails, onResolve }: Props) {
+export function ChatPane({
+  conversation,
+  onTakeControl,
+  onSend,
+  onOpenDetails,
+  onResolve,
+  analysisOnly = false,
+}: Props) {
   const [draft, setDraft] = useState("");
   const [feedback, setFeedback] = useState<Record<string, "up" | "down">>({});
   const [showSuggestion, setShowSuggestion] = useState(true);
@@ -139,7 +148,7 @@ export function ChatPane({ conversation, onTakeControl, onSend, onOpenDetails, o
             )}
           </div>
         </div>
-        {isAiControlled && (
+        {!analysisOnly && isAiControlled && (
           <Button size="sm" onClick={onTakeControl}>
             Tomar control
           </Button>
@@ -154,7 +163,7 @@ export function ChatPane({ conversation, onTakeControl, onSend, onOpenDetails, o
             <DropdownMenuItem onClick={onOpenDetails}>
               <Info className="h-3.5 w-3.5 mr-2" /> Detalles
             </DropdownMenuItem>
-            {onResolve && conversation.status !== "closed" && (
+            {!analysisOnly && onResolve && conversation.status !== "closed" && (
               <DropdownMenuItem onClick={onResolve}>
                 <CheckCircle2 className="h-3.5 w-3.5 mr-2" /> Cerrar conversación
               </DropdownMenuItem>
@@ -290,9 +299,20 @@ export function ChatPane({ conversation, onTakeControl, onSend, onOpenDetails, o
         message={inspectMessage}
       />
 
-      {/* Composer compacto */}
+      {/* Composer / modo análisis */}
       <div className="border-t bg-card px-4 py-3 shrink-0">
         <div className="max-w-3xl mx-auto space-y-2">
+          {analysisOnly ? (
+            <div className="rounded-lg border border-border/60 bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+              <p className="font-medium text-foreground">Modo análisis</p>
+              <p className="text-xs mt-0.5 leading-relaxed">
+                Solo lectura. Revisá el hilo y usá el inspector de mensajes (insights) para
+                analizar. Filtrá por sucursal en la bandeja. La intervención operativa queda en el
+                negocio.
+              </p>
+            </div>
+          ) : (
+            <>
           {conversation.suggestion && showSuggestion && (
             <div className="flex items-start gap-2 rounded-md bg-primary-soft/50 px-3 py-2 text-xs">
               <Sparkles className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
@@ -359,6 +379,8 @@ export function ChatPane({ conversation, onTakeControl, onSend, onOpenDetails, o
                 </Button>
               </div>
             </div>
+          )}
+            </>
           )}
         </div>
       </div>

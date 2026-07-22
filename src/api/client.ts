@@ -43,13 +43,35 @@ function extractValidationErrors(data: unknown): string[] {
 
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    const token = localStorage.getItem("token");
+    // FormData: dejar que el browser ponga multipart + boundary.
+    // Si forzamos "multipart/form-data" sin boundary, Django no recibe archivos.
+    if (typeof FormData !== "undefined" && config.data instanceof FormData) {
+      if (typeof config.headers.set === "function") {
+        config.headers.set("Content-Type", undefined as unknown as string);
+        config.headers.delete("Content-Type");
+      } else {
+        delete (config.headers as Record<string, unknown>)["Content-Type"];
+        delete (config.headers as Record<string, unknown>)["content-type"];
+      }
+    }
+
+    const url = String(config.url ?? "");
+    const isLogin =
+      url.includes("/accounts/users/login") || url.includes("/accounts/users/login_complete");
+
+    // No mandar Authorization en login: un token viejo en localStorage + cookie
+    // inválida no deben interferir con autenticarse de nuevo.
+    if (!isLogin) {
+      const token = localStorage.getItem("token");
+      if (token) {
+        config.headers.Authorization = `Token ${token}`;
+      }
+    } else {
+      delete config.headers.Authorization;
+    }
+
     const activeBranchId = getActiveBranchId();
     const branchMode = getBranchMode();
-
-    if (token) {
-      config.headers.Authorization = `Token ${token}`;
-    }
 
     // No pisar un x-branch-id explícito (p.ej. roles/asignaciones de otra sucursal en admin).
     const skipBranchHeader = Boolean((config as ApiRequestConfig).skipBranchHeader);
@@ -69,9 +91,15 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
-    if (error.response?.status === 401) {
+    const url = String(error.config?.url ?? "");
+    const isLogin =
+      url.includes("/accounts/users/login") || url.includes("/accounts/users/login_complete");
+
+    if (error.response?.status === 401 && !isLogin) {
       localStorage.removeItem("token");
       localStorage.removeItem("user");
+      localStorage.removeItem("branches");
+      localStorage.removeItem("permissions");
       localStorage.removeItem("activeBranchId");
       sessionStorage.removeItem("activeBranchId");
       if (window.location.pathname !== "/login") {

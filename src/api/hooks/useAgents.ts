@@ -1,5 +1,5 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { GET, POST, PUT, PATCH, DELETE, normalizeListResponse } from "../client";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import { GET, POST, PUT, PATCH, DELETE, GET_ALL_PAGES } from "../client";
 import { ENDPOINTS } from "../endpoints/index";
 import { useActiveBranchId } from "@/hooks/useActiveBranchId";
 import type { ParameterSource } from "./useAgentFunctions";
@@ -61,6 +61,11 @@ export interface Agent {
   functions?: (string | number)[];
   /** Apps/APIs externas que el agente puede usar (filtra skills asignables). */
   external_apis?: (string | number)[];
+  /**
+   * Política de flujo conversacional (slots + requires por skill).
+   * Vacía o sin `skills` = inactiva.
+   */
+  flow_policy?: Record<string, unknown> | null;
   prompt_template?: number | null;
 }
 
@@ -75,14 +80,16 @@ export function useAgents(filters?: {
   const params: Record<string, string | number | boolean> = { ...rest };
   // Backend compara contra el string "true".
   if (includeInactive) params.include_inactive = "true";
+  // Superadmin ignora solo el header: hay que mandar ?branch= para filtrar.
+  if (branchId) params.branch = branchId;
 
   return useQuery({
-    queryKey: [...QUERY_KEY, branchId, { ...rest, includeInactive: !!includeInactive }],
-    queryFn: () =>
-      GET<Agent[] | { count: number; results: Agent[] }>(ENDPOINTS.agents.list, {
-        params,
-      }).then((data) => normalizeListResponse<Agent>(data)),
+    queryKey: [...QUERY_KEY, branchId ?? "all", { ...rest, includeInactive: !!includeInactive }],
+    // page_size default del API = 10 y ordena por -created: agentes viejos
+    // (ej. agendamiento WM) desaparecían de la grilla. Traer todas las páginas.
+    queryFn: () => GET_ALL_PAGES<Agent>(ENDPOINTS.agents.list, { params }),
     staleTime: 2 * 60 * 1000,
+    placeholderData: keepPreviousData,
   });
 }
 

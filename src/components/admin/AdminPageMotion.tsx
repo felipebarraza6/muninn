@@ -2,17 +2,28 @@ import { motion, useReducedMotion, type Variants } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 const pageVariants: Variants = {
-  hidden: { opacity: 0, y: 12 },
+  hidden: { opacity: 0, y: 6 },
   show: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.25, ease: "easeOut", when: "beforeChildren", staggerChildren: 0.05 },
+    transition: {
+      duration: 0.32,
+      ease: [0.22, 1, 0.36, 1],
+      delay: 0.04,
+      when: "beforeChildren",
+      staggerChildren: 0.06,
+      delayChildren: 0.05,
+    },
   },
 };
 
 const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 8 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.2, ease: "easeOut" } },
+  hidden: { opacity: 0, y: 6 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.28, ease: [0.22, 1, 0.36, 1] },
+  },
 };
 
 const instant: Variants = {
@@ -71,7 +82,7 @@ export function AdminMotionList({
           ? instant
           : {
               hidden: {},
-              show: { transition: { staggerChildren: 0.04, delayChildren: 0.04 } },
+              show: { transition: { staggerChildren: 0.055, delayChildren: 0.06 } },
             }
       }
       initial="hidden"

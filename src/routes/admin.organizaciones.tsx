@@ -6,6 +6,7 @@ import {
   Globe2,
   Handshake,
   ImageIcon,
+  LayoutGrid,
   Link2,
   Loader2,
   Menu,
@@ -13,6 +14,7 @@ import {
   Plus,
   RefreshCw,
   Share2,
+  Shield,
   Trash2,
   Unlink2,
   UserRound,
@@ -65,14 +67,22 @@ import {
   useOrganizationStores,
   useOrganizationSyncVersion,
   useOrganizationTheme,
+  useOrganizationAllowedApps,
+  useOrganizationRoleApps,
   useOrganizations,
   useRefreshOrganizations,
   useUpdateOrganization,
+  useUpdateOrganizationAllowedApps,
+  useUpdateOrganizationRoleApps,
   useUpdateOrganizationTheme,
   type Organization,
+  type OrganizationRoleApps,
   type OrganizationTheme,
   type SocialLink,
+  FALLBACK_BRANCH_ROLES,
+  MUNINN_ASSIGNABLE_ROLE_CODES,
 } from "@/api/hooks/useBranches";
+import { OrganizationAppPicker } from "@/components/organizations/organization-app-picker";
 import { useAdminUsers } from "@/api/hooks/useUsers";
 import { AdminMotionItem, AdminPageMotion } from "@/components/admin/AdminPageMotion";
 import { PortalAccessLinkField } from "@/components/brand/PortalAccessLinkField";
@@ -91,6 +101,8 @@ import {
 } from "@/lib/themeFormItems";
 import {
   canCreateOrganizationsAdmin,
+  canDesignateOrganizationApps,
+  canDesignateOrganizationRoleApps,
   getOrganizationsAdminNavLabel,
   getOwnedOrganizationIds,
   isOrganizationOwnerScope,
@@ -101,18 +113,26 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
 
-type PanelTab = "datos" | "apariencia" | "redes" | "acceso" | "patrocinadores";
+type PanelTab = "datos" | "apariencia" | "redes" | "acceso" | "patrocinadores" | "apps" | "apps-roles";
 
 const PANEL_TABS: Array<{
   id: PanelTab;
   label: string;
   icon: typeof UserRound;
+  /** Solo al editar org existente (no en create). */
+  editOnly?: boolean;
+  /** Superadmin: designar apps a la org. */
+  superadminOnly?: boolean;
+  /** Superadmin u organizador: apps por rol. */
+  roleApps?: boolean;
 }> = [
   { id: "datos", label: "Datos", icon: UserRound },
   { id: "apariencia", label: "Apariencia", icon: ImageIcon },
   { id: "redes", label: "Redes", icon: Share2 },
   { id: "acceso", label: "Acceso", icon: Globe2 },
   { id: "patrocinadores", label: "Patrocinadores", icon: Handshake },
+  { id: "apps", label: "Apps", icon: LayoutGrid, editOnly: true, superadminOnly: true },
+  { id: "apps-roles", label: "Apps por rol", icon: Shield, editOnly: true, roleApps: true },
 ];
 
 const PANEL_SUBTITLES: Record<PanelTab, { edit: string; create: string }> = {
@@ -135,6 +155,14 @@ const PANEL_SUBTITLES: Record<PanelTab, { edit: string; create: string }> = {
   patrocinadores: {
     edit: "Partners que se muestran al ingresar.",
     create: "Partners opcionales al ingresar.",
+  },
+  apps: {
+    edit: "Qué apps del store puede ver esta organización.",
+    create: "",
+  },
+  "apps-roles": {
+    edit: "Qué apps ve cada rol (OWNER → ADMIN_LOCAL → EMPLOYEE).",
+    create: "",
   },
 };
 
@@ -254,6 +282,54 @@ export default function AdminOrganizacionesPage() {
     panelOpen && panelOrgId ? panelOrgId : null,
   );
   const { data: stores = [], isLoading: storesLoading } = useOrganizationStores(storesOrgId);
+
+  const canDesignateApps = canDesignateOrganizationApps();
+  const canDesignateRoleApps = canDesignateOrganizationRoleApps();
+  const updateAllowedApps = useUpdateOrganizationAllowedApps();
+  const updateRoleApps = useUpdateOrganizationRoleApps();
+
+  const { data: allowedAppsData, isLoading: allowedAppsLoading } = useOrganizationAllowedApps(
+    panelOpen && panelOrgId && (canDesignateApps || canDesignateRoleApps) ? panelOrgId : null,
+  );
+  const { data: roleAppsData, isLoading: roleAppsLoading } = useOrganizationRoleApps(
+    panelOpen && panelOrgId && canDesignateRoleApps ? panelOrgId : null,
+  );
+
+  const [draftAllowedAppIds, setDraftAllowedAppIds] = useState<string[]>([]);
+  const [draftRoleApps, setDraftRoleApps] = useState<OrganizationRoleApps["roles"]>({
+    OWNER: [],
+    ADMIN_LOCAL: [],
+    EMPLOYEE: [],
+  });
+  const [activeRoleCode, setActiveRoleCode] =
+    useState<(typeof MUNINN_ASSIGNABLE_ROLE_CODES)[number]>("OWNER");
+
+  useEffect(() => {
+    if (!allowedAppsData) return;
+    setDraftAllowedAppIds(allowedAppsData.external_api_ids.map(String));
+  }, [allowedAppsData]);
+
+  useEffect(() => {
+    if (!roleAppsData) return;
+    setDraftRoleApps({
+      OWNER: (roleAppsData.roles.OWNER ?? []).map(String),
+      ADMIN_LOCAL: (roleAppsData.roles.ADMIN_LOCAL ?? []).map(String),
+      EMPLOYEE: (roleAppsData.roles.EMPLOYEE ?? []).map(String),
+    });
+  }, [roleAppsData]);
+
+  const visiblePanelTabs = useMemo(() => {
+    const editingExisting = Boolean(editing);
+    return PANEL_TABS.filter((tab) => {
+      if (tab.editOnly && !editingExisting) return false;
+      if (tab.superadminOnly && !canDesignateApps) return false;
+      if (tab.roleApps && !canDesignateRoleApps) return false;
+      return true;
+    });
+  }, [editing, canDesignateApps, canDesignateRoleApps]);
+
+  const roleLabel = (code: string) =>
+    FALLBACK_BRANCH_ROLES.find((r) => r.code === code)?.name ?? code;
 
   // Hidratar theme al abrir edición
   useEffect(() => {
@@ -517,6 +593,50 @@ export default function AdminOrganizacionesPage() {
   };
 
   const save = async () => {
+    if (panelTab === "apps") {
+      if (!editing || !canDesignateApps) {
+        toast.error("No puedes designar apps de la organización");
+        return;
+      }
+      setSaving(true);
+      try {
+        await updateAllowedApps.mutateAsync({
+          orgId: editing.id,
+          external_api_ids: draftAllowedAppIds,
+        });
+        toast.success(
+          draftAllowedAppIds.length > 0
+            ? "Apps de la organización actualizadas"
+            : "Sin restricción: la org vuelve al filtro por sucursal",
+        );
+      } catch (e) {
+        toast.error(friendlyOrgError(e));
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
+    if (panelTab === "apps-roles") {
+      if (!editing || !canDesignateRoleApps) {
+        toast.error("No puedes designar apps por rol");
+        return;
+      }
+      setSaving(true);
+      try {
+        await updateRoleApps.mutateAsync({
+          orgId: editing.id,
+          roles: draftRoleApps,
+        });
+        toast.success("Apps por rol actualizadas");
+      } catch (e) {
+        toast.error(friendlyOrgError(e));
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
     if (!name.trim() || !dni.trim()) {
       toast.error("Nombre y RUT son requeridos");
       setPanelTab("datos");
@@ -1089,7 +1209,7 @@ export default function AdminOrganizacionesPage() {
                 </div>
 
                 <div className="shrink-0 flex flex-wrap gap-1 px-3 py-2 border-b border-border/50 bg-muted/20">
-                  {PANEL_TABS.map(({ id, label, icon: Icon }) => (
+                  {visiblePanelTabs.map(({ id, label, icon: Icon }) => (
                     <button
                       key={id}
                       type="button"
@@ -1649,6 +1769,82 @@ export default function AdminOrganizacionesPage() {
                       )}
                     </section>
                   )}
+
+                  {panelTab === "apps" && editing && (
+                    <section className="space-y-3">
+                      <div>
+                        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                          Apps permitidas
+                        </h3>
+                        <p className="text-[11px] text-muted-foreground mt-1">
+                          Elige qué apps del store puede ver esta organización. Vacío = sin
+                          restricción (sigue el filtro por sucursal).
+                        </p>
+                      </div>
+                      {allowedAppsLoading ? (
+                        <div className="flex justify-center py-8">
+                          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                        </div>
+                      ) : (
+                        <OrganizationAppPicker
+                          selectedIds={draftAllowedAppIds}
+                          onChange={setDraftAllowedAppIds}
+                          disabled={!canDesignateApps || updateAllowedApps.isPending}
+                        />
+                      )}
+                    </section>
+                  )}
+
+                  {panelTab === "apps-roles" && editing && (
+                    <section className="space-y-3">
+                      <div>
+                        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                          Apps por rol
+                        </h3>
+                        <p className="text-[11px] text-muted-foreground mt-1">
+                          Solo dentro de las apps permitidas de la org. Lista vacía en un rol =
+                          hereda todas las de la organización.
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {MUNINN_ASSIGNABLE_ROLE_CODES.map((code) => (
+                          <button
+                            key={code}
+                            type="button"
+                            onClick={() => setActiveRoleCode(code)}
+                            className={cn(
+                              "rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
+                              activeRoleCode === code
+                                ? "bg-teal-500/15 text-teal-300 border border-teal-500/30"
+                                : "text-muted-foreground hover:text-foreground border border-transparent",
+                            )}
+                          >
+                            {roleLabel(code)}
+                            <span className="ml-1 opacity-70">
+                              ({draftRoleApps[code]?.length ?? 0})
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                      {roleAppsLoading || allowedAppsLoading ? (
+                        <div className="flex justify-center py-8">
+                          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                        </div>
+                      ) : (
+                        <OrganizationAppPicker
+                          selectedIds={draftRoleApps[activeRoleCode] ?? []}
+                          onChange={(ids) =>
+                            setDraftRoleApps((prev) => ({ ...prev, [activeRoleCode]: ids }))
+                          }
+                          catalogIds={
+                            allowedAppsData?.is_restricted ? draftAllowedAppIds : null
+                          }
+                          disabled={!canDesignateRoleApps || updateRoleApps.isPending}
+                          emptyHint="No hay apps disponibles para este rol."
+                        />
+                      )}
+                    </section>
+                  )}
                 </div>
 
                 <div className="shrink-0 flex gap-2 px-4 py-3 border-t border-border/70 bg-card/60">
@@ -1656,13 +1852,22 @@ export default function AdminOrganizacionesPage() {
                     className="flex-1"
                     onClick={() => void save()}
                     disabled={
-                      saving || createOrg.isPending || updateOrg.isPending || updateTheme.isPending
+                      saving ||
+                      createOrg.isPending ||
+                      updateOrg.isPending ||
+                      updateTheme.isPending ||
+                      updateAllowedApps.isPending ||
+                      updateRoleApps.isPending
                     }
                   >
                     {(saving ||
                       createOrg.isPending ||
                       updateOrg.isPending ||
-                      updateTheme.isPending) && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                      updateTheme.isPending ||
+                      updateAllowedApps.isPending ||
+                      updateRoleApps.isPending) && (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    )}
                     Guardar
                   </Button>
                   {!singleOrgMode && (

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { DELETE, GET, GET_ALL_PAGES, PATCH, POST, normalizeListResponse } from "../client";
+import { DELETE, GET, GET_ALL_PAGES, PATCH, POST, PUT, normalizeListResponse } from "../client";
 import { ENDPOINTS } from "../endpoints/index";
 import { getStoredBranches, isAuthenticated } from "@/lib/authSession";
 import { getActiveBranchId, onBranchChange } from "@/lib/branchStorage";
@@ -177,6 +177,20 @@ export interface OrganizationTheme {
   is_active?: boolean;
 }
 
+/** Respuesta GET/PUT …/organizations/{id}/allowed-apps/ */
+export interface OrganizationAllowedApps {
+  organization: number | string;
+  external_api_ids: string[];
+  is_restricted: boolean;
+}
+
+/** Respuesta GET/PUT …/organizations/{id}/role-apps/ */
+export interface OrganizationRoleApps {
+  organization: number | string;
+  roles: Record<"OWNER" | "ADMIN_LOCAL" | "EMPLOYEE", string[]>;
+  org_allowed_external_api_ids: string[];
+}
+
 export interface BranchRole {
   id: number | string;
   code?: string;
@@ -348,9 +362,7 @@ export function useCreateBranch() {
       POST<AdminBranch>(
         ENDPOINTS.branches.list,
         data,
-        data instanceof FormData
-          ? { headers: { "Content-Type": "multipart/form-data" } }
-          : undefined,
+        data instanceof FormData ? { headers: { "Content-Type": undefined } } : undefined,
       ),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: BRANCHES_KEY });
@@ -367,9 +379,7 @@ export function useUpdateBranch() {
       PATCH<AdminBranch>(
         ENDPOINTS.branches.detail(id),
         data,
-        data instanceof FormData
-          ? { headers: { "Content-Type": "multipart/form-data" } }
-          : undefined,
+        data instanceof FormData ? { headers: {} } : undefined,
       ),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: BRANCHES_KEY });
@@ -453,9 +463,7 @@ export function useUpdateBranchThemeConfig() {
       PATCH<BranchThemeConfigResponse>(
         ENDPOINTS.branches.themeConfig(id),
         data,
-        data instanceof FormData
-          ? { headers: { "Content-Type": "multipart/form-data" } }
-          : undefined,
+        data instanceof FormData ? { headers: {} } : undefined,
       ),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: BRANCHES_KEY });
@@ -635,13 +643,86 @@ export function useUpdateOrganizationTheme() {
       PATCH<OrganizationTheme>(
         ENDPOINTS.branches.organizationTheme(id),
         data,
-        data instanceof FormData
-          ? { headers: { "Content-Type": "multipart/form-data" } }
-          : undefined,
+        data instanceof FormData ? { headers: {} } : undefined,
       ),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ["branches", "organizations", vars.id, "theme"] });
       qc.invalidateQueries({ queryKey: ORGS_KEY });
+    },
+  });
+}
+
+export function useOrganizationAllowedApps(orgId?: string | number | null) {
+  return useQuery({
+    queryKey: ["branches", "organizations", orgId, "allowed-apps"],
+    queryFn: () =>
+      GET<OrganizationAllowedApps>(ENDPOINTS.branches.organizationAllowedApps(orgId!), {
+        skipBranchHeader: true,
+      }),
+    enabled: Boolean(orgId),
+    staleTime: 30_000,
+  });
+}
+
+export function useUpdateOrganizationAllowedApps() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      orgId,
+      external_api_ids,
+    }: {
+      orgId: string | number;
+      external_api_ids: string[];
+    }) =>
+      PUT<OrganizationAllowedApps>(
+        ENDPOINTS.branches.organizationAllowedApps(orgId),
+        { external_api_ids },
+        { skipBranchHeader: true },
+      ),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({
+        queryKey: ["branches", "organizations", vars.orgId, "allowed-apps"],
+      });
+      qc.invalidateQueries({
+        queryKey: ["branches", "organizations", vars.orgId, "role-apps"],
+      });
+      qc.invalidateQueries({ queryKey: ["ai-agents", "external-apis"] });
+    },
+  });
+}
+
+export function useOrganizationRoleApps(orgId?: string | number | null) {
+  return useQuery({
+    queryKey: ["branches", "organizations", orgId, "role-apps"],
+    queryFn: () =>
+      GET<OrganizationRoleApps>(ENDPOINTS.branches.organizationRoleApps(orgId!), {
+        skipBranchHeader: true,
+      }),
+    enabled: Boolean(orgId),
+    staleTime: 30_000,
+  });
+}
+
+export function useUpdateOrganizationRoleApps() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      orgId,
+      roles,
+    }: {
+      orgId: string | number;
+      roles: OrganizationRoleApps["roles"];
+    }) =>
+      PUT<OrganizationRoleApps>(
+        ENDPOINTS.branches.organizationRoleApps(orgId),
+        { roles },
+        { skipBranchHeader: true },
+      ),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({
+        queryKey: ["branches", "organizations", vars.orgId, "role-apps"],
+      });
+      qc.invalidateQueries({ queryKey: ["ai-agents", "external-apis"] });
     },
   });
 }

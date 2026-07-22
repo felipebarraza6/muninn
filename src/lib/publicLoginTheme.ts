@@ -12,12 +12,31 @@ export type PublicStoreSummary = {
   region?: string;
 };
 
+/** App/API pública del holding (login org) — sin secretos. */
+export type PublicAvailableApp = {
+  id: string;
+  name: string;
+  description?: string | null;
+  category?: string | null;
+  tags?: string[];
+  logo_url?: string | null;
+  icon_url?: string | null;
+};
+
 export type PublicSocialLink = {
   url: string;
   icon?: string | null;
   name?: string | null;
   order?: number;
   enabled?: boolean;
+};
+
+export type PublicSponsor = {
+  name?: string | null;
+  logo_url?: string | null;
+  website_url?: string | null;
+  enabled?: boolean;
+  order?: number;
 };
 
 export type PublicThemeBranding = {
@@ -46,7 +65,7 @@ export type PublicThemeBranding = {
     welcome_message?: string | null;
     subtitle?: string | null;
     show_sponsor_logos?: boolean;
-    sponsors?: unknown;
+    sponsors?: PublicSponsor[] | null;
   };
 };
 
@@ -83,9 +102,13 @@ export type PublicLoginThemeResponse = {
   website_url?: string | null;
   brand_description?: string | null;
   social_links?: PublicSocialLink[] | null;
+  show_sponsor_logos?: boolean;
+  enabled_sponsors?: PublicSponsor[] | null;
+  sponsors?: PublicSponsor[] | null;
   login_slug?: string | null;
   custom_domain?: string | null;
   stores?: PublicStoreSummary[] | null;
+  available_apps?: PublicAvailableApp[] | null;
   fallback_from_branch_slug?: string | null;
 };
 
@@ -113,6 +136,11 @@ export function flattenPublicLoginTheme(theme: PublicLoginThemeResponse) {
   const b = theme.branding;
   const prefs = theme.ui_preferences;
   const socialLinks = normalizePublicSocialLinks(theme.social_links ?? b?.social_links ?? null);
+  const showSponsors =
+    theme.show_sponsor_logos !== false && b?.login?.show_sponsor_logos !== false;
+  const sponsors = normalizePublicSponsors(
+    theme.enabled_sponsors ?? theme.sponsors ?? b?.login?.sponsors ?? null,
+  );
   return {
     scope: theme.scope,
     branch_id: theme.branch_id,
@@ -138,8 +166,11 @@ export function flattenPublicLoginTheme(theme: PublicLoginThemeResponse) {
     brand_description: theme.brand_description || b?.brand_description || null,
     website_url: theme.website_url || b?.website_url || null,
     social_links: socialLinks,
+    show_sponsor_logos: showSponsors,
+    sponsors,
     branding: theme.branding ?? undefined,
     stores: theme.stores ?? null,
+    available_apps: Array.isArray(theme.available_apps) ? theme.available_apps : [],
     fallback_from_branch_slug: theme.fallback_from_branch_slug ?? null,
     custom_domain: theme.custom_domain ?? null,
     login_slug: theme.login_slug || b?.login?.slug || null,
@@ -164,5 +195,23 @@ function normalizePublicSocialLinks(
       enabled: l.enabled !== false,
       order: typeof l.order === "number" ? l.order : i + 1,
     }))
+    .filter((l) => l.enabled !== false)
+    .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
+}
+
+function normalizePublicSponsors(
+  raw: PublicSponsor[] | null | undefined,
+): PublicSponsor[] {
+  if (!Array.isArray(raw) || raw.length === 0) return [];
+  return [...raw]
+    .filter((s) => s && (s.logo_url?.trim() || s.name?.trim()))
+    .map((s, i) => ({
+      name: s.name?.trim() || null,
+      logo_url: s.logo_url?.trim() || null,
+      website_url: s.website_url?.trim() || null,
+      enabled: s.enabled !== false,
+      order: typeof s.order === "number" ? s.order : i + 1,
+    }))
+    .filter((s) => s.enabled !== false)
     .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
 }

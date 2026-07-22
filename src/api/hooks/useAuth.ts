@@ -152,8 +152,11 @@ export function selectDefaultBranch(user: User, branches: BranchAssignment[]) {
 
 export function useLogin() {
   return useMutation({
-    mutationFn: (credentials: LoginCredentials) =>
-      POST<LoginCompleteResponse>(ENDPOINTS.auth.login, credentials),
+    mutationFn: (credentials: LoginCredentials) => {
+      // Limpiar sesión local antes del login para no reutilizar token viejo.
+      clearSession();
+      return POST<LoginCompleteResponse>(ENDPOINTS.auth.login, credentials);
+    },
     onSuccess: (data) => {
       const raw = data.branches ?? data.user.branch_assignments ?? [];
       const branches = raw.map((b) => {
@@ -232,6 +235,44 @@ export function useChangePassword() {
       POST<{ message: string }>(ENDPOINTS.auth.changePassword, data, {
         skipBranchHeader: true,
       }),
+  });
+}
+
+export type ForgotPasswordPayload = {
+  email: string;
+  login_slug?: string | null;
+  branch_id?: number | null;
+};
+
+export function useForgotPassword() {
+  return useMutation({
+    mutationFn: (data: ForgotPasswordPayload) =>
+      POST<{ message?: string; error?: string }>(
+        ENDPOINTS.auth.forgotPassword,
+        {
+          email: data.email,
+          ...(data.login_slug ? { login_slug: data.login_slug } : {}),
+          ...(data.branch_id != null ? { branch_id: data.branch_id } : {}),
+        },
+        { skipBranchHeader: true },
+      ),
+  });
+}
+
+export type ResetPasswordConfirmPayload = {
+  token: string;
+  new_password: string;
+  confirm_password: string;
+};
+
+export function useResetPasswordConfirm() {
+  return useMutation({
+    mutationFn: (data: ResetPasswordConfirmPayload) =>
+      POST<{ message?: string; error?: string }>(
+        ENDPOINTS.auth.resetPasswordConfirm,
+        data,
+        { skipBranchHeader: true },
+      ),
   });
 }
 

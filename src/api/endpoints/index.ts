@@ -5,6 +5,8 @@ export const ENDPOINTS = {
     me: "/accounts/users/me/",
     myProfile: "/accounts/users/my-profile/",
     changePassword: "/accounts/users/change_password/",
+    forgotPassword: "/accounts/users/forgot_password/",
+    resetPasswordConfirm: "/accounts/users/reset_password_confirm/",
   },
   branches: {
     list: "/branches/",
@@ -26,6 +28,10 @@ export const ENDPOINTS = {
     organizationAttachStore: (id: string | number) => `/branches/organizations/${id}/attach-store/`,
     organizationDetachStore: (id: string | number) => `/branches/organizations/${id}/detach-store/`,
     organizationTheme: (id: string | number) => `/branches/organizations/${id}/theme/`,
+    organizationAllowedApps: (id: string | number) =>
+      `/branches/organizations/${id}/allowed-apps/`,
+    organizationRoleApps: (id: string | number) =>
+      `/branches/organizations/${id}/role-apps/`,
     organizationSyncVersion: "/branches/organizations/sync-version/",
   },
   users: {

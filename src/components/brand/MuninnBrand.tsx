@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import muninnMark from "@/assets/muninn-mark.png";
+import { BrandMarkSkeleton } from "@/components/ui/page-loader";
+import { probeLogoNeedsDarkInvert } from "@/lib/logoDisplay";
 import { cn } from "@/lib/utils";
 
 interface MuninnBrandProps {
@@ -16,130 +18,224 @@ interface MuninnBrandProps {
   tagline?: string | null;
   /** Logo de sucursal: si existe, es el icono; si no, mark Muninn. */
   branchLogoUrl?: string | null;
+  /**
+   * Branding aún cargando (org/sucursal).
+   * Muestra skeleton en lugar del cuervo Muninn — evita flash crow→logo.
+   */
+  pending?: boolean;
   /** Si se omite, renderiza sin enlace. */
   to?: string | null;
   onClick?: () => void;
   compact?: boolean;
   /** `stacked`: logo arriba, título abajo (login org). Default horizontal. */
   layout?: "horizontal" | "stacked";
+  /**
+   * Login org / hero: logo más ancho (wordmark), sin forzar cuadrado.
+   */
+  hero?: boolean;
   className?: string;
 }
 
 /**
  * Shell de marca:
- * - Con sucursal: título = fantasy_name, subtítulo = app_name; logo sucursal o Muninn.
- * - Sin sucursal: título = MUNINN, subtítulo = Agentes (+ mark Muninn).
- * - stacked: logo arriba + nombre abajo (sin forzar subtítulo).
+ * - Con logo de org/sucursal: solo el logo (sin nombre al lado).
+ * - Sin logo + tenant: monograma + nombre; subtítulo = app_name.
+ * - Plataforma Muninn: cuervo + MUNINN / Agentes.
+ * - pending: skeleton hasta que el tema/logo real esté listo.
+ * - dark invert solo si el PNG/WebP tiene transparencia real.
  */
 export function MuninnBrand({
   branchLabel,
   appName,
   tagline,
   branchLogoUrl,
+  pending = false,
   to,
   onClick,
   compact = false,
   layout = "horizontal",
+  hero = false,
   className,
 }: MuninnBrandProps) {
   const stacked = layout === "stacked";
   const branchName = branchLabel?.trim() || "";
-  const inBranch = Boolean(branchName);
-  const title = inBranch ? branchName : "MUNINN";
-  const subtitle = stacked
-    ? appName?.trim() || null
-    : inBranch
-      ? appName?.trim() || tagline?.trim() || null
-      : tagline?.trim() || "Agentes";
+  /** Marca plataforma Muninn (superadmin / login default): siempre cuervo, nunca monograma. */
+  const isMuninnPlatformBrand =
+    !branchLogoUrl &&
+    (!branchName || branchName.toLowerCase() === "muninn");
+  const inTenant = Boolean(branchName) && !isMuninnPlatformBrand;
+  const title =
+    pending && !inTenant && !isMuninnPlatformBrand
+      ? ""
+      : inTenant
+        ? branchName
+        : "MUNINN";
+  const subtitle = pending
+    ? null
+    : stacked
+      ? appName?.trim() || null
+      : inTenant
+        ? appName?.trim() || tagline?.trim() || null
+        : tagline?.trim() || appName?.trim() || "Agentes";
 
   const [logoFailed, setLogoFailed] = useState(false);
+  const [darkInvert, setDarkInvert] = useState(false);
+
   useEffect(() => {
     setLogoFailed(false);
+    setDarkInvert(false);
+    const url = branchLogoUrl?.trim();
+    if (!url) return;
+    let cancelled = false;
+    void probeLogoNeedsDarkInvert(url).then((needs) => {
+      if (!cancelled) setDarkInvert(needs);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [branchLogoUrl]);
-  const showBranchLogo = Boolean(branchLogoUrl) && !logoFailed;
+
+  const showBranchLogo = Boolean(branchLogoUrl) && !logoFailed && !pending;
+  /** Con logo de org/sucursal basta: no repetir el nombre al lado. */
+  const hideWordmark = showBranchLogo;
+  const showTenantSkeleton = pending && !isMuninnPlatformBrand;
+  /** Org/sucursal sin logo: inicial. Superadmin / Muninn: cuervo. */
+  const monogram =
+    inTenant && !showBranchLogo && !pending
+      ? branchName.charAt(0).toUpperCase() || "·"
+      : null;
+
+  const markSize = stacked || hero ? "lg" : compact ? "sm" : "md";
 
   const content = (
     <>
-      <span
-        className={cn(
-          "relative flex shrink-0 items-center justify-center overflow-hidden rounded-lg border",
-          showBranchLogo
-            ? "border-border bg-muted p-0.5"
-            : "border-primary/40 bg-primary/20 dark:bg-primary/15",
-          stacked ? "h-16 w-16 rounded-2xl" : compact ? "h-8 w-8" : "h-9 w-9",
-          !stacked && "group-data-[collapsible=icon]:!h-8 group-data-[collapsible=icon]:!w-8",
-        )}
-      >
-        {showBranchLogo ? (
-          <img
-            src={branchLogoUrl!}
-            alt={title}
-            className="h-full w-full object-contain"
-            onError={() => setLogoFailed(true)}
-          />
-        ) : (
-          <img
-            src={muninnMark}
-            alt=""
-            aria-hidden
-            className={cn(
-              "object-contain opacity-95 brightness-0 dark:invert",
-              stacked ? "h-9 w-9" : compact ? "h-5 w-5" : "h-6 w-6",
-              !stacked && "group-data-[collapsible=icon]:!h-5 group-data-[collapsible=icon]:!w-5",
-            )}
-          />
-        )}
-      </span>
+      {showTenantSkeleton ? (
+        <BrandMarkSkeleton size={markSize} />
+      ) : (
+        <span
+          className={cn(
+            "relative flex shrink-0 items-center justify-center overflow-hidden transition-opacity duration-300",
+            showBranchLogo
+              ? "border-0 bg-transparent p-0"
+              : monogram
+                ? "rounded-lg border border-primary/30 bg-primary/15 text-primary p-0"
+                : "rounded-lg border border-primary/40 bg-primary/20 dark:bg-primary/15",
+            showBranchLogo && hero
+              ? "h-14 w-auto max-w-[13rem] sm:h-16 sm:max-w-[16rem]"
+              : showBranchLogo && stacked
+                ? "h-16 w-auto max-w-[12rem] rounded-2xl"
+                : showBranchLogo
+                  ? compact
+                    ? "h-8 w-auto max-w-[7rem]"
+                    : "h-10 w-auto max-w-[9rem]"
+                  : stacked
+                    ? "h-16 w-16 rounded-2xl"
+                    : compact
+                      ? "h-8 w-8"
+                      : "h-9 w-9",
+            !stacked &&
+              !showBranchLogo &&
+              "group-data-[collapsible=icon]:!h-8 group-data-[collapsible=icon]:!w-8",
+          )}
+        >
+          {showBranchLogo ? (
+            <img
+              src={branchLogoUrl!}
+              alt={title || "Logo"}
+              className={cn(
+                "h-full w-auto max-w-full object-contain object-left animate-in fade-in duration-300",
+                darkInvert && "dark:brightness-0 dark:invert",
+              )}
+              onError={() => setLogoFailed(true)}
+            />
+          ) : monogram ? (
+            <span
+              className={cn(
+                "font-semibold leading-none",
+                stacked || hero ? "text-xl" : compact ? "text-xs" : "text-sm",
+              )}
+            >
+              {monogram}
+            </span>
+          ) : (
+            <img
+              src={muninnMark}
+              alt=""
+              aria-hidden
+              className={cn(
+                "object-contain opacity-95 brightness-0 dark:invert",
+                stacked ? "h-9 w-9" : compact ? "h-5 w-5" : "h-6 w-6",
+                !stacked && "group-data-[collapsible=icon]:!h-5 group-data-[collapsible=icon]:!w-5",
+              )}
+            />
+          )}
+        </span>
+      )}
 
-      {!compact && (
+      {!compact && !hideWordmark && (
         <div
           className={cn(
             "flex min-w-0 flex-col leading-tight",
             stacked ? "items-center text-center" : "group-data-[collapsible=icon]:hidden",
+            hero && "lg:items-start lg:text-left",
           )}
         >
-          <span
-            className={cn(
-              "font-semibold text-foreground",
-              stacked
-                ? "text-lg tracking-tight"
-                : inBranch
-                  ? "truncate text-sm tracking-tight"
-                  : "truncate text-[15px] tracking-[0.04em]",
-            )}
-          >
-            {title}
-          </span>
-          {subtitle && (
+          {pending && !title ? (
             <span
               className={cn(
-                "mt-0.5 uppercase tracking-[0.14em]",
-                stacked
+                "block animate-pulse rounded bg-muted",
+                stacked || hero ? "h-5 w-36" : "h-4 w-24",
+              )}
+            />
+          ) : (
+            <span
+              className={cn(
+                "font-semibold text-foreground transition-opacity duration-300",
+                stacked || hero
+                  ? "text-xl tracking-tight sm:text-2xl"
+                  : inTenant
+                    ? "truncate text-sm tracking-tight"
+                    : "truncate text-[15px] tracking-[0.04em]",
+              )}
+            >
+              {title || "\u00a0"}
+            </span>
+          )}
+          {pending && !subtitle ? (
+            <span className="mt-1.5 block h-2.5 w-16 animate-pulse rounded bg-muted/80" />
+          ) : subtitle ? (
+            <span
+              className={cn(
+                "mt-0.5 uppercase tracking-[0.14em] transition-opacity duration-300",
+                stacked || hero
                   ? "text-[10px] text-muted-foreground"
-                  : inBranch
+                  : inTenant
                     ? "truncate text-[9.5px] text-muted-foreground"
                     : "truncate text-[9.5px] text-primary/90",
               )}
             >
               {subtitle}
             </span>
-          )}
+          ) : null}
         </div>
       )}
     </>
   );
 
-  const aria = inBranch
-    ? subtitle
-      ? `${title} — ${subtitle}`
-      : title
-    : `Muninn — ${subtitle || "Agentes"}`;
+  const aria = pending
+    ? "Cargando marca"
+    : inTenant
+      ? subtitle
+        ? `${title} — ${subtitle}`
+        : title
+      : `Muninn — ${subtitle || "Agentes"}`;
 
   const shellClass = cn(
-    "flex min-w-0",
+    "flex min-w-0 transition-opacity duration-300",
     stacked
       ? "flex-col items-center gap-3"
       : "items-center gap-2.5 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:px-0",
+    hero && "gap-3 sm:gap-4",
     className,
   );
 

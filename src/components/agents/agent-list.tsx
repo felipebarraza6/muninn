@@ -274,8 +274,17 @@ function AgentCard({ agent, reduceMotion }: { agent: Agent; reduceMotion: boolea
                 )}
               />
             </div>
-            {(agent.is_default || isInactive) && (
+            {(agent.is_default || isInactive || agent.branch_name) && (
               <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                {agent.branch_name && (
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] h-5 max-w-[160px] truncate border-border text-muted-foreground"
+                    title={agent.branch_name}
+                  >
+                    {agent.branch_name}
+                  </Badge>
+                )}
                 {agent.is_default && (
                   <Badge
                     variant="outline"

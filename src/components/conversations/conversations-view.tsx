@@ -23,6 +23,7 @@ import {
   type UnifiedMessage,
 } from "@/api/hooks/useUnifiedConversations";
 import { useSendConversationMessage } from "@/api/hooks/useConversations";
+import { canInterveneInConversations, isSuperAdmin } from "@/lib/authGuards";
 
 function apiStatusToLocal(status?: string): ConversationStatus {
   const s = (status || "").toLowerCase();
@@ -57,7 +58,12 @@ function formatHHmm(iso?: string): string {
 function mapRoleToSender(role?: string, source?: "channel" | "internal"): ChatMessage["sender"] {
   const r = (role || "").toUpperCase();
   if (source === "channel") {
+    // Historial de canal (BE):
+    //   USER      → cliente externo
+    //   AGENT     → reply manual del operador humano
+    //   ASSISTANT → respuesta del agente IA
     if (r === "USER") return "patient";
+    if (r === "AGENT" || r === "HUMAN" || r === "OPERATOR") return "human";
     if (r === "SYSTEM") return "system";
     return "ai";
   }
@@ -65,6 +71,30 @@ function mapRoleToSender(role?: string, source?: "channel" | "internal"): ChatMe
   if (r === "AGENT" || r === "ASSISTANT") return "ai";
   if (r === "SYSTEM" || r === "TOOL") return "system";
   return "ai";
+}
+
+function parseMsgClock(time: string): number {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(time.trim());
+  if (!m) return 0;
+  return Number(m[1]) * 60 + Number(m[2]);
+}
+
+/** True si el remoto ya incluye este mensaje optimista (mismo texto, ventana corta). */
+function remoteHasLocalOutgoing(remote: ChatMessage[], local: ChatMessage): boolean {
+  const localText = local.text.trim();
+  if (!localText) return false;
+  return remote.some((rm) => {
+    if (rm.sender !== "human" && rm.sender !== "ai") return false;
+    if (rm.text.trim() !== localText) return false;
+    if (local.created && rm.created) {
+      const a = new Date(local.created).getTime();
+      const b = new Date(rm.created).getTime();
+      if (Number.isFinite(a) && Number.isFinite(b)) {
+        return Math.abs(a - b) < 120_000;
+      }
+    }
+    return Math.abs(parseMsgClock(rm.time) - parseMsgClock(local.time)) < 3;
+  });
 }
 
 function mapApiMessage(api: UnifiedMessage, source?: "channel" | "internal"): ChatMessage {
@@ -132,6 +162,8 @@ function mapApiConversation(api: UnifiedConversation): Conversation {
 
 export function ConversationsView() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const analysisOnly = !canInterveneInConversations();
+  const isPlatformAnalysis = isSuperAdmin();
 
   const { data: apiConvos = [], isLoading, error } = useUnifiedConversations();
   const takeControlMutation = useTakeControlUnifiedConversation();
@@ -191,18 +223,14 @@ export function ConversationsView() {
       ? apiMessages.map((m) => mapApiMessage(m, selectedSource))
       : [];
     const local = localMessages[selected?.id ?? ""] ?? [];
-    // Filtrar locales que ya aparecen en remoto (mismo texto y tiempo cercano).
+    // Quitar optimistas ya presentes en el refetch (evita duplicado azul + teal).
     const filteredLocal = local.filter((lm) => {
+      if (lm.sender === "system") {
+        // Mantener avisos locales de sistema (p. ej. "Tomaste control").
+        return true;
+      }
       if (lm.sender !== "human") return false;
-      return !remote.some(
-        (rm) =>
-          rm.sender === "human" &&
-          rm.text.trim() === lm.text.trim() &&
-          Math.abs(
-            new Date(`1970-01-01T${rm.time}:00`).getTime() -
-              new Date(`1970-01-01T${lm.time}:00`).getTime(),
-          ) < 120_000,
-      );
+      return !remoteHasLocalOutgoing(remote, lm);
     });
     return [...remote, ...filteredLocal];
   }, [apiMessages, localMessages, selected?.id, selectedSource]);
@@ -240,7 +268,7 @@ export function ConversationsView() {
   };
 
   const handleTakeControl = () => {
-    if (!selectedId || selectedSource !== "channel") return;
+    if (analysisOnly || !selectedId || selectedSource !== "channel") return;
     takeControlMutation.mutate(selectedId, {
       onSuccess: () => {
         appendLocalMessage({
@@ -255,25 +283,39 @@ export function ConversationsView() {
     });
   };
 
-  const handleSend = (text: string) => {
-    if (!text.trim() || !selectedId) return;
+  const clearLocalOutgoing = (conversationId: string, text: string) => {
     const trimmed = text.trim();
+    setLocalMessages((prev) => {
+      const existing = prev[conversationId] ?? [];
+      const next = existing.filter(
+        (m) => !(m.sender === "human" && m.text.trim() === trimmed),
+      );
+      if (next.length === existing.length) return prev;
+      return { ...prev, [conversationId]: next };
+    });
+  };
+
+  const handleSend = (text: string) => {
+    if (analysisOnly || !text.trim() || !selectedId) return;
+    const trimmed = text.trim();
+    const optimisticId = `h-${Date.now()}`;
 
     appendLocalMessage({
-      id: `h-${Date.now()}`,
+      id: optimisticId,
       sender: "human",
       text: trimmed,
       time: nowHHmm(),
+      created: new Date().toISOString(),
     });
 
     if (selectedSource === "channel") {
       replyMutation.mutate(
         { id: selectedId, message: trimmed },
         {
-          onSuccess: () => {
-            // El refetch de mensajes traerá la respuesta real.
+          onError: () => {
+            clearLocalOutgoing(selectedId, trimmed);
+            toast.error("Error al enviar el mensaje");
           },
-          onError: () => toast.error("Error al enviar el mensaje"),
         },
       );
       return;
@@ -283,6 +325,7 @@ export function ConversationsView() {
       { id: selectedId, message: trimmed },
       {
         onSuccess: (data) => {
+          clearLocalOutgoing(selectedId, trimmed);
           if (data?.message) {
             appendLocalMessage({
               id: `ai-${Date.now()}`,
@@ -292,12 +335,16 @@ export function ConversationsView() {
             });
           }
         },
-        onError: () => toast.error("Error al enviar el mensaje"),
+        onError: () => {
+          clearLocalOutgoing(selectedId, trimmed);
+          toast.error("Error al enviar el mensaje");
+        },
       },
     );
   };
 
   const handleResolve = () => {
+    if (analysisOnly) return;
     if (selectedSource === "channel" && selectedId) {
       setStatusMutation.mutate(
         { id: selectedId, status: "closed" },
@@ -342,7 +389,16 @@ export function ConversationsView() {
   }
 
   return (
-    <div className="h-[calc(100dvh-3.5rem)] flex bg-background overflow-hidden">
+    <div className="h-[calc(100dvh-3.5rem)] flex flex-col bg-background overflow-hidden">
+      {isPlatformAnalysis ? (
+        <div className="shrink-0 border-b border-border/60 bg-muted/30 px-4 py-2 text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">Análisis de plataforma</span>
+          {" · "}
+          Filtrá por sucursal en la bandeja (con búsqueda). Solo lectura: usá el inspector de
+          mensajes para revisar el hilo.
+        </div>
+      ) : null}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
       <aside
         className={`${mobileView === "list" ? "flex" : "hidden"} md:flex w-full md:w-[340px] lg:w-[360px] border-r bg-card flex-col shrink-0`}
       >
@@ -390,6 +446,7 @@ export function ConversationsView() {
             onSend={handleSend}
             onOpenDetails={() => setDetailsOpen(true)}
             onResolve={handleResolve}
+            analysisOnly={analysisOnly}
           />
         ) : (
           <div className="flex-1 flex items-center justify-center text-muted-foreground">
@@ -404,6 +461,7 @@ export function ConversationsView() {
             conversation={selectedWithMessages}
             onTakeControl={handleTakeControl}
             onResolve={handleResolve}
+            analysisOnly={analysisOnly}
           />
         )}
       </aside>
@@ -415,10 +473,12 @@ export function ConversationsView() {
               conversation={selectedWithMessages}
               onTakeControl={handleTakeControl}
               onResolve={handleResolve}
+              analysisOnly={analysisOnly}
             />
           )}
         </SheetContent>
       </Sheet>
+      </div>
     </div>
   );
 }

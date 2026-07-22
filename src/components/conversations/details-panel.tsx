@@ -15,9 +15,16 @@ interface Props {
   onTakeControl: () => void;
   onResolve: () => void;
   onDerive?: () => void;
+  /** Superadmin: sin acciones operativas. */
+  analysisOnly?: boolean;
 }
 
-export function ConversationDetailsPanel({ conversation, onTakeControl, onResolve }: Props) {
+export function ConversationDetailsPanel({
+  conversation,
+  onTakeControl,
+  onResolve,
+  analysisOnly = false,
+}: Props) {
   const isChannel = conversation.source === "channel";
   const ChannelIcon = channelIcon(conversation.channelType);
 
@@ -46,14 +53,16 @@ export function ConversationDetailsPanel({ conversation, onTakeControl, onResolv
           {conversation.controlledBy === "human" && !conversation.isWaitingHuman && (
             <span className="text-[11px] font-medium text-success">Tú controlas</span>
           )}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 ml-auto text-xs text-muted-foreground hover:text-foreground"
-            onClick={onResolve}
-          >
-            Cerrar
-          </Button>
+          {!analysisOnly && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 ml-auto text-xs text-muted-foreground hover:text-foreground"
+              onClick={onResolve}
+            >
+              Cerrar
+            </Button>
+          )}
         </div>
       </div>
 
@@ -110,16 +119,24 @@ export function ConversationDetailsPanel({ conversation, onTakeControl, onResolv
       </CollapsibleSection>
 
       {/* Acciones */}
-      <div className="p-4 border-t space-y-2">
-        {isChannel && conversation.controlledBy === "ai" && (
-          <Button className="w-full" size="sm" onClick={onTakeControl}>
-            Tomar control
+      {!analysisOnly && (
+        <div className="p-4 border-t space-y-2">
+          {isChannel && conversation.controlledBy === "ai" && (
+            <Button className="w-full" size="sm" onClick={onTakeControl}>
+              Tomar control
+            </Button>
+          )}
+          <Button className="w-full" variant="outline" size="sm" onClick={onResolve}>
+            Cerrar conversación
           </Button>
-        )}
-        <Button className="w-full" variant="outline" size="sm" onClick={onResolve}>
-          Cerrar conversación
-        </Button>
-      </div>
+        </div>
+      )}
+      {analysisOnly && (
+        <div className="p-4 border-t text-xs text-muted-foreground leading-relaxed">
+          Modo análisis: sin intervención. Usá el inspector de mensajes en el chat para revisar
+          RAG y tools.
+        </div>
+      )}
     </div>
   );
 }

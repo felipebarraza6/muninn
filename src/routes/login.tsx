@@ -1,9 +1,8 @@
 import { useMemo, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2 } from "lucide-react";
 import { useLogin } from "@/api/hooks/useAuth";
@@ -13,9 +12,106 @@ import { resolveMediaUrl } from "@/lib/mediaUrl";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { MuninnBrand } from "@/components/brand/MuninnBrand";
 import { LoginSocialLinks } from "@/components/brand/LoginSocialLinks";
+import { LoginLandingPanel } from "@/components/brand/LoginLandingPanel";
+import { OrgLoginLanding } from "@/components/brand/OrgLoginLanding";
+import { LOGIN_LANDING_TAGLINE } from "@/lib/loginLanding";
+import type { PublicAvailableApp } from "@/lib/publicLoginTheme";
+import { cn } from "@/lib/utils";
 
 const GITHUB_CREDIT_URL = "https://github.com/felipebarraza6";
 const GITHUB_CREDIT_LABEL = "felipebarraza6";
+
+function LoginForm({
+  email,
+  password,
+  onEmail,
+  onPassword,
+  onSubmit,
+  errorMessage,
+  pending,
+  forgotPasswordTo,
+}: {
+  email: string;
+  password: string;
+  onEmail: (v: string) => void;
+  onPassword: (v: string) => void;
+  onSubmit: (e: React.FormEvent) => void;
+  errorMessage: string | null;
+  pending: boolean;
+  forgotPasswordTo?: string;
+}) {
+  return (
+    <form
+      onSubmit={onSubmit}
+      className="rounded-2xl bg-card/80 p-5 backdrop-blur sm:p-6 space-y-5 shadow-sm"
+    >
+      {errorMessage && (
+        <Alert variant="destructive" className="border-destructive/30 bg-destructive/10">
+          <AlertDescription>{errorMessage}</AlertDescription>
+        </Alert>
+      )}
+      <div className="space-y-2">
+        <Label
+          htmlFor="email"
+          className="text-xs uppercase tracking-wider text-muted-foreground"
+        >
+          Correo electrónico
+        </Label>
+        <Input
+          id="email"
+          type="email"
+          placeholder="tu@correo.com"
+          value={email}
+          onChange={(e) => onEmail(e.target.value)}
+          required
+          autoComplete="email"
+          className="bg-secondary border-border/50 text-foreground placeholder:text-muted-foreground/50 focus-visible:ring-primary/40"
+        />
+      </div>
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <Label
+            htmlFor="password"
+            className="text-xs uppercase tracking-wider text-muted-foreground"
+          >
+            Contraseña
+          </Label>
+          {forgotPasswordTo ? (
+            <Link
+              to={forgotPasswordTo}
+              className="text-[11px] font-medium text-primary hover:underline underline-offset-2"
+            >
+              Recuperar contraseña
+            </Link>
+          ) : null}
+        </div>
+        <Input
+          id="password"
+          type="password"
+          placeholder="••••••••"
+          value={password}
+          onChange={(e) => onPassword(e.target.value)}
+          required
+          autoComplete="current-password"
+          className="bg-secondary border-border/50 text-foreground placeholder:text-muted-foreground/50 focus-visible:ring-primary/40"
+        />
+      </div>
+      <Button
+        type="submit"
+        className="w-full bg-primary text-primary-foreground hover:bg-primary-deep transition-colors"
+        disabled={pending}
+      >
+        {pending ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Entrando…
+          </>
+        ) : (
+          "Entrar"
+        )}
+      </Button>
+    </form>
+  );
+}
 
 export default function Login() {
   const navigate = useNavigate();
@@ -43,166 +139,187 @@ export default function Login() {
     ? (login.error as { friendlyMessage?: string }).friendlyMessage || "Error al iniciar sesión"
     : null;
 
-  // Logo + colores vienen del flat (theme real de la sucursal/org)
   const branchLogo = resolveThemeLogo(flat);
   const fantasyName = flat?.fantasy_name?.trim() || null;
   const appName = flat?.app_name?.trim() || null;
+  const orgName = flat?.organization_name?.trim() || null;
   const brandTitle = useMemo(() => {
     if (isAppDefault) return undefined;
     if (scope === "branch") {
       return fantasyName || flat?.branch_name || appName || undefined;
     }
-    // Portal organización
-    return appName || flat?.organization_name || undefined;
-  }, [isAppDefault, scope, fantasyName, flat?.branch_name, flat?.organization_name, appName]);
+    // Login org: nombre de la organización (no app_name / nombre de menú).
+    return orgName || undefined;
+  }, [isAppDefault, scope, fantasyName, flat?.branch_name, orgName, appName]);
 
-  // Portal organización: solo logo + nombre (sin tagline / subtítulos).
-  const isOrgPortal = scope === "organization" && !flat?.branch_id;
+  // Org portal: branding de organización (con o sin branch_id heredado).
+  // p.ej. /login/smart-hydro puede resolver org + branch_id de una store.
+  const isOrgPortal = scope === "organization";
   const isBranchLogin = scope === "branch" && Boolean(flat?.branch_id);
+  /** Pitch de producto Muninn: solo login base, nunca org/sucursal. */
+  const showMuninnLanding = isAppDefault;
 
   const brandSubtitle = useMemo(() => {
     if (isAppDefault || isOrgPortal) return undefined;
     if (scope === "branch") {
-      // Abajo del nombre fantasía: app_name (si es distinto)
       if (appName && appName !== brandTitle) return appName;
       return flat?.tagline || undefined;
     }
     return flat?.tagline || undefined;
   }, [isAppDefault, isOrgPortal, scope, appName, brandTitle, flat?.tagline]);
 
-  const subtitle = isOrgPortal
+  const formHint = isOrgPortal
     ? null
     : flat?.login_subtitle ||
       flat?.subtitle ||
       flat?.login_welcome_message ||
       flat?.welcome_message ||
-      (isAppDefault ? "Accede a tu panel de agentes" : "Accede a tu panel");
+      (isAppDefault ? LOGIN_LANDING_TAGLINE : "Accede a tu espacio de trabajo");
 
   const organizationLogo = resolveMediaUrl(flat?.organization_logo_url) || null;
-  // Crédito del holding solo en login de sucursal (en portal org el logo ya está arriba).
   const hasOrganizationLogo = Boolean(organizationLogo) && isBranchLogin;
-  const orgName = flat?.organization_name?.trim() || null;
-
-  // Sucursal → Powered by organización. Portal org / Muninn → GitHub.
   const showGithubCredit = !isBranchLogin;
-
   const socialLinks = !isAppDefault ? (flat?.social_links ?? []) : [];
+  const availableApps = (flat?.available_apps ?? []) as PublicAvailableApp[];
+  const orgSponsors = !isAppDefault ? (flat?.sponsors ?? []) : [];
+  const showOrgSponsors = flat?.show_sponsor_logos !== false;
+
+  // Logo de la org: theme logo → organization_logo_url (nunca crow mientras hay tenant).
+  const orgBrandLogo =
+    resolveThemeLogo(flat) ||
+    resolveMediaUrl(flat?.organization_logo_url) ||
+    resolveMediaUrl(flat?.logo_url) ||
+    null;
+
+  const formProps = {
+    email,
+    password,
+    onEmail: setEmail,
+    onPassword: setPassword,
+    onSubmit: handleSubmit,
+    errorMessage,
+    pending: login.isPending,
+    forgotPasswordTo: slug
+      ? `/forgot-password/${encodeURIComponent(slug)}`
+      : "/forgot-password",
+  };
+
+  if (isOrgPortal) {
+    return (
+      <div className="relative min-h-screen bg-background">
+        <div className="absolute top-4 right-4 z-20">
+          <ThemeToggle />
+        </div>
+        <OrgLoginLanding
+          loading={themeLoading}
+          orgName={orgName}
+          brandTitle={orgName}
+          brandLogoUrl={orgBrandLogo}
+          tagline={flat?.tagline || null}
+          description={flat?.brand_description || null}
+          websiteUrl={flat?.website_url || null}
+          welcomeMessage={
+            flat?.login_welcome_message || flat?.welcome_message || null
+          }
+          socialLinks={socialLinks}
+          sponsors={orgSponsors}
+          showSponsors={showOrgSponsors}
+          apps={availableApps}
+        >
+          <LoginForm {...formProps} />
+        </OrgLoginLanding>
+      </div>
+    );
+  }
 
   return (
-    <div className="relative flex min-h-screen flex-col items-center justify-center bg-background p-4">
-      <div className="absolute top-4 right-4">
+    <div className="relative min-h-screen bg-background">
+      <div className="absolute top-4 right-4 z-20">
         <ThemeToggle />
       </div>
 
-      <Card className="w-full max-w-sm border border-border/50 bg-card/80 backdrop-blur">
-        <CardHeader
-          className={isOrgPortal ? "space-y-0 pb-2 text-center" : "space-y-5 text-center"}
+      <div
+        className={cn(
+          "min-h-screen",
+          showMuninnLanding ? "grid lg:grid-cols-2" : "flex items-center justify-center",
+        )}
+      >
+        {showMuninnLanding && (
+          <aside className="relative hidden border-r border-border/40 lg:block">
+            <LoginLandingPanel loading={themeLoading} />
+          </aside>
+        )}
+
+        <div
+          className={cn(
+            "flex flex-col items-center justify-center px-4 py-10 sm:px-8",
+            showMuninnLanding ? "" : "w-full",
+          )}
         >
-          <div className="flex justify-center">
-            {themeLoading ? (
-              <Loader2 className="h-10 w-10 animate-spin text-muted-foreground" />
-            ) : (
-              <MuninnBrand
-                branchLabel={brandTitle}
-                appName={brandSubtitle}
-                branchLogoUrl={isAppDefault ? null : branchLogo}
-                layout={isOrgPortal ? "stacked" : "horizontal"}
-                className={isOrgPortal ? "justify-center" : "justify-center scale-110"}
-              />
-            )}
-          </div>
-          {!isOrgPortal && subtitle && (
-            <CardDescription className="text-muted-foreground">{subtitle}</CardDescription>
+          {showMuninnLanding && (
+            <div className="mb-8 w-full max-w-sm lg:hidden">
+              <LoginLandingPanel loading={themeLoading} compact />
+            </div>
           )}
-        </CardHeader>
-        <form onSubmit={handleSubmit}>
-          <CardContent className="space-y-4">
-            {errorMessage && (
-              <Alert variant="destructive" className="border-destructive/30 bg-destructive/10">
-                <AlertDescription>{errorMessage}</AlertDescription>
-              </Alert>
+
+          <div className="w-full max-w-sm space-y-6">
+            {!showMuninnLanding && (
+              <div className="space-y-4 text-center">
+                {themeLoading ? (
+                  <MuninnBrand pending layout="horizontal" className="justify-center scale-110" />
+                ) : (
+                  <MuninnBrand
+                    branchLabel={brandTitle}
+                    appName={brandSubtitle}
+                    branchLogoUrl={branchLogo}
+                    layout="horizontal"
+                    className="justify-center scale-110"
+                  />
+                )}
+                {formHint && <p className="text-sm text-muted-foreground">{formHint}</p>}
+              </div>
             )}
-            <div className="space-y-2">
-              <Label
-                htmlFor="email"
-                className="text-xs uppercase tracking-wider text-muted-foreground"
-              >
-                Correo electrónico
-              </Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="tu@correo.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="bg-secondary border-border/50 text-foreground placeholder:text-muted-foreground/50 focus-visible:ring-primary/40"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label
-                htmlFor="password"
-                className="text-xs uppercase tracking-wider text-muted-foreground"
-              >
-                Contraseña
-              </Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="bg-secondary border-border/50 text-foreground placeholder:text-muted-foreground/50 focus-visible:ring-primary/40"
-              />
-            </div>
-          </CardContent>
-          <CardFooter>
-            <Button
-              type="submit"
-              className="w-full bg-primary text-primary-foreground hover:bg-primary-deep transition-colors"
-              disabled={login.isPending}
-            >
-              {login.isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Entrando…
-                </>
-              ) : (
-                "Entrar"
+
+            {showMuninnLanding && (
+              <div className="hidden lg:block space-y-1.5">
+                <h2 className="text-xl font-semibold tracking-tight text-foreground">
+                  Iniciar sesión
+                </h2>
+                {formHint && <p className="text-sm text-muted-foreground">{formHint}</p>}
+              </div>
+            )}
+
+            <LoginForm {...formProps} />
+
+            {socialLinks.length > 0 && <LoginSocialLinks links={socialLinks} />}
+
+            <div className="flex flex-col items-center gap-2 pt-1">
+              {hasOrganizationLogo && (
+                <img
+                  src={organizationLogo!}
+                  alt={orgName || "Organización"}
+                  className="h-7 max-w-[140px] object-contain opacity-80"
+                />
               )}
-            </Button>
-          </CardFooter>
-        </form>
-      </Card>
-
-      {socialLinks.length > 0 && <LoginSocialLinks links={socialLinks} className="mt-5" />}
-
-      {!isOrgPortal && (
-        <div className="mt-6 flex flex-col items-center gap-2">
-          {hasOrganizationLogo && (
-            <img
-              src={organizationLogo!}
-              alt={orgName || "Organización"}
-              className="h-7 max-w-[140px] object-contain opacity-80"
-            />
-          )}
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground/70">
-            Powered by{" "}
-            {showGithubCredit ? (
-              <a
-                href={GITHUB_CREDIT_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline-offset-2 hover:text-foreground hover:underline"
-              >
-                {GITHUB_CREDIT_LABEL}
-              </a>
-            ) : (
-              orgName || "Muninn"
-            )}
-          </p>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground/70">
+                Powered by{" "}
+                {showGithubCredit ? (
+                  <a
+                    href={GITHUB_CREDIT_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline-offset-2 hover:text-foreground hover:underline"
+                  >
+                    {GITHUB_CREDIT_LABEL}
+                  </a>
+                ) : (
+                  orgName || "Muninn"
+                )}
+              </p>
+            </div>
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

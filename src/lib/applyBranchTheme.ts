@@ -99,6 +99,21 @@ function relativeLuminance(hex: string): number {
   return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
 }
 
+/**
+ * En dark mode, un primary casi negro (#000) deja botones invisibles.
+ * Regla genérica (todas las orgs): subir luminancia mínima para UI.
+ */
+function ensureUsablePrimary(hex: string, appearance: ResolvedAppearance): string {
+  const raw = hex.trim() || MUNINN_DEFAULT_THEME.primary_color;
+  if (appearance !== "dark") return raw;
+  const lum = relativeLuminance(raw);
+  if (lum >= 0.12) return raw;
+  const rgb = hexToRgb(raw);
+  if (!rgb) return raw;
+  // Mezclar hacia blanco hasta ~0.18 de luminancia percibida.
+  return rgbToHex(mixRgb(rgb, { r: 255, g: 255, b: 255 }, 0.55));
+}
+
 function primaryForeground(primaryHex: string): string {
   return relativeLuminance(primaryHex) > 0.4 ? "#000000" : "#ffffff";
 }
@@ -211,8 +226,10 @@ export function applyBranchTheme(theme: BranchThemeLike | null | undefined): voi
 
   const appearance: ResolvedAppearance = getResolvedAppearance();
   const defaultPrimary = appearance === "dark" ? "#2dd4bf" : "#0d9488";
-  const primary =
-    theme?.primary_color?.trim() || MUNINN_DEFAULT_THEME.primary_color || defaultPrimary;
+  const primary = ensureUsablePrimary(
+    theme?.primary_color?.trim() || MUNINN_DEFAULT_THEME.primary_color || defaultPrimary,
+    appearance,
+  );
   const deep = resolveDeep(primary, theme?.secondary_color);
   const onPrimary = primaryForeground(primary);
   const soft = appearance === "dark" ? tintOnDark(primary, 0.14) : tintOnLight(primary, 0.12);
