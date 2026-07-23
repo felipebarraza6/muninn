@@ -42,7 +42,7 @@ const AGENT_SECTIONS = [
   { id: "modelo", label: "Modelo", icon: Settings },
   { id: "rag", label: "RAG", icon: BookOpen },
   { id: "skills", label: "Skills", icon: Sparkles },
-  { id: "flujo", label: "Conversación", icon: GitBranch },
+  { id: "flujo", label: "DataRules", icon: GitBranch },
   { id: "test", label: "Test LLM", icon: FlaskConical },
 ] as const;
 

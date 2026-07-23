@@ -21,6 +21,7 @@ import "@xyflow/react/dist/style.css";
 import { cn } from "@/lib/utils";
 import type { SkillRuleDraft, SlotDraft } from "@/lib/flowPolicy";
 import { slugifySlotId } from "@/lib/flowPolicy";
+import { toast } from "sonner";
 
 export type FlowLinkMode = "requires" | "capture" | "prerequisites";
 
@@ -28,10 +29,14 @@ type BoardProps = {
   slots: SlotDraft[];
   skills: SkillRuleDraft[];
   linkMode: FlowLinkMode;
+  layout?: Record<string, { x: number; y: number }> | null;
+  onLayoutChange?: (layout: Record<string, { x: number; y: number }>) => void;
   onToggleRequires: (skillSlug: string, slotId: string) => void;
   onToggleCapture: (skillSlug: string, slotId: string) => void;
   onTogglePrerequisite: (skillSlug: string, otherSlug: string) => void;
   onEnableSkill: (skillSlug: string) => void;
+  /** Llena el alto del contenedor (layout repisa + pizarra). */
+  fillHeight?: boolean;
 };
 
 type SlotNodeData = { label: string; ask: string; linkCount: number };
@@ -45,14 +50,22 @@ type SkillNodeData = {
   dimmed: boolean;
 };
 
-const COL = { slots: 32, skills: 420 };
-const ROW_SLOT = 96;
-const ROW_SKILL = 118;
+const COL = { slots: 40, skills: 440 };
+const SLOT_W = 168;
+const SKILL_W = 220;
+const GAP_Y = 28;
+const SLOT_H = 88;
 
 /** Referencias estables: objetos inline en <ReactFlow> disparan loop en StoreUpdater. */
 const PRO_OPTIONS = { hideAttribution: true } as const;
 const DEFAULT_EDGE_OPTIONS = { type: "default" as const };
-const FIT_VIEW_OPTS = { padding: 0.18, duration: 220 };
+const FIT_VIEW_OPTS = { padding: 0.2, duration: 220 };
+
+function estimateSkillHeight(sk: SkillRuleDraft): number {
+  const tags = sk.requires.length + sk.capture.length;
+  const tagRows = Math.ceil(Math.max(tags, 1) / 3);
+  return 96 + tagRows * 24 + (tags > 0 ? 10 : 0);
+}
 
 function SlotNode({ data }: NodeProps<Node<SlotNodeData>>) {
   return (
@@ -155,8 +168,56 @@ function graphSignature(
     focusSkill,
     showIdle,
     slots: slots.map((s) => [slugifySlotId(s.id), s.ask]),
-    skills: skills.map((s) => [s.slug, s.name, s.enabled, s.requires, s.capture, s.prerequisites]),
+    skills: skills.map((s) => [
+      s.slug,
+      s.name,
+      s.enabled,
+      s.requires,
+      s.capture,
+      s.prerequisites,
+      s.prerequisitesAny,
+    ]),
   });
+}
+
+/** Empuja nodos para que no se solapen verticalmente (por columna lógica). */
+function unstackColumn(
+  nodes: Node[],
+  heights: Map<string, number>,
+  columnX: number,
+  colWidth: number,
+) {
+  const col = nodes
+    .filter((n) => Math.abs(n.position.x - columnX) < colWidth * 0.75)
+    .sort((a, b) => a.position.y - b.position.y || a.id.localeCompare(b.id));
+  let y = 24;
+  for (const n of col) {
+    if (n.position.y < y) n.position = { ...n.position, y };
+    y = n.position.y + (heights.get(n.id) ?? 96) + GAP_Y;
+  }
+}
+
+/** Corrige solapes entre nodos del mismo tipo aunque estén fuera de la columna base. */
+function unstackOverlapping(nodes: Node[], heights: Map<string, number>, type: "slot" | "skill") {
+  const width = type === "slot" ? SLOT_W : SKILL_W;
+  const group = nodes
+    .filter((n) => n.type === type)
+    .sort((a, b) => a.position.y - b.position.y || a.id.localeCompare(b.id));
+  for (let i = 1; i < group.length; i++) {
+    const cur = group[i]!;
+    let minY = Number.NEGATIVE_INFINITY;
+    for (let j = 0; j < i; j++) {
+      const prev = group[j]!;
+      const overlapX =
+        prev.position.x < cur.position.x + width * 0.9 &&
+        cur.position.x < prev.position.x + width * 0.9;
+      if (!overlapX) continue;
+      minY = Math.max(minY, prev.position.y + (heights.get(prev.id) ?? 96) + GAP_Y);
+    }
+    if (Number.isFinite(minY) && cur.position.y < minY) {
+      cur.position = { ...cur.position, y: minY };
+    }
+  }
 }
 
 function buildGraph(
@@ -165,9 +226,10 @@ function buildGraph(
   prevPositions: Map<string, { x: number; y: number }>,
   focusSkill: string | null,
   showIdle: boolean,
-): { nodes: Node[]; edges: Edge[] } {
+): { nodes: Node[]; edges: Edge[]; heights: Map<string, number> } {
   const visibleSkills = showIdle ? skills : skills.filter((s) => s.enabled);
   const linkCount = new Map<string, number>();
+  const heights = new Map<string, number>();
 
   for (const sk of visibleSkills) {
     if (!sk.enabled) continue;
@@ -186,10 +248,11 @@ function buildGraph(
   orderedSlots.forEach((s, i) => {
     const id = slugifySlotId(s.id) || `slot_${i}`;
     const nid = `slot:${id}`;
+    heights.set(nid, SLOT_H);
     nodes.push({
       id: nid,
       type: "slot",
-      position: prevPositions.get(nid) ?? { x: COL.slots, y: 28 + i * ROW_SLOT },
+      position: prevPositions.get(nid) ?? { x: COL.slots, y: 24 + i * (SLOT_H + GAP_Y) },
       data: {
         label: id,
         ask: s.ask || "Sin pregunta",
@@ -200,11 +263,13 @@ function buildGraph(
 
   visibleSkills.forEach((sk, i) => {
     const nid = `skill:${sk.slug}`;
+    const h = estimateSkillHeight(sk);
+    heights.set(nid, h);
     const focused = focusSkill === sk.slug;
     nodes.push({
       id: nid,
       type: "skill",
-      position: prevPositions.get(nid) ?? { x: COL.skills, y: 28 + i * ROW_SKILL },
+      position: prevPositions.get(nid) ?? { x: COL.skills, y: 24 + i * (h + GAP_Y) },
       data: {
         label: sk.name,
         slug: sk.slug,
@@ -216,6 +281,12 @@ function buildGraph(
       },
     });
   });
+
+  // Nunca pisarse: reacomoda columnas y corrige solapes residuales.
+  unstackColumn(nodes, heights, COL.slots, SLOT_W);
+  unstackColumn(nodes, heights, COL.skills, SKILL_W);
+  unstackOverlapping(nodes, heights, "slot");
+  unstackOverlapping(nodes, heights, "skill");
 
   const edges: Edge[] = [];
   const edgeVisible = (skillSlug: string) => !focusSkill || focusSkill === skillSlug;
@@ -265,15 +336,21 @@ function buildGraph(
         },
       });
     }
-    for (const pre of sk.prerequisites) {
+    for (const pre of [...sk.prerequisites, ...sk.prerequisitesAny]) {
       if (focusSkill && focusSkill !== sk.slug && focusSkill !== pre) continue;
+      const isAny = sk.prerequisitesAny.includes(pre);
       edges.push({
         id: `pre:${sk.slug}:${pre}`,
         source: `skill:${pre}`,
         sourceHandle: "out",
         target: `skill:${sk.slug}`,
         targetHandle: "pre",
-        style: { stroke: "hsl(199 85% 52%)", strokeWidth: 2, opacity: 0.9 },
+        style: {
+          stroke: "hsl(199 85% 52%)",
+          strokeWidth: 2,
+          opacity: 0.9,
+          ...(isAny ? { strokeDasharray: "4 3" } : {}),
+        },
         markerEnd: {
           type: MarkerType.ArrowClosed,
           color: "hsl(199 85% 52%)",
@@ -284,13 +361,21 @@ function buildGraph(
     }
   }
 
-  return { nodes, edges };
+  return { nodes, edges, heights };
+}
+
+function linkModeStroke(mode: FlowLinkMode): string {
+  if (mode === "capture") return "hsl(168 72% 42%)";
+  if (mode === "prerequisites") return "hsl(199 85% 52%)";
+  return "hsl(38 92% 52%)";
 }
 
 function BoardCanvas({
   slots,
   skills,
   linkMode,
+  layout,
+  onLayoutChange,
   focusSkill,
   showIdle,
   onToggleRequires,
@@ -312,9 +397,23 @@ function BoardCanvas({
   const appliedSigRef = useRef<string | null>(null);
   const layoutKeyRef = useRef<string | null>(null);
   const readyRef = useRef(false);
+  const appliedLayoutJsonRef = useRef<string>("");
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+
+  // Aplicar layout guardado (carga / reset / refetch).
+  useEffect(() => {
+    const json = JSON.stringify(layout ?? {});
+    if (json === appliedLayoutJsonRef.current) return;
+    appliedLayoutJsonRef.current = json;
+    if (layout && Object.keys(layout).length > 0) {
+      for (const [id, pos] of Object.entries(layout)) {
+        positionsRef.current.set(id, { x: pos.x, y: pos.y });
+      }
+    }
+    appliedSigRef.current = null;
+  }, [layout]);
 
   useEffect(() => {
     if (appliedSigRef.current === signature) return;
@@ -328,7 +427,6 @@ function BoardCanvas({
     const layoutKey = graphSignature(slots, skills, null, showIdle);
     if (readyRef.current && layoutKeyRef.current !== layoutKey && next.nodes.length > 0) {
       layoutKeyRef.current = layoutKey;
-      // Encajar solo cuando cambia el set de nodos (no al enfocar una skill).
       requestAnimationFrame(() => {
         fitView(FIT_VIEW_OPTS);
       });
@@ -337,6 +435,14 @@ function BoardCanvas({
     }
   }, [signature, slots, skills, focusSkill, showIdle, setNodes, setEdges, fitView]);
 
+  const emitLayout = useCallback(() => {
+    if (!onLayoutChange) return;
+    const next: Record<string, { x: number; y: number }> = {};
+    for (const [id, pos] of positionsRef.current) next[id] = pos;
+    appliedLayoutJsonRef.current = JSON.stringify(next);
+    onLayoutChange(next);
+  }, [onLayoutChange]);
+
   const onInit = useCallback(() => {
     readyRef.current = true;
     if (positionsRef.current.size > 0) {
@@ -344,9 +450,31 @@ function BoardCanvas({
     }
   }, [fitView]);
 
-  const onNodeDragStop = useCallback((_: unknown, node: Node) => {
-    positionsRef.current.set(node.id, node.position);
-  }, []);
+  const onNodeDragStop = useCallback(
+    (_: unknown, node: Node) => {
+      positionsRef.current.set(node.id, { ...node.position });
+      // Re-unstack la columna afectada para que no queden pisados tras soltar.
+      const heights = new Map<string, number>();
+      for (const n of nodes) {
+        if (n.type === "slot") heights.set(n.id, SLOT_H);
+        else {
+          const sk = skills.find((s) => `skill:${s.slug}` === n.id);
+          heights.set(n.id, sk ? estimateSkillHeight(sk) : 96);
+        }
+      }
+      const updated = nodes.map((n) =>
+        n.id === node.id ? { ...n, position: { ...node.position } } : { ...n },
+      );
+      const colX = node.id.startsWith("slot:") ? COL.slots : COL.skills;
+      const colW = node.id.startsWith("slot:") ? SLOT_W : SKILL_W;
+      unstackColumn(updated, heights, colX, colW);
+      unstackOverlapping(updated, heights, node.id.startsWith("slot:") ? "slot" : "skill");
+      for (const n of updated) positionsRef.current.set(n.id, n.position);
+      setNodes(updated);
+      emitLayout();
+    },
+    [emitLayout, nodes, setNodes, skills],
+  );
 
   const onNodeClick = useCallback(
     (_: MouseEvent, node: Node) => {
@@ -362,11 +490,34 @@ function BoardCanvas({
 
   const onPaneClick = useCallback(() => onFocusSkill(null), [onFocusSkill]);
 
+  const isValidConnection = useCallback(
+    (connection: Connection | Edge) => {
+      const source = connection.source || "";
+      const target = connection.target || "";
+      if (!source || !target || source === target) return false;
+      if (linkMode === "prerequisites") {
+        return source.startsWith("skill:") && target.startsWith("skill:");
+      }
+      return source.startsWith("slot:") && target.startsWith("skill:");
+    },
+    [linkMode],
+  );
+
   const onConnect = useCallback(
     (connection: Connection) => {
       const source = connection.source || "";
       const target = connection.target || "";
       if (!source || !target) return;
+
+      if (linkMode === "prerequisites") {
+        if (source.startsWith("skill:") && target.startsWith("skill:") && source !== target) {
+          onEnableSkill(target.slice(6));
+          onTogglePrerequisite(target.slice(6), source.slice(6));
+          return;
+        }
+        toast.message("Modo Antes: uní skill → skill (asa derecha → asa superior).");
+        return;
+      }
 
       if (source.startsWith("slot:") && target.startsWith("skill:")) {
         const slotId = source.slice(5);
@@ -377,10 +528,11 @@ function BoardCanvas({
         return;
       }
 
-      if (source.startsWith("skill:") && target.startsWith("skill:") && source !== target) {
-        onEnableSkill(target.slice(6));
-        onTogglePrerequisite(target.slice(6), source.slice(6));
-      }
+      toast.message(
+        linkMode === "capture"
+          ? "Modo Recordar: arrastrá desde un Dato hacia una Skill."
+          : "Modo Obligatorio: arrastrá desde un Dato hacia una Skill.",
+      );
     },
     [linkMode, onEnableSkill, onToggleCapture, onTogglePrerequisite, onToggleRequires],
   );
@@ -401,6 +553,15 @@ function BoardCanvas({
     [],
   );
 
+  const connectionLineStyle = useMemo(
+    () => ({
+      stroke: linkModeStroke(linkMode),
+      strokeWidth: 2,
+      ...(linkMode === "capture" ? { strokeDasharray: "5 4" } : {}),
+    }),
+    [linkMode],
+  );
+
   return (
     <ReactFlow
       nodes={nodes}
@@ -413,6 +574,8 @@ function BoardCanvas({
       onPaneClick={onPaneClick}
       onConnect={onConnect}
       onEdgeClick={onEdgeClick}
+      isValidConnection={isValidConnection}
+      connectionLineStyle={connectionLineStyle}
       nodeTypes={NODE_TYPES}
       colorMode="dark"
       proOptions={PRO_OPTIONS}
@@ -435,25 +598,33 @@ function BoardCanvas({
 }
 
 export function FlowPolicyBoard(props: BoardProps) {
+  const { fillHeight = false, ...boardProps } = props;
   const [focusSkill, setFocusSkill] = useState<string | null>(null);
-  const [showIdle, setShowIdle] = useState(false);
-  const empty = props.slots.length === 0 && props.skills.length === 0;
-  const enabledCount = props.skills.filter((s) => s.enabled).length;
+  // Solo skills con reglas (enabled). Las Off no aparecen en la pizarra.
+  const showIdle = false;
+  const empty = boardProps.slots.length === 0 && boardProps.skills.every((s) => !s.enabled);
+  const enabledCount = boardProps.skills.filter((s) => s.enabled).length;
 
   if (empty) {
     return (
-      <div className="flex h-[420px] items-center justify-center rounded-xl border border-dashed border-border/70 bg-muted/15 px-6 text-center">
+      <div
+        className={cn(
+          "flex items-center justify-center rounded-xl border border-dashed border-border/70 bg-muted/15 px-6 text-center",
+          fillHeight ? "h-full min-h-[560px]" : "h-[420px]",
+        )}
+      >
         <p className="max-w-sm text-sm text-muted-foreground">
-          Creá al menos un <strong className="text-foreground/80">dato</strong> y asigná skills al
-          agente. Acá vas a ver cajas y podés unirlas arrastrando desde los puntos.
+          Activá una <strong className="text-foreground/80">skill</strong> en la repisa o uní un
+          dato con una skill. Arrastrá desde los puntos según el modo (Obligatorio / Recordar /
+          Antes).
         </p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border/60 bg-muted/15 px-3 py-2 text-[11px]">
+    <div className={cn("space-y-2", fillHeight && "flex h-full min-h-0 flex-col")}>
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border/60 bg-muted/15 px-3 py-2 text-[11px] shrink-0">
         <span className="inline-flex items-center gap-1.5 text-muted-foreground">
           <span className="h-0.5 w-4 rounded bg-amber-500" /> Obligatorio
         </span>
@@ -464,15 +635,13 @@ export function FlowPolicyBoard(props: BoardProps) {
         <span className="inline-flex items-center gap-1.5 text-muted-foreground">
           <span className="h-0.5 w-4 rounded bg-sky-500" /> Antes
         </span>
-        <label className="ml-auto inline-flex cursor-pointer items-center gap-1.5 text-muted-foreground">
-          <input
-            type="checkbox"
-            className="accent-primary"
-            checked={showIdle}
-            onChange={(e) => setShowIdle(e.target.checked)}
-          />
-          Skills sin reglas ({props.skills.length - enabledCount})
-        </label>
+        <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+          <span className="h-0.5 w-4 rounded border-t border-dashed border-sky-400 bg-transparent" />{" "}
+          Antes (alguna)
+        </span>
+        <span className="ml-auto text-muted-foreground/80 tabular-nums">
+          {enabledCount} skill{enabledCount === 1 ? "" : "s"} en pizarra
+        </span>
         {focusSkill ? (
           <button
             type="button"
@@ -482,14 +651,21 @@ export function FlowPolicyBoard(props: BoardProps) {
             Ver todas las líneas
           </button>
         ) : (
-          <span className="text-muted-foreground/80">Clic en una skill para enfocarla</span>
+          <span className="text-muted-foreground/80 hidden sm:inline">
+            Clic en skill para enfocar · arrastrá para unir
+          </span>
         )}
       </div>
 
-      <div className="h-[min(620px,72vh)] overflow-hidden rounded-xl border border-border/70 bg-[#0b1210]">
+      <div
+        className={cn(
+          "overflow-hidden rounded-xl border border-border/70 bg-[#0b1210]",
+          fillHeight ? "min-h-0 flex-1 h-full" : "h-[min(70vh,720px)]",
+        )}
+      >
         <ReactFlowProvider>
           <BoardCanvas
-            {...props}
+            {...boardProps}
             focusSkill={focusSkill}
             showIdle={showIdle}
             onFocusSkill={setFocusSkill}
