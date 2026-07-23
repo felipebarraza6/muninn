@@ -6,11 +6,12 @@ import {
   Sparkles,
   MessageSquare,
   ArrowRight,
-  Loader2,
   AlertTriangle,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { useAgents } from "@/api/hooks/useAgents";
 import { useChannels } from "@/api/hooks/useChannels";
 import { useExternalAPIs } from "@/api/hooks/useExternalAPIs";
@@ -117,19 +118,18 @@ export function BusinessHome() {
         : "grid-cols-2 md:grid-cols-3";
 
   if (isLoading) {
-    return (
-      <div className="px-4 md:px-6 lg:px-8 py-6 flex justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <PageSkeleton variant="dashboard" />;
   }
 
   return (
     <AdminPageMotion>
       <AdminMotionItem>
-        <div className="flex justify-end mb-3">
-          <StudioBranchFilter />
-        </div>
+        <PageHeader
+          title="Resumen"
+          description="Operación de tu sucursal: agentes, canales y cola humana."
+          actions={<StudioBranchFilter />}
+          className="mb-3"
+        />
       </AdminMotionItem>
       <AdminMotionItem>
         <SummaryKpiGrid items={summaryItems} columnsClass={kpiCols} />
@@ -142,9 +142,7 @@ export function BusinessHome() {
               <CardHeader className="pb-2 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 space-y-0">
                 <div className="min-w-0">
                   <CardTitle className="text-base">Contacto con clientes</CardTitle>
-                  <CardDescription>
-                    Últimas conversaciones que requieren atención.
-                  </CardDescription>
+                  <CardDescription>Últimas conversaciones que requieren atención.</CardDescription>
                 </div>
                 <Button asChild variant="ghost" size="sm" className="h-8 self-start">
                   <Link to="/conversaciones">

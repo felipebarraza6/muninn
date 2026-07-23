@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import {
   ArrowLeft,
   Bot,
@@ -16,6 +17,7 @@ import {
   Archive,
   User,
   RefreshCw,
+  Wrench,
   X,
 } from "lucide-react";
 import { useAgent } from "@/api/hooks/useAgents";
@@ -45,8 +47,43 @@ import {
   type UnifiedConversation,
 } from "@/api/hooks/useUnifiedConversations";
 import { streamConversationChat } from "@/api/chat-stream";
+import {
+  ChatSkillCommand,
+  getSlashSkillQuery,
+  removeSlashQuery,
+  type SkillCommandOption,
+} from "@/components/chat/chat-skill-command";
+import { ChatAgentPicker } from "@/components/chat/chat-agent-picker";
+import {
+  extractPolicyTrace,
+  inferPolicyTraceFromConfig,
+  policyTraceSignalCount,
+} from "@/lib/policyTrace";
+import { formatSkillInvocation, getSkillRequiredFreeParams } from "@/lib/chatSkillParams";
+import type { Agent } from "@/api/hooks/useAgents";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+
+type AttachedSkill = {
+  id: string;
+  name: string;
+  slug: string;
+  params: Record<string, string>;
+};
+
+type PendingSkillParams = {
+  skill: SkillCommandOption;
+  fields: Array<{ key: string; label: string; description?: string; type?: string }>;
+  values: Record<string, string>;
+};
 
 interface ChatMessage {
   id: string | number;
@@ -56,6 +93,10 @@ interface ChatMessage {
   rag_sources?: unknown[];
   tool_calls?: unknown[];
   tool_results?: unknown[];
+  policy_trace?: unknown;
+  flow_policy_trace?: unknown;
+  policies?: unknown;
+  metadata?: Record<string, unknown> | null;
   replyToId?: string | number;
   replyToRole?: string;
   replyToPreview?: string;
@@ -102,6 +143,10 @@ function normalizeMessages(data?: ChatMessageResponse[]): ChatMessage[] {
       rag_sources: m.rag_sources ?? m.sources,
       tool_calls: m.tool_calls,
       tool_results: m.tool_results,
+      policy_trace: m.policy_trace ?? meta?.policy_trace,
+      flow_policy_trace: m.flow_policy_trace ?? meta?.flow_policy_trace,
+      policies: m.policies ?? meta?.policies,
+      metadata: meta as Record<string, unknown> | null,
       replyToId: meta?.reply_to_id,
       replyToRole:
         replyRoleRaw === "user"
@@ -175,6 +220,13 @@ interface AgentChatCoreProps {
   backTo?: string;
   /** Cuando el core vive dentro de /chat (ya hay header de agente). */
   fillParent?: boolean;
+  /** Sustituye el nombre estático por el picker de agentes (drawer). */
+  agentSwitcher?: {
+    agents: Agent[];
+    onChange: (agentId: string) => void;
+  };
+  /** Extra a la derecha del picker (ej. filtro de sucursal). */
+  headerExtra?: React.ReactNode;
 }
 
 export function AgentChatCore({
@@ -182,6 +234,8 @@ export function AgentChatCore({
   showBackLink = true,
   backTo = "/agentes",
   fillParent = false,
+  agentSwitcher,
+  headerExtra,
 }: AgentChatCoreProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const conversationIdFromUrl = searchParams.get("conversation");
@@ -206,12 +260,39 @@ export function AgentChatCore({
       .filter(Boolean);
   }, [agent?.functions, allFunctions]);
 
+  const agentSkillOptions = useMemo((): SkillCommandOption[] => {
+    const ids = new Set((agent?.functions ?? []).map((id) => String(id)));
+    if (!ids.size) return [];
+    return allFunctions
+      .filter((f) => ids.has(String(f.id)) && f.is_active !== false)
+      .map((f) => {
+        const slug =
+          (f.slug && String(f.slug).trim()) ||
+          (f.name || "")
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "_")
+            .replace(/^_|_$/g, "") ||
+          String(f.id);
+        return {
+          id: String(f.id),
+          name: f.name || slug,
+          slug,
+        };
+      })
+      .filter((s) => s.slug);
+  }, [agent?.functions, allFunctions]);
+
   const agentBranchId =
     agent?.branch != null && String(agent.branch).trim() !== "" ? String(agent.branch) : null;
 
   const [conversationId, setConversationId] = useState<string | null>(conversationIdFromUrl);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
+  const [skillMenuOpen, setSkillMenuOpen] = useState(false);
+  const [inputCursor, setInputCursor] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [attachedSkills, setAttachedSkills] = useState<AttachedSkill[]>([]);
+  const [pendingSkill, setPendingSkill] = useState<PendingSkillParams | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   /** Tras «Nueva»: chat vacío listo para escribir; se crea al primer mensaje. */
   const [isDraftNew, setIsDraftNew] = useState(false);
@@ -221,6 +302,7 @@ export function AgentChatCore({
   const [inspectMessage, setInspectMessage] = useState<InsightMessage | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [liveSteps, setLiveSteps] = useState<LiveStreamStep[]>([]);
+  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
   const streamingMsgIdRef = useRef<string | null>(null);
   const streamingDraftRef = useRef("");
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
@@ -237,6 +319,12 @@ export function AgentChatCore({
   useEffect(() => {
     setReplyTo(null);
   }, [conversationId]);
+
+  useEffect(() => {
+    setAttachedSkills([]);
+    setPendingSkill(null);
+    setSkillMenuOpen(false);
+  }, [agentId]);
 
   const mergeSearchParams = useCallback(
     (updates: Record<string, string | null>) => {
@@ -338,8 +426,76 @@ export function AgentChatCore({
   }, [remoteMessages, conversationId, isDraftNew]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, sendMessage.isPending]);
+    messagesEndRef.current?.scrollIntoView({
+      behavior: reduceMotion ? "auto" : "smooth",
+    });
+  }, [messages, sendMessage.isPending, isStreaming, reduceMotion]);
+
+  const slashQuery = useMemo(() => getSlashSkillQuery(input, inputCursor), [input, inputCursor]);
+
+  useEffect(() => {
+    if (!agentSkillOptions.length) {
+      setSkillMenuOpen(false);
+      return;
+    }
+    setSkillMenuOpen(Boolean(slashQuery));
+  }, [slashQuery, agentSkillOptions.length]);
+
+  const selectSkillCommand = useCallback(
+    (skill: SkillCommandOption) => {
+      const start = slashQuery?.start ?? input.length;
+      const cursor = inputCursor || input.length;
+      const { next, cursor: nextCursor } = removeSlashQuery(input, start, cursor);
+      setInput(next);
+      setInputCursor(nextCursor);
+      setSkillMenuOpen(false);
+
+      const fn = allFunctions.find((f) => String(f.id) === skill.id);
+      const fields = getSkillRequiredFreeParams(fn);
+      if (fields.length > 0) {
+        setPendingSkill({
+          skill,
+          fields,
+          values: Object.fromEntries(fields.map((f) => [f.key, ""])),
+        });
+        return;
+      }
+
+      setAttachedSkills((prev) => {
+        if (prev.some((s) => s.id === skill.id)) return prev;
+        return [...prev, { id: skill.id, name: skill.name, slug: skill.slug, params: {} }];
+      });
+      requestAnimationFrame(() => inputRef.current?.focus());
+    },
+    [allFunctions, input, inputCursor, slashQuery?.start],
+  );
+
+  const confirmPendingSkill = useCallback(() => {
+    if (!pendingSkill) return;
+    const missing = pendingSkill.fields.filter((f) => !pendingSkill.values[f.key]?.trim());
+    if (missing.length) {
+      toast.error(`Completa: ${missing.map((m) => m.label).join(", ")}`);
+      return;
+    }
+    setAttachedSkills((prev) => {
+      if (prev.some((s) => s.id === pendingSkill.skill.id)) {
+        return prev.map((s) =>
+          s.id === pendingSkill.skill.id ? { ...s, params: { ...pendingSkill.values } } : s,
+        );
+      }
+      return [
+        ...prev,
+        {
+          id: pendingSkill.skill.id,
+          name: pendingSkill.skill.name,
+          slug: pendingSkill.skill.slug,
+          params: { ...pendingSkill.values },
+        },
+      ];
+    });
+    setPendingSkill(null);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, [pendingSkill]);
 
   const ensureConversationId = useCallback(async (): Promise<string | null> => {
     if (conversationIdRef.current) return conversationIdRef.current;
@@ -426,7 +582,12 @@ export function AgentChatCore({
     overrides?: { text?: string; reply?: ReplyTarget | null },
   ) => {
     e?.preventDefault();
-    const text = (overrides?.text ?? input).trim();
+    const freeText = (overrides?.text ?? input).trim();
+    const skillPrefix =
+      overrides?.text != null
+        ? ""
+        : attachedSkills.map((s) => formatSkillInvocation(s.slug, s.params)).join(" ");
+    const text = [skillPrefix, freeText].filter(Boolean).join("\n").trim();
     if (!text || isBusy || isCreating) return;
 
     const activeReply = overrides && "reply" in overrides ? overrides.reply : replyTo;
@@ -450,6 +611,9 @@ export function AgentChatCore({
 
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
+    setInputCursor(0);
+    setSkillMenuOpen(false);
+    setAttachedSkills([]);
     setReplyTo(null);
     setIsDraftNew(false);
     setLiveSteps([
@@ -493,6 +657,7 @@ export function AgentChatCore({
 
     streamingDraftRef.current = "";
     streamingMsgIdRef.current = null;
+    setStreamingMessageId(null);
 
     try {
       const data = await streamConversationChat(
@@ -539,6 +704,7 @@ export function AgentChatCore({
               }
               const id = makeId("agent-stream");
               streamingMsgIdRef.current = id;
+              setStreamingMessageId(id);
               return [
                 ...prev,
                 {
@@ -556,15 +722,23 @@ export function AgentChatCore({
 
       const finalContent = data.message ?? data.content ?? data.text ?? streamingDraftRef.current;
       const streamId = streamingMsgIdRef.current;
+      const meta =
+        data.metadata && typeof data.metadata === "object"
+          ? (data.metadata as Record<string, unknown>)
+          : null;
       setMessages((prev) => {
-        const finalMsg = {
+        const finalMsg: ChatMessage = {
           id: data.id ?? streamId ?? makeId("agent"),
-          role: "agent" as const,
+          role: "agent",
           content: finalContent,
           created: data.created_at ?? data.created ?? data.timestamp ?? new Date().toISOString(),
           rag_sources: data.rag_sources ?? data.sources,
           tool_calls: data.tool_calls,
           tool_results: data.tool_results,
+          policy_trace: data.policy_trace ?? meta?.policy_trace,
+          flow_policy_trace: data.flow_policy_trace ?? meta?.flow_policy_trace,
+          policies: data.policies ?? meta?.policies,
+          metadata: meta,
         };
         if (streamId && prev.some((m) => m.id === streamId)) {
           return prev.map((m) => (m.id === streamId ? { ...m, ...finalMsg } : m));
@@ -588,6 +762,10 @@ export function AgentChatCore({
             replyToId,
           });
           if (data?.message || data?.content || data?.text) {
+            const fallbackMeta =
+              data.metadata && typeof data.metadata === "object"
+                ? (data.metadata as Record<string, unknown>)
+                : null;
             setMessages((prev) => [
               ...prev,
               {
@@ -599,6 +777,10 @@ export function AgentChatCore({
                 rag_sources: data.rag_sources ?? data.sources,
                 tool_calls: data.tool_calls,
                 tool_results: data.tool_results,
+                policy_trace: data.policy_trace ?? fallbackMeta?.policy_trace,
+                flow_policy_trace: data.flow_policy_trace ?? fallbackMeta?.flow_policy_trace,
+                policies: data.policies ?? fallbackMeta?.policies,
+                metadata: fallbackMeta,
               },
             ]);
           }
@@ -617,6 +799,7 @@ export function AgentChatCore({
       setLiveSteps([]);
       streamingDraftRef.current = "";
       streamingMsgIdRef.current = null;
+      setStreamingMessageId(null);
       streamAbortRef.current = null;
     }
   };
@@ -733,10 +916,8 @@ export function AgentChatCore({
 
   if (agentLoading) {
     return (
-      <div
-        className={`${fillParent ? "h-full" : "h-[calc(100dvh-3.5rem)]"} w-full bg-background flex items-center justify-center`}
-      >
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className={`${fillParent ? "h-full" : "h-[calc(100dvh-3.5rem)]"} w-full bg-background`}>
+        <PageSkeleton variant="chat" className="h-full max-w-none px-4 py-4" padded={false} />
       </div>
     );
   }
@@ -758,7 +939,7 @@ export function AgentChatCore({
 
   return (
     <div className={shellClass}>
-      <header className="border-b border-border/50 bg-card/50 backdrop-blur px-4 py-3 flex items-center gap-3 shrink-0">
+      <header className="border-b border-border/50 bg-card/50 backdrop-blur px-3 sm:px-4 py-2 flex items-center gap-2 sm:gap-3 shrink-0">
         {showBackLink && (
           <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" asChild>
             <Link to={backTo}>
@@ -767,196 +948,209 @@ export function AgentChatCore({
           </Button>
         )}
 
-        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-          <Bot className="h-4 w-4 text-primary" />
-        </div>
+        {agentSwitcher ? (
+          <ChatAgentPicker
+            agents={agentSwitcher.agents}
+            value={agentId}
+            onChange={agentSwitcher.onChange}
+            className="flex-1 min-w-0 justify-start"
+          />
+        ) : (
+          <>
+            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+              <Bot className="h-4 w-4 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-medium text-sm truncate">{agent.name}</div>
+              <div className="text-xs text-muted-foreground truncate">
+                {!isReady
+                  ? agent?.is_active
+                    ? "Sin modelo de lenguaje configurado"
+                    : "Agente inactivo"
+                  : agent.use_rag
+                    ? `RAG top ${agent.rag_top_k ?? "—"} · ${agent.embedding_model || "embedding default"}`
+                    : "RAG desactivado"}
+              </div>
+            </div>
+          </>
+        )}
 
-        <div className="flex-1 min-w-0">
-          <div className="font-medium text-sm truncate">{agent.name}</div>
-          <div className="text-xs text-muted-foreground truncate">
-            {!isReady
-              ? agent?.is_active
-                ? "Sin modelo de lenguaje configurado"
-                : "Agente inactivo"
-              : agent.use_rag
-                ? `RAG top ${agent.rag_top_k ?? "—"} · ${agent.embedding_model || "embedding default"}`
-                : "RAG desactivado"}
-          </div>
-        </div>
-
-        <Button
-          variant="outline"
-          size="sm"
-          className="shrink-0 gap-1.5 cursor-pointer"
-          onClick={handleNewConversation}
-          disabled={isCreating}
-          title="Nueva conversación"
-        >
-          {isCreating ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <MessageSquarePlus className="h-3.5 w-3.5" />
-          )}
-          <span className="hidden sm:inline">Nueva</span>
-        </Button>
-
-        {conversationId && (
+        <div className="ml-auto flex items-center gap-1.5 sm:gap-2 shrink-0">
+          {headerExtra}
           <Button
             variant="outline"
             size="sm"
             className="shrink-0 gap-1.5 cursor-pointer"
-            onClick={handleCloseCurrentConversation}
-            disabled={updateStatus.isPending}
-            title="Archivar"
+            onClick={handleNewConversation}
+            disabled={isCreating}
+            title="Nueva conversación"
           >
-            <Archive className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Archivar</span>
+            {isCreating ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <MessageSquarePlus className="h-3.5 w-3.5" />
+            )}
+            <span className="hidden sm:inline">Nueva</span>
           </Button>
-        )}
 
-        <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-          <SheetTrigger asChild>
+          {conversationId && (
             <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 shrink-0 cursor-pointer"
-              title="Historial"
+              variant="outline"
+              size="sm"
+              className="shrink-0 gap-1.5 cursor-pointer"
+              onClick={handleCloseCurrentConversation}
+              disabled={updateStatus.isPending}
+              title="Archivar"
             >
-              <History className="h-4 w-4" />
+              <Archive className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Archivar</span>
             </Button>
-          </SheetTrigger>
-          <SheetContent
-            side="right"
-            className="w-full sm:max-w-sm p-0 bg-background flex flex-col h-full"
-          >
-            <SheetHeader className="px-4 py-4 border-b border-border/50 shrink-0 space-y-1">
-              <SheetTitle className="text-sm font-medium">Historial de prueba</SheetTitle>
-              <p className="text-[11px] text-muted-foreground font-normal">
-                Las conversaciones solo se archivan cuando tú lo indiques.
-              </p>
-            </SheetHeader>
-            <div className="flex flex-col flex-1 min-h-0 p-3">
-              <div className="flex rounded-lg border border-border/50 p-0.5 mb-3 shrink-0">
-                <button
-                  onClick={() => setHistoryTab("active")}
-                  className={`flex-1 text-xs font-medium py-1 rounded-md transition-colors ${
-                    historyTab === "active"
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  Activas
-                </button>
-                <button
-                  onClick={() => setHistoryTab("archived")}
-                  className={`flex-1 text-xs font-medium py-1 rounded-md transition-colors ${
-                    historyTab === "archived"
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  Archivadas
-                </button>
-              </div>
+          )}
 
-              <ScrollArea className="flex-1 -mx-3 px-3">
-                {conversationsLoading ? (
-                  <div className="space-y-2">
-                    <Skeleton className="h-10 w-full" />
-                    <Skeleton className="h-10 w-full" />
-                  </div>
-                ) : agentConversations.length === 0 ? (
-                  <div className="text-sm text-muted-foreground py-6 text-center">
-                    No hay conversaciones previas
-                  </div>
-                ) : (
-                  <div className="space-y-1 pb-2">
-                    {agentConversations.map((conv) => {
-                      const isArchived =
-                        historyTab === "archived" ||
-                        (conv.status || "").toLowerCase().trim() === "archived" ||
-                        (conv.status || "").toLowerCase().trim() === "closed" ||
-                        (conv.status || "").toLowerCase().trim() === "inactive";
-                      return (
-                        <div
-                          key={conv.id}
-                          className={`group flex items-center gap-1 rounded-md text-sm transition-colors ${
-                            String(conv.id) === conversationId
-                              ? "bg-primary/10 text-primary"
-                              : "hover:bg-muted/50 text-foreground"
-                          }`}
-                        >
-                          <button
-                            onClick={() => handleSelectConversation(String(conv.id))}
-                            className="flex-1 text-left px-3 py-2.5 min-w-0"
+          <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+            <SheetTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 shrink-0 cursor-pointer"
+                title="Historial"
+              >
+                <History className="h-4 w-4" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent
+              side="right"
+              className="w-full sm:max-w-sm p-0 bg-background flex flex-col h-full"
+            >
+              <SheetHeader className="px-4 py-4 border-b border-border/50 shrink-0 space-y-1">
+                <SheetTitle className="text-sm font-medium">Historial de prueba</SheetTitle>
+                <p className="text-[11px] text-muted-foreground font-normal">
+                  Las conversaciones solo se archivan cuando tú lo indiques.
+                </p>
+              </SheetHeader>
+              <div className="flex flex-col flex-1 min-h-0 p-3">
+                <div className="flex rounded-lg border border-border/50 p-0.5 mb-3 shrink-0">
+                  <button
+                    onClick={() => setHistoryTab("active")}
+                    className={`flex-1 text-xs font-medium py-1 rounded-md transition-colors ${
+                      historyTab === "active"
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    Activas
+                  </button>
+                  <button
+                    onClick={() => setHistoryTab("archived")}
+                    className={`flex-1 text-xs font-medium py-1 rounded-md transition-colors ${
+                      historyTab === "archived"
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    Archivadas
+                  </button>
+                </div>
+
+                <ScrollArea className="flex-1 -mx-3 px-3">
+                  {conversationsLoading ? (
+                    <div className="space-y-2">
+                      <Skeleton className="h-10 w-full" />
+                      <Skeleton className="h-10 w-full" />
+                    </div>
+                  ) : agentConversations.length === 0 ? (
+                    <div className="text-sm text-muted-foreground py-6 text-center">
+                      No hay conversaciones previas
+                    </div>
+                  ) : (
+                    <div className="space-y-1 pb-2">
+                      {agentConversations.map((conv) => {
+                        const isArchived =
+                          historyTab === "archived" ||
+                          (conv.status || "").toLowerCase().trim() === "archived" ||
+                          (conv.status || "").toLowerCase().trim() === "closed" ||
+                          (conv.status || "").toLowerCase().trim() === "inactive";
+                        return (
+                          <div
+                            key={conv.id}
+                            className={`group flex items-center gap-1 rounded-md text-sm transition-colors ${
+                              String(conv.id) === conversationId
+                                ? "bg-primary/10 text-primary"
+                                : "hover:bg-muted/50 text-foreground"
+                            }`}
                           >
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span className="font-medium truncate">
-                                {conv.title || "Sin título"}
-                              </span>
-                              <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
-                                #{conv.id}
-                              </span>
-                            </div>
-                            <div className="text-[11px] text-muted-foreground mt-0.5 space-y-0.5">
-                              <div className="flex flex-wrap gap-x-2 gap-y-0.5">
-                                <span>{conv.message_count ?? 0} msgs</span>
-                                {conv.created && (
-                                  <span title={formatDateTime(conv.created) ?? undefined}>
-                                    Inicio {formatRelative(conv.created)}
-                                  </span>
-                                )}
-                                {conv.modified && (
-                                  <span title={formatDateTime(conv.modified) ?? undefined}>
-                                    Act. {formatRelative(conv.modified)}
-                                  </span>
+                            <button
+                              onClick={() => handleSelectConversation(String(conv.id))}
+                              className="flex-1 text-left px-3 py-2.5 min-w-0"
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="font-medium truncate">
+                                  {conv.title || "Sin título"}
+                                </span>
+                                <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
+                                  #{conv.id}
+                                </span>
+                              </div>
+                              <div className="text-[11px] text-muted-foreground mt-0.5 space-y-0.5">
+                                <div className="flex flex-wrap gap-x-2 gap-y-0.5">
+                                  <span>{conv.message_count ?? 0} msgs</span>
+                                  {conv.created && (
+                                    <span title={formatDateTime(conv.created) ?? undefined}>
+                                      Inicio {formatRelative(conv.created)}
+                                    </span>
+                                  )}
+                                  {conv.modified && (
+                                    <span title={formatDateTime(conv.modified) ?? undefined}>
+                                      Act. {formatRelative(conv.modified)}
+                                    </span>
+                                  )}
+                                </div>
+                                {conv.last_message && (
+                                  <p className="truncate text-[10px] opacity-80">
+                                    {conv.last_message}
+                                  </p>
                                 )}
                               </div>
-                              {conv.last_message && (
-                                <p className="truncate text-[10px] opacity-80">
-                                  {conv.last_message}
-                                </p>
-                              )}
-                            </div>
-                          </button>
-                          {isArchived ? (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleRestoreConversation(conv.id);
-                              }}
-                              disabled={updateStatus.isPending}
-                              className="shrink-0 inline-flex items-center gap-1 px-2 py-2 text-xs text-muted-foreground hover:text-primary transition-colors cursor-pointer disabled:opacity-50"
-                              title="Restaurar"
-                            >
-                              <RefreshCw className="h-3.5 w-3.5" />
-                              <span className="hidden sm:inline">Restaurar</span>
                             </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleArchiveConversation(conv.id);
-                              }}
-                              disabled={updateStatus.isPending}
-                              className="shrink-0 inline-flex items-center gap-1 px-2 py-2 text-xs text-muted-foreground hover:text-destructive transition-colors cursor-pointer disabled:opacity-50"
-                              title="Archivar"
-                            >
-                              <Archive className="h-3.5 w-3.5" />
-                              <span className="hidden sm:inline">Archivar</span>
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </ScrollArea>
-            </div>
-          </SheetContent>
-        </Sheet>
+                            {isArchived ? (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRestoreConversation(conv.id);
+                                }}
+                                disabled={updateStatus.isPending}
+                                className="shrink-0 inline-flex items-center gap-1 px-2 py-2 text-xs text-muted-foreground hover:text-primary transition-colors cursor-pointer disabled:opacity-50"
+                                title="Restaurar"
+                              >
+                                <RefreshCw className="h-3.5 w-3.5" />
+                                <span className="hidden sm:inline">Restaurar</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleArchiveConversation(conv.id);
+                                }}
+                                disabled={updateStatus.isPending}
+                                className="shrink-0 inline-flex items-center gap-1 px-2 py-2 text-xs text-muted-foreground hover:text-destructive transition-colors cursor-pointer disabled:opacity-50"
+                                title="Archivar"
+                              >
+                                <Archive className="h-3.5 w-3.5" />
+                                <span className="hidden sm:inline">Archivar</span>
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </ScrollArea>
+              </div>
+            </SheetContent>
+          </Sheet>
+        </div>
       </header>
 
       {(conversationId || isDraftNew) && (
@@ -1053,12 +1247,20 @@ export function AgentChatCore({
             messages.map((msg) => {
               const ragCount = Array.isArray(msg.rag_sources) ? msg.rag_sources.length : 0;
               const toolCount = Array.isArray(msg.tool_calls) ? msg.tool_calls.length : 0;
+              const msgPolicy =
+                extractPolicyTrace(msg) ??
+                (msg.role === "agent"
+                  ? inferPolicyTraceFromConfig(agent.flow_policy, msg.tool_calls)
+                  : null);
+              const policyCount = policyTraceSignalCount(msgPolicy);
+              const isStreamingBubble =
+                isStreaming && streamingMessageId != null && String(msg.id) === streamingMessageId;
               return (
                 <motion.div
                   key={msg.id}
                   initial={reduceMotion ? false : { opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.32, ease: [0.25, 0.1, 0.25, 1] }}
+                  transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
                   className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}
                 >
                   <div
@@ -1101,6 +1303,12 @@ export function AgentChatCore({
                         </div>
                       )}
                       <ChatMarkdown content={msg.content} inverted={msg.role === "user"} />
+                      {isStreamingBubble && !reduceMotion && (
+                        <span
+                          aria-hidden
+                          className="inline-block w-[2px] h-[1em] ml-0.5 align-[-0.1em] bg-primary/80 animate-pulse rounded-sm"
+                        />
+                      )}
                       <div
                         className={`mt-1.5 flex items-center gap-1.5 text-[10px] tabular-nums font-medium ${
                           msg.role === "user"
@@ -1111,11 +1319,12 @@ export function AgentChatCore({
                         <span title={formatDateTime(msg.created) ?? undefined}>
                           {formatMessageStamp(msg.created) || "Sin fecha"}
                         </span>
-                        {msg.role === "agent" && (
+                        {msg.role === "agent" && !isStreamingBubble && (
                           <MessageInspectButton
                             variant="icon"
                             chunkCount={ragCount}
                             toolCount={toolCount}
+                            policyCount={policyCount}
                             onClick={() =>
                               setInspectMessage({
                                 id: msg.id,
@@ -1124,6 +1333,10 @@ export function AgentChatCore({
                                 rag_sources: msg.rag_sources,
                                 tool_calls: msg.tool_calls,
                                 tool_results: msg.tool_results,
+                                policy_trace: msg.policy_trace,
+                                flow_policy_trace: msg.flow_policy_trace,
+                                policies: msg.policies,
+                                metadata: msg.metadata,
                               })
                             }
                           />
@@ -1134,6 +1347,7 @@ export function AgentChatCore({
                       <MessageActivityTrail
                         toolCalls={msg.tool_calls}
                         toolResults={msg.tool_results}
+                        policyTrace={msgPolicy}
                       />
                     )}
                     <ChatMessageActions
@@ -1185,6 +1399,7 @@ export function AgentChatCore({
         message={inspectMessage}
         embeddingModel={agent.embedding_model}
         topK={agent.rag_top_k}
+        flowPolicy={agent.flow_policy}
       />
 
       <div className="border-t border-border/50 bg-card/50 backdrop-blur p-3 sm:p-4">
@@ -1208,38 +1423,158 @@ export function AgentChatCore({
               </button>
             </div>
           )}
-          <form
-            onSubmit={(e) => void handleSend(e)}
-            className="flex items-end gap-2 rounded-full bg-muted/60 border border-border/50 px-2 py-2 transition-colors focus-within:border-primary/40 focus-within:bg-muted"
+          {attachedSkills.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 px-0.5">
+              {attachedSkills.map((skill) => {
+                const paramBits = Object.entries(skill.params)
+                  .filter(([, v]) => v.trim())
+                  .map(([k, v]) => `${k}=${v}`);
+                return (
+                  <span
+                    key={skill.id}
+                    className="inline-flex items-center gap-1.5 max-w-full rounded-full border border-primary/35 bg-primary/10 pl-2.5 pr-1 py-1 text-[11px] font-medium text-primary"
+                    title={paramBits.length ? `${skill.name}: ${paramBits.join(", ")}` : skill.name}
+                  >
+                    <Wrench className="h-3 w-3 shrink-0 opacity-80" />
+                    <span className="truncate">
+                      /{skill.slug}
+                      {paramBits.length > 0 ? (
+                        <span className="text-primary/70 font-normal">
+                          {" "}
+                          · {paramBits.slice(0, 2).join(", ")}
+                          {paramBits.length > 2 ? "…" : ""}
+                        </span>
+                      ) : null}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setAttachedSkills((prev) => prev.filter((s) => s.id !== skill.id))
+                      }
+                      className="shrink-0 rounded-full p-0.5 hover:bg-primary/20"
+                      aria-label={`Quitar ${skill.name}`}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                );
+              })}
+            </div>
+          )}
+          <ChatSkillCommand
+            open={skillMenuOpen && agentSkillOptions.length > 0}
+            onOpenChange={setSkillMenuOpen}
+            skills={agentSkillOptions}
+            query={slashQuery?.query ?? ""}
+            onSelect={selectSkillCommand}
           >
-            <Input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={
-                isCreating
-                  ? "Creando conversación..."
-                  : isBusy
-                    ? "El agente está respondiendo..."
-                    : replyTo
-                      ? "Escribe tu respuesta…"
-                      : isDraftNew || !conversationId
-                        ? "Escribe para iniciar una conversación nueva..."
-                        : "Escribe tu mensaje..."
-              }
-              disabled={isBusy || isCreating || (!conversationId && !isDraftNew)}
-              className="flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-3 py-2 text-sm"
-            />
-            <Button
-              type="submit"
-              size="icon"
-              className="h-9 w-9 rounded-full shrink-0"
-              disabled={!input.trim() || isBusy || isCreating || (!conversationId && !isDraftNew)}
+            <form
+              onSubmit={(e) => void handleSend(e)}
+              className="flex items-end gap-2 rounded-full bg-muted/60 border border-border/50 px-2 py-2 transition-colors focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/25 focus-within:bg-muted"
             >
-              {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            </Button>
-          </form>
+              <Input
+                ref={inputRef}
+                value={input}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  setInputCursor(e.target.selectionStart ?? e.target.value.length);
+                }}
+                onSelect={(e) => {
+                  const t = e.currentTarget;
+                  setInputCursor(t.selectionStart ?? t.value.length);
+                }}
+                placeholder={
+                  isCreating
+                    ? "Creando conversación..."
+                    : isBusy
+                      ? "El agente está respondiendo..."
+                      : replyTo
+                        ? "Escribe tu respuesta…"
+                        : attachedSkills.length > 0
+                          ? "Añade un mensaje o envía la skill…"
+                          : isDraftNew || !conversationId
+                            ? "Escribe para iniciar… (/ para skills)"
+                            : "Escribe tu mensaje… (/ para skills)"
+                }
+                disabled={isBusy || isCreating || (!conversationId && !isDraftNew)}
+                className="flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-3 py-2 text-sm"
+              />
+              <motion.div whileTap={reduceMotion ? undefined : { scale: 0.9 }}>
+                <Button
+                  type="submit"
+                  size="icon"
+                  className="h-9 w-9 rounded-full shrink-0"
+                  disabled={
+                    (!input.trim() && attachedSkills.length === 0) ||
+                    isBusy ||
+                    isCreating ||
+                    (!conversationId && !isDraftNew)
+                  }
+                >
+                  {isBusy ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                </Button>
+              </motion.div>
+            </form>
+          </ChatSkillCommand>
         </div>
       </div>
+
+      <Dialog
+        open={Boolean(pendingSkill)}
+        onOpenChange={(open) => {
+          if (!open) setPendingSkill(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <Wrench className="h-4 w-4 text-primary" />
+              Parámetros de {pendingSkill?.skill.name ?? "skill"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <p className="text-xs text-muted-foreground">
+              Esta skill necesita datos antes de ejecutarla.
+            </p>
+            {pendingSkill?.fields.map((field) => (
+              <div key={field.key} className="space-y-1.5">
+                <Label htmlFor={`skill-param-${field.key}`} className="text-xs capitalize">
+                  {field.label}
+                </Label>
+                <Input
+                  id={`skill-param-${field.key}`}
+                  value={pendingSkill.values[field.key] ?? ""}
+                  onChange={(e) =>
+                    setPendingSkill((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            values: { ...prev.values, [field.key]: e.target.value },
+                          }
+                        : prev,
+                    )
+                  }
+                  placeholder={field.description || field.key}
+                  className="h-9"
+                  autoFocus={field.key === pendingSkill.fields[0]?.key}
+                />
+              </div>
+            ))}
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="ghost" onClick={() => setPendingSkill(null)}>
+              Cancelar
+            </Button>
+            <Button type="button" onClick={confirmPendingSkill}>
+              Añadir skill
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { KeyRound, Loader2, Link2Off, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
   useApplicationConnection,
@@ -11,6 +9,8 @@ import {
   useDisconnectApplication,
   type ExternalAPI,
 } from "@/api/hooks/useExternalAPIs";
+import { AppCredentialFieldsForm } from "@/components/applications/app-credential-fields-form";
+import { canOfferInstallationCredentials, resolveCredentialFields } from "@/lib/external-api";
 import { useActiveBranchId } from "@/hooks/useActiveBranchId";
 import { toast } from "sonner";
 
@@ -29,24 +29,30 @@ function formatWhen(iso?: string | null): string {
 /**
  * Cuenta personal de prueba (Studio / Probar).
  * Sin selector de sucursal: eso vive en Instalación (cuenta de servicio).
- * Acá solo credentials del usuario actual para probar en Studio.
  */
 export function PersonalConnectionsPanel({ api }: { api: ExternalAPI }) {
   const apiId = String(api.id);
   const branchId = useActiveBranchId();
-  const { data: connection, isLoading, refetch } = useApplicationConnection(apiId);
-  const { data: fieldsData, isLoading: fieldsLoading } = useCredentialFields(apiId);
+  const needsCreds = canOfferInstallationCredentials(api);
+  const {
+    data: connection,
+    isLoading,
+    refetch,
+  } = useApplicationConnection(needsCreds ? apiId : undefined);
+  const { data: fieldsData, isLoading: fieldsLoading } = useCredentialFields(
+    needsCreds ? apiId : undefined,
+  );
   const connect = useConnectApplication();
   const disconnect = useDisconnectApplication();
 
-  const fields = useMemo(() => {
-    const fromApi = fieldsData?.fields ?? [];
-    if (fromApi.length) return fromApi;
-    return [
-      { name: "email", type: "string", format: "email", required: true },
-      { name: "password", type: "string", format: "password", required: true },
-    ];
-  }, [fieldsData?.fields]);
+  const fields = useMemo(
+    () =>
+      resolveCredentialFields(api.auth_type, fieldsData?.fields, {
+        baseUrl: api.base_url,
+        name: api.name,
+      }),
+    [api.auth_type, api.base_url, api.name, fieldsData?.fields],
+  );
 
   const [values, setValues] = useState<Record<string, string>>({});
 
@@ -63,7 +69,7 @@ export function PersonalConnectionsPanel({ api }: { api: ExternalAPI }) {
     for (const f of fields) {
       const v = (values[f.name] ?? "").trim();
       if (!v && f.required !== false) {
-        toast.error(`Completá «${f.name}»`);
+        toast.error(`Completa «${f.label || f.name}»`);
         return;
       }
       if (v) credentials[f.name] = v;
@@ -81,9 +87,7 @@ export function PersonalConnectionsPanel({ api }: { api: ExternalAPI }) {
             setValues((prev) => {
               const cleared = { ...prev };
               for (const k of Object.keys(cleared)) {
-                if (k.toLowerCase().includes("password") || k.toLowerCase().includes("secret")) {
-                  cleared[k] = "";
-                }
+                if (/password|secret|token|key|api_key/i.test(k)) cleared[k] = "";
               }
               return cleared;
             });
@@ -115,7 +119,7 @@ export function PersonalConnectionsPanel({ api }: { api: ExternalAPI }) {
     });
   };
 
-  if (api.auth_type !== "endpoint_auth") {
+  if (!needsCreds) {
     return null;
   }
 
@@ -160,36 +164,15 @@ export function PersonalConnectionsPanel({ api }: { api: ExternalAPI }) {
             </div>
           )}
 
-          <div className="grid gap-3 sm:grid-cols-2 max-w-2xl">
-            {fields.map((f) => {
-              const inputType =
-                f.format === "password" || f.name.toLowerCase().includes("password")
-                  ? "password"
-                  : f.format === "email" || f.name.toLowerCase().includes("email")
-                    ? "email"
-                    : "text";
-              return (
-                <div key={f.name} className="space-y-1.5">
-                  <Label className="text-xs font-mono">
-                    {f.name}
-                    {f.required !== false && <span className="text-destructive"> *</span>}
-                  </Label>
-                  <Input
-                    type={inputType}
-                    autoComplete="off"
-                    className="h-9"
-                    value={values[f.name] ?? ""}
-                    onChange={(e) => setValues((prev) => ({ ...prev, [f.name]: e.target.value }))}
-                    placeholder={
-                      connected && inputType === "password"
-                        ? "•••••••• (dejar vacío para no cambiar)"
-                        : f.name
-                    }
-                  />
-                </div>
-              );
-            })}
-          </div>
+          <AppCredentialFieldsForm
+            authType={api.auth_type}
+            fieldsFromApi={fieldsData?.fields}
+            apiHints={{ baseUrl: api.base_url, name: api.name }}
+            values={values}
+            connected={connected}
+            className="max-w-2xl"
+            onChange={(name, value) => setValues((prev) => ({ ...prev, [name]: value }))}
+          />
 
           <div className="flex flex-wrap gap-2">
             <Button type="button" size="sm" disabled={connect.isPending} onClick={onConnect}>

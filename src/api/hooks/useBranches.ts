@@ -206,12 +206,33 @@ export interface BranchRole {
 /** En Muninn solo se asignan Propietario, Administrador local y Empleado. */
 export const MUNINN_ASSIGNABLE_ROLE_CODES = ["OWNER", "ADMIN_LOCAL", "EMPLOYEE"] as const;
 
+/** Etiquetas fijas en español (UI Muninn); no depender del nombre que venga de la API por sucursal. */
+export const MUNINN_ROLE_LABELS_ES: Record<(typeof MUNINN_ASSIGNABLE_ROLE_CODES)[number], string> =
+  {
+    OWNER: "Propietario",
+    ADMIN_LOCAL: "Administrador local",
+    EMPLOYEE: "Empleado",
+  };
+
 /** Roles estándar si la API no devuelve definiciones para la sucursal. */
 export const FALLBACK_BRANCH_ROLES: BranchRole[] = [
-  { id: "OWNER", code: "OWNER", name: "Propietario", hierarchy_level: 1 },
-  { id: "ADMIN_LOCAL", code: "ADMIN_LOCAL", name: "Administrador local", hierarchy_level: 2 },
-  { id: "EMPLOYEE", code: "EMPLOYEE", name: "Empleado", hierarchy_level: 5 },
+  { id: "OWNER", code: "OWNER", name: MUNINN_ROLE_LABELS_ES.OWNER, hierarchy_level: 1 },
+  {
+    id: "ADMIN_LOCAL",
+    code: "ADMIN_LOCAL",
+    name: MUNINN_ROLE_LABELS_ES.ADMIN_LOCAL,
+    hierarchy_level: 2,
+  },
+  { id: "EMPLOYEE", code: "EMPLOYEE", name: MUNINN_ROLE_LABELS_ES.EMPLOYEE, hierarchy_level: 5 },
 ];
+
+export function muninnRoleLabel(code: string | null | undefined): string {
+  const c = (code || "").trim();
+  if (c in MUNINN_ROLE_LABELS_ES) {
+    return MUNINN_ROLE_LABELS_ES[c as keyof typeof MUNINN_ROLE_LABELS_ES];
+  }
+  return c || "—";
+}
 
 function normalizeBranchRoles(raw: unknown, branchId: string | number): BranchRole[] {
   const list = Array.isArray(raw)
@@ -219,23 +240,37 @@ function normalizeBranchRoles(raw: unknown, branchId: string | number): BranchRo
     : normalizeListResponse<BranchRole>(raw as { results?: BranchRole[] });
 
   const allowed = new Set<string>(MUNINN_ASSIGNABLE_ROLE_CODES);
+  const byCode = new Map<string, BranchRole>();
 
-  const mapped = list
-    .map((r) => {
-      const code = (r.code || r.value || String(r.id)).trim();
-      const name = (r.name || r.label || code).trim();
-      return {
-        id: r.id,
-        code,
-        name,
-        branch: r.branch ?? branchId,
-        hierarchy_level: typeof r.hierarchy_level === "number" ? r.hierarchy_level : 999,
-        is_system: r.is_system,
-      } satisfies BranchRole;
-    })
-    .filter((r) => allowed.has(r.code));
+  for (const r of list) {
+    const code = (r.code || r.value || String(r.id)).trim();
+    if (!allowed.has(code)) continue;
+    byCode.set(code, {
+      id: r.id ?? code,
+      code,
+      name: muninnRoleLabel(code),
+      label: muninnRoleLabel(code),
+      branch: r.branch ?? branchId,
+      hierarchy_level: typeof r.hierarchy_level === "number" ? r.hierarchy_level : 999,
+      is_system: r.is_system,
+    });
+  }
 
-  return mapped.sort((a, b) => {
+  // Siempre ofrecer los 3 roles Muninn, aunque la sucursal traiga nombres en inglés o incompletos.
+  for (const code of MUNINN_ASSIGNABLE_ROLE_CODES) {
+    if (byCode.has(code)) continue;
+    const fallback = FALLBACK_BRANCH_ROLES.find((r) => r.code === code);
+    if (fallback) {
+      byCode.set(code, {
+        ...fallback,
+        branch: branchId,
+        name: muninnRoleLabel(code),
+        label: muninnRoleLabel(code),
+      });
+    }
+  }
+
+  return Array.from(byCode.values()).sort((a, b) => {
     const ha = a.hierarchy_level ?? 999;
     const hb = b.hierarchy_level ?? 999;
     if (ha !== hb) return ha - hb;
@@ -733,8 +768,8 @@ export function useBranchUsers(options?: { allBranches?: boolean }) {
     queryKey: ["branches", "users", allBranches ? "all" : "active"],
     queryFn: () =>
       GET_ALL_PAGES<BranchUserAssignment>(ENDPOINTS.branches.users, {
-        // Admin usuarios: ver asignaciones de todas las sucursales (superadmin).
-        ...(allBranches ? { skipBranchHeader: true } : {}),
+        // Admin usuarios: ver asignaciones de todas las sucursales del alcance.
+        ...(allBranches ? { skipBranchHeader: true, params: { all: true } } : {}),
       }),
     staleTime: 30_000,
   });
@@ -759,7 +794,11 @@ export function useCreateBranchUser() {
 export function useDeleteBranchUser() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string | number) => DELETE(ENDPOINTS.branches.userDetail(id)),
+    mutationFn: (id: string | number) =>
+      DELETE(ENDPOINTS.branches.userDetail(id), {
+        // No atar el DELETE a la sucursal del header (falla al mover entre stores).
+        skipBranchHeader: true,
+      }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["branches", "users"] }),
   });
 }

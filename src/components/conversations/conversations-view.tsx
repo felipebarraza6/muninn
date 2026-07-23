@@ -11,7 +11,8 @@ import {
 } from "@/lib/conversation-types";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, Info, Loader2 } from "lucide-react";
+import { ChevronLeft, Info } from "lucide-react";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { toast } from "sonner";
 import {
   useUnifiedConversations,
@@ -287,9 +288,7 @@ export function ConversationsView() {
     const trimmed = text.trim();
     setLocalMessages((prev) => {
       const existing = prev[conversationId] ?? [];
-      const next = existing.filter(
-        (m) => !(m.sender === "human" && m.text.trim() === trimmed),
-      );
+      const next = existing.filter((m) => !(m.sender === "human" && m.text.trim() === trimmed));
       if (next.length === existing.length) return prev;
       return { ...prev, [conversationId]: next };
     });
@@ -373,8 +372,8 @@ export function ConversationsView() {
 
   if (isLoading) {
     return (
-      <div className="h-[calc(100dvh-3.5rem)] flex items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="h-[calc(100dvh-3.5rem)] bg-background">
+        <PageSkeleton variant="inbox" className="h-full max-w-none px-4 py-4" padded={false} />
       </div>
     );
   }
@@ -399,75 +398,63 @@ export function ConversationsView() {
         </div>
       ) : null}
       <div className="flex flex-1 min-h-0 overflow-hidden">
-      <aside
-        className={`${mobileView === "list" ? "flex" : "hidden"} md:flex w-full md:w-[340px] lg:w-[360px] border-r bg-card flex-col shrink-0`}
-      >
-        <ConversationList
-          conversations={convos}
-          selectedId={selectedId}
-          onSelect={handleSelect}
-          bucket={bucket}
-          onBucketChange={setBucket}
-          subFilter={subFilter}
-          onSubFilterChange={setSubFilter}
-          query={query}
-          onQueryChange={setQuery}
-        />
-      </aside>
-
-      <section
-        className={`${mobileView === "chat" ? "flex" : "hidden"} md:flex flex-1 flex-col min-w-0`}
-      >
-        <div className="md:hidden flex items-center gap-2 border-b px-3 h-12 shrink-0">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => setMobileView("list")}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <span className="font-medium text-sm truncate flex-1">
-            {selectedWithMessages?.patientName || "Selecciona una conversación"}
-          </span>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => setDetailsOpen(true)}
-          >
-            <Info className="h-4 w-4" />
-          </Button>
-        </div>
-        {selectedWithMessages ? (
-          <ChatPane
-            conversation={selectedWithMessages}
-            onTakeControl={handleTakeControl}
-            onSend={handleSend}
-            onOpenDetails={() => setDetailsOpen(true)}
-            onResolve={handleResolve}
-            analysisOnly={analysisOnly}
+        <aside
+          className={`${mobileView === "list" ? "flex" : "hidden"} md:flex w-full md:w-[340px] lg:w-[360px] border-r bg-card flex-col shrink-0`}
+        >
+          <ConversationList
+            conversations={convos}
+            selectedId={selectedId}
+            onSelect={handleSelect}
+            bucket={bucket}
+            onBucketChange={setBucket}
+            subFilter={subFilter}
+            onSubFilterChange={setSubFilter}
+            query={query}
+            onQueryChange={setQuery}
           />
-        ) : (
-          <div className="flex-1 flex items-center justify-center text-muted-foreground">
-            Selecciona una conversación
+        </aside>
+
+        <section
+          className={`${mobileView === "chat" ? "flex" : "hidden"} md:flex flex-1 flex-col min-w-0`}
+        >
+          <div className="md:hidden flex items-center gap-2 border-b px-3 h-12 shrink-0">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setMobileView("list")}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="font-medium text-sm truncate flex-1">
+              {selectedWithMessages?.patientName || "Selecciona una conversación"}
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setDetailsOpen(true)}
+            >
+              <Info className="h-4 w-4" />
+            </Button>
           </div>
-        )}
-      </section>
+          {selectedWithMessages ? (
+            <ChatPane
+              conversation={selectedWithMessages}
+              onTakeControl={handleTakeControl}
+              onSend={handleSend}
+              onOpenDetails={() => setDetailsOpen(true)}
+              onResolve={handleResolve}
+              analysisOnly={analysisOnly}
+            />
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-muted-foreground">
+              Selecciona una conversación
+            </div>
+          )}
+        </section>
 
-      <aside className="hidden xl:flex w-[340px] border-l bg-card flex-col shrink-0 overflow-y-auto">
-        {selectedWithMessages && (
-          <ConversationDetailsPanel
-            conversation={selectedWithMessages}
-            onTakeControl={handleTakeControl}
-            onResolve={handleResolve}
-            analysisOnly={analysisOnly}
-          />
-        )}
-      </aside>
-
-      <Sheet open={detailsOpen} onOpenChange={setDetailsOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-md p-0 overflow-y-auto xl:hidden">
+        <aside className="hidden xl:flex w-[340px] border-l bg-card flex-col shrink-0 overflow-y-auto">
           {selectedWithMessages && (
             <ConversationDetailsPanel
               conversation={selectedWithMessages}
@@ -476,8 +463,20 @@ export function ConversationsView() {
               analysisOnly={analysisOnly}
             />
           )}
-        </SheetContent>
-      </Sheet>
+        </aside>
+
+        <Sheet open={detailsOpen} onOpenChange={setDetailsOpen}>
+          <SheetContent side="right" className="w-full sm:max-w-md p-0 overflow-y-auto xl:hidden">
+            {selectedWithMessages && (
+              <ConversationDetailsPanel
+                conversation={selectedWithMessages}
+                onTakeControl={handleTakeControl}
+                onResolve={handleResolve}
+                analysisOnly={analysisOnly}
+              />
+            )}
+          </SheetContent>
+        </Sheet>
       </div>
     </div>
   );

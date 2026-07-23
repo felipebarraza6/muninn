@@ -13,6 +13,7 @@ import {
   Plug,
   Check,
 } from "lucide-react";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -135,11 +136,7 @@ export function AgentSkillsPanel({ agentId }: AgentSkillsPanelProps) {
   }, [availableSkills, assignSearch, typeFilter]);
 
   if (isLoadingAgent || isLoadingCatalog || isLoadingApps) {
-    return (
-      <div className="flex items-center justify-center min-h-[200px]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <PageSkeleton variant="list" padded={false} />;
   }
 
   const setSkills = (nextIds: string[], successMsg: string, onDone?: () => void) => {

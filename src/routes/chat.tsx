@@ -1,21 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Bot, Loader2 } from "lucide-react";
+import { Bot } from "lucide-react";
 import { AgentChatCore } from "@/components/agent-chat-core";
 import { useAgents } from "@/api/hooks/useAgents";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 
 export default function ChatPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const agentIdFromUrl = searchParams.get("agent");
-  const conversationFromUrl = searchParams.get("conversation");
   const { data: agents = [], isLoading } = useAgents({ is_active: true });
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(agentIdFromUrl);
 
@@ -48,7 +41,6 @@ export default function ChatPage() {
       (prev) => {
         const next = new URLSearchParams(prev);
         next.set("agent", value);
-        // Al cambiar de agente, limpiar conversación de otro agente
         next.delete("conversation");
         return next;
       },
@@ -58,8 +50,8 @@ export default function ChatPage() {
 
   if (isLoading) {
     return (
-      <div className="h-[calc(100dvh-3.5rem)] w-full bg-background flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="h-[calc(100dvh-3.5rem)] w-full bg-background">
+        <PageSkeleton variant="chat" className="h-full max-w-none px-4 py-4" padded={false} />
       </div>
     );
   }
@@ -78,40 +70,19 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="h-[calc(100dvh-3.5rem)] w-full flex flex-col overflow-hidden">
-      <div className="border-b border-border/50 bg-card/50 backdrop-blur px-4 py-2 shrink-0 w-full flex items-center justify-start gap-3">
-        <Bot className="h-4 w-4 text-muted-foreground shrink-0" />
-        <Select value={selectedAgentId ?? undefined} onValueChange={handleAgentChange}>
-          <SelectTrigger className="w-auto min-w-[12rem] max-w-sm shrink-0 border-0 bg-transparent shadow-none focus:ring-0 px-0 py-0 h-auto text-sm font-medium">
-            <SelectValue placeholder="Selecciona un agente" />
-          </SelectTrigger>
-          <SelectContent>
-            {activeAgents.map((agent) => (
-              <SelectItem key={String(agent.id)} value={String(agent.id)}>
-                {agent.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {conversationFromUrl ? (
-          <span className="text-[11px] text-muted-foreground truncate hidden sm:inline">
-            Conv. #{conversationFromUrl}
-          </span>
-        ) : (
-          <span className="text-[11px] text-muted-foreground truncate hidden md:inline">
-            Conversación nueva
-          </span>
-        )}
-        <div className="ml-auto shrink-0">
-          <StudioBranchFilter />
-        </div>
-      </div>
-
-      <div className="flex-1 min-h-0">
-        {selectedAgentId ? (
-          <AgentChatCore agentId={selectedAgentId} showBackLink={false} fillParent />
-        ) : null}
-      </div>
+    <div className="h-[calc(100dvh-3.5rem)] w-full overflow-hidden">
+      {selectedAgentId ? (
+        <AgentChatCore
+          agentId={selectedAgentId}
+          showBackLink={false}
+          fillParent
+          agentSwitcher={{
+            agents: activeAgents,
+            onChange: handleAgentChange,
+          }}
+          headerExtra={<StudioBranchFilter />}
+        />
+      ) : null}
     </div>
   );
 }

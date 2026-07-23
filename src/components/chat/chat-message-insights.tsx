@@ -41,6 +41,26 @@ export interface ToolResultDetail {
   content?: string;
 }
 
+/** Solo marca fallo real; evita falsos positivos tipo `"invalid": false` en JSON. */
+export function isToolResultFailed(content: unknown): boolean {
+  if (content == null) return false;
+  if (typeof content === "object" && !Array.isArray(content)) {
+    const o = content as Record<string, unknown>;
+    if (o.ok === false || o.success === false) return true;
+    if (typeof o.error === "string" && o.error.trim()) return true;
+    if (typeof o.detail === "string" && /traceback|exception/i.test(o.detail)) return true;
+    return false;
+  }
+  if (typeof content !== "string") return false;
+  const t = content.trim();
+  if (!t) return false;
+  try {
+    return isToolResultFailed(JSON.parse(t));
+  } catch {
+    return /^(error|failed|denied|exception)\b/i.test(t) || /\btraceback\b/i.test(t);
+  }
+}
+
 function prettyJson(value: unknown): string {
   if (value == null) return "";
   if (typeof value === "string") {

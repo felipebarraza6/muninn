@@ -44,14 +44,22 @@ function extractValidationErrors(data: unknown): string[] {
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     // FormData: dejar que el browser ponga multipart + boundary.
-    // Si forzamos "multipart/form-data" sin boundary, Django no recibe archivos.
+    // Si forzamos "multipart/form-data" sin boundary (o dejamos application/json),
+    // Django no recibe archivos.
     if (typeof FormData !== "undefined" && config.data instanceof FormData) {
-      if (typeof config.headers.set === "function") {
-        config.headers.set("Content-Type", undefined as unknown as string);
-        config.headers.delete("Content-Type");
+      const headers = config.headers as {
+        set?: (k: string, v: unknown) => void;
+        delete?: (k: string) => void;
+        setContentType?: (v: false | string) => void;
+      } & Record<string, unknown>;
+      if (typeof headers.setContentType === "function") {
+        headers.setContentType(false);
+      } else if (typeof headers.delete === "function") {
+        headers.delete("Content-Type");
+        headers.delete("content-type");
       } else {
-        delete (config.headers as Record<string, unknown>)["Content-Type"];
-        delete (config.headers as Record<string, unknown>)["content-type"];
+        delete headers["Content-Type"];
+        delete headers["content-type"];
       }
     }
 

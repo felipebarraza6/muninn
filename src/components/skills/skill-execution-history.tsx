@@ -3,6 +3,7 @@ import { Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { useFunctionExecutionLogs, type FunctionExecutionLog } from "@/api/hooks/useAgentFunctions";
 import {
   formatLogLatency,
@@ -51,9 +52,7 @@ export function SkillExecutionHistory({ skillId }: { skillId: string }) {
       </div>
 
       {isLoading ? (
-        <div className="flex items-center justify-center min-h-[160px]">
-          <Loader2 className="h-7 w-7 animate-spin text-muted-foreground" />
-        </div>
+        <PageSkeleton variant="list" padded={false} rows={4} />
       ) : logs.length === 0 ? (
         <div className="rounded-lg border border-dashed px-4 py-12 text-center text-sm text-muted-foreground">
           Aún no hay ejecuciones de esta skill.

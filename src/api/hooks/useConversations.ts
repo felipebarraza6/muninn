@@ -39,6 +39,9 @@ export type ChatMessageMetadata = {
   reply_to_id?: number | string;
   reply_to_role?: string;
   reply_to_preview?: string;
+  policy_trace?: unknown;
+  flow_policy_trace?: unknown;
+  policies?: unknown;
   [key: string]: unknown;
 };
 
@@ -57,6 +60,9 @@ export interface ChatMessageResponse {
   sources?: unknown[];
   tool_calls?: unknown[];
   tool_results?: unknown[];
+  policy_trace?: unknown;
+  flow_policy_trace?: unknown;
+  policies?: unknown;
   metadata?: ChatMessageMetadata | null;
 }
 

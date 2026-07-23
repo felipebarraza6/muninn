@@ -10,12 +10,12 @@ import {
   Copy,
   Archive,
   Eye,
-  Loader2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -127,11 +127,7 @@ export default function CampaignsPage() {
   };
 
   if (isLoading) {
-    return (
-      <div className="px-4 md:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <PageSkeleton variant="cards" />;
   }
 
   if (error) {

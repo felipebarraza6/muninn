@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { Check, Database, Loader2, Sparkles, Wrench, X } from "lucide-react";
+import { Check, Database, Loader2, Shield, Sparkles, Wrench, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ToolCallDetail, ToolResultDetail } from "@/components/chat/chat-message-insights";
+import { isToolResultFailed } from "@/components/chat/chat-message-insights";
+import type { PolicyTrace } from "@/lib/policyTrace";
 
 function toolLabel(call: ToolCallDetail): string {
   const raw = call.function?.name || call.name || "skill";
@@ -216,53 +218,85 @@ export function ChatProcessingIndicator({
   );
 }
 
-/** Chips compactos bajo el mensaje: skills ejecutadas (RAG va en el botón de detalle). */
+/** Chips compactos bajo el mensaje: skills ejecutadas + señales de policy. */
 export function MessageActivityTrail({
   toolCalls,
   toolResults,
+  policyTrace,
   className,
 }: {
   toolCalls?: unknown[];
   toolResults?: unknown[];
+  policyTrace?: PolicyTrace | null;
   className?: string;
 }) {
   const reduceMotion = useReducedMotion();
   const labels = useMemo(() => extractToolLabels(toolCalls), [toolCalls]);
   const results = Array.isArray(toolResults) ? (toolResults as ToolResultDetail[]) : [];
+  const blocked = policyTrace?.skills_blocked ?? [];
+  const missing = policyTrace?.slots_missing ?? [];
 
-  if (!labels.length) return null;
+  if (!labels.length && !blocked.length && !missing.length) return null;
+
+  const chips: Array<{ key: string; label: string; tone: "ok" | "fail" | "warn" }> = [
+    ...labels.map((label, i) => {
+      const result = results[i];
+      const failed = isToolResultFailed(result?.content);
+      return {
+        key: `skill-${label}-${i}`,
+        label: failed ? `Falló: ${label}` : `Ejecutada: ${label}`,
+        tone: (failed ? "fail" : "ok") as "ok" | "fail",
+      };
+    }),
+    ...blocked.map((b, i) => ({
+      key: `block-${b.skill}-${i}`,
+      label: b.reason ? `${b.skill}: ${b.reason}` : `Bloqueada: ${b.skill}`,
+      tone: "fail" as const,
+    })),
+    ...missing.slice(0, 3).map((s, i) => ({
+      key: `slot-${s}-${i}`,
+      label: `Slot: ${s}`,
+      tone: "warn" as const,
+    })),
+  ];
 
   return (
     <motion.div
       initial={reduceMotion ? false : { opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ duration: 0.4, ease: softEase }}
+      transition={{ duration: 0.25, ease: softEase }}
       className={cn("flex flex-wrap items-center gap-1 pt-0.5", className)}
     >
-      {labels.map((label, i) => {
-        const result = results[i];
-        const failed =
-          typeof result?.content === "string" && /error|fail|denied|invalid/i.test(result.content);
-        return (
-          <span
-            key={`${label}-${i}`}
-            className={cn(
-              "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium max-w-[14rem]",
-              failed
-                ? "border-destructive/25 bg-destructive/8 text-destructive"
-                : "border-primary/20 bg-primary/8 text-primary/90",
-            )}
-            title={label}
-          >
-            {failed ? (
-              <Wrench className="h-3 w-3 shrink-0 opacity-70" />
+      {chips.map((chip, i) => (
+        <motion.span
+          key={chip.key}
+          initial={reduceMotion ? false : { opacity: 0, y: 3 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.18, delay: reduceMotion ? 0 : i * 0.04, ease: softEase }}
+          className={cn(
+            "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium max-w-[16rem]",
+            chip.tone === "fail"
+              ? "border-destructive/25 bg-destructive/8 text-destructive"
+              : chip.tone === "warn"
+                ? "border-warning/25 bg-warning/10 text-warning"
+                : "border-primary/25 bg-primary/10 text-primary",
+          )}
+          title={chip.label}
+        >
+          {chip.tone === "fail" ? (
+            chip.key.startsWith("block-") ? (
+              <Shield className="h-3 w-3 shrink-0 opacity-80" />
             ) : (
-              <Check className="h-3 w-3 shrink-0 opacity-80" />
-            )}
-            <span className="truncate">{label}</span>
-          </span>
-        );
-      })}
+              <X className="h-3 w-3 shrink-0 opacity-80" />
+            )
+          ) : chip.tone === "warn" ? (
+            <Shield className="h-3 w-3 shrink-0 opacity-80" />
+          ) : (
+            <Wrench className="h-3 w-3 shrink-0 opacity-80" />
+          )}
+          <span className="truncate">{chip.label}</span>
+        </motion.span>
+      ))}
     </motion.div>
   );
 }

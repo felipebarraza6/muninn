@@ -42,6 +42,7 @@ import { useAgents, type Agent } from "@/api/hooks/useAgents";
 import { KNOWLEDGE_TYPE_LABEL, parseFaqPairs, serializeFaqPairs } from "@/lib/knowledge-types";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { InlineSkeleton } from "@/components/ui/page-skeleton";
 
 export type KnowledgeViewerContext = "catalog" | "agent";
 
@@ -1050,9 +1051,8 @@ export function KnowledgeContentViewer({
         </DialogHeader>
 
         {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-12 gap-3 flex-1">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">Cargando contenido...</span>
+          <div className="flex flex-1 flex-col gap-3 p-4 py-8">
+            <InlineSkeleton lines={6} className="py-0" />
           </div>
         ) : error || !doc ? (
           <div className="flex flex-col items-center justify-center py-12 gap-3 text-destructive flex-1">

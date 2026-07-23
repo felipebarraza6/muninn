@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { ChatMarkdown } from "@/components/chat/chat-markdown";
 import { ChatCopyButton } from "@/components/chat/chat-copy-button";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 
 interface ChatMessage {
   id: string;
@@ -107,13 +108,9 @@ export function EmbedChatPanel({ channelId, className, compact = false }: EmbedC
   if (configLoading) {
     return (
       <div
-        className={cn(
-          "flex items-center justify-center bg-background text-muted-foreground",
-          compact ? "h-80" : "h-full min-h-[320px]",
-          className,
-        )}
+        className={cn("bg-background p-4", compact ? "h-80" : "h-full min-h-[320px]", className)}
       >
-        <Loader2 className="h-6 w-6 animate-spin" />
+        <PageSkeleton variant="chat" padded={false} className="h-full" />
       </div>
     );
   }

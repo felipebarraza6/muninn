@@ -138,14 +138,32 @@ function branchParams(branch?: string | number | null) {
   return branch != null && branch !== "" ? { branch } : undefined;
 }
 
-type KnowledgeIdInput = string | { id: string; branch?: string | number | null };
+type KnowledgeIdInput = string | { id: string; branch?: string | number | null; hard?: boolean };
 
 function resolveKnowledgeIdInput(input: KnowledgeIdInput): {
   id: string;
   branch?: string | number | null;
+  hard?: boolean;
 } {
   if (typeof input === "string") return { id: input };
   return input;
+}
+
+export function useDeleteKnowledge() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: KnowledgeIdInput) => {
+      const { id, branch, hard } = resolveKnowledgeIdInput(input);
+      return DELETE(ENDPOINTS.knowledge.detail(id), {
+        params: {
+          ...(branchParams(branch) ?? {}),
+          include_inactive: "true",
+          ...(hard ? { hard: "true" } : {}),
+        },
+      });
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: QUERY_KEY }),
+  });
 }
 
 export function useKnowledge(
@@ -187,17 +205,6 @@ export function useUpdateKnowledge() {
       PATCH<AgentKnowledge>(ENDPOINTS.knowledge.detail(id), data, {
         params: branchParams(branch),
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: QUERY_KEY }),
-  });
-}
-
-export function useDeleteKnowledge() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (input: KnowledgeIdInput) => {
-      const { id, branch } = resolveKnowledgeIdInput(input);
-      return DELETE(ENDPOINTS.knowledge.detail(id), { params: branchParams(branch) });
-    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: QUERY_KEY }),
   });
 }

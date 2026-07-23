@@ -29,7 +29,9 @@ import {
   Play,
   Send,
   Inbox,
+  RotateCcw,
 } from "lucide-react";
+import { PageSkeleton, InlineSkeleton } from "@/components/ui/page-skeleton";
 import {
   useChannel,
   useChannelsCatalog,
@@ -63,6 +65,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { canDeleteChannels, canHardDeleteChannels, canManageChannels } from "@/lib/authGuards";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -84,10 +87,7 @@ function ChannelPanel({
 }) {
   return (
     <section
-      className={cn(
-        "rounded-2xl border border-border/60 bg-card/40 overflow-hidden",
-        className,
-      )}
+      className={cn("rounded-2xl border border-border/60 bg-card/40 overflow-hidden", className)}
     >
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 px-4 sm:px-5 py-4 border-b border-border/50">
         <div className="min-w-0 space-y-0.5">
@@ -235,7 +235,8 @@ export default function ChannelDetailPage() {
           setEditing(false);
           refetch();
         },
-        onError: () => toast.error("No se pudo guardar"),
+        onError: (e) =>
+          toast.error((e as { friendlyMessage?: string })?.friendlyMessage || "No se pudo guardar"),
       },
     );
   };
@@ -258,11 +259,7 @@ export default function ChannelDetailPage() {
   };
 
   if (isLoading) {
-    return (
-      <div className="px-4 md:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <PageSkeleton variant="studio" />;
   }
 
   if (error || !channel) {
@@ -286,6 +283,11 @@ export default function ChannelDetailPage() {
   const scriptCode = getWidgetScriptCode(channel.id);
   const accent = channelAccent(channel.channel_type);
   const ChannelIcon = channelIcon(channel.channel_type);
+  const canManage = canManageChannels(channel.branch);
+  const canDelete = canDeleteChannels(channel.branch);
+  const canHardDelete = canHardDeleteChannels(channel.branch);
+  const errMsg = (e: unknown, fallback: string) =>
+    (e as { friendlyMessage?: string })?.friendlyMessage || fallback;
 
   return (
     <div className="px-4 md:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto space-y-6">
@@ -340,39 +342,141 @@ export default function ChannelDetailPage() {
             )}
             Probar
           </Button>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="outline" size="sm" className="text-destructive">
-                <Trash2 className="h-4 w-4 mr-1.5" /> Eliminar
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>¿Eliminar canal?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Se eliminará «{channel.name}». Esta acción no se puede deshacer.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={() =>
-                    remove.mutate(channel.id, {
-                      onSuccess: () => {
-                        toast.success("Canal eliminado");
-                        navigate("/canales");
-                      },
-                      onError: () => toast.error("No se pudo eliminar"),
-                    })
-                  }
+          {canManage && channel.is_active === false && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={update.isPending}
+              onClick={() =>
+                update.mutate(
+                  { id: channel.id, data: { is_active: true } },
+                  {
+                    onSuccess: (saved) => {
+                      if (saved?.is_active === false) {
+                        toast.error("El servidor no reactivó el canal. Intenta de nuevo.");
+                        refetch();
+                        return;
+                      }
+                      toast.success("Canal reactivado");
+                      refetch();
+                    },
+                    onError: (e) => toast.error(errMsg(e, "No se pudo reactivar el canal")),
+                  },
+                )
+              }
+            >
+              {update.isPending ? (
+                <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+              ) : (
+                <RotateCcw className="h-4 w-4 mr-1.5" />
+              )}
+              Reactivar
+            </Button>
+          )}
+          {canDelete && channel.is_active !== false && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  disabled={remove.isPending}
                 >
+                  {remove.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4 mr-1.5" />
+                  )}
+                  Desactivar
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Desactivar canal</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    ¿Desactivar «{channel.name}»? Dejará de recibir/enviar mensajes. Podés
+                    reactivarlo después.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    onClick={() =>
+                      remove.mutate(
+                        { id: channel.id, hard: false },
+                        {
+                          onSuccess: () => {
+                            toast.success("Canal desactivado");
+                            navigate("/canales");
+                          },
+                          onError: (e) => toast.error(errMsg(e, "No se pudo desactivar el canal")),
+                        },
+                      )
+                    }
+                  >
+                    Desactivar
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+          {canHardDelete && channel.is_active === false && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  disabled={remove.isPending}
+                >
+                  {remove.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4 mr-1.5" />
+                  )}
                   Eliminar
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Eliminar permanentemente</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    ¿Eliminar «{channel.name}» de forma permanente? No se puede deshacer.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    onClick={() =>
+                      remove.mutate(
+                        { id: channel.id, hard: true },
+                        {
+                          onSuccess: () => {
+                            toast.success("Canal eliminado");
+                            navigate("/canales");
+                          },
+                          onError: (e) => toast.error(errMsg(e, "No se pudo eliminar el canal")),
+                        },
+                      )
+                    }
+                  >
+                    Eliminar
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
         </div>
       </header>
+
+      {!canManage && (
+        <p className="text-xs text-muted-foreground rounded-xl border border-border/60 bg-muted/20 px-3 py-2">
+          Vista de <span className="font-medium text-foreground">solo lectura</span>. Solo
+          superadmin, organizador, owner o admin local pueden editar o desactivar canales.
+        </p>
+      )}
 
       <Tabs value={activeTab} onValueChange={setTab}>
         <TabsList className="w-full sm:w-auto justify-start flex-wrap h-auto">
@@ -388,42 +492,40 @@ export default function ChannelDetailPage() {
             title="Configuración"
             description={`Campos tipados del proveedor · ${channelLabel(channel.channel_type)}`}
             actions={
-              !editing ? (
-                <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
-                  <Pencil className="h-3.5 w-3.5 mr-1.5" /> Editar
-                </Button>
-              ) : (
-                <>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setEditing(false);
-                      setName(channel.name ?? "");
-                      setAgentId(channel.assigned_agent ? String(channel.assigned_agent) : "");
-                      setIsActive(channel.is_active ?? true);
-                      setWelcomeMessage(channel.welcome_message ?? "");
-                      setConfigValues(channel.config_masked ?? {});
-                    }}
-                  >
-                    Cancelar
+              canManage ? (
+                !editing ? (
+                  <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
+                    <Pencil className="h-3.5 w-3.5 mr-1.5" /> Editar
                   </Button>
-                  <Button size="sm" onClick={handleSave} disabled={update.isPending}>
-                    {update.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
-                    Guardar
-                  </Button>
-                </>
-              )
+                ) : (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setEditing(false);
+                        setName(channel.name ?? "");
+                        setAgentId(channel.assigned_agent ? String(channel.assigned_agent) : "");
+                        setIsActive(channel.is_active ?? true);
+                        setWelcomeMessage(channel.welcome_message ?? "");
+                        setConfigValues(channel.config_masked ?? {});
+                      }}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button size="sm" onClick={handleSave} disabled={update.isPending}>
+                      {update.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+                      Guardar
+                    </Button>
+                  </>
+                )
+              ) : undefined
             }
           >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Nombre</Label>
-                <Input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  disabled={!editing}
-                />
+                <Input value={name} onChange={(e) => setName(e.target.value)} disabled={!editing} />
               </div>
               <div className="space-y-2">
                 <Label>Agente asignado</Label>
@@ -523,7 +625,7 @@ export default function ChannelDetailPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={regenerate.isPending}
+                  disabled={!canManage || regenerate.isPending}
                   onClick={() =>
                     regenerate.mutate(channel.id, {
                       onSuccess: (data) => {
@@ -584,7 +686,7 @@ export default function ChannelDetailPage() {
 
               <ChannelSubSection
                 title="Script flotante (recomendado)"
-                description='Pegalo antes de </body>. Aparece una burbuja que abre el chat.'
+                description="Pegalo antes de </body>. Aparece una burbuja que abre el chat."
               >
                 <div className="relative rounded-lg border border-border/50 bg-muted/30 p-3">
                   <pre className="text-xs font-mono whitespace-pre-wrap pr-8">{scriptCode}</pre>
@@ -753,9 +855,7 @@ export default function ChannelDetailPage() {
             }
           >
             {sessionsLoading ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
+              <InlineSkeleton lines={4} />
             ) : sessions.length === 0 ? (
               <p className="text-sm text-muted-foreground py-6 text-center">
                 Aún no hay sesiones. Usá «Simular» o el widget para generar una.

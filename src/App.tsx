@@ -18,12 +18,6 @@ import { PageLoader } from "./components/ui/page-loader";
 
 const Dashboard = lazy(() => import("./routes/index"));
 const Conversaciones = lazy(() => import("./routes/conversaciones"));
-const Campanas = lazy(() => import("./routes/campanas"));
-const CampanasDetail = lazy(() => import("./routes/campanas.$id"));
-const Oportunidades = lazy(() => import("./routes/oportunidades"));
-const Reportes = lazy(() => import("./routes/reportes"));
-const Configuracion = lazy(() => import("./routes/configuracion"));
-const MetricasDetail = lazy(() => import("./routes/metricas.$id"));
 const Agentes = lazy(() => import("./routes/agentes"));
 const AgentesNuevo = lazy(() => import("./routes/agentes.nuevo"));
 const AgentesDetail = lazy(() => import("./routes/agentes.$id"));
@@ -137,7 +131,7 @@ function AnimatedOutlet() {
             <Route path="/funciones" element={<Navigate to="/skills" replace />} />
             <Route path="/funciones/nuevo" element={<Navigate to="/skills/nuevo" replace />} />
             <Route path="/funciones/:id" element={<FunctionDetailRedirect />} />
-            <Route path="/configuracion" element={<Configuracion />} />
+            <Route path="/configuracion" element={<Navigate to="/perfil" replace />} />
             <Route path="/perfil" element={<PerfilPage />} />
             <Route
               path="/admin/organizaciones"
@@ -171,7 +165,6 @@ function AnimatedOutlet() {
                 </RequireUsersAdmin>
               }
             />
-            {/* Rutas ERP ocultas del nav; se mantienen accesibles por URL temporalmente */}
             <Route
               path="/conversaciones"
               element={
@@ -180,11 +173,12 @@ function AnimatedOutlet() {
                 </RequireConversations>
               }
             />
-            <Route path="/campanas" element={<Campanas />} />
-            <Route path="/campanas/:id" element={<CampanasDetail />} />
-            <Route path="/oportunidades" element={<Oportunidades />} />
-            <Route path="/reportes" element={<Reportes />} />
-            <Route path="/metricas/:id" element={<MetricasDetail />} />
+            {/* ERP legacy: fuera del nav → home hasta producto formal */}
+            <Route path="/campanas" element={<Navigate to="/" replace />} />
+            <Route path="/campanas/:id" element={<Navigate to="/" replace />} />
+            <Route path="/oportunidades" element={<Navigate to="/" replace />} />
+            <Route path="/reportes" element={<Navigate to="/" replace />} />
+            <Route path="/metricas/:id" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>
       </motion.div>

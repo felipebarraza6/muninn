@@ -1,34 +1,32 @@
 import { motion, useReducedMotion, type Variants } from "framer-motion";
 import { cn } from "@/lib/utils";
 
+const easeOut = [0.22, 1, 0.36, 1] as const;
+
 const pageVariants: Variants = {
-  hidden: { opacity: 0, y: 6 },
+  hidden: { opacity: 0 },
   show: {
     opacity: 1,
-    y: 0,
     transition: {
-      duration: 0.32,
-      ease: [0.22, 1, 0.36, 1],
-      delay: 0.04,
+      duration: 0.2,
+      ease: easeOut,
       when: "beforeChildren",
-      staggerChildren: 0.06,
-      delayChildren: 0.05,
+      staggerChildren: 0.03,
     },
   },
 };
 
 const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 6 },
+  hidden: { opacity: 0 },
   show: {
     opacity: 1,
-    y: 0,
-    transition: { duration: 0.28, ease: [0.22, 1, 0.36, 1] },
+    transition: { duration: 0.18, ease: easeOut },
   },
 };
 
 const instant: Variants = {
-  hidden: { opacity: 1, y: 0 },
-  show: { opacity: 1, y: 0 },
+  hidden: { opacity: 1 },
+  show: { opacity: 1 },
 };
 
 export function AdminPageMotion({
@@ -51,6 +49,7 @@ export function AdminPageMotion({
   );
 }
 
+/** Item de página: hereda stagger del padre; variants locales solo si reduce motion. */
 export function AdminMotionItem({
   children,
   className,
@@ -58,14 +57,14 @@ export function AdminMotionItem({
   children: React.ReactNode;
   className?: string;
 }) {
-  const reduce = useReducedMotion();
   return (
-    <motion.div className={className} variants={reduce ? instant : itemVariants}>
+    <motion.div className={className} variants={itemVariants}>
       {children}
     </motion.div>
   );
 }
 
+/** Lista con stagger suave (evitar en tablas largas). */
 export function AdminMotionList({
   children,
   className,
@@ -82,7 +81,7 @@ export function AdminMotionList({
           ? instant
           : {
               hidden: {},
-              show: { transition: { staggerChildren: 0.055, delayChildren: 0.06 } },
+              show: { transition: { staggerChildren: 0.025 } },
             }
       }
       initial="hidden"

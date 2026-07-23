@@ -2,12 +2,15 @@ import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import tsConfigPaths from "vite-tsconfig-paths";
+import { VitePWA } from "vite-plugin-pwa";
 
 // En desarrollo el proxy /api apunta a la API local (por defecto localhost:8000).
 // Override con VITE_DEV_API_PROXY en .env.local si el backend usa otro host/puerto.
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const devApiProxy = env.VITE_DEV_API_PROXY || "http://localhost:8000";
+  const appName = env.VITE_PWA_NAME || "Muninn";
+  const themeColor = env.VITE_PWA_THEME_COLOR || "#0b1210";
 
   return {
     plugins: [
@@ -16,6 +19,57 @@ export default defineConfig(({ mode }) => {
       }),
       tailwindcss(),
       tsConfigPaths(),
+      VitePWA({
+        registerType: "prompt",
+        includeAssets: ["favicon.png"],
+        manifest: {
+          name: appName,
+          short_name: appName,
+          description: "Agentes especializados",
+          theme_color: themeColor,
+          background_color: themeColor,
+          display: "standalone",
+          orientation: "any",
+          start_url: "/",
+          scope: "/",
+          lang: "es",
+          icons: [
+            {
+              src: "/favicon.png",
+              sizes: "192x192",
+              type: "image/png",
+              purpose: "any",
+            },
+            {
+              src: "/favicon.png",
+              sizes: "512x512",
+              type: "image/png",
+              purpose: "any maskable",
+            },
+          ],
+        },
+        workbox: {
+          navigateFallback: "/index.html",
+          navigateFallbackDenylist: [/^\/api\//, /^\/media\//],
+          runtimeCaching: [
+            {
+              urlPattern: ({ url }) => url.pathname.startsWith("/api/"),
+              handler: "NetworkOnly",
+            },
+            {
+              urlPattern: ({ url }) => url.pathname.startsWith("/media/"),
+              handler: "NetworkFirst",
+              options: {
+                cacheName: "media-cache",
+                expiration: { maxEntries: 64, maxAgeSeconds: 60 * 60 * 24 },
+              },
+            },
+          ],
+        },
+        devOptions: {
+          enabled: false,
+        },
+      }),
     ],
     server: {
       port: 3001,
@@ -32,9 +86,7 @@ export default defineConfig(({ mode }) => {
           target: devApiProxy,
           changeOrigin: true,
           secure: false,
-          // SSE (chat stream): no bufferizar la respuesta.
           configure: (proxy) => {
-            // by-host lee HTTP_HOST: reinyecta el Host del SPA (custom domain local).
             proxy.on("proxyReq", (proxyReq, req) => {
               const url = req.url || "";
               if (!url.includes("public-login-theme/by-host")) return;
@@ -53,7 +105,6 @@ export default defineConfig(({ mode }) => {
             });
           },
         },
-        // Logos / favicons / banners (ImageField → /media/...)
         "/media": {
           target: devApiProxy,
           changeOrigin: true,
@@ -72,7 +123,6 @@ export default defineConfig(({ mode }) => {
         output: {
           manualChunks(id) {
             if (!id.includes("node_modules")) {
-              // Separar admin del chat/studio para bajar el bundle inicial.
               if (id.includes("/src/routes/admin.")) return "admin";
               if (
                 id.includes("/src/routes/agentes") ||
@@ -84,7 +134,6 @@ export default defineConfig(({ mode }) => {
               }
               return undefined;
             }
-            // React + Radix juntos: separarlos crea chunk circular (TDZ en runtime).
             if (
               /node_modules[/\\](react|react-dom|scheduler|react-router|react-router-dom)([/\\]|$)/.test(
                 id,

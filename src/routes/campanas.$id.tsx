@@ -9,12 +9,12 @@ import {
   ClipboardList,
   Sparkles,
   Send,
-  Loader2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import {
   Table,
   TableBody,
@@ -102,12 +102,7 @@ export default function CampaignDetailPage() {
   const [tab, setTab] = useState<"audience" | "message" | "results">("audience");
 
   if (isLoading) {
-    return (
-      <div className="px-6 py-12 max-w-md mx-auto flex flex-col items-center gap-3">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        <p className="text-sm text-muted-foreground">Cargando campaña...</p>
-      </div>
-    );
+    return <PageSkeleton variant="detail" />;
   }
 
   if (error || !c) {

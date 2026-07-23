@@ -105,7 +105,11 @@ export function useChannel(id: string | undefined) {
   const branchId = useActiveBranchId();
   return useQuery({
     queryKey: [...QUERY_KEY, branchId, id],
-    queryFn: () => GET<Channel>(ENDPOINTS.channels.detail(id!)),
+    queryFn: () =>
+      GET<Channel>(ENDPOINTS.channels.detail(id!), {
+        // Sin esto, backends viejos filtran is_active=True también en detalle → 404.
+        params: { include_inactive: "true" },
+      }),
     enabled: !!id,
   });
 }
@@ -141,7 +145,17 @@ export function useUpdateChannel() {
 export function useDeleteChannel() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string | number) => DELETE(ENDPOINTS.channels.detail(String(id))),
+    mutationFn: (arg: string | number | { id: string | number; hard?: boolean }) => {
+      const id = typeof arg === "object" ? arg.id : arg;
+      const hard = typeof arg === "object" ? Boolean(arg.hard) : false;
+      return DELETE(ENDPOINTS.channels.detail(String(id)), {
+        // include_inactive: backends que aún filtran is_active en destroy.
+        params: {
+          include_inactive: "true",
+          ...(hard ? { hard: "true" } : {}),
+        },
+      });
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: QUERY_KEY }),
   });
 }

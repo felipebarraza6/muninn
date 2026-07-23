@@ -14,16 +14,13 @@ import {
   Maximize2,
   Minimize2,
 } from "lucide-react";
+import { InlineSkeleton } from "@/components/ui/page-skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useAgent, useAgentSkillConfigs, useUpdateAgent } from "@/api/hooks/useAgents";
 import { useAgentFunctions } from "@/api/hooks/useAgentFunctions";
 import { FlowPolicyBoard } from "@/components/agents/flow-policy-board";
@@ -191,10 +188,7 @@ export function AgentFlowPolicyPanel({ agentId }: Props) {
   }, [zenMode]);
 
   const slotIds = useMemo(() => slots.map((s) => slugifySlotId(s.id)).filter(Boolean), [slots]);
-  const draftPolicy = useMemo(
-    () => draftsToPolicy(slots, skills, layout),
-    [slots, skills, layout],
-  );
+  const draftPolicy = useMemo(() => draftsToPolicy(slots, skills, layout), [slots, skills, layout]);
   const active = flowPolicyIsActive(draftPolicy);
   const markDirty = useCallback(() => {
     editEpochRef.current += 1;
@@ -411,11 +405,7 @@ export function AgentFlowPolicyPanel({ agentId }: Props) {
   };
 
   if (isLoading || !agent) {
-    return (
-      <div className="flex justify-center py-16">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <InlineSkeleton className="py-16" lines={6} />;
   }
 
   const workspace = (

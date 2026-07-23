@@ -1,6 +1,6 @@
 import { useClinicDashboard } from "@/api/hooks/useAnalytics";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2 } from "lucide-react";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 
 const KPI_LABELS = [
   { key: "total_patients", label: "Total clientes" },
@@ -13,11 +13,7 @@ export default function Reportes() {
   const { data, isLoading } = useClinicDashboard();
 
   if (isLoading) {
-    return (
-      <div className="px-4 md:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <PageSkeleton variant="dashboard" />;
   }
 
   return (

@@ -1,5 +1,5 @@
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Building2,
   ExternalLink,
@@ -9,7 +9,6 @@ import {
   LayoutGrid,
   Link2,
   Loader2,
-  Menu,
   MoreHorizontal,
   Plus,
   RefreshCw,
@@ -18,7 +17,6 @@ import {
   Trash2,
   Unlink2,
   UserRound,
-  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,7 +55,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   useAdminBranches,
   useAttachStore,
@@ -85,8 +82,14 @@ import {
 import { OrganizationAppPicker } from "@/components/organizations/organization-app-picker";
 import { useAdminUsers } from "@/api/hooks/useUsers";
 import { AdminMotionItem, AdminPageMotion } from "@/components/admin/AdminPageMotion";
+import { AdminEntityEditChrome } from "@/components/admin/AdminOwnerSettingsShell";
+import { AdminPageLoader } from "@/components/admin/AdminPageLoader";
+import { InlineSkeleton } from "@/components/ui/page-skeleton";
+import { AdminListToolbar } from "@/components/admin/AdminListToolbar";
+import { AdminMobileFab } from "@/components/admin/AdminMobileFab";
 import { PortalAccessLinkField } from "@/components/brand/PortalAccessLinkField";
 import { ThemeAssetField } from "@/components/brand/ThemeAssetField";
+import { EmptyState, ErrorBanner } from "@/components/ui/empty-state";
 import { toCssColorHex } from "@/lib/colorHex";
 import { resolveMediaUrl } from "@/lib/mediaUrl";
 import { buildPortalAccessUrl, normalizePortalHost } from "@/lib/portalAccessUrl";
@@ -113,7 +116,14 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
 
-type PanelTab = "datos" | "apariencia" | "redes" | "acceso" | "patrocinadores" | "apps" | "apps-roles";
+type PanelTab =
+  | "datos"
+  | "apariencia"
+  | "redes"
+  | "acceso"
+  | "patrocinadores"
+  | "apps"
+  | "apps-roles";
 
 const PANEL_TABS: Array<{
   id: PanelTab;
@@ -202,16 +212,18 @@ function friendlyOrgError(e: unknown): string {
 }
 
 export default function AdminOrganizacionesPage() {
-  const reduceMotion = useReducedMotion();
   const isGlobalAdmin = isSuperAdmin();
   const orgOwnerScope = isOrganizationOwnerScope();
   const canCreate = canCreateOrganizationsAdmin();
-  const singleOrgMode = isSingleOrganizationOwner();
+  const orgOwnerShell = isSingleOrganizationOwner();
   const pageLabel = getOrganizationsAdminNavLabel();
   const ownedOrgIdSet = useMemo(() => {
     if (isGlobalAdmin) return null;
     if (!orgOwnerScope) return new Set<string>();
-    return new Set(getOwnedOrganizationIds());
+    const ids = getOwnedOrganizationIds();
+    // Sin IDs en sesión: confiar en el API (ya filtra por holding).
+    if (ids.length === 0) return null;
+    return new Set(ids);
   }, [isGlobalAdmin, orgOwnerScope]);
 
   const { data: orgsRaw = [], isLoading, isFetching, isError, error } = useOrganizations();
@@ -219,6 +231,8 @@ export default function AdminOrganizacionesPage() {
     if (!ownedOrgIdSet) return orgsRaw;
     return orgsRaw.filter((o) => ownedOrgIdSet.has(String(o.id)));
   }, [orgsRaw, ownedOrgIdSet]);
+  /** Owner de un solo holding: shell settings. Si hay 0 o >1, lista. */
+  const singleOrgMode = orgOwnerShell && orgs.length === 1;
 
   useOrganizationSyncVersion(true);
   const refreshOrganizations = useRefreshOrganizations();
@@ -231,6 +245,7 @@ export default function AdminOrganizacionesPage() {
   const detachStore = useDetachStore();
   const updateTheme = useUpdateOrganizationTheme();
 
+  const [searchParams, setSearchParams] = useSearchParams();
   const [refreshing, setRefreshing] = useState(false);
   const [fabOpen, setFabOpen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -303,20 +318,39 @@ export default function AdminOrganizacionesPage() {
   });
   const [activeRoleCode, setActiveRoleCode] =
     useState<(typeof MUNINN_ASSIGNABLE_ROLE_CODES)[number]>("OWNER");
+  const appsHydratedForId = useRef<string | null>(null);
+  const themeHydratedForId = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!allowedAppsData) return;
-    setDraftAllowedAppIds(allowedAppsData.external_api_ids.map(String));
-  }, [allowedAppsData]);
-
-  useEffect(() => {
-    if (!roleAppsData) return;
-    setDraftRoleApps({
-      OWNER: (roleAppsData.roles.OWNER ?? []).map(String),
-      ADMIN_LOCAL: (roleAppsData.roles.ADMIN_LOCAL ?? []).map(String),
-      EMPLOYEE: (roleAppsData.roles.EMPLOYEE ?? []).map(String),
-    });
-  }, [roleAppsData]);
+    if (!panelOpen || !panelOrgId) {
+      appsHydratedForId.current = null;
+      return;
+    }
+    if (!allowedAppsData && !roleAppsData) return;
+    const id = String(panelOrgId);
+    if (appsHydratedForId.current === id) return;
+    // Esperar ambos si hacen falta, para no parcializar.
+    if (canDesignateApps && !allowedAppsData) return;
+    if (canDesignateRoleApps && !roleAppsData) return;
+    appsHydratedForId.current = id;
+    if (allowedAppsData) {
+      setDraftAllowedAppIds(allowedAppsData.external_api_ids.map(String));
+    }
+    if (roleAppsData) {
+      setDraftRoleApps({
+        OWNER: (roleAppsData.roles.OWNER ?? []).map(String),
+        ADMIN_LOCAL: (roleAppsData.roles.ADMIN_LOCAL ?? []).map(String),
+        EMPLOYEE: (roleAppsData.roles.EMPLOYEE ?? []).map(String),
+      });
+    }
+  }, [
+    panelOpen,
+    panelOrgId,
+    allowedAppsData,
+    roleAppsData,
+    canDesignateApps,
+    canDesignateRoleApps,
+  ]);
 
   const visiblePanelTabs = useMemo(() => {
     const editingExisting = Boolean(editing);
@@ -331,9 +365,16 @@ export default function AdminOrganizacionesPage() {
   const roleLabel = (code: string) =>
     FALLBACK_BRANCH_ROLES.find((r) => r.code === code)?.name ?? code;
 
-  // Hidratar theme al abrir edición
+  // Hidratar theme una sola vez por org abierta (no pisar ediciones al refetch).
   useEffect(() => {
-    if (!panelOpen || !orgTheme) return;
+    if (!panelOpen || !panelOrgId) {
+      themeHydratedForId.current = null;
+      return;
+    }
+    if (!orgTheme) return;
+    const id = String(panelOrgId);
+    if (themeHydratedForId.current === id) return;
+    themeHydratedForId.current = id;
     const branding = orgTheme.branding;
     setLogoUrl(assetUrl(branding?.logo_url, orgTheme.logo_url, orgTheme.logo));
     setFaviconUrl(assetUrl(branding?.favicon_url, orgTheme.favicon_url, orgTheme.favicon));
@@ -349,7 +390,7 @@ export default function AdminOrganizacionesPage() {
     setBorderRadius(typeof orgTheme.borderRadius === "number" ? orgTheme.borderRadius : 6);
     setCompact(Boolean(orgTheme.compact));
     setMotionEnabled(orgTheme.motion !== false);
-  }, [panelOpen, orgTheme]);
+  }, [panelOpen, panelOrgId, orgTheme]);
 
   const resetThemeExtras = () => {
     setThemeForm({});
@@ -439,6 +480,9 @@ export default function AdminOrganizacionesPage() {
     setFocusedOrgId(null);
     setEditing(null);
     setPanelTab("datos");
+    if (searchParams.get("view")) {
+      setSearchParams({}, { replace: true });
+    }
   };
 
   const openCreate = () => {
@@ -459,6 +503,7 @@ export default function AdminOrganizacionesPage() {
     setActive(true);
     resetThemeExtras();
     setPanelOpen(true);
+    setSearchParams({ view: "nuevo" }, { replace: true });
   };
 
   const openEdit = (o: Organization, tab: PanelTab = "datos") => {
@@ -475,6 +520,9 @@ export default function AdminOrganizacionesPage() {
     setActive(o.is_active !== false);
     resetThemeExtras();
     setPanelOpen(true);
+    if (!singleOrgMode) {
+      setSearchParams({ view: "editar", id: String(o.id) }, { replace: true });
+    }
   };
 
   // Organizador con un solo holding: siempre el editor (nunca lista).
@@ -486,6 +534,36 @@ export default function AdminOrganizacionesPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- openEdit estable para este flujo
   }, [singleOrgMode, orgs, isLoading, panelOpen, editing?.id]);
+
+  // Breadcrumb limpia ?view=… → cerrar formulario (solo admin multi).
+  useEffect(() => {
+    if (singleOrgMode) return;
+    if (!searchParams.get("view") && panelOpen) {
+      setPanelOpen(false);
+      setFocusedOrgId(null);
+      setEditing(null);
+      setFabOpen(false);
+    }
+  }, [searchParams, panelOpen, singleOrgMode]);
+
+  // Deep-link / refresh: hidratar formulario desde ?view=
+  useEffect(() => {
+    if (singleOrgMode || isLoading || panelOpen) return;
+    const view = searchParams.get("view");
+    if (!view) return;
+    if (view === "nuevo") {
+      if (!canCreate) return;
+      openCreate();
+      return;
+    }
+    if (view === "editar") {
+      const id = searchParams.get("id");
+      if (!id) return;
+      const o = orgs.find((x) => String(x.id) === id);
+      if (o) openEdit(o);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, isLoading, orgs, panelOpen, singleOrgMode, canCreate]);
 
   const openAttach = (o: Organization) => {
     if (!canCreate) {
@@ -583,13 +661,37 @@ export default function AdminOrganizacionesPage() {
     const themePayload = buildThemeJsonPayload();
     const hasFiles = Boolean(logoFile || faviconFile || bannerFile);
     await updateTheme.mutateAsync({ id: orgId, data: themePayload });
-    if (hasFiles) {
-      const fd = new FormData();
-      if (logoFile) fd.append("logo", logoFile);
-      if (faviconFile) fd.append("favicon", faviconFile);
-      if (bannerFile) fd.append("banner_image", bannerFile);
-      await updateTheme.mutateAsync({ id: orgId, data: fd });
-    }
+    if (!hasFiles) return;
+
+    const fd = new FormData();
+    // app_name ayuda a parsers multipart parciales del BE (mismo patrón que sucursales).
+    const appName = String(themePayload.app_name ?? "").trim();
+    if (appName) fd.append("app_name", appName);
+    if (logoFile) fd.append("logo", logoFile);
+    if (faviconFile) fd.append("favicon", faviconFile);
+    if (bannerFile) fd.append("banner_image", bannerFile);
+
+    const themeRes = await updateTheme.mutateAsync({ id: orgId, data: fd });
+    setLogoUrl(assetUrl(themeRes?.branding?.logo_url, themeRes?.logo_url, themeRes?.logo, logoUrl));
+    setFaviconUrl(
+      assetUrl(
+        themeRes?.branding?.favicon_url,
+        themeRes?.favicon_url,
+        themeRes?.favicon,
+        faviconUrl,
+      ),
+    );
+    setBannerUrl(
+      assetUrl(
+        themeRes?.branding?.banner_image_url,
+        themeRes?.banner_image_url,
+        themeRes?.banner_image,
+        bannerUrl,
+      ),
+    );
+    setLogoFile(null);
+    setFaviconFile(null);
+    setBannerFile(null);
   };
 
   const save = async () => {
@@ -792,9 +894,7 @@ export default function AdminOrganizacionesPage() {
         )}
       </div>
       {storesLoading ? (
-        <div className="flex justify-center py-4">
-          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-        </div>
+        <InlineSkeleton lines={3} />
       ) : stores.length === 0 ? (
         <p className="text-xs text-muted-foreground rounded-md border border-dashed border-border px-3 py-4 text-center">
           {canCreate
@@ -843,1044 +943,979 @@ export default function AdminOrganizacionesPage() {
   );
 
   if (isLoading) {
-    return (
-      <div className="px-4 md:px-6 lg:px-8 py-6 flex justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <AdminPageLoader variant="table" />;
   }
 
   return (
-    <AdminPageMotion>
+    <AdminPageMotion className={panelOpen || singleOrgMode ? "pt-3 pb-6 space-y-4" : undefined}>
       {isError && (
         <AdminMotionItem>
-          <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm">
-            No se pudieron cargar las organizaciones.{" "}
-            {(error as { friendlyMessage?: string })?.friendlyMessage || ""}
-            <Button size="sm" variant="outline" className="ml-3" onClick={handleRefresh}>
-              Reintentar
-            </Button>
+          <ErrorBanner
+            message={`No se pudieron cargar las organizaciones. ${(error as { friendlyMessage?: string })?.friendlyMessage || ""}`.trim()}
+            onRetry={handleRefresh}
+          />
+        </AdminMotionItem>
+      )}
+
+      {orgOwnerShell && orgs.length === 0 && (
+        <AdminMotionItem>
+          <EmptyState
+            title="Sin organización"
+            description="No tienes una organización asignada como propietario."
+          />
+        </AdminMotionItem>
+      )}
+
+      {!singleOrgMode && !panelOpen && (
+        <AdminMotionItem>
+          <AdminListToolbar
+            countLabel={`${filteredOrgs.length} organizaci${filteredOrgs.length === 1 ? "ón" : "ones"}`}
+            actions={[
+              {
+                label: "Actualizar",
+                icon: RefreshCw,
+                onClick: handleRefresh,
+                disabled: refreshing || isFetching,
+                spinning: refreshing || isFetching,
+              },
+              ...(canCreate
+                ? [{ label: "Nueva", icon: Plus, onClick: openCreate, variant: "default" as const }]
+                : []),
+            ]}
+          />
+          <div className="min-w-0 overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent border-border/50">
+                  {(
+                    [
+                      {
+                        key: "name" as const,
+                        label: "Organización",
+                        className: undefined,
+                      },
+                      {
+                        key: "dni" as const,
+                        label: "RUT",
+                        className: "hidden sm:table-cell",
+                      },
+                      {
+                        key: "owner" as const,
+                        label: "Propietario",
+                        className: "hidden md:table-cell",
+                      },
+                      {
+                        key: "domain" as const,
+                        label: "Acceso",
+                        className: "hidden lg:table-cell",
+                      },
+                      {
+                        key: "stores" as const,
+                        label: "Sucursales",
+                        className: "hidden xl:table-cell",
+                      },
+                    ] as const
+                  ).map((col) => (
+                    <TableHead key={col.key} className={col.className}>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleFilter(col.key);
+                        }}
+                        className={cn(
+                          "inline-flex max-w-full items-center truncate rounded-sm text-left transition-colors cursor-pointer hover:underline underline-offset-4 hover:text-foreground",
+                          isFilterVisible(col.key)
+                            ? "text-primary hover:text-primary"
+                            : "text-muted-foreground",
+                        )}
+                        title={
+                          isFilterVisible(col.key) ? "Cerrar filtro" : `Filtrar por ${col.label}`
+                        }
+                        aria-label={`Filtrar por ${col.label}`}
+                        aria-pressed={isFilterVisible(col.key)}
+                      >
+                        {col.label}
+                      </button>
+                    </TableHead>
+                  ))}
+                  <TableHead className="text-right w-[72px]">
+                    <span className="sr-only">Acciones</span>
+                  </TableHead>
+                </TableRow>
+                {showFilterRow && (
+                  <TableRow className="hover:bg-transparent border-border/40">
+                    <TableHead className="pt-0 pb-3 font-normal align-top">
+                      {isFilterVisible("name") ? (
+                        <Input
+                          autoFocus={Boolean(openFilters.name)}
+                          value={filters.name}
+                          onChange={(e) => setFilter("name", e.target.value)}
+                          placeholder="Buscar por nombre…"
+                          className="h-8 text-xs font-normal bg-muted/30 border-border/60"
+                        />
+                      ) : null}
+                    </TableHead>
+                    <TableHead className="hidden sm:table-cell pt-0 pb-3 font-normal align-top">
+                      {isFilterVisible("dni") ? (
+                        <Input
+                          autoFocus={Boolean(openFilters.dni)}
+                          value={filters.dni}
+                          onChange={(e) => setFilter("dni", e.target.value)}
+                          placeholder="12.345.678-9"
+                          className="h-8 text-xs font-normal font-mono bg-muted/30 border-border/60"
+                        />
+                      ) : null}
+                    </TableHead>
+                    <TableHead className="pt-0 pb-3 font-normal align-top hidden md:table-cell">
+                      {isFilterVisible("owner") ? (
+                        <Input
+                          autoFocus={Boolean(openFilters.owner)}
+                          value={filters.owner}
+                          onChange={(e) => setFilter("owner", e.target.value)}
+                          placeholder="correo@empresa.com"
+                          className="h-8 text-xs font-normal bg-muted/30 border-border/60"
+                        />
+                      ) : null}
+                    </TableHead>
+                    <TableHead className="pt-0 pb-3 font-normal align-top hidden lg:table-cell">
+                      {isFilterVisible("domain") ? (
+                        <Input
+                          autoFocus={Boolean(openFilters.domain)}
+                          value={filters.domain}
+                          onChange={(e) => setFilter("domain", e.target.value)}
+                          placeholder="dominio o nombre corto"
+                          className="h-8 text-xs font-normal bg-muted/30 border-border/60"
+                        />
+                      ) : null}
+                    </TableHead>
+                    <TableHead className="pt-0 pb-3 font-normal align-top hidden xl:table-cell">
+                      {isFilterVisible("stores") ? (
+                        <Input
+                          autoFocus={Boolean(openFilters.stores)}
+                          value={filters.stores}
+                          onChange={(e) => setFilter("stores", e.target.value)}
+                          placeholder="2 / 5"
+                          className="h-8 text-xs font-normal bg-muted/30 border-border/60"
+                        />
+                      ) : null}
+                    </TableHead>
+                    <TableHead className="pt-0 pb-3" />
+                  </TableRow>
+                )}
+              </TableHeader>
+              <TableBody>
+                {filteredOrgs.length === 0 && (
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell colSpan={6} className="p-4">
+                      <EmptyState
+                        title={orgs.length === 0 ? "Sin organizaciones" : "Sin coincidencias"}
+                        description={
+                          orgs.length === 0
+                            ? canCreate
+                              ? "Creá la primera organización para empezar."
+                              : "Sin organizaciones asignadas."
+                            : "Ninguna organización coincide con los filtros."
+                        }
+                        action={
+                          orgs.length === 0 && canCreate ? (
+                            <Button size="sm" onClick={openCreate}>
+                              <Plus className="h-4 w-4 mr-1.5" />
+                              Nueva
+                            </Button>
+                          ) : undefined
+                        }
+                      />
+                    </TableCell>
+                  </TableRow>
+                )}
+                {filteredOrgs.map((o) => {
+                  const selected = focusedOrgId === String(o.id);
+                  const storesCount = o.stores_count ?? 0;
+                  const max = o.max_branches;
+                  return (
+                    <TableRow
+                      key={String(o.id)}
+                      className={cn(
+                        "cursor-pointer transition-colors",
+                        selected && "bg-sidebar-accent/60",
+                      )}
+                      onClick={() => openEdit(o)}
+                    >
+                      <TableCell className="min-w-0">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span
+                            className={cn(
+                              "h-2 w-2 rounded-full shrink-0",
+                              o.is_active !== false ? "bg-emerald-500" : "bg-muted-foreground/40",
+                            )}
+                            title={o.is_active !== false ? "Activa" : "Inactiva"}
+                          />
+                          <div className="min-w-0">
+                            <div className="font-medium text-sm truncate">{o.name}</div>
+                            <div className="text-xs text-muted-foreground truncate">
+                              {max != null
+                                ? `${storesCount} / ${max} sucursales`
+                                : `${storesCount} sucursales`}
+                              <span className="sm:hidden font-mono">
+                                {o.dni ? ` · ${o.dni}` : ""}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell font-mono text-xs whitespace-nowrap">
+                        {o.dni || "—"}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground truncate max-w-[10rem] hidden md:table-cell">
+                        {o.owner_email || "—"}
+                      </TableCell>
+                      <TableCell
+                        className="text-xs truncate max-w-[12rem] hidden lg:table-cell"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {(() => {
+                          const access = buildPortalAccessUrl({
+                            customDomain: o.custom_domain,
+                            loginSlug: o.login_slug,
+                          });
+                          const hasOwn =
+                            Boolean(o.custom_domain?.trim()) || Boolean(o.login_slug?.trim());
+                          if (!hasOwn) {
+                            return <span className="text-muted-foreground">—</span>;
+                          }
+                          return (
+                            <a
+                              href={access.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-primary hover:underline underline-offset-2 max-w-full"
+                              title={access.url}
+                            >
+                              <span className="truncate">
+                                {o.custom_domain?.trim() || o.login_slug || "Abrir"}
+                              </span>
+                              <ExternalLink className="h-3 w-3 shrink-0 opacity-80" />
+                            </a>
+                          );
+                        })()}
+                      </TableCell>
+                      <TableCell className="text-xs tabular-nums hidden xl:table-cell">
+                        {max != null ? `${storesCount} / ${max}` : storesCount}
+                      </TableCell>
+                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8"
+                              title="Más opciones"
+                            >
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="min-w-[11rem]">
+                            {canCreate && (
+                              <DropdownMenuItem onClick={() => openAttach(o)}>
+                                <Link2 className="h-3.5 w-3.5 mr-2" />
+                                Vincular sucursal
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem onClick={() => openEdit(o, "apariencia")}>
+                              <ImageIcon className="h-3.5 w-3.5 mr-2" />
+                              Apariencia
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openEdit(o, "redes")}>
+                              <Share2 className="h-3.5 w-3.5 mr-2" />
+                              Redes
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openEdit(o, "acceso")}>
+                              <Globe2 className="h-3.5 w-3.5 mr-2" />
+                              Acceso
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openEdit(o, "patrocinadores")}>
+                              <Handshake className="h-3.5 w-3.5 mr-2" />
+                              Patrocinadores
+                            </DropdownMenuItem>
+                            {canCreate && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  className="text-destructive focus:text-destructive"
+                                  onClick={() => handleDelete(o)}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5 mr-2" />
+                                  Eliminar
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
           </div>
         </AdminMotionItem>
       )}
 
-      <AdminMotionItem>
-        <div
-          className={cn(
-            "grid gap-4 items-start",
-            singleOrgMode
-              ? "grid-cols-1"
-              : panelOpen
-                ? "grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)]"
-                : "grid-cols-1",
-          )}
-        >
-          {singleOrgMode && orgs.length === 0 && (
-            <p className="text-sm text-muted-foreground py-10 text-center">
-              No tienes una organización asignada como propietario.
-            </p>
-          )}
-
-          {!singleOrgMode && (
-            <div className={cn("min-w-0 overflow-x-auto", panelOpen && "hidden lg:block")}>
-              <Table>
-                <TableHeader>
-                  <TableRow className="hover:bg-transparent border-border/50">
-                    {(
-                      [
-                        {
-                          key: "name" as const,
-                          label: "Organización",
-                          className: undefined,
-                        },
-                        {
-                          key: "dni" as const,
-                          label: "RUT",
-                          className: "hidden sm:table-cell",
-                        },
-                        {
-                          key: "owner" as const,
-                          label: "Propietario",
-                          className: cn("hidden", !panelOpen && "md:table-cell"),
-                        },
-                        {
-                          key: "domain" as const,
-                          label: "Acceso",
-                          className: cn("hidden", !panelOpen && "lg:table-cell"),
-                        },
-                        {
-                          key: "stores" as const,
-                          label: "Sucursales",
-                          className: cn("hidden", !panelOpen && "xl:table-cell"),
-                        },
-                      ] as const
-                    ).map((col) => (
-                      <TableHead key={col.key} className={col.className}>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleFilter(col.key);
-                          }}
-                          className={cn(
-                            "inline-flex max-w-full items-center truncate rounded-sm text-left transition-colors cursor-pointer hover:underline underline-offset-4 hover:text-foreground",
-                            isFilterVisible(col.key)
-                              ? "text-primary hover:text-primary"
-                              : "text-muted-foreground",
-                          )}
-                          title={
-                            isFilterVisible(col.key) ? "Cerrar filtro" : `Filtrar por ${col.label}`
-                          }
-                          aria-label={`Filtrar por ${col.label}`}
-                          aria-pressed={isFilterVisible(col.key)}
-                        >
-                          {col.label}
-                        </button>
-                      </TableHead>
-                    ))}
-                    <TableHead className="text-right w-[72px]">
-                      <span className="sr-only">Acciones</span>
-                    </TableHead>
-                  </TableRow>
-                  {showFilterRow && (
-                    <TableRow className="hover:bg-transparent border-border/40">
-                      <TableHead className="pt-0 pb-3 font-normal align-top">
-                        {isFilterVisible("name") ? (
-                          <Input
-                            autoFocus={Boolean(openFilters.name)}
-                            value={filters.name}
-                            onChange={(e) => setFilter("name", e.target.value)}
-                            placeholder="Buscar por nombre…"
-                            className="h-8 text-xs font-normal bg-muted/30 border-border/60"
-                          />
-                        ) : null}
-                      </TableHead>
-                      <TableHead className="hidden sm:table-cell pt-0 pb-3 font-normal align-top">
-                        {isFilterVisible("dni") ? (
-                          <Input
-                            autoFocus={Boolean(openFilters.dni)}
-                            value={filters.dni}
-                            onChange={(e) => setFilter("dni", e.target.value)}
-                            placeholder="12.345.678-9"
-                            className="h-8 text-xs font-normal font-mono bg-muted/30 border-border/60"
-                          />
-                        ) : null}
-                      </TableHead>
-                      <TableHead
-                        className={cn(
-                          "pt-0 pb-3 font-normal align-top hidden",
-                          !panelOpen && "md:table-cell",
-                        )}
-                      >
-                        {isFilterVisible("owner") ? (
-                          <Input
-                            autoFocus={Boolean(openFilters.owner)}
-                            value={filters.owner}
-                            onChange={(e) => setFilter("owner", e.target.value)}
-                            placeholder="correo@empresa.com"
-                            className="h-8 text-xs font-normal bg-muted/30 border-border/60"
-                          />
-                        ) : null}
-                      </TableHead>
-                      <TableHead
-                        className={cn(
-                          "pt-0 pb-3 font-normal align-top hidden",
-                          !panelOpen && "lg:table-cell",
-                        )}
-                      >
-                        {isFilterVisible("domain") ? (
-                          <Input
-                            autoFocus={Boolean(openFilters.domain)}
-                            value={filters.domain}
-                            onChange={(e) => setFilter("domain", e.target.value)}
-                            placeholder="dominio o nombre corto"
-                            className="h-8 text-xs font-normal bg-muted/30 border-border/60"
-                          />
-                        ) : null}
-                      </TableHead>
-                      <TableHead
-                        className={cn(
-                          "pt-0 pb-3 font-normal align-top hidden",
-                          !panelOpen && "xl:table-cell",
-                        )}
-                      >
-                        {isFilterVisible("stores") ? (
-                          <Input
-                            autoFocus={Boolean(openFilters.stores)}
-                            value={filters.stores}
-                            onChange={(e) => setFilter("stores", e.target.value)}
-                            placeholder="2 / 5"
-                            className="h-8 text-xs font-normal bg-muted/30 border-border/60"
-                          />
-                        ) : null}
-                      </TableHead>
-                      <TableHead className="pt-0 pb-3" />
-                    </TableRow>
-                  )}
-                </TableHeader>
-                <TableBody>
-                  {filteredOrgs.length === 0 && (
-                    <TableRow className="hover:bg-transparent">
-                      <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
-                        {orgs.length === 0
-                          ? canCreate
-                            ? "Sin organizaciones. Usa el menú para crear la primera."
-                            : "Sin organizaciones asignadas."
-                          : "Ninguna organización coincide con los filtros."}
-                      </TableCell>
-                    </TableRow>
-                  )}
-                  {filteredOrgs.map((o) => {
-                    const selected = panelOpen && focusedOrgId === String(o.id);
-                    const storesCount = o.stores_count ?? 0;
-                    const max = o.max_branches;
-                    return (
-                      <TableRow
-                        key={String(o.id)}
-                        className={cn(
-                          "cursor-pointer transition-colors",
-                          selected && "bg-sidebar-accent/60",
-                        )}
-                        onClick={() => openEdit(o)}
-                      >
-                        <TableCell className="min-w-0">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span
-                              className={cn(
-                                "h-2 w-2 rounded-full shrink-0",
-                                o.is_active !== false ? "bg-emerald-500" : "bg-muted-foreground/40",
-                              )}
-                              title={o.is_active !== false ? "Activa" : "Inactiva"}
-                            />
-                            <div className="min-w-0">
-                              <div className="font-medium text-sm truncate">{o.name}</div>
-                              <div className="text-xs text-muted-foreground truncate">
-                                {max != null
-                                  ? `${storesCount} / ${max} sucursales`
-                                  : `${storesCount} sucursales`}
-                                <span className="sm:hidden font-mono">
-                                  {o.dni ? ` · ${o.dni}` : ""}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="hidden sm:table-cell font-mono text-xs whitespace-nowrap">
-                          {o.dni || "—"}
-                        </TableCell>
-                        <TableCell
-                          className={cn(
-                            "text-xs text-muted-foreground truncate max-w-[10rem] hidden",
-                            !panelOpen && "md:table-cell",
-                          )}
-                        >
-                          {o.owner_email || "—"}
-                        </TableCell>
-                        <TableCell
-                          className={cn(
-                            "text-xs truncate max-w-[12rem] hidden",
-                            !panelOpen && "lg:table-cell",
-                          )}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {(() => {
-                            const access = buildPortalAccessUrl({
-                              customDomain: o.custom_domain,
-                              loginSlug: o.login_slug,
-                            });
-                            const hasOwn =
-                              Boolean(o.custom_domain?.trim()) || Boolean(o.login_slug?.trim());
-                            if (!hasOwn) {
-                              return <span className="text-muted-foreground">—</span>;
-                            }
-                            return (
-                              <a
-                                href={access.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 text-primary hover:underline underline-offset-2 max-w-full"
-                                title={access.url}
-                              >
-                                <span className="truncate">
-                                  {o.custom_domain?.trim() || o.login_slug || "Abrir"}
-                                </span>
-                                <ExternalLink className="h-3 w-3 shrink-0 opacity-80" />
-                              </a>
-                            );
-                          })()}
-                        </TableCell>
-                        <TableCell
-                          className={cn(
-                            "text-xs tabular-nums hidden",
-                            !panelOpen && "xl:table-cell",
-                          )}
-                        >
-                          {max != null ? `${storesCount} / ${max}` : storesCount}
-                        </TableCell>
-                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="h-8 w-8"
-                                title="Más opciones"
-                              >
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="min-w-[11rem]">
-                              {canCreate && (
-                                <DropdownMenuItem onClick={() => openAttach(o)}>
-                                  <Link2 className="h-3.5 w-3.5 mr-2" />
-                                  Vincular sucursal
-                                </DropdownMenuItem>
-                              )}
-                              <DropdownMenuItem onClick={() => openEdit(o, "apariencia")}>
-                                <ImageIcon className="h-3.5 w-3.5 mr-2" />
-                                Apariencia
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => openEdit(o, "redes")}>
-                                <Share2 className="h-3.5 w-3.5 mr-2" />
-                                Redes
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => openEdit(o, "acceso")}>
-                                <Globe2 className="h-3.5 w-3.5 mr-2" />
-                                Acceso
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => openEdit(o, "patrocinadores")}>
-                                <Handshake className="h-3.5 w-3.5 mr-2" />
-                                Patrocinadores
-                              </DropdownMenuItem>
-                              {canCreate && (
-                                <>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem
-                                    className="text-destructive focus:text-destructive"
-                                    onClick={() => handleDelete(o)}
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5 mr-2" />
-                                    Eliminar
-                                  </DropdownMenuItem>
-                                </>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-
-          <AnimatePresence mode="wait">
-            {panelOpen && (
-              <motion.aside
-                key={focusedOrgId ?? "new"}
-                initial={reduceMotion ? false : { opacity: 0, x: 16 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={reduceMotion ? undefined : { opacity: 0, x: 12 }}
-                transition={{ duration: 0.2, ease: "easeOut" }}
-                className={cn(
-                  "rounded-lg border border-border bg-background flex flex-col overflow-hidden min-w-0 self-start",
-                  "h-[calc(100dvh-5rem)] max-h-[calc(100dvh-5rem)]",
-                  "lg:sticky lg:top-16 lg:z-20 lg:h-[calc(100dvh-5rem)] lg:max-h-[calc(100dvh-5rem)]",
-                  singleOrgMode && "w-full max-w-3xl mx-auto",
+      {panelOpen && (
+        <AdminMotionItem>
+          <AdminEntityEditChrome
+            mode={singleOrgMode ? "owner" : "form"}
+            panelKey={focusedOrgId ?? "new"}
+            title={singleOrgMode ? name.trim() || editing?.name || panelTitle : panelTitle}
+            meta={
+              singleOrgMode
+                ? businessName.trim() || String(themeValues.tagline ?? "").trim() || undefined
+                : undefined
+            }
+            subtitle={singleOrgMode ? PANEL_SUBTITLES[panelTab].edit : panelSubtitle}
+            formHint={!singleOrgMode ? panelSubtitle : undefined}
+            tabs={visiblePanelTabs}
+            tab={panelTab}
+            onTabChange={(id) => setPanelTab(id as PanelTab)}
+            onClose={singleOrgMode ? undefined : closePanel}
+            logoUrl={logoUrl || null}
+            bannerUrl={bannerUrl || null}
+            accentColor={String(themeValues.primary_color ?? "").trim() || null}
+            initial={(name || editing?.name || "O").charAt(0)}
+            active={active}
+            onRefresh={singleOrgMode ? handleRefresh : undefined}
+            refreshing={refreshing || isFetching}
+            footer={
+              <>
+                <Button
+                  className={singleOrgMode ? undefined : "min-w-[8rem]"}
+                  onClick={() => void save()}
+                  disabled={
+                    saving ||
+                    createOrg.isPending ||
+                    updateOrg.isPending ||
+                    updateTheme.isPending ||
+                    updateAllowedApps.isPending ||
+                    updateRoleApps.isPending
+                  }
+                >
+                  {(saving ||
+                    createOrg.isPending ||
+                    updateOrg.isPending ||
+                    updateTheme.isPending ||
+                    updateAllowedApps.isPending ||
+                    updateRoleApps.isPending) && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                  Guardar
+                </Button>
+                {!singleOrgMode && (
+                  <Button variant="outline" onClick={closePanel}>
+                    Cancelar
+                  </Button>
                 )}
-              >
-                <div className="shrink-0 flex items-start justify-between gap-2 px-4 pt-4 pb-3 border-b border-border/70">
-                  <div className="min-w-0">
-                    <h2 className="text-sm font-semibold tracking-tight truncate">{panelTitle}</h2>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">{panelSubtitle}</p>
+              </>
+            }
+          >
+            {panelTab === "datos" && (
+              <div className="space-y-3.5">
+                <section className="space-y-3">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Identidad
+                  </h3>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                      <Label>Nombre *</Label>
+                      <Input
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="ej. Grupo Patagon"
+                      />
+                    </div>
+                    <div>
+                      <Label>Razón social</Label>
+                      <Input
+                        value={businessName}
+                        onChange={(e) => setBusinessName(e.target.value)}
+                        placeholder="ej. Patagon SpA"
+                      />
+                    </div>
                   </div>
-                  {!singleOrgMode && (
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8 shrink-0"
-                      onClick={closePanel}
-                      title="Cerrar"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
+                  <div>
+                    <Label>RUT *</Label>
+                    <Input
+                      value={dni}
+                      onChange={(e) => setDni(e.target.value)}
+                      className="font-mono max-w-xs"
+                      placeholder="76.111.222-3"
+                    />
+                  </div>
+                </section>
 
-                <div className="shrink-0 flex flex-wrap gap-1 px-3 py-2 border-b border-border/50 bg-muted/20">
-                  {visiblePanelTabs.map(({ id, label, icon: Icon }) => (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={() => setPanelTab(id)}
-                      className={cn(
-                        "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
-                        panelTab === id
-                          ? "bg-background text-foreground shadow-sm"
-                          : "text-muted-foreground hover:text-foreground",
-                      )}
-                    >
-                      <Icon className="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden />
-                      <span>{label}</span>
-                    </button>
-                  ))}
-                </div>
-
-                <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-5">
-                  {panelTab === "datos" && (
-                    <div className="space-y-3.5">
-                      <section className="space-y-3">
-                        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                          Identidad
-                        </h3>
-                        <div>
-                          <Label>Nombre *</Label>
-                          <Input
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                            placeholder="Grupo Patagon"
-                          />
-                        </div>
-                        <div>
-                          <Label>Razón social</Label>
-                          <Input
-                            value={businessName}
-                            onChange={(e) => setBusinessName(e.target.value)}
-                            placeholder="Patagon SpA"
-                          />
-                        </div>
-                        <div>
-                          <Label>RUT *</Label>
-                          <Input
-                            value={dni}
-                            onChange={(e) => setDni(e.target.value)}
-                            placeholder="76.111.222-3"
-                          />
-                        </div>
-                      </section>
-
-                      <section className="space-y-3">
-                        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                          Operación
-                        </h3>
-                        {canCreate && (
-                          <>
-                            <div>
-                              <Label>Propietario</Label>
-                              <Select
-                                value={owner || "none"}
-                                onValueChange={(v) => setOwner(v === "none" ? "" : v)}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Opcional" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="none">Sin propietario</SelectItem>
-                                  {users.map((u) => (
-                                    <SelectItem key={String(u.id)} value={String(u.id)}>
-                                      {u.email}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div>
-                              <Label>Máximo de sucursales</Label>
-                              <Input
-                                type="number"
-                                min={1}
-                                value={maxBranches}
-                                onChange={(e) => setMaxBranches(e.target.value)}
-                              />
-                            </div>
-                          </>
-                        )}
-                        <label className="flex items-center gap-2 text-sm cursor-pointer">
-                          <Checkbox
-                            checked={active}
-                            onCheckedChange={(v) => setActive(v === true)}
-                          />
-                          Organización activa
-                        </label>
-                      </section>
-
-                      {editing && (
-                        <section className="pt-1 border-t border-border/60">{storesList}</section>
-                      )}
-                    </div>
-                  )}
-
-                  {panelTab === "apariencia" && (
-                    <div className="space-y-3.5">
-                      {themeLoading && editing ? (
-                        <div className="flex justify-center py-6">
-                          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                        </div>
-                      ) : (
-                        <>
-                          <section className="space-y-3">
-                            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                              Marca
-                            </h3>
-                            <div>
-                              <Label>Nombre en el menú</Label>
-                              <Input
-                                value={String(themeValues.app_name ?? "")}
-                                onChange={(e) => setThemeField("app_name", e.target.value)}
-                                placeholder="Ej. Grupo Patagon"
-                              />
-                            </div>
-                            <div>
-                              <Label>Eslogan</Label>
-                              <Input
-                                value={String(themeValues.tagline ?? "")}
-                                onChange={(e) => setThemeField("tagline", e.target.value)}
-                              />
-                            </div>
-                            <div>
-                              <Label>Descripción de marca</Label>
-                              <Textarea
-                                value={String(themeValues.brand_description ?? "")}
-                                onChange={(e) => setThemeField("brand_description", e.target.value)}
-                                rows={3}
-                              />
-                            </div>
-                          </section>
-                          <section className="space-y-3">
-                            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                              Colores
-                            </h3>
-                            {(
-                              [
-                                ["primary_color", "Color principal"],
-                                ["secondary_color", "Color secundario"],
-                              ] as const
-                            ).map(([key, label]) => {
-                              const raw = String(themeValues[key] ?? "").trim();
-                              const hex = toCssColorHex(raw, "#808080");
-                              return (
-                                <div key={key}>
-                                  <Label>{label}</Label>
-                                  <div className="flex items-center gap-2">
-                                    <input
-                                      type="color"
-                                      value={hex}
-                                      onChange={(e) =>
-                                        setThemeField(key, e.target.value.toLowerCase())
-                                      }
-                                      className="h-9 w-12 shrink-0 cursor-pointer rounded-md border border-border bg-transparent p-0.5"
-                                      title={label}
-                                      aria-label={label}
-                                    />
-                                    <Input
-                                      value={raw}
-                                      onChange={(e) => setThemeField(key, e.target.value)}
-                                      placeholder="#0284c7"
-                                    />
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </section>
-                          <section className="space-y-3">
-                            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                              Imágenes
-                            </h3>
-                            <ThemeAssetField
-                              label="Logo"
-                              hint="PNG, JPG, WebP o GIF. Máximo 2 MB."
-                              previewUrl={logoUrl}
-                              file={logoFile}
-                              onFile={setLogoFile}
-                            />
-                            <ThemeAssetField
-                              label="Ícono de pestaña"
-                              hint="Ícono chico del navegador. PNG, ICO o WebP. Máximo 2 MB."
-                              previewUrl={faviconUrl}
-                              file={faviconFile}
-                              onFile={setFaviconFile}
-                            />
-                            <ThemeAssetField
-                              label="Imagen de portada"
-                              hint="Pantalla de ingreso. PNG, JPG o WebP. Máximo 2 MB."
-                              previewUrl={bannerUrl}
-                              file={bannerFile}
-                              onFile={setBannerFile}
-                            />
-                          </section>
-                          <section className="space-y-3">
-                            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                              Estilo
-                            </h3>
-                            <div className="grid grid-cols-2 gap-2">
-                              <div>
-                                <Label>Tamaño de texto</Label>
-                                <Input
-                                  type="number"
-                                  min={12}
-                                  max={20}
-                                  value={fontSize}
-                                  onChange={(e) => setFontSize(Number(e.target.value) || 14)}
-                                />
-                                <p className="mt-1 text-[11px] text-muted-foreground">12–20 px</p>
-                              </div>
-                              <div>
-                                <Label>Redondeo de bordes</Label>
-                                <Input
-                                  type="number"
-                                  min={0}
-                                  max={24}
-                                  value={borderRadius}
-                                  onChange={(e) => setBorderRadius(Number(e.target.value) || 0)}
-                                />
-                                <p className="mt-1 text-[11px] text-muted-foreground">0–24 px</p>
-                              </div>
-                            </div>
-                            <label className="flex items-center gap-2 text-sm cursor-pointer">
-                              <Checkbox
-                                checked={compact}
-                                onCheckedChange={(v) => setCompact(v === true)}
-                              />
-                              Interfaz compacta
-                            </label>
-                            <label className="flex items-center gap-2 text-sm cursor-pointer">
-                              <Checkbox
-                                checked={motionEnabled}
-                                onCheckedChange={(v) => setMotionEnabled(v === true)}
-                              />
-                              Animaciones
-                            </label>
-                          </section>
-                        </>
-                      )}
-                    </div>
-                  )}
-
-                  {panelTab === "redes" && (
-                    <section className="space-y-3">
+                <section className="space-y-3">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Operación
+                  </h3>
+                  {canCreate && (
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <div>
-                        <Label>Sitio web</Label>
+                        <Label>Propietario</Label>
+                        <Select
+                          value={owner || "none"}
+                          onValueChange={(v) => setOwner(v === "none" ? "" : v)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Opcional" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Sin propietario</SelectItem>
+                            {users.map((u) => (
+                              <SelectItem key={String(u.id)} value={String(u.id)}>
+                                {u.email}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label>Máximo de sucursales</Label>
                         <Input
-                          value={String(themeValues.website_url ?? "")}
-                          onChange={(e) => setThemeField("website_url", e.target.value)}
-                          placeholder="https://…"
+                          type="number"
+                          min={1}
+                          value={maxBranches}
+                          onChange={(e) => setMaxBranches(e.target.value)}
+                          placeholder="5"
                         />
                       </div>
-                      <div className="flex items-center justify-between gap-2 pt-1">
-                        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                          Redes sociales
-                        </h3>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() =>
-                            setSocialLinks((prev) => [
-                              ...prev,
-                              newThemeSocialLink({ order: prev.length + 1 }),
-                            ])
-                          }
-                        >
-                          <Plus className="h-3.5 w-3.5 mr-1" />
-                          Agregar
-                        </Button>
-                      </div>
-                      {socialLinks.length === 0 ? (
-                        <p className="text-[11px] text-muted-foreground">
-                          Sin links. Agregá las redes que quieras mostrar.
-                        </p>
-                      ) : (
-                        <div className="space-y-3">
-                          {socialLinks.map((link, index) => (
-                            <div
-                              key={link.key}
-                              className="rounded-md border border-border/70 p-3 space-y-2 bg-muted/10"
-                            >
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-[11px] font-medium text-muted-foreground">
-                                  Link {index + 1}
-                                </span>
-                                <Button
-                                  type="button"
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-7 w-7"
-                                  onClick={() =>
-                                    setSocialLinks((prev) => prev.filter((s) => s.key !== link.key))
-                                  }
-                                  title="Eliminar"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
-                              <div className="grid grid-cols-2 gap-2">
-                                <div>
-                                  <Label>Nombre *</Label>
-                                  <Input
-                                    value={link.name}
-                                    onChange={(e) =>
-                                      setSocialLinks((prev) =>
-                                        prev.map((s) =>
-                                          s.key === link.key ? { ...s, name: e.target.value } : s,
-                                        ),
-                                      )
-                                    }
-                                    placeholder="Instagram"
-                                  />
-                                </div>
-                                <div>
-                                  <Label>Ícono</Label>
-                                  <Select
-                                    value={link.icon}
-                                    onValueChange={(v) =>
-                                      setSocialLinks((prev) =>
-                                        prev.map((s) =>
-                                          s.key === link.key ? { ...s, icon: v } : s,
-                                        ),
-                                      )
-                                    }
-                                  >
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Ícono" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {SOCIAL_ICON_OPTIONS.map((o) => (
-                                        <SelectItem key={o.value} value={o.value}>
-                                          {o.label}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              </div>
-                              <div>
-                                <Label>Enlace *</Label>
-                                <Input
-                                  value={link.url}
-                                  onChange={(e) =>
-                                    setSocialLinks((prev) =>
-                                      prev.map((s) =>
-                                        s.key === link.key ? { ...s, url: e.target.value } : s,
-                                      ),
-                                    )
-                                  }
-                                  placeholder="https://instagram.com/…"
-                                />
-                              </div>
-                              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                                <Checkbox
-                                  checked={link.enabled}
-                                  onCheckedChange={(v) =>
-                                    setSocialLinks((prev) =>
-                                      prev.map((s) =>
-                                        s.key === link.key ? { ...s, enabled: v === true } : s,
-                                      ),
-                                    )
-                                  }
-                                />
-                                Visible
-                              </label>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </section>
-                  )}
-
-                  {panelTab === "acceso" && (
-                    <div className="space-y-3.5">
-                      {themeLoading && editing ? (
-                        <div className="flex justify-center py-6">
-                          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                        </div>
-                      ) : (
-                        <section className="space-y-3">
-                          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                            Ingreso al portal
-                          </h3>
-                          <div>
-                            <Label>Dominio propio</Label>
-                            <Input
-                              value={customDomain}
-                              onChange={(e) => setCustomDomain(e.target.value)}
-                              onBlur={() => {
-                                const normalized = normalizePortalHost(customDomain);
-                                if (normalized) setCustomDomain(normalized);
-                              }}
-                              placeholder="portal.cliente.com"
-                            />
-                            <p className="mt-1 text-[11px] text-muted-foreground">
-                              Opcional. Solo el dominio, sin https://
-                            </p>
-                          </div>
-                          <div>
-                            <Label>Nombre corto del link</Label>
-                            <Input
-                              value={String(themeValues.login_slug ?? "")}
-                              onChange={(e) => setThemeField("login_slug", e.target.value)}
-                              placeholder="mi-grupo"
-                            />
-                            <p className="mt-1 text-[11px] text-muted-foreground">
-                              Se usa cuando no hay dominio propio.
-                            </p>
-                          </div>
-                          <PortalAccessLinkField
-                            customDomain={customDomain}
-                            loginSlug={String(themeValues.login_slug ?? "")}
-                          />
-                          <div>
-                            <Label>Mensaje de bienvenida</Label>
-                            <Input
-                              value={String(themeValues.login_welcome_message ?? "")}
-                              onChange={(e) =>
-                                setThemeField("login_welcome_message", e.target.value)
-                              }
-                              placeholder="¡Bienvenido!"
-                            />
-                          </div>
-                          <div>
-                            <Label>Texto de apoyo</Label>
-                            <Input
-                              value={String(themeValues.login_subtitle ?? "")}
-                              onChange={(e) => setThemeField("login_subtitle", e.target.value)}
-                              placeholder="Ingresá con tu cuenta"
-                            />
-                          </div>
-                        </section>
-                      )}
                     </div>
                   )}
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <Checkbox checked={active} onCheckedChange={(v) => setActive(v === true)} />
+                    Organización activa
+                  </label>
+                </section>
 
-                  {panelTab === "patrocinadores" && (
+                {editing && (
+                  <section className="pt-1 border-t border-border/60">{storesList}</section>
+                )}
+              </div>
+            )}
+
+            {panelTab === "apariencia" && (
+              <div className="space-y-3.5">
+                {themeLoading && editing ? (
+                  <InlineSkeleton lines={5} />
+                ) : (
+                  <>
                     <section className="space-y-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                          Patrocinadores
-                        </h3>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() =>
-                            setSponsors((prev) => [
-                              ...prev,
-                              newThemeSponsor({ order: prev.length + 1 }),
-                            ])
-                          }
-                        >
-                          <Plus className="h-3.5 w-3.5 mr-1" />
-                          Agregar
-                        </Button>
+                      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        Marca
+                      </h3>
+                      <div>
+                        <Label>Nombre en el menú</Label>
+                        <Input
+                          value={String(themeValues.app_name ?? "")}
+                          onChange={(e) => setThemeField("app_name", e.target.value)}
+                          placeholder="Ej. Grupo Patagon"
+                        />
+                      </div>
+                      <div>
+                        <Label>Eslogan</Label>
+                        <Input
+                          value={String(themeValues.tagline ?? "")}
+                          onChange={(e) => setThemeField("tagline", e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <Label>Descripción de marca</Label>
+                        <Textarea
+                          value={String(themeValues.brand_description ?? "")}
+                          onChange={(e) => setThemeField("brand_description", e.target.value)}
+                          rows={3}
+                        />
+                      </div>
+                    </section>
+                    <section className="space-y-3">
+                      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        Colores
+                      </h3>
+                      {(
+                        [
+                          ["primary_color", "Color principal"],
+                          ["secondary_color", "Color secundario"],
+                        ] as const
+                      ).map(([key, label]) => {
+                        const raw = String(themeValues[key] ?? "").trim();
+                        const hex = toCssColorHex(raw, "#808080");
+                        return (
+                          <div key={key}>
+                            <Label>{label}</Label>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="color"
+                                value={hex}
+                                onChange={(e) => setThemeField(key, e.target.value.toLowerCase())}
+                                className="h-9 w-12 shrink-0 cursor-pointer rounded-md border border-border bg-transparent p-0.5"
+                                title={label}
+                                aria-label={label}
+                              />
+                              <Input
+                                value={raw}
+                                onChange={(e) => setThemeField(key, e.target.value)}
+                                placeholder="#0284c7"
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </section>
+                    <section className="space-y-3">
+                      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        Imágenes
+                      </h3>
+                      <ThemeAssetField
+                        label="Logo"
+                        hint="PNG, JPG, WebP o GIF. Máximo 2 MB."
+                        previewUrl={logoUrl}
+                        file={logoFile}
+                        onFile={setLogoFile}
+                      />
+                      <ThemeAssetField
+                        label="Ícono de pestaña"
+                        hint="Ícono chico del navegador. PNG, ICO o WebP. Máximo 2 MB."
+                        previewUrl={faviconUrl}
+                        file={faviconFile}
+                        onFile={setFaviconFile}
+                      />
+                      <ThemeAssetField
+                        label="Imagen de portada"
+                        hint="Pantalla de ingreso. PNG, JPG o WebP. Máximo 2 MB."
+                        previewUrl={bannerUrl}
+                        file={bannerFile}
+                        onFile={setBannerFile}
+                      />
+                    </section>
+                    <section className="space-y-3">
+                      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        Estilo
+                      </h3>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label>Tamaño de texto</Label>
+                          <Input
+                            type="number"
+                            min={12}
+                            max={20}
+                            value={fontSize}
+                            onChange={(e) => setFontSize(Number(e.target.value) || 14)}
+                          />
+                          <p className="mt-1 text-[11px] text-muted-foreground">12–20 px</p>
+                        </div>
+                        <div>
+                          <Label>Redondeo de bordes</Label>
+                          <Input
+                            type="number"
+                            min={0}
+                            max={24}
+                            value={borderRadius}
+                            onChange={(e) => setBorderRadius(Number(e.target.value) || 0)}
+                          />
+                          <p className="mt-1 text-[11px] text-muted-foreground">0–24 px</p>
+                        </div>
                       </div>
                       <label className="flex items-center gap-2 text-sm cursor-pointer">
                         <Checkbox
-                          checked={showSponsors}
-                          onCheckedChange={(v) => setShowSponsors(v === true)}
+                          checked={compact}
+                          onCheckedChange={(v) => setCompact(v === true)}
                         />
-                        Mostrar patrocinadores al ingresar
+                        Interfaz compacta
                       </label>
-                      {sponsors.length === 0 ? (
-                        <p className="text-[11px] text-muted-foreground">
-                          Sin patrocinadores. Agregá partners con nombre, imagen y sitio web.
-                        </p>
-                      ) : (
-                        <div className="space-y-3">
-                          {sponsors.map((s, index) => (
-                            <div
-                              key={s.key}
-                              className="rounded-md border border-border/70 p-3 space-y-2 bg-muted/10"
-                            >
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-[11px] font-medium text-muted-foreground">
-                                  Patrocinador {index + 1}
-                                </span>
-                                <Button
-                                  type="button"
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-7 w-7"
-                                  onClick={() =>
-                                    setSponsors((prev) => prev.filter((x) => x.key !== s.key))
-                                  }
-                                  title="Eliminar"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
-                              <div>
-                                <Label>Nombre *</Label>
-                                <Input
-                                  value={s.name}
-                                  onChange={(e) =>
-                                    setSponsors((prev) =>
-                                      prev.map((x) =>
-                                        x.key === s.key ? { ...x, name: e.target.value } : x,
-                                      ),
-                                    )
-                                  }
-                                  placeholder="Sercotec"
-                                />
-                              </div>
-                              <div>
-                                <Label>Imagen</Label>
-                                <Input
-                                  value={s.logo_url}
-                                  onChange={(e) =>
-                                    setSponsors((prev) =>
-                                      prev.map((x) =>
-                                        x.key === s.key ? { ...x, logo_url: e.target.value } : x,
-                                      ),
-                                    )
-                                  }
-                                  placeholder="https://…/imagen.png"
-                                />
-                              </div>
-                              <div>
-                                <Label>Sitio web</Label>
-                                <Input
-                                  value={s.website_url}
-                                  onChange={(e) =>
-                                    setSponsors((prev) =>
-                                      prev.map((x) =>
-                                        x.key === s.key ? { ...x, website_url: e.target.value } : x,
-                                      ),
-                                    )
-                                  }
-                                  placeholder="https://…"
-                                />
-                              </div>
-                              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                                <Checkbox
-                                  checked={s.enabled}
-                                  onCheckedChange={(v) =>
-                                    setSponsors((prev) =>
-                                      prev.map((x) =>
-                                        x.key === s.key ? { ...x, enabled: v === true } : x,
-                                      ),
-                                    )
-                                  }
-                                />
-                                Habilitado
-                              </label>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </section>
-                  )}
-
-                  {panelTab === "apps" && editing && (
-                    <section className="space-y-3">
-                      <div>
-                        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                          Apps permitidas
-                        </h3>
-                        <p className="text-[11px] text-muted-foreground mt-1">
-                          Elige qué apps del store puede ver esta organización. Vacío = sin
-                          restricción (sigue el filtro por sucursal).
-                        </p>
-                      </div>
-                      {allowedAppsLoading ? (
-                        <div className="flex justify-center py-8">
-                          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                        </div>
-                      ) : (
-                        <OrganizationAppPicker
-                          selectedIds={draftAllowedAppIds}
-                          onChange={setDraftAllowedAppIds}
-                          disabled={!canDesignateApps || updateAllowedApps.isPending}
+                      <label className="flex items-center gap-2 text-sm cursor-pointer">
+                        <Checkbox
+                          checked={motionEnabled}
+                          onCheckedChange={(v) => setMotionEnabled(v === true)}
                         />
-                      )}
+                        Animaciones
+                      </label>
                     </section>
-                  )}
+                  </>
+                )}
+              </div>
+            )}
 
-                  {panelTab === "apps-roles" && editing && (
-                    <section className="space-y-3">
-                      <div>
-                        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                          Apps por rol
-                        </h3>
-                        <p className="text-[11px] text-muted-foreground mt-1">
-                          Solo dentro de las apps permitidas de la org. Lista vacía en un rol =
-                          hereda todas las de la organización.
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap gap-1">
-                        {MUNINN_ASSIGNABLE_ROLE_CODES.map((code) => (
-                          <button
-                            key={code}
-                            type="button"
-                            onClick={() => setActiveRoleCode(code)}
-                            className={cn(
-                              "rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
-                              activeRoleCode === code
-                                ? "bg-teal-500/15 text-teal-300 border border-teal-500/30"
-                                : "text-muted-foreground hover:text-foreground border border-transparent",
-                            )}
-                          >
-                            {roleLabel(code)}
-                            <span className="ml-1 opacity-70">
-                              ({draftRoleApps[code]?.length ?? 0})
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                      {roleAppsLoading || allowedAppsLoading ? (
-                        <div className="flex justify-center py-8">
-                          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                        </div>
-                      ) : (
-                        <OrganizationAppPicker
-                          selectedIds={draftRoleApps[activeRoleCode] ?? []}
-                          onChange={(ids) =>
-                            setDraftRoleApps((prev) => ({ ...prev, [activeRoleCode]: ids }))
-                          }
-                          catalogIds={
-                            allowedAppsData?.is_restricted ? draftAllowedAppIds : null
-                          }
-                          disabled={!canDesignateRoleApps || updateRoleApps.isPending}
-                          emptyHint="No hay apps disponibles para este rol."
-                        />
-                      )}
-                    </section>
-                  )}
+            {panelTab === "redes" && (
+              <section className="space-y-3">
+                <div>
+                  <Label>Sitio web</Label>
+                  <Input
+                    value={String(themeValues.website_url ?? "")}
+                    onChange={(e) => setThemeField("website_url", e.target.value)}
+                    placeholder="https://…"
+                  />
                 </div>
-
-                <div className="shrink-0 flex gap-2 px-4 py-3 border-t border-border/70 bg-card/60">
+                <div className="flex items-center justify-between gap-2 pt-1">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Redes sociales
+                  </h3>
                   <Button
-                    className="flex-1"
-                    onClick={() => void save()}
-                    disabled={
-                      saving ||
-                      createOrg.isPending ||
-                      updateOrg.isPending ||
-                      updateTheme.isPending ||
-                      updateAllowedApps.isPending ||
-                      updateRoleApps.isPending
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      setSocialLinks((prev) => [
+                        ...prev,
+                        newThemeSocialLink({ order: prev.length + 1 }),
+                      ])
                     }
                   >
-                    {(saving ||
-                      createOrg.isPending ||
-                      updateOrg.isPending ||
-                      updateTheme.isPending ||
-                      updateAllowedApps.isPending ||
-                      updateRoleApps.isPending) && (
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    )}
-                    Guardar
+                    <Plus className="h-3.5 w-3.5 mr-1" />
+                    Agregar
                   </Button>
-                  {!singleOrgMode && (
-                    <Button variant="outline" onClick={closePanel}>
-                      Cancelar
-                    </Button>
-                  )}
                 </div>
-              </motion.aside>
+                {socialLinks.length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    Sin links. Agregá las redes que quieras mostrar.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {socialLinks.map((link, index) => (
+                      <div
+                        key={link.key}
+                        className="rounded-md border border-border/70 p-3 space-y-2 bg-muted/10"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[11px] font-medium text-muted-foreground">
+                            Link {index + 1}
+                          </span>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7"
+                            onClick={() =>
+                              setSocialLinks((prev) => prev.filter((s) => s.key !== link.key))
+                            }
+                            title="Eliminar"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <Label>Nombre *</Label>
+                            <Input
+                              value={link.name}
+                              onChange={(e) =>
+                                setSocialLinks((prev) =>
+                                  prev.map((s) =>
+                                    s.key === link.key ? { ...s, name: e.target.value } : s,
+                                  ),
+                                )
+                              }
+                              placeholder="Instagram"
+                            />
+                          </div>
+                          <div>
+                            <Label>Ícono</Label>
+                            <Select
+                              value={link.icon}
+                              onValueChange={(v) =>
+                                setSocialLinks((prev) =>
+                                  prev.map((s) => (s.key === link.key ? { ...s, icon: v } : s)),
+                                )
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Ícono" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {SOCIAL_ICON_OPTIONS.map((o) => (
+                                  <SelectItem key={o.value} value={o.value}>
+                                    {o.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <div>
+                          <Label>Enlace *</Label>
+                          <Input
+                            value={link.url}
+                            onChange={(e) =>
+                              setSocialLinks((prev) =>
+                                prev.map((s) =>
+                                  s.key === link.key ? { ...s, url: e.target.value } : s,
+                                ),
+                              )
+                            }
+                            placeholder="https://instagram.com/…"
+                          />
+                        </div>
+                        <label className="flex items-center gap-2 text-sm cursor-pointer">
+                          <Checkbox
+                            checked={link.enabled}
+                            onCheckedChange={(v) =>
+                              setSocialLinks((prev) =>
+                                prev.map((s) =>
+                                  s.key === link.key ? { ...s, enabled: v === true } : s,
+                                ),
+                              )
+                            }
+                          />
+                          Visible
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
             )}
-          </AnimatePresence>
-        </div>
-      </AdminMotionItem>
+
+            {panelTab === "acceso" && (
+              <div className="space-y-3.5">
+                {themeLoading && editing ? (
+                  <InlineSkeleton lines={4} />
+                ) : (
+                  <section className="space-y-3">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Ingreso al portal
+                    </h3>
+                    <div>
+                      <Label>Dominio propio</Label>
+                      <Input
+                        value={customDomain}
+                        onChange={(e) => setCustomDomain(e.target.value)}
+                        onBlur={() => {
+                          const normalized = normalizePortalHost(customDomain);
+                          if (normalized) setCustomDomain(normalized);
+                        }}
+                        placeholder="portal.cliente.com"
+                      />
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        Opcional. Solo el dominio, sin https://
+                      </p>
+                    </div>
+                    <div>
+                      <Label>Nombre corto del link</Label>
+                      <Input
+                        value={String(themeValues.login_slug ?? "")}
+                        onChange={(e) => setThemeField("login_slug", e.target.value)}
+                        placeholder="mi-grupo"
+                      />
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        Se usa cuando no hay dominio propio.
+                      </p>
+                    </div>
+                    <PortalAccessLinkField
+                      customDomain={customDomain}
+                      loginSlug={String(themeValues.login_slug ?? "")}
+                    />
+                    <div>
+                      <Label>Mensaje de bienvenida</Label>
+                      <Input
+                        value={String(themeValues.login_welcome_message ?? "")}
+                        onChange={(e) => setThemeField("login_welcome_message", e.target.value)}
+                        placeholder="¡Bienvenido!"
+                      />
+                    </div>
+                    <div>
+                      <Label>Texto de apoyo</Label>
+                      <Input
+                        value={String(themeValues.login_subtitle ?? "")}
+                        onChange={(e) => setThemeField("login_subtitle", e.target.value)}
+                        placeholder="Ingresá con tu cuenta"
+                      />
+                    </div>
+                  </section>
+                )}
+              </div>
+            )}
+
+            {panelTab === "patrocinadores" && (
+              <section className="space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Patrocinadores
+                  </h3>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      setSponsors((prev) => [...prev, newThemeSponsor({ order: prev.length + 1 })])
+                    }
+                  >
+                    <Plus className="h-3.5 w-3.5 mr-1" />
+                    Agregar
+                  </Button>
+                </div>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <Checkbox
+                    checked={showSponsors}
+                    onCheckedChange={(v) => setShowSponsors(v === true)}
+                  />
+                  Mostrar patrocinadores al ingresar
+                </label>
+                {sponsors.length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    Sin patrocinadores. Agregá partners con nombre, imagen y sitio web.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {sponsors.map((s, index) => (
+                      <div
+                        key={s.key}
+                        className="rounded-md border border-border/70 p-3 space-y-2 bg-muted/10"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[11px] font-medium text-muted-foreground">
+                            Patrocinador {index + 1}
+                          </span>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7"
+                            onClick={() =>
+                              setSponsors((prev) => prev.filter((x) => x.key !== s.key))
+                            }
+                            title="Eliminar"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                        <div>
+                          <Label>Nombre *</Label>
+                          <Input
+                            value={s.name}
+                            onChange={(e) =>
+                              setSponsors((prev) =>
+                                prev.map((x) =>
+                                  x.key === s.key ? { ...x, name: e.target.value } : x,
+                                ),
+                              )
+                            }
+                            placeholder="Sercotec"
+                          />
+                        </div>
+                        <div>
+                          <Label>Imagen</Label>
+                          <Input
+                            value={s.logo_url}
+                            onChange={(e) =>
+                              setSponsors((prev) =>
+                                prev.map((x) =>
+                                  x.key === s.key ? { ...x, logo_url: e.target.value } : x,
+                                ),
+                              )
+                            }
+                            placeholder="https://…/imagen.png"
+                          />
+                        </div>
+                        <div>
+                          <Label>Sitio web</Label>
+                          <Input
+                            value={s.website_url}
+                            onChange={(e) =>
+                              setSponsors((prev) =>
+                                prev.map((x) =>
+                                  x.key === s.key ? { ...x, website_url: e.target.value } : x,
+                                ),
+                              )
+                            }
+                            placeholder="https://…"
+                          />
+                        </div>
+                        <label className="flex items-center gap-2 text-sm cursor-pointer">
+                          <Checkbox
+                            checked={s.enabled}
+                            onCheckedChange={(v) =>
+                              setSponsors((prev) =>
+                                prev.map((x) =>
+                                  x.key === s.key ? { ...x, enabled: v === true } : x,
+                                ),
+                              )
+                            }
+                          />
+                          Habilitado
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
+
+            {panelTab === "apps" && editing && (
+              <section className="space-y-3">
+                <div>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Apps permitidas
+                  </h3>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Elige qué apps del store puede ver esta organización. Vacío = sin restricción
+                    (sigue el filtro por sucursal).
+                  </p>
+                </div>
+                {allowedAppsLoading ? (
+                  <InlineSkeleton lines={4} />
+                ) : (
+                  <OrganizationAppPicker
+                    selectedIds={draftAllowedAppIds}
+                    onChange={setDraftAllowedAppIds}
+                    disabled={!canDesignateApps || updateAllowedApps.isPending}
+                  />
+                )}
+              </section>
+            )}
+
+            {panelTab === "apps-roles" && editing && (
+              <section className="space-y-3">
+                <div>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Apps por rol
+                  </h3>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Solo dentro de las apps permitidas de la org. Lista vacía en un rol = hereda
+                    todas las de la organización.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {MUNINN_ASSIGNABLE_ROLE_CODES.map((code) => (
+                    <button
+                      key={code}
+                      type="button"
+                      onClick={() => setActiveRoleCode(code)}
+                      className={cn(
+                        "rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
+                        activeRoleCode === code
+                          ? "bg-teal-500/15 text-teal-300 border border-teal-500/30"
+                          : "text-muted-foreground hover:text-foreground border border-transparent",
+                      )}
+                    >
+                      {roleLabel(code)}
+                      <span className="ml-1 opacity-70">({draftRoleApps[code]?.length ?? 0})</span>
+                    </button>
+                  ))}
+                </div>
+                {roleAppsLoading || allowedAppsLoading ? (
+                  <InlineSkeleton lines={4} />
+                ) : (
+                  <OrganizationAppPicker
+                    selectedIds={draftRoleApps[activeRoleCode] ?? []}
+                    onChange={(ids) =>
+                      setDraftRoleApps((prev) => ({ ...prev, [activeRoleCode]: ids }))
+                    }
+                    catalogIds={allowedAppsData?.is_restricted ? draftAllowedAppIds : null}
+                    disabled={!canDesignateRoleApps || updateRoleApps.isPending}
+                    emptyHint="No hay apps disponibles para este rol."
+                  />
+                )}
+              </section>
+            )}
+          </AdminEntityEditChrome>
+        </AdminMotionItem>
+      )}
 
       <Dialog
         open={attachOpen}
@@ -1898,9 +1933,7 @@ export default function AdminOrganizacionesPage() {
           </DialogHeader>
           <div className="space-y-4">
             {storesLoading ? (
-              <div className="flex justify-center py-6">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              </div>
+              <InlineSkeleton lines={4} />
             ) : (
               <div className="space-y-2">
                 <Label className="mb-0">Ya vinculadas ({stores.length})</Label>
@@ -1996,77 +2029,21 @@ export default function AdminOrganizacionesPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* FAB: menú → Nueva / Actualizar (solo iconos + tooltip) */}
-      <TooltipProvider delayDuration={200}>
-        <AnimatePresence>
-          {!panelOpen && !singleOrgMode && (
-            <motion.div
-              className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2"
-              initial={reduceMotion ? false : { opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={reduceMotion ? undefined : { opacity: 0, y: 8 }}
-            >
-              <AnimatePresence>
-                {fabOpen && (
-                  <motion.div
-                    initial={reduceMotion ? false : { opacity: 0, y: 8, scale: 0.96 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={reduceMotion ? undefined : { opacity: 0, y: 6, scale: 0.96 }}
-                    className="flex flex-col items-end gap-2 mb-1"
-                  >
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          size="icon"
-                          variant="secondary"
-                          className="h-10 w-10 rounded-full shadow-md"
-                          onClick={handleRefresh}
-                          disabled={refreshing || isFetching}
-                          aria-label="Actualizar"
-                        >
-                          <RefreshCw
-                            className={cn("h-4 w-4", (refreshing || isFetching) && "animate-spin")}
-                          />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="left">Actualizar</TooltipContent>
-                    </Tooltip>
-                    {canCreate && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            size="icon"
-                            className="h-10 w-10 rounded-full shadow-md"
-                            onClick={openCreate}
-                            aria-label="Nueva"
-                          >
-                            <Plus className="h-4 w-4" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="left">Nueva</TooltipContent>
-                      </Tooltip>
-                    )}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    size="icon"
-                    className="h-12 w-12 rounded-full shadow-lg"
-                    onClick={() => setFabOpen((v) => !v)}
-                    aria-expanded={fabOpen}
-                    aria-label={fabOpen ? "Cerrar menú" : "Menú"}
-                  >
-                    {fabOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="left">{fabOpen ? "Cerrar" : "Menú"}</TooltipContent>
-              </Tooltip>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </TooltipProvider>
+      <AdminMobileFab
+        open={fabOpen}
+        onOpenChange={setFabOpen}
+        visible={!panelOpen && !singleOrgMode}
+        actions={[
+          {
+            label: "Actualizar",
+            icon: RefreshCw,
+            onClick: handleRefresh,
+            disabled: refreshing || isFetching,
+            spinning: refreshing || isFetching,
+          },
+          ...(canCreate ? [{ label: "Nueva", icon: Plus, onClick: openCreate }] : []),
+        ]}
+      />
     </AdminPageMotion>
   );
 }

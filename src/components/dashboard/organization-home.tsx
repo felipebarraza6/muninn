@@ -9,10 +9,10 @@ import {
   LayoutGrid,
   MessageSquare,
   ArrowRight,
-  Loader2,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { useOrganizations, useAdminBranches } from "@/api/hooks/useBranches";
 import { useAdminUsers } from "@/api/hooks/useUsers";
 import { useAgents } from "@/api/hooks/useAgents";
@@ -58,9 +58,7 @@ export function OrganizationHome() {
 
   const holdingBranches = useMemo(() => {
     if (ownedIds.size === 0) return branches;
-    return branches.filter(
-      (b) => b.organization != null && ownedIds.has(String(b.organization)),
-    );
+    return branches.filter((b) => b.organization != null && ownedIds.has(String(b.organization)));
   }, [branches, ownedIds]);
 
   const isLoading =
@@ -115,11 +113,7 @@ export function OrganizationHome() {
   ];
 
   if (isLoading) {
-    return (
-      <div className="px-4 md:px-6 lg:px-8 py-6 flex justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <PageSkeleton variant="dashboard" />;
   }
 
   return (
@@ -158,9 +152,7 @@ export function OrganizationHome() {
               >
                 <Link to={link.href}>
                   <link.icon className="h-4 w-4 text-primary shrink-0" />
-                  <span className="truncate">
-                    {"label" in link ? link.label : orgLabel}
-                  </span>
+                  <span className="truncate">{"label" in link ? link.label : orgLabel}</span>
                   <ArrowRight className="h-3.5 w-3.5 ml-auto opacity-50" />
                 </Link>
               </Button>

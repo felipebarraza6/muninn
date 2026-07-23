@@ -30,7 +30,7 @@ type PageMeta = {
   breadcrumb: { label: string; to?: string }[];
 };
 
-function getPageMeta(pathname: string): PageMeta {
+function getPageMeta(pathname: string, search = ""): PageMeta {
   if (pathname === "/") {
     return { breadcrumb: [] };
   }
@@ -109,13 +109,16 @@ function getPageMeta(pathname: string): PageMeta {
     };
   }
   if (pathname.startsWith("/admin/organizaciones")) {
-    return {
-      breadcrumb: [
-        { label: "Resumen", to: "/" },
-        { label: "Admin" },
-        { label: getOrganizationsAdminNavLabel() },
-      ],
-    };
+    const view = new URLSearchParams(search).get("view");
+    const label = getOrganizationsAdminNavLabel();
+    const crumbs: PageMeta["breadcrumb"] = [
+      { label: "Resumen", to: "/" },
+      { label: "Admin" },
+      { label, to: view ? "/admin/organizaciones" : undefined },
+    ];
+    if (view === "nuevo") crumbs.push({ label: "Nueva organización" });
+    else if (view === "editar") crumbs.push({ label: "Editar organización" });
+    return { breadcrumb: crumbs };
   }
   if (pathname.startsWith("/admin/llm")) {
     return {
@@ -123,18 +126,28 @@ function getPageMeta(pathname: string): PageMeta {
     };
   }
   if (pathname.startsWith("/admin/sucursales")) {
-    return {
-      breadcrumb: [
-        { label: "Resumen", to: "/" },
-        { label: "Admin" },
-        { label: getBranchesAdminNavLabel() },
-      ],
-    };
+    const view = new URLSearchParams(search).get("view");
+    const label = getBranchesAdminNavLabel();
+    const crumbs: PageMeta["breadcrumb"] = [
+      { label: "Resumen", to: "/" },
+      { label: "Admin" },
+      { label, to: view ? "/admin/sucursales" : undefined },
+    ];
+    if (view === "nuevo") crumbs.push({ label: "Nueva sucursal" });
+    else if (view === "editar") crumbs.push({ label: "Editar sucursal" });
+    return { breadcrumb: crumbs };
   }
   if (pathname.startsWith("/admin/usuarios")) {
-    return {
-      breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Admin" }, { label: "Usuarios" }],
-    };
+    const view = new URLSearchParams(search).get("view");
+    const crumbs: PageMeta["breadcrumb"] = [
+      { label: "Resumen", to: "/" },
+      { label: "Admin" },
+      { label: "Usuarios", to: view ? "/admin/usuarios" : undefined },
+    ];
+    if (view === "nuevo") crumbs.push({ label: "Nuevo usuario" });
+    else if (view === "asignar") crumbs.push({ label: "Asignar a sucursal" });
+    else if (view === "editar") crumbs.push({ label: "Editar usuario" });
+    return { breadcrumb: crumbs };
   }
   if (pathname.startsWith("/configuracion")) {
     return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Configuración" }] };
@@ -142,12 +155,24 @@ function getPageMeta(pathname: string): PageMeta {
   if (pathname.startsWith("/perfil")) {
     return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Mi perfil" }] };
   }
+  if (pathname.startsWith("/campanas")) {
+    return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Campañas" }] };
+  }
+  if (pathname.startsWith("/oportunidades")) {
+    return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Oportunidades" }] };
+  }
+  if (pathname.startsWith("/reportes")) {
+    return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Reportes" }] };
+  }
+  if (pathname.startsWith("/metricas")) {
+    return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Métricas" }] };
+  }
   return { breadcrumb: [] };
 }
 
 function PageHeader() {
-  const { pathname } = useLocation();
-  const meta = getPageMeta(pathname);
+  const { pathname, search } = useLocation();
+  const meta = getPageMeta(pathname, search);
   const [user, setUser] = useState(() => getStoredUser());
   const showBranchSwitcher = showHeaderBranchSwitcher();
 
@@ -180,7 +205,13 @@ function PageHeader() {
       <SidebarTrigger className="h-9 w-9 shrink-0" />
 
       {meta.breadcrumb.length > 0 && (
-        <nav className="hidden sm:flex items-center gap-1.5 text-sm text-muted-foreground min-w-0 flex-1">
+        <nav
+          className={cn(
+            "flex items-center gap-1.5 text-sm text-muted-foreground min-w-0",
+            showBranchSwitcher ? "hidden sm:flex flex-1" : "flex-1",
+          )}
+          aria-label="Miga de pan"
+        >
           {meta.breadcrumb.map((b, i) => {
             const isLast = i === meta.breadcrumb.length - 1;
             return (
@@ -203,13 +234,20 @@ function PageHeader() {
         </nav>
       )}
 
-      {/* Móvil: sucursal en el centro (oculto para organizador — filtra por pantalla). */}
-      {showBranchSwitcher && (
+      {/* Móvil: sucursal en el centro; si no hay switcher, mostrar título truncado. */}
+      {showBranchSwitcher ? (
         <div className="flex flex-1 min-w-0 items-center justify-center sm:hidden">
           <BranchSwitcher compact />
         </div>
+      ) : meta.breadcrumb.length > 0 ? (
+        <div className="flex flex-1 min-w-0 sm:hidden">
+          <span className="truncate text-sm font-medium text-foreground">
+            {meta.breadcrumb[meta.breadcrumb.length - 1]?.label}
+          </span>
+        </div>
+      ) : (
+        <div className="flex-1 min-w-0 sm:hidden" />
       )}
-      {!showBranchSwitcher && <div className="flex-1 min-w-0 sm:hidden" />}
 
       <div className="ml-auto flex items-center gap-1.5 sm:gap-2 shrink-0">
         {showBranchSwitcher && (

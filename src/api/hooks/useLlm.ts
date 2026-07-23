@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   DELETE,
   GET,
+  GET_ALL_PAGES,
   PATCH,
   POST,
   normalizeListResponse,
@@ -165,9 +166,7 @@ export function useLlmProviders(options?: { scope?: LlmProviderScope | null }) {
       } else if (explicitBranch) {
         config.headers = { "x-branch-id": explicitBranch };
       }
-      return GET<LlmProvider[] | { results: LlmProvider[] }>(ENDPOINTS.llm.providers, config).then(
-        (data) => normalizeListResponse<LlmProvider>(data),
-      );
+      return GET_ALL_PAGES<LlmProvider>(ENDPOINTS.llm.providers, config);
     },
     enabled: fetchAll
       ? skipBranchHeader || Boolean(activeBranchId)
@@ -255,17 +254,20 @@ export function useLlmModels(options?: UseLlmModelsOptions) {
       if (paginated) {
         params.page = page!;
         params.page_size = pageSize;
+        const data = await GET<LlmModel[] | PaginatedResponse<LlmModel>>(ENDPOINTS.llm.models, {
+          params,
+        });
+        const results = normalizeListResponse(data);
+        const count =
+          data && typeof data === "object" && !Array.isArray(data) && typeof data.count === "number"
+            ? data.count
+            : results.length;
+        return { results, count } satisfies LlmModelsListResult;
       }
 
-      const data = await GET<LlmModel[] | PaginatedResponse<LlmModel>>(ENDPOINTS.llm.models, {
-        params,
-      });
-      const results = normalizeListResponse(data);
-      const count =
-        data && typeof data === "object" && !Array.isArray(data) && typeof data.count === "number"
-          ? data.count
-          : results.length;
-      return { results, count } satisfies LlmModelsListResult;
+      // Sin page: traer todas las páginas (activo / selectores de agente).
+      const results = await GET_ALL_PAGES<LlmModel>(ENDPOINTS.llm.models, { params });
+      return { results, count: results.length } satisfies LlmModelsListResult;
     },
     enabled,
     staleTime: 5 * 60 * 1000,

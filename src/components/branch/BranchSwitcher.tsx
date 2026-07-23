@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Select,
   SelectContent,
@@ -56,6 +57,7 @@ export function BranchSwitcher({ compact = false }: BranchSwitcherProps) {
 
 function BranchSwitcherInner({ compact = false }: BranchSwitcherProps) {
   const user = getStoredUser();
+  const qc = useQueryClient();
   const { data: options = [], isLoading, isError } = useMyBranchesSelect();
   const [value, setValue] = useState(() => getActiveBranchId() ?? "");
 
@@ -110,7 +112,8 @@ function BranchSwitcherInner({ compact = false }: BranchSwitcherProps) {
         onValueChange={(next) => {
           setValue(next);
           setActiveBranchId(next, true, Boolean(user?.is_superuser));
-          window.location.reload();
+          // Sin full reload: las queries dependen de x-branch-id / branchStorage.
+          void qc.invalidateQueries();
         }}
       >
         <SelectTrigger

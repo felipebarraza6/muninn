@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
+import { HorizontalScrollStrip } from "@/components/ui/horizontal-scroll-strip";
 import {
   Select,
   SelectContent,
@@ -85,10 +87,7 @@ function AppStoreCard({
       )}
     >
       <div className="flex items-start gap-3.5">
-        <AppIcon
-          name={api.name}
-          src={api.icon_display_url || api.icon_url || api.icon}
-        />
+        <AppIcon name={api.name} src={api.icon_display_url || api.icon_url || api.icon} />
         <div className="min-w-0 flex-1 space-y-1.5">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="font-semibold text-sm leading-snug truncate tracking-tight">
@@ -288,21 +287,28 @@ export default function APIs() {
           if (!selectedTags.every((t) => apiTags.has(t.toLowerCase()))) return false;
         }
         if (!term) return true;
-        return (
-          api.name.toLowerCase().includes(term) ||
-          (api.base_url ?? "").toLowerCase().includes(term) ||
-          (api.description ?? "").toLowerCase().includes(term) ||
-          (api.category ?? "").toLowerCase().includes(term) ||
-          (AUTH_TYPE_LABEL[api.auth_type ?? "none"] ?? "").toLowerCase().includes(term) ||
-          (api.branch_names ?? []).some((n) => n.toLowerCase().includes(term)) ||
-          (api.tags ?? []).some((t) => String(t).toLowerCase().includes(term))
-        );
+        const host = hostFromUrl(api.base_url || "") || "";
+        const haystack = [
+          api.name,
+          api.base_url,
+          host,
+          api.description,
+          api.category,
+          api.auth_type,
+          AUTH_TYPE_LABEL[api.auth_type ?? "none"],
+          ...(api.branch_names ?? []),
+          ...(api.tags ?? []).map((t) => String(t)),
+        ]
+          .filter((v) => v != null && String(v).trim() !== "")
+          .join("\n")
+          .toLowerCase();
+        return haystack.includes(term);
       })
       .sort((a, b) => {
         const aActive = a.is_active !== false ? 0 : 1;
         const bActive = b.is_active !== false ? 0 : 1;
         if (aActive !== bActive) return aActive - bActive;
-        return (a.name || "").localeCompare(b.name || "", "es");
+        return String(a.name || "").localeCompare(String(b.name || ""), "es");
       });
   }, [apisRaw, search, showBranchFilter, branchFilter, categoryFilter, selectedTags]);
 
@@ -420,33 +426,41 @@ export default function APIs() {
         )}
       </div>
       {tagOptions.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {tagOptions.map((tag) => {
-            const active = selectedTags.includes(tag);
-            return (
+        <div className="space-y-1.5">
+          <HorizontalScrollStrip>
+            {tagOptions.map((tag) => {
+              const active = selectedTags.includes(tag);
+              return (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => startTransition(() => toggleFilterTag(tag))}
+                  className={cn(
+                    "inline-flex items-center shrink-0 rounded-full border px-2.5 py-1 text-[11px] transition-colors whitespace-nowrap",
+                    active
+                      ? "border-primary/40 bg-primary/15 text-primary"
+                      : "border-border/70 bg-background/40 text-muted-foreground hover:border-primary/30",
+                  )}
+                >
+                  {tag}
+                </button>
+              );
+            })}
+            {selectedTags.length > 0 && (
               <button
-                key={tag}
                 type="button"
-                onClick={() => startTransition(() => toggleFilterTag(tag))}
-                className={cn(
-                  "inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] transition-colors",
-                  active
-                    ? "border-primary/40 bg-primary/15 text-primary"
-                    : "border-border/70 bg-background/40 text-muted-foreground hover:border-primary/30",
-                )}
+                onClick={() => startTransition(() => setSelectedTags([]))}
+                className="inline-flex items-center gap-1 shrink-0 rounded-full px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground whitespace-nowrap"
               >
-                {tag}
+                <X className="h-3 w-3" /> Limpiar tags
               </button>
-            );
-          })}
+            )}
+          </HorizontalScrollStrip>
           {selectedTags.length > 0 && (
-            <button
-              type="button"
-              onClick={() => startTransition(() => setSelectedTags([]))}
-              className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground"
-            >
-              <X className="h-3 w-3" /> Limpiar tags
-            </button>
+            <p className="text-[11px] text-muted-foreground px-0.5">
+              {selectedTags.length} tag{selectedTags.length === 1 ? "" : "s"} activo
+              {selectedTags.length === 1 ? "" : "s"}
+            </p>
           )}
         </div>
       )}
@@ -458,9 +472,7 @@ export default function APIs() {
       <AdminPageMotion className="space-y-5">
         {storeHeader}
         {filterBar}
-        <div className="flex items-center justify-center min-h-[240px]">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
+        <PageSkeleton variant="cards" padded={false} />
       </AdminPageMotion>
     );
   }

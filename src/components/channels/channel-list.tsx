@@ -1,27 +1,16 @@
 import { useMemo, useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import {
-  ArrowUpRight,
-  CheckCircle2,
-  Loader2,
-  Plus,
-  Play,
-  Radio,
-  Bot,
-} from "lucide-react";
+import { ArrowUpRight, CheckCircle2, Loader2, Plus, Play, Radio, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { useChannels, useTestChannel, type Channel } from "@/api/hooks/useChannels";
 import { ChannelForm } from "@/components/channels/channel-form";
 import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
-import {
-  channelAccent,
-  channelIcon,
-  channelLabel,
-  formatChannelTestToast,
-} from "@/lib/channels";
+import { channelAccent, channelIcon, channelLabel, formatChannelTestToast } from "@/lib/channels";
+import { canManageChannels } from "@/lib/authGuards";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -33,6 +22,7 @@ export function ChannelList() {
   const [testingId, setTestingId] = useState<string | number | null>(null);
   const [q, setQ] = useState("");
   const [ready, setReady] = useState(false);
+  const canManage = canManageChannels();
   useEffect(() => {
     if (!isPending) setReady(true);
   }, [isPending]);
@@ -100,9 +90,15 @@ export function ChannelList() {
             </p>
           )}
         </div>
-        <Button size="sm" onClick={() => setCreating(true)} className="self-start sm:self-auto shrink-0">
-          <Plus className="h-4 w-4 mr-1.5" /> Nuevo canal
-        </Button>
+        {canManage && (
+          <Button
+            size="sm"
+            onClick={() => setCreating(true)}
+            className="self-start sm:self-auto shrink-0"
+          >
+            <Plus className="h-4 w-4 mr-1.5" /> Nuevo canal
+          </Button>
+        )}
       </div>
 
       <div className="flex flex-col sm:flex-row gap-2 sm:max-w-xl">
@@ -116,9 +112,7 @@ export function ChannelList() {
       </div>
 
       {isPending && !ready ? (
-        <div className="flex items-center justify-center min-h-[220px]">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
+        <PageSkeleton variant="cards" padded={false} />
       ) : filtered.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border/70 bg-muted/20 px-6 py-16 text-center">
           <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
@@ -129,7 +123,7 @@ export function ChannelList() {
               ? "Sin canales para esa búsqueda."
               : "No hay canales aún. Creá el primero para conectar un agente."}
           </p>
-          {!q.trim() && (
+          {!q.trim() && canManage && (
             <Button size="sm" className="mt-4" onClick={() => setCreating(true)}>
               <Plus className="h-4 w-4 mr-1.5" /> Crear canal
             </Button>
@@ -153,22 +147,24 @@ export function ChannelList() {
         </div>
       )}
 
-      <Dialog open={creating} onOpenChange={setCreating}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Nuevo canal</DialogTitle>
-          </DialogHeader>
-          <ChannelForm
-            bare
-            onCancel={() => setCreating(false)}
-            onSaved={(created) => {
-              setCreating(false);
-              refetch();
-              if (created?.id) navigate(`/canales/${created.id}`);
-            }}
-          />
-        </DialogContent>
-      </Dialog>
+      {canManage && (
+        <Dialog open={creating} onOpenChange={setCreating}>
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Nuevo canal</DialogTitle>
+            </DialogHeader>
+            <ChannelForm
+              bare
+              onCancel={() => setCreating(false)}
+              onSaved={(created) => {
+                setCreating(false);
+                refetch();
+                if (created?.id) navigate(`/canales/${created.id}`);
+              }}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
@@ -264,9 +260,7 @@ function ChannelCard({
         <dl className="mt-auto grid grid-cols-1 gap-2 text-[12px]">
           <div className="flex items-center gap-2 min-w-0 text-muted-foreground">
             <Radio className="h-3.5 w-3.5 shrink-0 opacity-70" />
-            <span className="truncate">
-              {channel.provider?.trim() || "Sin proveedor"}
-            </span>
+            <span className="truncate">{channel.provider?.trim() || "Sin proveedor"}</span>
           </div>
           <div className="flex items-center gap-2 min-w-0 text-muted-foreground">
             <Bot className="h-3.5 w-3.5 shrink-0 opacity-70" />

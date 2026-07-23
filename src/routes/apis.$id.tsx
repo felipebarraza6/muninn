@@ -41,6 +41,7 @@ import {
   X,
   Store,
 } from "lucide-react";
+import { PageSkeleton, InlineSkeleton } from "@/components/ui/page-skeleton";
 import {
   useExternalAPI,
   useExternalAPIs,
@@ -64,6 +65,8 @@ import {
   AUTH_HEADER_PREFIX_OPTIONS,
   AUTH_TYPE_HINT,
   AUTH_TYPE_LABEL,
+  needsPerInstallationCredentials,
+  canOfferInstallationCredentials,
   parseJsonObject,
   prettyJson,
 } from "@/lib/external-api";
@@ -100,6 +103,7 @@ export default function APIDetailPage() {
     enabled: canViewInstallations && (isGlobalAdmin || isOrgOwner),
   });
   const { data: myBranches = [] } = useMyBranchesSelect();
+  const canToggleInstalls = canManageExternalApis();
   const {
     data: linkedSkills = [],
     isLoading: skillsLoading,
@@ -165,6 +169,9 @@ export default function APIDetailPage() {
     if (requestedTab === "skills" && !canViewSkillsTab) return "configuracion";
     if (requestedTab === "instalacion" && !canViewInstallations) return "configuracion";
     if (requestedTab === "probar" && !canManage) return "configuracion";
+    if (requestedTab === "cuenta" && api && !canOfferInstallationCredentials(api)) {
+      return "configuracion";
+    }
     return requestedTab;
   })();
 
@@ -272,11 +279,7 @@ export default function APIDetailPage() {
   };
 
   if (isLoading) {
-    return (
-      <div className="px-4 md:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <PageSkeleton variant="studio" />;
   }
 
   if (error || !api) {
@@ -583,11 +586,13 @@ export default function APIDetailPage() {
               <Sparkles className="h-3.5 w-3.5" />
               Skills
               {skillCount > 0 ? (
-                <span className="text-[10px] text-muted-foreground tabular-nums">({skillCount})</span>
+                <span className="text-[10px] text-muted-foreground tabular-nums">
+                  ({skillCount})
+                </span>
               ) : null}
             </TabsTrigger>
           )}
-          {api.auth_type === "endpoint_auth" && (
+          {canOfferInstallationCredentials(api) && (
             <TabsTrigger value="cuenta" className="gap-1.5 flex-1 sm:flex-none">
               <KeyRound className="h-3.5 w-3.5" />
               Cuenta de prueba
@@ -606,7 +611,7 @@ export default function APIDetailPage() {
             <AppInstallationsPanel
               api={api}
               branchOptions={branchOptions}
-              canManage={canManage}
+              canManage={canToggleInstalls}
               onSaved={() => void refetch()}
             />
           </TabsContent>
@@ -621,6 +626,21 @@ export default function APIDetailPage() {
                 la cuenta de prueba van en sus pestañas.
               </p>
             </div>
+
+            {canOfferInstallationCredentials(api) && canViewInstallations && (
+              <div className="rounded-lg border border-primary/25 bg-primary/5 px-3 py-2.5 text-xs text-muted-foreground flex flex-col sm:flex-row sm:items-center gap-2 justify-between">
+                <span>
+                  Credenciales (API key, token o login): pégalas en{" "}
+                  <strong className="text-foreground font-medium">
+                    Instalación → Conectar cuenta de servicio
+                  </strong>{" "}
+                  en la sucursal instalada (ej. Smart Hydro).
+                </span>
+                <Button size="sm" variant="outline" onClick={() => setTab("instalacion")}>
+                  Ir a Instalación
+                </Button>
+              </div>
+            )}
 
             {canManage && canViewEndpoints && endpointCount === 0 && (
               <div className="rounded-lg border border-primary/25 bg-primary/5 px-3 py-2.5 text-xs text-muted-foreground flex flex-col sm:flex-row sm:items-center gap-2 justify-between">
@@ -932,8 +952,8 @@ export default function APIDetailPage() {
                       </SelectContent>
                     </Select>
                     <p className="text-[11px] text-muted-foreground">
-                      El botón Probar del store llama este endpoint para validar que el servicio está
-                      activo. Si requiere auth, usa la cuenta de la instalación.
+                      El botón Probar del store llama este endpoint para validar que el servicio
+                      está activo. Si requiere auth, usa la cuenta de la instalación.
                     </p>
                   </div>
                 )}
@@ -1066,7 +1086,7 @@ export default function APIDetailPage() {
                     <p className="font-medium font-mono text-xs">{api.api_key_masked}</p>
                   </div>
                 )}
-                {canViewEndpoints && api.auth_type === "endpoint_auth" && (
+                {api.auth_type === "endpoint_auth" && (
                   <>
                     <div>
                       <span className="text-muted-foreground text-xs">Endpoint auth</span>
@@ -1078,14 +1098,37 @@ export default function APIDetailPage() {
                       <span className="text-muted-foreground text-xs">Token path</span>
                       <p className="font-medium font-mono text-xs">{api.auth_token_path || "—"}</p>
                     </div>
+                    <div>
+                      <span className="text-muted-foreground text-xs">Prefijo Authorization</span>
+                      <p className="font-medium font-mono text-xs">
+                        {api.auth_header_prefix || "Bearer"}
+                      </p>
+                    </div>
                   </>
                 )}
-                {canViewEndpoints && (
+                {(canViewEndpoints || api.health_endpoint_key) && (
                   <div>
                     <span className="text-muted-foreground text-xs">Endpoint de prueba</span>
                     <p className="font-medium font-mono text-xs">
                       {api.health_endpoint_key || "Automático"}
                     </p>
+                  </div>
+                )}
+                {canOfferInstallationCredentials(api) && (
+                  <div className="md:col-span-2 rounded-lg border border-border/60 bg-muted/15 px-3 py-2 text-xs text-muted-foreground">
+                    Auth{" "}
+                    <span className="text-foreground font-medium">
+                      {AUTH_TYPE_LABEL[api.auth_type || ""] || api.auth_type || "abierta"}
+                    </span>
+                    : la cuenta usable por agentes se configura en{" "}
+                    <button
+                      type="button"
+                      className="text-primary hover:underline font-medium"
+                      onClick={() => setTab("instalacion")}
+                    >
+                      Instalación → Conectar cuenta
+                    </button>
+                    .
                   </div>
                 )}
                 {api.description && (
@@ -1109,134 +1152,132 @@ export default function APIDetailPage() {
 
         {canViewEndpoints && (
           <TabsContent value="endpoints" className="mt-0">
-          <section className="space-y-5">
-            <div className="border-b border-border/60 pb-3">
-              <h2 className="text-sm font-medium">Endpoints</h2>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Rutas de la aplicación que usan las skills. Si usás auth Login, creá primero el
-                endpoint de login y seleccionálo en Configuración.
-              </p>
-            </div>
-            <ExternalApiEndpointsPanel
-              endpoints={api.endpoints ?? {}}
-              canManage={canManage}
-              saving={update.isPending}
-              onSave={saveEndpoints}
-              embedded
-              authEndpointKey={
-                authType === "endpoint_auth"
-                  ? authEndpointKey.trim() || api.auth_endpoint_key || ""
-                  : ""
-              }
-            />
-          </section>
-        </TabsContent>
+            <section className="space-y-5">
+              <div className="border-b border-border/60 pb-3">
+                <h2 className="text-sm font-medium">Endpoints</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Rutas de la aplicación que usan las skills. Si usas auth Login, crea primero el
+                  endpoint de login y selecciónalo en Configuración.
+                </p>
+              </div>
+              <ExternalApiEndpointsPanel
+                endpoints={api.endpoints ?? {}}
+                canManage={canManage}
+                saving={update.isPending}
+                onSave={saveEndpoints}
+                embedded
+                authEndpointKey={
+                  authType === "endpoint_auth"
+                    ? authEndpointKey.trim() || api.auth_endpoint_key || ""
+                    : ""
+                }
+              />
+            </section>
+          </TabsContent>
         )}
 
         {canViewSkillsTab && (
-        <TabsContent value="skills" className="mt-0">
-          <section className="space-y-5">
-            <div className="flex flex-col sm:flex-row sm:items-start gap-3 justify-between border-b border-border/60 pb-3">
-              <div>
-                <h2 className="text-sm font-medium">Skills vinculadas</h2>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Skills que usan esta aplicación. Podés generar skills API automáticamente desde
-                  los endpoints (se omiten login/credenciales).
-                </p>
-              </div>
-              {canManage && (
-                <div className="flex flex-wrap gap-2 shrink-0">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={handleSyncSkills}
-                    disabled={syncSkills.isPending || endpointCount === 0}
-                  >
-                    {syncSkills.isPending ? (
-                      <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-                    ) : (
-                      <RefreshCw className="h-4 w-4 mr-1.5" />
-                    )}
-                    Generar desde endpoints
-                  </Button>
-                  <Button size="sm" variant="outline" asChild>
-                    <Link to="/funciones/nuevo">
-                      Nueva skill
-                      <ArrowUpRight className="h-3.5 w-3.5 ml-1" />
-                    </Link>
-                  </Button>
+          <TabsContent value="skills" className="mt-0">
+            <section className="space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-start gap-3 justify-between border-b border-border/60 pb-3">
+                <div>
+                  <h2 className="text-sm font-medium">Skills vinculadas</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Skills que usan esta aplicación. Podés generar skills API automáticamente desde
+                    los endpoints (se omiten login/credenciales).
+                  </p>
                 </div>
-              )}
-            </div>
-
-            {skillsLoading ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground py-6">
-                <Loader2 className="h-4 w-4 animate-spin" /> Cargando skills…
-              </div>
-            ) : linkedSkills.length === 0 ? (
-              <div className="py-10 text-center space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  Todavía no hay skills vinculadas a esta aplicación.
-                </p>
-                {canManage && endpointCount > 0 && (
-                  <Button size="sm" onClick={handleSyncSkills} disabled={syncSkills.isPending}>
-                    Generar skills desde endpoints
-                  </Button>
+                {canManage && (
+                  <div className="flex flex-wrap gap-2 shrink-0">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleSyncSkills}
+                      disabled={syncSkills.isPending || endpointCount === 0}
+                    >
+                      {syncSkills.isPending ? (
+                        <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-4 w-4 mr-1.5" />
+                      )}
+                      Generar desde endpoints
+                    </Button>
+                    <Button size="sm" variant="outline" asChild>
+                      <Link to="/funciones/nuevo">
+                        Nueva skill
+                        <ArrowUpRight className="h-3.5 w-3.5 ml-1" />
+                      </Link>
+                    </Button>
+                  </div>
                 )}
               </div>
-            ) : (
-              <ul className="divide-y divide-border/60">
-                {linkedSkills.map((fn) => {
-                  const endpointType =
-                    fn.implementation_type === "api" &&
-                    fn.config &&
-                    typeof fn.config === "object" &&
-                    "endpoint_type" in fn.config
-                      ? String((fn.config as { endpoint_type?: string }).endpoint_type || "")
-                      : "";
-                  return (
-                    <li key={fn.id}>
-                      <Link
-                        to={`/funciones/${fn.id}`}
-                        className="flex items-start gap-3 py-3 -mx-1 px-1 rounded-md hover:bg-muted/35 transition-colors group"
-                      >
-                        <div className="min-w-0 flex-1 space-y-0.5">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-sm font-medium truncate group-hover:text-primary transition-colors">
-                              {fn.name}
-                            </span>
-                            <Badge variant="outline" className="text-[10px] font-normal">
-                              {IMPLEMENTATION_TYPE_LABEL[fn.implementation_type ?? "api"] ??
-                                fn.implementation_type}
-                            </Badge>
-                            {fn.is_active === false && (
-                              <Badge variant="secondary" className="text-[10px]">
-                                Inactiva
+
+              {skillsLoading ? (
+                <InlineSkeleton lines={4} />
+              ) : linkedSkills.length === 0 ? (
+                <div className="py-10 text-center space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    Todavía no hay skills vinculadas a esta aplicación.
+                  </p>
+                  {canManage && endpointCount > 0 && (
+                    <Button size="sm" onClick={handleSyncSkills} disabled={syncSkills.isPending}>
+                      Generar skills desde endpoints
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <ul className="divide-y divide-border/60">
+                  {linkedSkills.map((fn) => {
+                    const endpointType =
+                      fn.implementation_type === "api" &&
+                      fn.config &&
+                      typeof fn.config === "object" &&
+                      "endpoint_type" in fn.config
+                        ? String((fn.config as { endpoint_type?: string }).endpoint_type || "")
+                        : "";
+                    return (
+                      <li key={fn.id}>
+                        <Link
+                          to={`/funciones/${fn.id}`}
+                          className="flex items-start gap-3 py-3 -mx-1 px-1 rounded-md hover:bg-muted/35 transition-colors group"
+                        >
+                          <div className="min-w-0 flex-1 space-y-0.5">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-sm font-medium truncate group-hover:text-primary transition-colors">
+                                {fn.name}
+                              </span>
+                              <Badge variant="outline" className="text-[10px] font-normal">
+                                {IMPLEMENTATION_TYPE_LABEL[fn.implementation_type ?? "api"] ??
+                                  fn.implementation_type}
                               </Badge>
-                            )}
-                          </div>
-                          <p className="text-[11px] text-muted-foreground font-mono truncate">
-                            {fn.slug}
-                            {endpointType ? ` · ${endpointType}` : ""}
-                          </p>
-                          {fn.description ? (
-                            <p className="text-xs text-muted-foreground line-clamp-1">
-                              {fn.description}
+                              {fn.is_active === false && (
+                                <Badge variant="secondary" className="text-[10px]">
+                                  Inactiva
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-muted-foreground font-mono truncate">
+                              {fn.slug}
+                              {endpointType ? ` · ${endpointType}` : ""}
                             </p>
-                          ) : null}
-                        </div>
-                        <ArrowUpRight className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5 opacity-50 group-hover:opacity-100" />
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </section>
-        </TabsContent>
+                            {fn.description ? (
+                              <p className="text-xs text-muted-foreground line-clamp-1">
+                                {fn.description}
+                              </p>
+                            ) : null}
+                          </div>
+                          <ArrowUpRight className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5 opacity-50 group-hover:opacity-100" />
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
+          </TabsContent>
         )}
 
-        {api.auth_type === "endpoint_auth" && (
+        {canOfferInstallationCredentials(api) && (
           <TabsContent value="cuenta" className="mt-0">
             <PersonalConnectionsPanel api={api} />
           </TabsContent>

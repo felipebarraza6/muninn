@@ -59,12 +59,12 @@ import {
   showBranchFilterUI,
 } from "@/lib/authGuards";
 import { GLOBAL_BRANCH_ID, getActiveBranchId } from "@/lib/branchStorage";
-import {
-  AdminMotionItem,
-  AdminMotionList,
-  AdminPageMotion,
-} from "@/components/admin/AdminPageMotion";
+import { AdminMotionItem, AdminPageMotion } from "@/components/admin/AdminPageMotion";
+import { AdminPageLoader } from "@/components/admin/AdminPageLoader";
+import { InlineSkeleton } from "@/components/ui/page-skeleton";
+import { AdminListToolbar } from "@/components/admin/AdminListToolbar";
 import { BranchFilterSelect } from "@/components/branch/BranchFilterSelect";
+import { EmptyState, ErrorBanner } from "@/components/ui/empty-state";
 import { toast } from "sonner";
 import type { AxiosError } from "axios";
 
@@ -99,7 +99,15 @@ export default function AdminLlmPage() {
   const showBranchFilter = showBranchFilterUI();
   const [branchFilter, setBranchFilter] = useState(GLOBAL_BRANCH_ID);
   const providerScope = branchFilter === GLOBAL_BRANCH_ID ? "all" : branchFilter;
-  const { data: providers = [], isLoading, refetch } = useLlmProviders({ scope: providerScope });
+  const {
+    data: providers = [],
+    isLoading,
+    isFetching,
+    isError,
+    refetch,
+  } = useLlmProviders({
+    scope: providerScope,
+  });
   const { data: adminBranches = [] } = useAdminBranches({
     enabled: canManageProviders && isGlobalAdmin,
   });
@@ -124,6 +132,8 @@ export default function AdminLlmPage() {
   }, [providers, showBranchFilter, branchFilter]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  /** true = panel derecho muestra formulario de LLM (en vez de modelos). */
+  const [providerFormOpen, setProviderFormOpen] = useState(false);
   const selected = useMemo(
     () => filteredProviders.find((p) => String(p.id) === selectedId) ?? null,
     [filteredProviders, selectedId],
@@ -170,6 +180,10 @@ export default function AdminLlmPage() {
   const [syncFreeOnly, setSyncFreeOnly] = useState(false);
   const [activatingModelId, setActivatingModelId] = useState<string | null>(null);
 
+  useEffect(() => {
+    setSyncModalOpen(false);
+  }, [selectedId, branchFilter]);
+
   const { data: capabilityKeys = [] } = useProviderModelCapabilities(
     syncModalOpen ? selectedId : null,
   );
@@ -207,13 +221,15 @@ export default function AdminLlmPage() {
 
   useEffect(() => {
     if (filteredProviders.length === 0) {
-      if (selectedId) setSelectedId(null);
+      // Crear en lista vacía: no borrar selección ni cerrar el form.
+      if (!providerFormOpen && selectedId) setSelectedId(null);
       return;
     }
     if (selectedId && filteredProviders.some((p) => String(p.id) === selectedId)) return;
+    // Id pendiente (p. ej. recién creado, cache aún sin él): no reasignar ni cerrar form.
+    if (providerFormOpen || selectedId) return;
     setSelectedId(String(filteredProviders[0].id));
-    setProviderFormOpen(false);
-  }, [filteredProviders, selectedId]);
+  }, [filteredProviders, selectedId, providerFormOpen]);
 
   const createProvider = useCreateLlmProvider();
   const updateProvider = useUpdateLlmProvider();
@@ -224,8 +240,6 @@ export default function AdminLlmPage() {
   const createModel = useCreateLlmModel();
   const updateModel = useUpdateLlmModel();
 
-  /** true = panel derecho muestra formulario de LLM (en vez de modelos). */
-  const [providerFormOpen, setProviderFormOpen] = useState(false);
   const [providerFormTab, setProviderFormTab] = useState("general");
   const [editingProvider, setEditingProvider] = useState<LlmProvider | null>(null);
   const [pName, setPName] = useState("");
@@ -649,7 +663,6 @@ export default function AdminLlmPage() {
           onSuccess: (updated) => {
             toast.success("LLM actualizado");
             setEditingProvider(updated);
-            refetch();
           },
           onError: (e) =>
             toast.error((e as { friendlyMessage?: string }).friendlyMessage || "Error al guardar"),
@@ -661,8 +674,8 @@ export default function AdminLlmPage() {
           toast.success("LLM creado");
           setSelectedId(String(created.id));
           setEditingProvider(created);
+          setProviderFormOpen(true);
           setProviderFormTab("endpoints");
-          refetch();
         },
         onError: (e) =>
           toast.error((e as { friendlyMessage?: string }).friendlyMessage || "Error al crear"),
@@ -797,15 +810,41 @@ export default function AdminLlmPage() {
   };
 
   if (isLoading) {
-    return (
-      <div className="px-4 md:px-6 lg:px-8 py-6 flex justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <AdminPageLoader variant="split" />;
   }
 
   return (
     <AdminPageMotion>
+      {isError && (
+        <AdminMotionItem>
+          <ErrorBanner message="No se pudieron cargar los LLMs." onRetry={() => void refetch()} />
+        </AdminMotionItem>
+      )}
+      <AdminMotionItem>
+        <AdminListToolbar
+          countLabel={`${filteredProviders.length} ${filteredProviders.length === 1 ? "LLM" : "LLMs"}${!canManageProviders ? " · solo lectura" : ""}`}
+          actions={[
+            {
+              label: "Actualizar",
+              icon: RefreshCw,
+              onClick: () => void refetch(),
+              disabled: isFetching,
+              spinning: isFetching,
+            },
+            ...(canManageProviders
+              ? [
+                  {
+                    label: "Nuevo",
+                    icon: Plus,
+                    onClick: openCreateProvider,
+                    variant: "default" as const,
+                  },
+                ]
+              : []),
+          ]}
+        />
+      </AdminMotionItem>
+
       {showBranchFilter && (
         <AdminMotionItem>
           <div className="mb-2">
@@ -820,20 +859,20 @@ export default function AdminLlmPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(260px,340px)_1fr] gap-6 lg:gap-8">
         <AdminMotionItem>
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs text-muted-foreground">
-              {filteredProviders.length} {filteredProviders.length === 1 ? "LLM" : "LLMs"}
-              {!canManageProviders ? " · solo lectura" : ""}
-            </span>
-            {canManageProviders && (
-              <Button size="sm" variant="ghost" onClick={openCreateProvider}>
-                <Plus className="h-4 w-4 mr-1" /> Nuevo
-              </Button>
-            )}
-          </div>
-          <AdminMotionList className="space-y-1.5">
+          <div className="space-y-1.5">
             {filteredProviders.length === 0 && (
-              <p className="text-sm text-muted-foreground py-6 text-center">Sin LLMs.</p>
+              <EmptyState
+                title="Sin LLMs"
+                description="No hay proveedores configurados para este alcance."
+                action={
+                  canManageProviders ? (
+                    <Button size="sm" onClick={openCreateProvider}>
+                      <Plus className="h-4 w-4 mr-1.5" />
+                      Nuevo
+                    </Button>
+                  ) : undefined
+                }
+              />
             )}
             {filteredProviders.map((p) => (
               <AdminMotionItem key={String(p.id)}>
@@ -893,7 +932,7 @@ export default function AdminLlmPage() {
                 </button>
               </AdminMotionItem>
             ))}
-          </AdminMotionList>
+          </div>
         </AdminMotionItem>
 
         <AdminMotionItem>
@@ -1526,7 +1565,6 @@ export default function AdminLlmPage() {
                           toast.success("Eliminado");
                           setSelectedId(null);
                           closeProviderForm();
-                          refetch();
                         },
                         onError: (e) =>
                           toast.error(
@@ -1670,17 +1708,13 @@ export default function AdminLlmPage() {
                 </details>
               )}
 
-              <AdminMotionList className="divide-y divide-border/60">
+              <div className="divide-y divide-border/60">
                 {!selected && (
                   <p className="text-sm text-muted-foreground py-8 text-center">
                     Elige un LLM a la izquierda.
                   </p>
                 )}
-                {selected && modelsLoading && (
-                  <div className="flex justify-center py-8">
-                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                  </div>
-                )}
+                {selected && modelsLoading && <InlineSkeleton className="px-1" lines={4} />}
                 {selected &&
                   !modelsLoading &&
                   pagedActiveModels.map((m) => (
@@ -1809,7 +1843,7 @@ export default function AdminLlmPage() {
                       </div>
                     </div>
                   )}
-              </AdminMotionList>
+              </div>
             </>
           )}
         </AdminMotionItem>
@@ -2001,9 +2035,7 @@ export default function AdminLlmPage() {
           </div>
           <div className="max-h-[min(52vh,420px)] overflow-y-auto rounded-md border border-border divide-y divide-border/60">
             {inactiveLoading || (inactiveFetching && inactiveModels.length === 0) ? (
-              <div className="flex justify-center py-10">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              </div>
+              <InlineSkeleton className="px-3" lines={5} />
             ) : inactiveModels.length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center">
                 {deferredSyncSearch.trim() || syncCaps.length || syncFreeOnly

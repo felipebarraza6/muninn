@@ -18,6 +18,7 @@ import {
   type BranchAssignment,
 } from "@/api/hooks/useAuth";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -187,11 +188,7 @@ export default function PerfilPage() {
   };
 
   if (isLoading && !profile) {
-    return (
-      <div className="flex min-h-[400px] items-center justify-center">
-        <Loader2 className="h-7 w-7 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <PageSkeleton variant="profile" />;
   }
 
   return (

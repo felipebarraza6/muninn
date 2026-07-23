@@ -34,6 +34,7 @@ import { AgentSkillsPanel } from "@/components/agents/agent-skills-panel";
 import { AgentFlowPolicyPanel } from "@/components/agents/agent-flow-policy-panel";
 import { AgentForm } from "@/components/agents/agent-form";
 import { AdminPageMotion } from "@/components/admin/AdminPageMotion";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { isSuperAdmin } from "@/lib/authGuards";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -143,11 +144,7 @@ export default function AgentDetailPage() {
   );
 
   if (isLoading) {
-    return (
-      <div className="px-4 md:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <PageSkeleton variant="studio" />;
   }
 
   if (error || !agent) {

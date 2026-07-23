@@ -10,6 +10,7 @@ import {
   Unlink,
   RefreshCw,
 } from "lucide-react";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -246,11 +247,7 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
   }, [assignedDocs, indexingIds]);
 
   if (isLoadingAgent || isLoadingKnowledge) {
-    return (
-      <div className="flex items-center justify-center min-h-[200px]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <PageSkeleton variant="list" padded={false} />;
   }
 
   if (!agent?.use_rag) {

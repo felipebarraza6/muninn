@@ -9,10 +9,10 @@ import {
   LayoutGrid,
   Sparkles,
   ArrowRight,
-  Loader2,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { useOrganizations, useAdminBranches } from "@/api/hooks/useBranches";
 import { useAdminUsers } from "@/api/hooks/useUsers";
 import { useAgents } from "@/api/hooks/useAgents";
@@ -115,11 +115,7 @@ export function PlatformHome() {
   ];
 
   if (isLoading) {
-    return (
-      <div className="px-4 md:px-6 lg:px-8 py-6 flex justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <PageSkeleton variant="dashboard" />;
   }
 
   return (

@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Building2, KeyRound, Link2Off, Loader2, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -21,6 +20,13 @@ import {
   type ExternalAPI,
   type ExternalAPIInstallation,
 } from "@/api/hooks/useExternalAPIs";
+import { AppCredentialFieldsForm } from "@/components/applications/app-credential-fields-form";
+import { canManageInstallationAccount, canToggleExternalApiInstallations } from "@/lib/authGuards";
+import {
+  canOfferInstallationCredentials,
+  needsPerInstallationCredentials,
+  resolveCredentialFields,
+} from "@/lib/external-api";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -47,8 +53,6 @@ function serverInstalledIds(
   for (const inst of installations) {
     if (inst.is_active !== false) ids.add(String(inst.branch));
   }
-  // Solo fallback mientras carga: si ya cargó y está vacío, es «sin instalaciones»
-  // (no usar api.branch: es ancla técnica y reaparecía la sucursal desinstalada).
   if (ids.size === 0 && !installationsLoaded) {
     for (const b of api.branches ?? []) ids.add(String(b));
   }
@@ -67,9 +71,11 @@ export function AppInstallationsPanel({
 }: {
   api: ExternalAPI;
   branchOptions: BranchOption[];
-  canManage: boolean;
+  /** Legacy: instalar/desinstalar. Si no se pasa, se deduce del rol. */
+  canManage?: boolean;
   onSaved?: () => void;
 }) {
+  const canToggle = canManage ?? canToggleExternalApiInstallations();
   const update = useUpdateExternalAPI();
   const {
     data: installations = [],
@@ -79,14 +85,12 @@ export function AppInstallationsPanel({
     isError: installationsError,
     error: installationsErr,
   } = useExternalAPIInstallations(String(api.id));
-  const { data: fieldsData } = useCredentialFields(
-    api.auth_type === "endpoint_auth" ? String(api.id) : undefined,
-  );
+  const needsCreds = canOfferInstallationCredentials(api);
+  const { data: fieldsData } = useCredentialFields(needsCreds ? String(api.id) : undefined);
   const connectInstall = useConnectInstallation();
   const disconnectAccount = useDisconnectInstallationAccount();
 
   const [search, setSearch] = useState("");
-  /** Optimistic override mientras corre el PATCH; null = usar servidor. */
   const [optimisticIds, setOptimisticIds] = useState<string[] | null>(null);
   const [accountBranchId, setAccountBranchId] = useState<string | null>(null);
   const [credValues, setCredValues] = useState<Record<string, string>>({});
@@ -97,7 +101,6 @@ export function AppInstallationsPanel({
   );
   const selected = optimisticIds ?? serverIds;
 
-  // Si el servidor converge con lo optimista, soltar el override.
   useEffect(() => {
     if (optimisticIds == null) return;
     const a = [...optimisticIds].sort().join(",");
@@ -113,17 +116,16 @@ export function AppInstallationsPanel({
     return map;
   }, [installations]);
 
-  const fields = useMemo(() => {
-    const fromApi = fieldsData?.fields ?? [];
-    if (fromApi.length) return fromApi;
-    return [
-      { name: "email", type: "string", format: "email", required: true },
-      { name: "password", type: "string", format: "password", required: true },
-    ];
-  }, [fieldsData?.fields]);
+  const fields = useMemo(
+    () =>
+      resolveCredentialFields(api.auth_type, fieldsData?.fields, {
+        baseUrl: api.base_url,
+        name: api.name,
+      }),
+    [api.auth_type, api.base_url, api.name, fieldsData?.fields],
+  );
 
   useEffect(() => {
-    if (!accountBranchId) return;
     const next: Record<string, string> = {};
     for (const f of fields) next[f.name] = "";
     setCredValues(next);
@@ -135,24 +137,22 @@ export function AppInstallationsPanel({
     return branchOptions.filter((b) => b.label.toLowerCase().includes(q));
   }, [branchOptions, search]);
 
-  const persistBranches = (nextIds: string[]) => {
-    if (!canManage || update.isPending) return;
-    const prev = selected;
-    setOptimisticIds(nextIds);
+  const persistBranches = (ids: string[]) => {
+    setOptimisticIds(ids);
     update.mutate(
-      {
-        id: String(api.id),
-        data: {
-          branches: nextIds.map((bid) => (Number.isNaN(Number(bid)) ? bid : Number(bid))),
-        },
-      },
+      { id: api.id, data: { branches: ids } },
       {
         onSuccess: () => {
+          toast.success(
+            ids.length === 0
+              ? "App sin instalaciones"
+              : `Instalada en ${ids.length} sucursal${ids.length === 1 ? "" : "es"}`,
+          );
           void refetchInstallations();
           onSaved?.();
         },
         onError: (err) => {
-          setOptimisticIds(prev);
+          setOptimisticIds(null);
           toast.error(
             (err as { friendlyMessage?: string })?.friendlyMessage ||
               "No se pudieron actualizar las instalaciones",
@@ -162,49 +162,74 @@ export function AppInstallationsPanel({
     );
   };
 
-  const toggle = (id: string) => {
-    if (!canManage || update.isPending) return;
-    const isOn = selected.includes(id);
-    const next = isOn ? selected.filter((x) => x !== id) : [...selected, id];
+  const toggle = (branchId: string) => {
+    if (!canToggle) return;
+    const next = selected.includes(branchId)
+      ? selected.filter((id) => id !== branchId)
+      : [...selected, branchId];
     persistBranches(next);
   };
 
-  const accountBranch = branchOptions.find((b) => b.id === accountBranchId);
+  const accountBranch = branchOptions.find((b) => b.id === accountBranchId) ?? null;
   const accountInst = accountBranchId ? installByBranch.get(accountBranchId) : undefined;
   const accountHasCreds = Boolean(accountInst?.has_credentials);
+  const canEditAccount = canManageInstallationAccount(accountBranchId);
 
   const onConnectService = () => {
-    if (!accountBranchId || !accountInst?.id) {
-      toast.error("La instalación aún no está lista; reintentá en un momento");
+    if (!accountInst?.id) {
+      toast.error("No hay instalación para esta sucursal");
       return;
     }
     const credentials: Record<string, string> = {};
     for (const f of fields) {
       const v = (credValues[f.name] ?? "").trim();
       if (!v && f.required !== false) {
-        toast.error(`Completá «${f.name}»`);
+        toast.error(`Completa «${f.label || f.name}»`);
         return;
       }
       if (v) credentials[f.name] = v;
+    }
+    if (Object.keys(credentials).length === 0 && accountHasCreds) {
+      toast.error("Ingresa al menos un valor para actualizar");
+      return;
     }
     connectInstall.mutate(
       { id: accountInst.id, credentials },
       {
         onSuccess: (r) => {
-          if (r.success) {
-            toast.success("Cuenta de la instalación conectada");
-            setAccountBranchId(null);
+          if (r.success === false) {
+            const err = r.error || "No se pudo conectar";
+            const is401 = /401|unauthorized/i.test(err);
+            toast.error(
+              is401
+                ? "Nubox/API rechazó las credenciales (401). Revisa partner Bearer + company API key."
+                : err,
+            );
             void refetchInstallations();
-            onSaved?.();
-          } else {
-            toast.error(r.error || "No se pudo conectar");
-            void refetchInstallations();
+            return;
           }
+          const verifyErr = r.installation?.last_error;
+          if (verifyErr && /401|unauthorized/i.test(verifyErr)) {
+            toast.error(
+              "Credenciales guardadas pero la API respondió 401. Nubox exige Token partner (Bearer) y X-Api-Key de empresa.",
+            );
+            void refetchInstallations();
+            return;
+          }
+          toast.success("Cuenta de servicio conectada");
+          setAccountBranchId(null);
+          void refetchInstallations();
+          onSaved?.();
         },
         onError: (err) => {
-          toast.error(
+          const msg =
             (err as { friendlyMessage?: string })?.friendlyMessage ||
-              "No se pudo conectar la cuenta de servicio",
+            (err as Error)?.message ||
+            "No se pudo conectar la cuenta";
+          toast.error(
+            /401|unauthorized/i.test(msg)
+              ? "401 Unauthorized: token partner o company API key inválidos / incompletos."
+              : msg,
           );
           void refetchInstallations();
         },
@@ -216,7 +241,8 @@ export function AppInstallationsPanel({
     if (!accountInst?.id) return;
     disconnectAccount.mutate(accountInst.id, {
       onSuccess: () => {
-        toast.success("Cuenta de servicio desconectada");
+        toast.success("Cuenta desconectada");
+        setAccountBranchId(null);
         void refetchInstallations();
         onSaved?.();
       },
@@ -236,7 +262,6 @@ export function AppInstallationsPanel({
     );
   }
 
-  const showAccount = api.auth_type === "endpoint_auth";
   const saving = update.isPending;
 
   return (
@@ -248,10 +273,26 @@ export function AppInstallationsPanel({
           {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> : null}
         </h2>
         <p className="text-xs text-muted-foreground max-w-2xl leading-relaxed">
-          Tocá una sucursal para instalar o desinstalar. La app puede quedar sin instalaciones. En
-          cada una configurá la{" "}
-          <strong className="text-foreground font-medium">cuenta de servicio</strong> que usan los
-          agentes.
+          {canToggle
+            ? "Toca una sucursal para instalar o desinstalar. "
+            : "Solo puedes configurar la cuenta de servicio en tus sucursales. "}
+          {needsCreds ? (
+            <>
+              En cada instalación instalada usa{" "}
+              <strong className="text-foreground font-medium">Conectar cuenta de servicio</strong>{" "}
+              para pegar API key, token o login (según el proveedor).
+              {!needsPerInstallationCredentials(api.auth_type, {
+                authEndpointKey: api.auth_endpoint_key,
+              }) && (
+                <span className="block mt-1 text-warning">
+                  El catálogo marca esta app como «abierta»; igual puedes cargar credenciales aquí.
+                  Ideal: en Configuración cambia Auth a API Key o Login y guarda.
+                </span>
+              )}
+            </>
+          ) : (
+            "Esta app no requiere credenciales por sucursal."
+          )}
         </p>
       </div>
 
@@ -260,7 +301,7 @@ export function AppInstallationsPanel({
           <p className="font-medium">No se pudieron cargar las instalaciones</p>
           <p className="text-destructive/90">
             {(installationsErr as { friendlyMessage?: string })?.friendlyMessage ||
-              "El endpoint de instalaciones no respondió. Si acabás de actualizar el backend, reiniciá la API."}
+              "El endpoint de instalaciones no respondió."}
           </p>
           <Button
             type="button"
@@ -278,7 +319,7 @@ export function AppInstallationsPanel({
         <Badge variant="outline" className="text-[11px] font-normal">
           {selected.length} instalada{selected.length === 1 ? "" : "s"}
         </Badge>
-        {canManage && (
+        {canToggle && (
           <div className="flex items-center gap-2 text-[11px]">
             <button
               type="button"
@@ -316,6 +357,7 @@ export function AppInstallationsPanel({
           const inst = installByBranch.get(b.id);
           const needsReconnect = Boolean(inst?.needs_reconnect || inst?.credentials_unreadable);
           const hasCreds = Boolean(inst?.has_credentials) && !needsReconnect;
+          const canAccount = canManageInstallationAccount(b.id);
           return (
             <div
               key={b.id}
@@ -326,11 +368,11 @@ export function AppInstallationsPanel({
             >
               <button
                 type="button"
-                disabled={!canManage || saving}
+                disabled={!canToggle || saving}
                 onClick={() => toggle(b.id)}
                 className={cn(
                   "flex items-start gap-3 text-left w-full",
-                  (!canManage || saving) && "cursor-default",
+                  (!canToggle || saving) && "cursor-default",
                 )}
               >
                 <span
@@ -347,13 +389,17 @@ export function AppInstallationsPanel({
                   <span className="block text-sm font-medium truncate">{b.label}</span>
                   <span className="block text-[11px] text-muted-foreground">
                     {installed
-                      ? "Instalada — tocá para desinstalar"
-                      : "No instalada — tocá para instalar"}
+                      ? canToggle
+                        ? "Instalada — toca para desinstalar"
+                        : "Instalada en esta sucursal"
+                      : canToggle
+                        ? "No instalada — toca para instalar"
+                        : "No instalada"}
                   </span>
                 </span>
               </button>
 
-              {installed && showAccount && (
+              {installed && needsCreds && (
                 <div className="flex flex-col gap-1.5 pl-7">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge
@@ -366,7 +412,7 @@ export function AppInstallationsPanel({
                           ? `Con cuenta: ${inst?.label || "servicio"}`
                           : "Sin cuenta"}
                     </Badge>
-                    {canManage && (
+                    {canAccount && (
                       <button
                         type="button"
                         className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline disabled:opacity-50"
@@ -374,7 +420,7 @@ export function AppInstallationsPanel({
                         onClick={() => {
                           if (!inst?.id) {
                             toast.error(
-                              "Todavía no hay fila de instalación para esta sucursal. Reintentá cargar o reinstalá.",
+                              "Todavía no hay fila de instalación. Reintenta cargar o reinstala.",
                             );
                             void refetchInstallations();
                             return;
@@ -394,7 +440,12 @@ export function AppInstallationsPanel({
                   {needsReconnect && (
                     <p className="text-[11px] text-destructive/90 leading-snug">
                       {inst?.last_error ||
-                        "Las credenciales no se pueden leer (posible cambio de clave). Volvé a conectar la cuenta."}
+                        "Las credenciales no se pueden leer. Vuelve a conectar la cuenta."}
+                    </p>
+                  )}
+                  {!needsReconnect && inst?.last_error && (
+                    <p className="text-[11px] text-destructive/90 leading-snug">
+                      {inst.last_error}
                     </p>
                   )}
                 </div>
@@ -434,37 +485,17 @@ export function AppInstallationsPanel({
             </div>
           )}
 
-          <div className="grid gap-3">
-            {fields.map((f) => {
-              const inputType =
-                f.format === "password" || f.name.toLowerCase().includes("password")
-                  ? "password"
-                  : f.format === "email" || f.name.toLowerCase().includes("email")
-                    ? "email"
-                    : "text";
-              return (
-                <div key={f.name} className="space-y-1.5">
-                  <Label className="text-xs font-mono">
-                    {f.name}
-                    {f.required !== false && <span className="text-destructive"> *</span>}
-                  </Label>
-                  <Input
-                    type={inputType}
-                    autoComplete="off"
-                    className="h-9"
-                    value={credValues[f.name] ?? ""}
-                    onChange={(e) =>
-                      setCredValues((prev) => ({ ...prev, [f.name]: e.target.value }))
-                    }
-                    placeholder={accountHasCreds && inputType === "password" ? "••••••••" : f.name}
-                  />
-                </div>
-              );
-            })}
-          </div>
+          <AppCredentialFieldsForm
+            authType={api.auth_type}
+            fieldsFromApi={fieldsData?.fields}
+            apiHints={{ baseUrl: api.base_url, name: api.name }}
+            values={credValues}
+            connected={accountHasCreds}
+            onChange={(name, value) => setCredValues((prev) => ({ ...prev, [name]: value }))}
+          />
 
           <DialogFooter className="gap-2 sm:gap-0">
-            {accountHasCreds && accountInst?.id && (
+            {accountHasCreds && accountInst?.id && canEditAccount && (
               <Button
                 type="button"
                 size="sm"
@@ -481,19 +512,21 @@ export function AppInstallationsPanel({
                 Quitar cuenta
               </Button>
             )}
-            <Button
-              type="button"
-              size="sm"
-              disabled={connectInstall.isPending || !accountInst?.id}
-              onClick={onConnectService}
-            >
-              {connectInstall.isPending ? (
-                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-              ) : (
-                <KeyRound className="h-3.5 w-3.5 mr-1.5" />
-              )}
-              Conectar y probar
-            </Button>
+            {canEditAccount && (
+              <Button
+                type="button"
+                size="sm"
+                disabled={connectInstall.isPending || !accountInst?.id}
+                onClick={onConnectService}
+              >
+                {connectInstall.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                ) : (
+                  <KeyRound className="h-3.5 w-3.5 mr-1.5" />
+                )}
+                Conectar y probar
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

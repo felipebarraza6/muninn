@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   ArrowRight,
@@ -9,6 +9,7 @@ import {
   CircleHelp,
   Database,
   FlaskConical,
+  Shield,
   Sparkles,
   TriangleAlert,
   Wrench,
@@ -26,11 +27,19 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { ChatMarkdown } from "@/components/chat/chat-markdown";
 import {
+  isToolResultFailed,
   normalizeRagScore,
   type RagSourceDetail,
   type ToolCallDetail,
   type ToolResultDetail,
 } from "@/components/chat/chat-message-insights";
+import type { FlowPolicy } from "@/lib/flowPolicy";
+import {
+  extractPolicyTrace,
+  inferPolicyTraceFromConfig,
+  policyTraceSignalCount,
+  type PolicyTrace,
+} from "@/lib/policyTrace";
 
 function prettyJson(value: unknown): string {
   if (value == null) return "";
@@ -76,7 +85,28 @@ type Verdict = {
   detail: string;
 };
 
-function computeVerdict(ragSources: RagSourceDetail[], toolCalls: ToolCallDetail[]): Verdict {
+function computeVerdict(
+  ragSources: RagSourceDetail[],
+  toolCalls: ToolCallDetail[],
+  policyTrace?: PolicyTrace | null,
+): Verdict {
+  const blocked = policyTrace?.skills_blocked?.length ?? 0;
+  const missing = policyTrace?.slots_missing?.length ?? 0;
+  if (blocked > 0) {
+    return {
+      level: "weak",
+      title: "Skills bloqueadas por policy",
+      detail: `${blocked} skill${blocked === 1 ? "" : "s"} no pudieron ejecutarse según la traza de policies.`,
+    };
+  }
+  if (missing > 0) {
+    return {
+      level: "ok",
+      title: "Slots incompletos",
+      detail: `Faltan ${missing} slot${missing === 1 ? "" : "s"} de flow_policy para completar el flujo.`,
+    };
+  }
+
   const scores = ragSources.map(normalizeRagScore).filter((s): s is number => s != null);
   const top = scores.length ? Math.max(...scores) : undefined;
   const avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : undefined;
@@ -198,6 +228,11 @@ function DocumentationSection() {
               (APIs, acciones). Si aparecen, el agente ejecutó algo además de responder.
             </li>
             <li>
+              <span className="font-medium text-foreground">Policies:</span> reglas de{" "}
+              <span className="font-mono text-[11px]">flow_policy</span> (slots, allow/block). Si
+              dice “inferido”, se cruzó la config del agente con las skills del mensaje.
+            </li>
+            <li>
               <span className="font-medium text-foreground">Proceso:</span> pregunta → embedding →
               retrieve (chunks) → respuesta (LLM ± skills).
             </li>
@@ -208,47 +243,282 @@ function DocumentationSection() {
   );
 }
 
+type InsightTab = "chunks" | "skills" | "policies";
+
 function QuickStats({
   chunkCount,
   toolCount,
-  topScore,
+  policyCount,
+  active,
+  onChange,
 }: {
   chunkCount: number;
   toolCount: number;
-  topScore?: number;
+  policyCount: number;
+  active: InsightTab;
+  onChange: (tab: InsightTab) => void;
 }) {
-  const items = [
+  const items: Array<{
+    id: InsightTab;
+    label: string;
+    value: string;
+    hint: string;
+    disabled: boolean;
+  }> = [
     {
+      id: "chunks",
       label: "Chunks",
       value: String(chunkCount),
       hint: chunkCount > 0 ? "RAG usado" : "Sin RAG",
+      disabled: chunkCount === 0,
     },
     {
+      id: "skills",
       label: "Skills",
       value: String(toolCount),
       hint: toolCount > 0 ? "Ejecutadas" : "Ninguna",
+      disabled: toolCount === 0,
     },
     {
-      label: "Mejor score",
-      value: topScore != null ? `${Math.round(topScore * 100)}%` : "—",
-      hint: topScore != null ? "Similitud top" : "N/A",
+      id: "policies",
+      label: "Policies",
+      value: String(policyCount),
+      hint: policyCount > 0 ? "Señales" : "Ninguna",
+      disabled: policyCount === 0,
     },
   ];
   return (
     <div className="grid grid-cols-3 gap-2">
-      {items.map((s) => (
-        <div
-          key={s.label}
-          className="rounded-lg border border-border/60 bg-background px-2.5 py-2 text-center"
-        >
-          <div className="text-lg font-semibold tabular-nums tracking-tight">{s.value}</div>
-          <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
-            {s.label}
-          </div>
-          <div className="text-[10px] text-muted-foreground/80 mt-0.5 truncate">{s.hint}</div>
-        </div>
-      ))}
+      {items.map((s) => {
+        const selected = active === s.id;
+        return (
+          <button
+            key={s.id}
+            type="button"
+            disabled={s.disabled}
+            onClick={() => onChange(s.id)}
+            className={cn(
+              "rounded-lg border px-2.5 py-2 text-center transition-colors",
+              s.disabled && "opacity-45 cursor-not-allowed",
+              !s.disabled && "cursor-pointer hover:border-primary/40",
+              selected
+                ? "border-primary/50 bg-primary/10 ring-1 ring-primary/25"
+                : "border-border/60 bg-background",
+            )}
+          >
+            <div className="text-lg font-semibold tabular-nums tracking-tight">{s.value}</div>
+            <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+              {s.label}
+            </div>
+            <div className="text-[10px] text-muted-foreground/80 mt-0.5 truncate">{s.hint}</div>
+          </button>
+        );
+      })}
     </div>
+  );
+}
+
+function SkillResultCard({
+  call,
+  result,
+  defaultOpen,
+}: {
+  call: ToolCallDetail;
+  result?: ToolResultDetail;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(Boolean(defaultOpen));
+  const failed = isToolResultFailed(result?.content);
+  const name = toolName(call);
+
+  return (
+    <article
+      className={cn(
+        "rounded-xl border overflow-hidden",
+        failed ? "border-destructive/30 bg-destructive-soft/15" : "border-primary/25 bg-primary/5",
+      )}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-2.5 px-3.5 py-3 text-left hover:bg-background/40 transition-colors"
+      >
+        <span
+          className={cn(
+            "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
+            failed ? "bg-destructive/15 text-destructive" : "bg-primary/15 text-primary",
+          )}
+        >
+          <Wrench className="h-4 w-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-mono font-medium truncate">{name}</p>
+          <p className="text-[11px] text-muted-foreground">
+            {failed ? "Falló la ejecución" : "Skill ejecutada"}
+          </p>
+        </div>
+        <Badge
+          variant="outline"
+          className={cn(
+            "text-[10px] shrink-0",
+            failed
+              ? "border-destructive/30 text-destructive"
+              : "border-primary/30 text-primary bg-primary/5",
+          )}
+        >
+          {failed ? "Error" : "OK"}
+        </Badge>
+        <ChevronDown
+          className={cn(
+            "h-4 w-4 text-muted-foreground transition-transform shrink-0",
+            open && "rotate-180",
+          )}
+        />
+      </button>
+      {open && (
+        <div className="border-t border-border/50 bg-background/50 p-3.5 space-y-3">
+          <div className="rounded-lg border border-border/50 overflow-hidden">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-muted/40 text-[10px] uppercase tracking-wide text-muted-foreground">
+              Argumentos
+            </div>
+            <pre className="text-xs font-mono p-3 overflow-x-auto whitespace-pre-wrap max-h-40">
+              {prettyJson(call.function?.arguments ?? call.arguments) || "{}"}
+            </pre>
+          </div>
+          <div className="rounded-lg border border-border/50 overflow-hidden">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-muted/40 text-[10px] uppercase tracking-wide text-muted-foreground">
+              <ArrowRight className="h-3 w-3" />
+              Resultado
+            </div>
+            <pre className="text-xs font-mono p-3 overflow-x-auto whitespace-pre-wrap max-h-56">
+              {result ? prettyJson(result.content) : "Sin resultado registrado"}
+            </pre>
+          </div>
+        </div>
+      )}
+    </article>
+  );
+}
+
+function PoliciesSection({ trace }: { trace: PolicyTrace }) {
+  const filled = trace.slots_filled ? Object.entries(trace.slots_filled) : [];
+  const hasBody =
+    filled.length > 0 ||
+    (trace.slots_missing?.length ?? 0) > 0 ||
+    (trace.skills_allowed?.length ?? 0) > 0 ||
+    (trace.skills_blocked?.length ?? 0) > 0 ||
+    (trace.rules_applied?.length ?? 0) > 0;
+
+  if (!hasBody) return null;
+
+  return (
+    <section className="space-y-3">
+      <div className="flex items-center gap-2 text-sm font-semibold">
+        <Shield className="h-4 w-4 text-primary" />
+        Policies consideradas
+        {trace.inferred && (
+          <Badge variant="outline" className="text-[10px] font-normal text-muted-foreground">
+            Inferido de la config
+          </Badge>
+        )}
+      </div>
+      <div className="rounded-xl border border-border/60 bg-muted/15 p-4 space-y-4">
+        {filled.length > 0 && (
+          <div className="space-y-1.5">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              Slots llenos
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {filled.map(([k, v]) => (
+                <Badge key={k} variant="outline" className="text-[11px] font-normal max-w-full">
+                  <span className="font-medium">{k}</span>
+                  <span className="text-muted-foreground ml-1 truncate">
+                    {typeof v === "string" || typeof v === "number" ? String(v) : "…"}
+                  </span>
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+        {(trace.slots_missing?.length ?? 0) > 0 && (
+          <div className="space-y-1.5">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              Slots faltantes
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {trace.slots_missing!.map((s) => (
+                <Badge
+                  key={s}
+                  variant="outline"
+                  className="text-[11px] border-warning/30 text-warning bg-warning-soft/30"
+                >
+                  {s}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+        {(trace.skills_allowed?.length ?? 0) > 0 && (
+          <div className="space-y-1.5">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              Skills permitidas
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {trace.skills_allowed!.map((s) => (
+                <Badge
+                  key={s}
+                  variant="outline"
+                  className="text-[11px] border-success/30 text-success bg-success-soft/30"
+                >
+                  {s}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+        {(trace.skills_blocked?.length ?? 0) > 0 && (
+          <div className="space-y-1.5">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              Skills bloqueadas
+            </p>
+            <div className="space-y-1.5">
+              {trace.skills_blocked!.map((b) => (
+                <div
+                  key={b.skill}
+                  className="rounded-lg border border-destructive/25 bg-destructive-soft/20 px-3 py-2 text-sm"
+                >
+                  <span className="font-mono text-destructive">{b.skill}</span>
+                  {b.reason && <p className="text-xs text-muted-foreground mt-0.5">{b.reason}</p>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {(trace.rules_applied?.length ?? 0) > 0 && (
+          <div className="space-y-1.5">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              Reglas aplicadas
+            </p>
+            <div className="space-y-2">
+              {trace.rules_applied!.map((r, i) => (
+                <div
+                  key={`${r.skill ?? "rule"}-${i}`}
+                  className="rounded-lg border border-border/50 bg-background/70 px-3 py-2 text-sm space-y-1"
+                >
+                  {r.skill && <p className="font-mono text-foreground/90">{r.skill}</p>}
+                  {(r.requires?.length ?? 0) > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      requires: {r.requires!.join(", ")}
+                    </p>
+                  )}
+                  {r.note && <p className="text-xs text-muted-foreground">{r.note}</p>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -312,6 +582,10 @@ export type InsightMessage = {
   rag_sources?: unknown[];
   tool_calls?: unknown[];
   tool_results?: unknown[];
+  policy_trace?: unknown;
+  flow_policy_trace?: unknown;
+  policies?: unknown;
+  metadata?: Record<string, unknown> | null;
 };
 
 export function MessageInsightSheet({
@@ -320,12 +594,15 @@ export function MessageInsightSheet({
   message,
   embeddingModel,
   topK,
+  flowPolicy,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   message: InsightMessage | null;
   embeddingModel?: string | number | null;
   topK?: number | null;
+  /** Fallback: reglas inferidas desde agent.flow_policy. */
+  flowPolicy?: FlowPolicy | Record<string, unknown> | null;
 }) {
   const ragSources = useMemo(
     () => (Array.isArray(message?.rag_sources) ? (message!.rag_sources as RagSourceDetail[]) : []),
@@ -341,13 +618,24 @@ export function MessageInsightSheet({
     [message],
   );
 
+  const policyTrace = useMemo(() => {
+    const fromMsg = extractPolicyTrace(message ?? undefined);
+    if (fromMsg) return fromMsg;
+    return inferPolicyTraceFromConfig(flowPolicy, message?.tool_calls);
+  }, [message, flowPolicy]);
+
+  const policyCount = policyTraceSignalCount(policyTrace);
+
   const scores = useMemo(
     () => ragSources.map(normalizeRagScore).filter((s): s is number => s != null),
     [ragSources],
   );
   const topScore = scores.length ? Math.max(...scores) : undefined;
 
-  const verdict = useMemo(() => computeVerdict(ragSources, toolCalls), [ragSources, toolCalls]);
+  const verdict = useMemo(
+    () => computeVerdict(ragSources, toolCalls, policyTrace),
+    [ragSources, toolCalls, policyTrace],
+  );
   const style = VERDICT_STYLES[verdict.level];
   const VerdictIcon = style.icon;
   const reduceMotion = useReducedMotion();
@@ -367,16 +655,30 @@ export function MessageInsightSheet({
     [toolResults],
   );
 
+  const defaultTab = useMemo((): InsightTab => {
+    if (ragSources.length > 0) return "chunks";
+    if (toolCalls.length > 0) return "skills";
+    if (policyCount > 0) return "policies";
+    return "chunks";
+  }, [ragSources.length, toolCalls.length, policyCount]);
+
+  const [activeTab, setActiveTab] = useState<InsightTab>(defaultTab);
+
+  useEffect(() => {
+    setActiveTab(defaultTab);
+  }, [defaultTab, panelKey]);
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
         className={cn(
-          "w-full sm:max-w-xl md:max-w-2xl lg:max-w-3xl p-0 flex flex-col gap-0 bg-background overflow-hidden",
+          "w-full sm:max-w-2xl md:max-w-3xl lg:max-w-4xl p-0 flex flex-col gap-0 bg-background overflow-hidden",
           "data-[state=open]:duration-500 data-[state=closed]:duration-300",
           "data-[state=open]:slide-in-from-right-10 data-[state=closed]:slide-out-to-right-10",
           "data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0",
         )}
+        style={{ maxWidth: "min(96vw, 52rem)" }}
       >
         <SheetHeader className="px-5 sm:px-6 py-4 border-b border-border/60 shrink-0 space-y-1 text-left">
           <SheetTitle className="text-lg flex items-center gap-2.5">
@@ -384,7 +686,7 @@ export function MessageInsightSheet({
             Análisis del mensaje
           </SheetTitle>
           <SheetDescription className="text-sm">
-            Datos de esta respuesta: scores, chunks y skills.
+            Usa las tarjetas de arriba para ver chunks, skills o policies.
           </SheetDescription>
         </SheetHeader>
 
@@ -399,7 +701,6 @@ export function MessageInsightSheet({
                 exit={reduceMotion ? undefined : { opacity: 0 }}
                 transition={{ duration: 0.28, ease: [0.25, 0.1, 0.25, 1] }}
               >
-                {/* 1. Veredicto + métricas dinámicas */}
                 <div className={cn("rounded-xl border p-4 space-y-3", style.box)}>
                   <div className="flex items-start gap-3">
                     <VerdictIcon className="h-5 w-5 shrink-0 mt-0.5" />
@@ -411,6 +712,9 @@ export function MessageInsightSheet({
                           {toolCalls.length > 0
                             ? ` · ${toolCalls.length} skill${toolCalls.length === 1 ? "" : "s"}`
                             : ""}
+                          {policyCount > 0
+                            ? ` · ${policyCount} polic${policyCount === 1 ? "y" : "ies"}`
+                            : ""}
                         </Badge>
                       </div>
                       <p className="text-sm text-muted-foreground">{verdict.detail}</p>
@@ -419,7 +723,9 @@ export function MessageInsightSheet({
                   <QuickStats
                     chunkCount={ragSources.length}
                     toolCount={toolCalls.length}
-                    topScore={topScore}
+                    policyCount={policyCount}
+                    active={activeTab}
+                    onChange={setActiveTab}
                   />
                   {(embeddingModel != null || topK != null) && (
                     <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground border-t border-border/40 pt-2.5">
@@ -438,127 +744,137 @@ export function MessageInsightSheet({
                   )}
                 </div>
 
-                {/* 2. Skills (alta prioridad si hubo ejecución) */}
-                {toolCalls.length > 0 && (
+                {activeTab === "skills" && (
                   <section className="space-y-3">
                     <div className="flex items-center gap-2 text-sm font-semibold">
-                      <Wrench className="h-4 w-4 text-info" />
+                      <Wrench className="h-4 w-4 text-primary" />
                       Skills ejecutadas
                     </div>
-                    <div className="space-y-3">
-                      {toolCalls.map((call, i) => {
-                        const result = resultFor(call, i);
-                        return (
-                          <article
+                    {toolCalls.length === 0 ? (
+                      <p className="text-sm text-muted-foreground py-6 text-center">
+                        Esta respuesta no ejecutó skills.
+                      </p>
+                    ) : (
+                      <div className="space-y-2.5">
+                        {toolCalls.map((call, i) => (
+                          <SkillResultCard
                             key={call.id ?? i}
-                            className="rounded-xl border border-info/25 bg-info-soft/20 p-4 space-y-3"
-                          >
-                            <div className="flex items-center gap-2 text-sm font-mono font-medium text-info">
-                              <Wrench className="h-4 w-4" />
-                              {toolName(call)}
-                            </div>
-                            <div>
-                              <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1.5">
-                                Argumentos
-                              </div>
-                              <pre className="text-xs font-mono bg-background/70 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap">
-                                {prettyJson(call.function?.arguments ?? call.arguments) || "{}"}
-                              </pre>
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted-foreground mb-1.5">
-                                <ArrowRight className="h-3.5 w-3.5" />
-                                Resultado
-                              </div>
-                              <pre className="text-xs font-mono bg-background/70 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap max-h-64">
-                                {result ? prettyJson(result.content) : "Sin resultado registrado"}
-                              </pre>
-                            </div>
-                          </article>
-                        );
-                      })}
-                    </div>
+                            call={call}
+                            result={resultFor(call, i)}
+                          />
+                        ))}
+                      </div>
+                    )}
                   </section>
                 )}
 
-                {/* 3. Chunks RAG */}
-                {ragSources.length > 0 && (
+                {activeTab === "policies" &&
+                  (policyTrace ? (
+                    <PoliciesSection trace={policyTrace} />
+                  ) : (
+                    <p className="text-sm text-muted-foreground py-6 text-center">
+                      Sin señales de policy en este mensaje.
+                    </p>
+                  ))}
+
+                {activeTab === "chunks" && (
                   <section className="space-y-3">
-                    <div className="flex items-center gap-2 text-sm font-semibold">
-                      <Boxes className="h-4 w-4 text-primary" />
-                      Chunks recuperados
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <div className="flex items-center gap-2 text-sm font-semibold">
+                        <Boxes className="h-4 w-4 text-primary" />
+                        Chunks recuperados
+                      </div>
+                      {topScore != null && (
+                        <Badge
+                          variant="outline"
+                          className="text-[11px] font-medium border-primary/30 bg-primary/5 text-primary"
+                        >
+                          Mejor similitud {Math.round(topScore * 100)}%
+                        </Badge>
+                      )}
                     </div>
-                    <SimilarityChart sources={ragSources} />
-                    <div className="space-y-3">
-                      {ragSources.map((src, i) => {
-                        const score = normalizeRagScore(src);
-                        const snippet = (src.content || src.summary || "").trim();
-                        const kind = src.knowledge_type || src.source || src.source_app;
-                        const tone =
-                          score == null
-                            ? "text-muted-foreground"
-                            : score >= 0.72
-                              ? "text-success"
-                              : score >= 0.45
-                                ? "text-warning"
-                                : "text-destructive";
-                        return (
-                          <article
-                            key={src.id ?? i}
-                            className="rounded-xl border border-border/70 bg-card/60 p-4 space-y-3"
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-md bg-primary/15 px-1.5 text-xs font-semibold text-primary">
-                                    #{i + 1}
-                                  </span>
-                                  <span className="text-sm font-medium truncate">
-                                    {sourceTitle(src)}
-                                  </span>
-                                </div>
-                                <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-x-3">
-                                  <span>{chunkLabel(src, i)}</span>
-                                  {kind && <span className="uppercase tracking-wide">{kind}</span>}
-                                </div>
-                              </div>
-                              <span
-                                className={cn("text-sm font-mono font-semibold shrink-0", tone)}
+                    {ragSources.length === 0 ? (
+                      <p className="text-sm text-muted-foreground py-6 text-center">
+                        Sin chunks RAG en esta respuesta.
+                      </p>
+                    ) : (
+                      <>
+                        <SimilarityChart sources={ragSources} />
+                        <div className="space-y-3">
+                          {ragSources.map((src, i) => {
+                            const score = normalizeRagScore(src);
+                            const snippet = (src.content || src.summary || "").trim();
+                            const kind = src.knowledge_type || src.source || src.source_app;
+                            const tone =
+                              score == null
+                                ? "text-muted-foreground"
+                                : score >= 0.72
+                                  ? "text-success"
+                                  : score >= 0.45
+                                    ? "text-warning"
+                                    : "text-destructive";
+                            return (
+                              <article
+                                key={src.id ?? i}
+                                className="rounded-xl border border-border/70 bg-card/60 p-4 space-y-3"
                               >
-                                {score != null ? `${Math.round(score * 100)}%` : scoreLabel(src)}
-                              </span>
-                            </div>
-                            <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                              <div
-                                className={cn(
-                                  "h-full rounded-full",
-                                  score == null
-                                    ? "bg-muted-foreground/40"
-                                    : score >= 0.72
-                                      ? "bg-success"
-                                      : score >= 0.45
-                                        ? "bg-warning"
-                                        : "bg-destructive",
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-md bg-primary/15 px-1.5 text-xs font-semibold text-primary">
+                                        #{i + 1}
+                                      </span>
+                                      <span className="text-sm font-medium truncate">
+                                        {sourceTitle(src)}
+                                      </span>
+                                    </div>
+                                    <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-x-3">
+                                      <span>{chunkLabel(src, i)}</span>
+                                      {kind && (
+                                        <span className="uppercase tracking-wide">{kind}</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <span
+                                    className={cn("text-sm font-mono font-semibold shrink-0", tone)}
+                                  >
+                                    {score != null
+                                      ? `${Math.round(score * 100)}%`
+                                      : scoreLabel(src)}
+                                  </span>
+                                </div>
+                                <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                                  <div
+                                    className={cn(
+                                      "h-full rounded-full",
+                                      score == null
+                                        ? "bg-muted-foreground/40"
+                                        : score >= 0.72
+                                          ? "bg-success"
+                                          : score >= 0.45
+                                            ? "bg-warning"
+                                            : "bg-destructive",
+                                    )}
+                                    style={{
+                                      width: `${score != null ? Math.round(score * 100) : 0}%`,
+                                    }}
+                                  />
+                                </div>
+                                {snippet && (
+                                  <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap border-l-2 border-primary/25 pl-3">
+                                    {snippet.slice(0, 520)}
+                                    {snippet.length > 520 ? "…" : ""}
+                                  </p>
                                 )}
-                                style={{
-                                  width: `${score != null ? Math.round(score * 100) : 0}%`,
-                                }}
-                              />
-                            </div>
-                            {snippet && (
-                              <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap border-l-2 border-primary/25 pl-3">
-                                {snippet.slice(0, 520)}
-                                {snippet.length > 520 ? "…" : ""}
-                              </p>
-                            )}
-                          </article>
-                        );
-                      })}
-                    </div>
+                              </article>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
                   </section>
                 )}
 
-                {/* 4. Texto de la respuesta */}
                 {message?.content && (
                   <section className="space-y-2">
                     <div className="flex items-center gap-2 text-sm font-semibold">
@@ -571,7 +887,6 @@ export function MessageInsightSheet({
                   </section>
                 )}
 
-                {/* 5. Documentación estática (opcional, cerrada) */}
                 <DocumentationSection />
               </motion.div>
             )}
@@ -585,21 +900,23 @@ export function MessageInsightSheet({
 export function MessageInspectButton({
   chunkCount,
   toolCount,
+  policyCount = 0,
   onClick,
   variant = "chip",
 }: {
   chunkCount: number;
   toolCount: number;
+  policyCount?: number;
   onClick: () => void;
   /** icon = compacto al lado de la hora; chip = botón con texto */
   variant?: "icon" | "chip";
 }) {
-  const hasData = chunkCount > 0 || toolCount > 0;
-  const title = hasData
-    ? `Análisis · ${chunkCount > 0 ? `${chunkCount} fuentes` : ""}${
-        chunkCount > 0 && toolCount > 0 ? " · " : ""
-      }${toolCount > 0 ? `${toolCount} skills` : ""}`
-    : "Ver análisis técnico del mensaje";
+  const hasData = chunkCount > 0 || toolCount > 0 || policyCount > 0;
+  const parts: string[] = [];
+  if (chunkCount > 0) parts.push(`${chunkCount} fuentes`);
+  if (toolCount > 0) parts.push(`${toolCount} skills`);
+  if (policyCount > 0) parts.push(`${policyCount} policies`);
+  const title = hasData ? `Análisis · ${parts.join(" · ")}` : "Ver análisis técnico del mensaje";
 
   if (variant === "icon") {
     return (
@@ -642,9 +959,13 @@ export function MessageInspectButton({
       Análisis
       {hasData && (
         <span className="tabular-nums opacity-80">
-          {chunkCount > 0 ? `${chunkCount}c` : ""}
-          {chunkCount > 0 && toolCount > 0 ? " · " : ""}
-          {toolCount > 0 ? `${toolCount}fn` : ""}
+          {[
+            chunkCount > 0 ? `${chunkCount}c` : null,
+            toolCount > 0 ? `${toolCount}fn` : null,
+            policyCount > 0 ? `${policyCount}p` : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
         </span>
       )}
     </motion.button>

@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import {
   Select,
   SelectContent,
@@ -358,9 +359,7 @@ export default function Funciones() {
       <AdminPageMotion className="space-y-5">
         {storeHeader}
         {filters}
-        <div className="flex items-center justify-center min-h-[240px]">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
+        <PageSkeleton variant="cards" padded={false} />
       </AdminPageMotion>
     );
   }

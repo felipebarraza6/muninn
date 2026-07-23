@@ -268,11 +268,32 @@ export function canViewExternalApiSkillsInStore(): boolean {
 }
 
 /**
- * Ver instalaciones multi-sucursal (conteos / pestaña Instalación).
- * Superadmin y organizador; OWNER de tienda no ve el mapa de sucursales.
+ * Ver instalaciones (pestaña Instalación) y configurar cuenta de servicio.
+ * - Superadmin / organizador: mapa multi-sucursal
+ * - OWNER de sucursal: sus sucursales (cuenta de servicio)
  */
 export function canViewExternalApiInstallations(): boolean {
+  if (canManageExternalApis()) return true;
+  return isBranchOwner();
+}
+
+/**
+ * Instalar/desinstalar app en sucursales (toggle del mapa).
+ * Solo superadmin u organizador; el OWNER de tienda solo configura la cuenta.
+ */
+export function canToggleExternalApiInstallations(): boolean {
   return canManageExternalApis();
+}
+
+/**
+ * Conectar/editar cuenta de servicio de una instalación.
+ * SA/organizador: cualquiera de su alcance; OWNER: solo sus sucursales.
+ */
+export function canManageInstallationAccount(
+  branchId: string | number | null | undefined,
+): boolean {
+  if (canManageExternalApis()) return true;
+  return canManageBranchUsers(branchId);
 }
 
 /**
@@ -345,6 +366,46 @@ export function isStoreOwnerScope(): boolean {
 }
 
 /**
+ * Crear / editar / desactivar canales.
+ * - Superadmin, organizador, OWNER y ADMIN_LOCAL: sí
+ * - Empleado y roles operativos: solo lectura
+ */
+export function canManageChannels(branchId?: string | number | null): boolean {
+  if (isSuperAdmin()) return true;
+  if (isOrganizationOwner()) return true;
+  if (branchId == null || branchId === "") {
+    return getStoredBranches().some((b) => {
+      if (b.is_active === false) return false;
+      return isManagerRole(getAssignmentRoleCode(b));
+    });
+  }
+  const assignment = getStoredBranches().find((b) => String(b.branch_id) === String(branchId));
+  if (!assignment || assignment.is_active === false) return false;
+  return isManagerRole(getAssignmentRoleCode(assignment));
+}
+
+/**
+ * Soft-delete / desactivar canal: mismos roles que gestionar.
+ */
+export function canDeleteChannels(branchId?: string | number | null): boolean {
+  return canManageChannels(branchId);
+}
+
+/**
+ * Borrado físico de canal ya inactivo.
+ * - Superadmin, organizador (holding) y OWNER de la sucursal: sí
+ * - ADMIN_LOCAL / empleados: no
+ */
+export function canHardDeleteChannels(branchId?: string | number | null): boolean {
+  if (isSuperAdmin()) return true;
+  if (isOrganizationOwner()) return true;
+  if (branchId == null || branchId === "") {
+    return getOwnerBranchIds().length > 0;
+  }
+  return getOwnerBranchIds().includes(String(branchId));
+}
+
+/**
  * Ver recursos inactivos en Studio (agentes, conocimiento, skills, APIs).
  * - Superadmin / organizador (owner de holding): sí (activos + inactivos)
  * - OWNER de sucursal y demás roles: no (solo activos)
@@ -359,6 +420,52 @@ export function canViewInactiveStudioResources(): boolean {
     .toUpperCase();
   if (role === ROLE_ORG_OWNER) return true;
   return getStoredBranches().some((b) => getAssignmentRoleCode(b) === ROLE_ORG_OWNER);
+}
+
+/**
+ * Ver conocimiento inactivo (para reactivar / borrar definitivo).
+ * - Superadmin / organizador: sí
+ * - OWNER de sucursal: sí (sus stores)
+ */
+export function canViewInactiveKnowledge(): boolean {
+  if (canViewInactiveStudioResources()) return true;
+  return isBranchOwner();
+}
+
+/**
+ * Borrado físico de conocimiento.
+ * - Superadmin: cualquier sucursal
+ * - Organizador: stores de su holding
+ * - OWNER: solo sus sucursales
+ * - ADMIN_LOCAL / empleados: no
+ */
+export function canHardDeleteKnowledge(branchId?: string | number | null): boolean {
+  if (isSuperAdmin()) return true;
+  if (isOrganizationOwner()) {
+    if (branchId == null || branchId === "") return true;
+    const owned = getOwnerBranchIds();
+    // Si aún no hay stores en sesión, no bloquear en FE (el API valida).
+    if (owned.length === 0) return true;
+    return owned.includes(String(branchId));
+  }
+  if (branchId == null || branchId === "") {
+    return getOwnerBranchIds().length > 0;
+  }
+  return getOwnerBranchIds().includes(String(branchId));
+}
+
+/**
+ * Desactivar / reactivar conocimiento: mismos roles que pueden borrarlo.
+ */
+export function canManageKnowledge(branchId?: string | number | null): boolean {
+  return canHardDeleteKnowledge(branchId);
+}
+
+/**
+ * Reactivar conocimiento desactivado.
+ */
+export function canRestoreKnowledge(branchId?: string | number | null): boolean {
+  return canHardDeleteKnowledge(branchId);
 }
 
 /** @deprecated Usar canViewInactiveStudioResources */

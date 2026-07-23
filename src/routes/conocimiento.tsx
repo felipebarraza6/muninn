@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,25 +37,40 @@ import { knowledgeCardPreview, knowledgeTypeLabel, knowledgeTypeMeta } from "@/l
 import { toast } from "sonner";
 import { AdminPageMotion } from "@/components/admin/AdminPageMotion";
 import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
-import { canViewInactiveStudioResources, isSuperAdmin } from "@/lib/authGuards";
+import {
+  canHardDeleteKnowledge,
+  canManageKnowledge,
+  canRestoreKnowledge,
+  canViewInactiveKnowledge,
+} from "@/lib/authGuards";
 import { cn } from "@/lib/utils";
+
+type PendingAction =
+  | { type: "deactivate"; doc: AgentKnowledge }
+  | { type: "hard"; doc: AgentKnowledge };
 
 function KnowledgeCard({
   doc,
   agentCount,
   indexed,
+  canManage,
   canRestore,
+  canHardDelete,
   restoring,
   onDeactivate,
   onRestore,
+  onHardDelete,
 }: {
   doc: AgentKnowledge;
   agentCount: number;
   indexed: boolean;
+  canManage: boolean;
   canRestore: boolean;
+  canHardDelete: boolean;
   restoring: boolean;
   onDeactivate: () => void;
   onRestore: () => void;
+  onHardDelete: () => void;
 }) {
   const { label, Icon, style } = knowledgeTypeMeta(doc.knowledge_type);
   const preview = knowledgeCardPreview(doc);
@@ -129,7 +145,7 @@ function KnowledgeCard({
           context="catalog"
           branchId={doc.branch}
         />
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-1">
           {inactive && canRestore && (
             <Button
               variant="outline"
@@ -147,15 +163,27 @@ function KnowledgeCard({
               Reactivar
             </Button>
           )}
-          {!inactive && (
+          {!inactive && canManage && (
             <Button
               variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-destructive"
+              size="sm"
+              className="h-8 text-muted-foreground"
               onClick={onDeactivate}
               title="Desactivar"
             >
-              <Trash2 className="h-4 w-4" />
+              Desactivar
+            </Button>
+          )}
+          {canHardDelete && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 text-destructive hover:text-destructive"
+              onClick={onHardDelete}
+              title="Eliminar permanentemente"
+            >
+              <Trash2 className="h-3.5 w-3.5 mr-1" />
+              Eliminar
             </Button>
           )}
         </div>
@@ -165,8 +193,7 @@ function KnowledgeCard({
 }
 
 export default function Conocimiento() {
-  const showInactive = canViewInactiveStudioResources();
-  const canRestore = isSuperAdmin();
+  const showInactive = canViewInactiveKnowledge();
   const {
     data: docsRaw = [],
     isLoading,
@@ -180,7 +207,7 @@ export default function Conocimiento() {
 
   const [q, setQ] = useState("");
   const [creating, setCreating] = useState(false);
-  const [pendingDelete, setPendingDelete] = useState<AgentKnowledge | null>(null);
+  const [pending, setPending] = useState<PendingAction | null>(null);
   const [restoringId, setRestoringId] = useState<string | null>(null);
 
   const docs = useMemo(() => {
@@ -218,6 +245,9 @@ export default function Conocimiento() {
     );
   }, [docs, q]);
 
+  const errMsg = (e: unknown, fallback: string) =>
+    (e as { friendlyMessage?: string })?.friendlyMessage || fallback;
+
   return (
     <AdminPageMotion className="space-y-4 px-4 md:px-6 lg:px-8 py-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -247,9 +277,7 @@ export default function Conocimiento() {
       </div>
 
       {isLoading ? (
-        <div className="flex justify-center py-16">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
+        <PageSkeleton variant="list" padded={false} />
       ) : filtered.length === 0 ? (
         <div className="rounded-xl border border-dashed py-16 text-center">
           <p className="text-sm text-muted-foreground">
@@ -258,76 +286,105 @@ export default function Conocimiento() {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-          {filtered.map((doc) => (
-            <KnowledgeCard
-              key={doc.id}
-              doc={doc}
-              agentCount={agentCountByDoc.get(String(doc.id)) ?? 0}
-              indexed={isKnowledgeIndexed(doc)}
-              canRestore={canRestore}
-              restoring={restoringId === String(doc.id)}
-              onDeactivate={() => setPendingDelete(doc)}
-              onRestore={() => {
-                const id = String(doc.id);
-                setRestoringId(id);
-                update.mutate(
-                  { id, data: { is_active: true }, branch: doc.branch },
-                  {
-                    onSuccess: () => {
-                      toast.success("Conocimiento reactivado");
-                      setRestoringId(null);
-                      void refetch();
+          {filtered.map((doc) => {
+            const canManage = canManageKnowledge(doc.branch);
+            const canHardDelete = canHardDeleteKnowledge(doc.branch);
+            return (
+              <KnowledgeCard
+                key={doc.id}
+                doc={doc}
+                agentCount={agentCountByDoc.get(String(doc.id)) ?? 0}
+                indexed={isKnowledgeIndexed(doc)}
+                canManage={canManage}
+                canRestore={canRestoreKnowledge(doc.branch)}
+                canHardDelete={canHardDelete}
+                restoring={restoringId === String(doc.id)}
+                onDeactivate={() => setPending({ type: "deactivate", doc })}
+                onHardDelete={() => setPending({ type: "hard", doc })}
+                onRestore={() => {
+                  const id = String(doc.id);
+                  setRestoringId(id);
+                  update.mutate(
+                    { id, data: { is_active: true }, branch: doc.branch },
+                    {
+                      onSuccess: () => {
+                        toast.success("Conocimiento reactivado");
+                        setRestoringId(null);
+                        void refetch();
+                      },
+                      onError: (e) => {
+                        toast.error(errMsg(e, "No se pudo reactivar"));
+                        setRestoringId(null);
+                      },
                     },
-                    onError: () => {
-                      toast.error("No se pudo reactivar");
-                      setRestoringId(null);
-                    },
-                  },
-                );
-              }}
-            />
-          ))}
+                  );
+                }}
+              />
+            );
+          })}
         </div>
       )}
 
       <AlertDialog
-        open={Boolean(pendingDelete)}
+        open={Boolean(pending)}
         onOpenChange={(open) => {
-          if (!open) setPendingDelete(null);
+          if (!open) setPending(null);
         }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Desactivar conocimiento?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {pending?.type === "hard"
+                ? "¿Eliminar permanentemente?"
+                : "¿Desactivar conocimiento?"}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              «{pendingDelete?.title}» se desactivará y dejará de estar disponible para los agentes.
-              No se borra: un superadministrador puede reactivarlo después si hace falta.
+              {pending?.type === "hard" ? (
+                <>
+                  «{pending.doc.title}» se borrará de forma permanente de esta sucursal. Pueden
+                  hacerlo superadmin, organizador (sus stores) y owner (su sucursal). No se puede
+                  deshacer.
+                </>
+              ) : (
+                <>
+                  «{pending?.doc.title}» se desactivará y dejará de estar disponible para los
+                  agentes. Después podés reactivarlo.
+                </>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={remove.isPending}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              disabled={remove.isPending || !pendingDelete}
+              disabled={remove.isPending || !pending}
               onClick={(e) => {
                 e.preventDefault();
-                if (!pendingDelete) return;
+                if (!pending) return;
+                const hard = pending.type === "hard";
                 remove.mutate(
-                  { id: String(pendingDelete.id), branch: pendingDelete.branch },
+                  { id: String(pending.doc.id), branch: pending.doc.branch, hard },
                   {
                     onSuccess: () => {
-                      toast.success("Conocimiento desactivado");
-                      setPendingDelete(null);
+                      toast.success(hard ? "Conocimiento eliminado" : "Conocimiento desactivado");
+                      setPending(null);
+                      void refetch();
                     },
-                    onError: () => toast.error("No se pudo desactivar"),
+                    onError: (err) =>
+                      toast.error(
+                        errMsg(err, hard ? "No se pudo eliminar" : "No se pudo desactivar"),
+                      ),
                   },
                 );
               }}
             >
               {remove.isPending ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Desactivando…
+                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                  {pending?.type === "hard" ? "Eliminando…" : "Desactivando…"}
                 </>
+              ) : pending?.type === "hard" ? (
+                "Eliminar"
               ) : (
                 "Desactivar"
               )}

@@ -39,6 +39,7 @@ import {
   RefreshCw,
   RotateCcw,
 } from "lucide-react";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import {
   useAgentFunction,
   useUpdateAgentFunction,
@@ -202,11 +203,7 @@ export default function FunctionDetailPage() {
   );
 
   if (isLoading) {
-    return (
-      <div className="px-4 md:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <PageSkeleton variant="studio" />;
   }
 
   if (error || !fn) {
