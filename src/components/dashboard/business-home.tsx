@@ -126,7 +126,6 @@ export function BusinessHome() {
     <AdminPageMotion>
       <AdminMotionItem>
         <PageHeader
-          title="Resumen"
           description="Operación de tu sucursal: agentes, canales y cola humana."
           actions={<StudioBranchFilter />}
           className="mb-3"

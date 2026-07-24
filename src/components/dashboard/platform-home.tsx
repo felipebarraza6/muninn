@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { useOrganizations, useAdminBranches } from "@/api/hooks/useBranches";
 import { useAdminUsers } from "@/api/hooks/useUsers";
@@ -121,15 +122,11 @@ export function PlatformHome() {
   return (
     <AdminPageMotion>
       <AdminMotionItem>
-        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-5">
-          <div className="min-w-0 space-y-1">
-            <h1 className="text-xl font-semibold tracking-tight">Resumen de plataforma</h1>
-            <p className="text-sm text-muted-foreground">
-              Vista global de tenants, infraestructura y catálogo Studio. Sin operación de clientes.
-            </p>
-          </div>
-          <StudioBranchFilter />
-        </div>
+        <PageHeader
+          description="Vista global de tenants, infraestructura y catálogo Studio. Sin operación de clientes."
+          actions={<StudioBranchFilter />}
+          className="mb-3"
+        />
       </AdminMotionItem>
 
       <AdminMotionItem>

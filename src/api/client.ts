@@ -123,6 +123,19 @@ apiClient.interceptors.response.use(
         `Demasiadas solicitudes.${wait} Espera un momento antes de continuar.`;
     }
 
+    if (status === 404) {
+      const url = String(error.config?.url ?? "");
+      if (url.includes("work-plans")) {
+        (error as AxiosError & { friendlyMessage?: string }).friendlyMessage =
+          "Ruta work-plans no encontrada en el API. Reiniciá el contenedor yggdra-light-api.";
+      }
+    }
+
+    if (!error.response) {
+      (error as AxiosError & { friendlyMessage?: string }).friendlyMessage =
+        "Sin respuesta del servidor. Revisá que el API (Docker :8000) y el proxy de Vite estén corriendo.";
+    }
+
     if (error.response?.data) {
       const data = error.response.data as Record<string, unknown>;
 

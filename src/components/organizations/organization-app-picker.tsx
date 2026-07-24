@@ -25,6 +25,7 @@ export function OrganizationAppPicker({
   const { data: allApps = [], isLoading } = useExternalAPIs({
     scope: "store",
     includeInactive: true,
+    forDesignation: true,
   });
   const [search, setSearch] = useState("");
 

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { GET, PATCH, POST, normalizeListResponse } from "../client";
+import { DELETE, GET, PATCH, POST, normalizeListResponse } from "../client";
 import { ENDPOINTS } from "../endpoints/index";
 
 export type WorkflowNodeType =
@@ -110,6 +110,7 @@ export function useWorkflow(id: string | undefined) {
     queryKey: [KEY, id],
     queryFn: () => GET<Workflow>(ENDPOINTS.workflows.detail(id!)),
     enabled: !!id,
+    staleTime: 30_000,
   });
 }
 
@@ -118,6 +119,37 @@ export function useCreateWorkflow() {
   return useMutation({
     mutationFn: (payload: Partial<Workflow>) => POST<Workflow>(ENDPOINTS.workflows.list, payload),
     onSuccess: () => qc.invalidateQueries({ queryKey: [KEY] }),
+  });
+}
+
+export function useUpdateWorkflow() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...patch }: Partial<Workflow> & { id: string }) =>
+      PATCH<Workflow>(ENDPOINTS.workflows.detail(id), patch),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: [KEY, data.id] });
+      qc.invalidateQueries({ queryKey: [KEY] });
+    },
+  });
+}
+
+export type WorkflowTriggerTypeOption = {
+  value: string;
+  label: string;
+  supported?: boolean;
+  production_ready?: boolean;
+  notes?: string | null;
+};
+
+export function useWorkflowTriggerTypes() {
+  return useQuery({
+    queryKey: [KEY, "trigger-types"],
+    queryFn: () =>
+      GET<WorkflowTriggerTypeOption[] | { count: number; results: WorkflowTriggerTypeOption[] }>(
+        ENDPOINTS.workflows.triggerTypes,
+      ).then((data) => normalizeListResponse<WorkflowTriggerTypeOption>(data)),
+    staleTime: 10 * 60 * 1000,
   });
 }
 
@@ -175,6 +207,23 @@ export function useUpdateWorkflowNode() {
   });
 }
 
+export function useDeleteWorkflowNode() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id }: { id: string; workflow: string }) =>
+      DELETE(ENDPOINTS.workflowNodes.detail(id)),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: [KEY, vars.workflow] });
+      qc.invalidateQueries({ queryKey: [KEY] });
+    },
+    onError: (_err, vars) => {
+      // Si ya estaba soft-deleted / ausente, igual refrescamos el grafo
+      qc.invalidateQueries({ queryKey: [KEY, vars.workflow] });
+      qc.invalidateQueries({ queryKey: [KEY] });
+    },
+  });
+}
+
 export function useCreateWorkflowEdge() {
   const qc = useQueryClient();
   return useMutation({
@@ -186,8 +235,33 @@ export function useCreateWorkflowEdge() {
     }) => POST<WorkflowEdge>(ENDPOINTS.workflowEdges.list, payload),
     onSuccess: (_d, vars) => {
       qc.invalidateQueries({ queryKey: [KEY, vars.workflow] });
+      qc.invalidateQueries({ queryKey: [KEY] });
     },
   });
+}
+
+export function useDeleteWorkflowEdge() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id }: { id: string; workflow: string }) =>
+      DELETE(ENDPOINTS.workflowEdges.detail(id)),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: [KEY, vars.workflow] });
+      qc.invalidateQueries({ queryKey: [KEY] });
+    },
+  });
+}
+
+function isExecutionLive(status?: string): boolean {
+  const s = String(status || "").toLowerCase();
+  return (
+    s.includes("run") ||
+    s.includes("pend") ||
+    s === "started" ||
+    s === "queued" ||
+    s === "in_progress" ||
+    s === "processing"
+  );
 }
 
 export function useWorkflowExecutions(workflowId?: string) {
@@ -199,6 +273,11 @@ export function useWorkflowExecutions(workflowId?: string) {
         { params: workflowId ? { workflow: workflowId } : undefined },
       ).then((data) => normalizeListResponse<WorkflowExecution>(data)),
     enabled: !!workflowId,
+    refetchInterval: (q) => {
+      const list = q.state.data;
+      if (!list?.length) return false;
+      return list.some((ex) => isExecutionLive(ex.status)) ? 1500 : false;
+    },
   });
 }
 
@@ -207,5 +286,6 @@ export function useWorkflowExecution(id: string | undefined) {
     queryKey: ["workflow-executions", "detail", id],
     queryFn: () => GET<WorkflowExecution>(ENDPOINTS.workflowExecutions.detail(id!)),
     enabled: !!id,
+    refetchInterval: (q) => (isExecutionLive(q.state.data?.status) ? 1200 : false),
   });
 }

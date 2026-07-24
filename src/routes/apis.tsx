@@ -41,6 +41,7 @@ import { AUTH_TYPE_HINT, AUTH_TYPE_LABEL, formatTestResultToast } from "@/lib/ex
 import { APP_STORE_PATH, hostFromUrl } from "@/lib/applications";
 import { AppIcon } from "@/components/applications/app-icon";
 import { cn } from "@/lib/utils";
+import { useDesignatedStoreAppIds } from "@/hooks/useDesignatedStoreAppIds";
 
 const ALL_CATEGORIES = "__all__";
 
@@ -210,6 +211,7 @@ export default function APIs() {
     scope: "store",
     includeInactive: true,
   });
+  const { ready: designationReady, allowedIds: designatedIds } = useDesignatedStoreAppIds();
   const { data: adminBranches = [] } = useAdminBranches({
     enabled: showBranchFilter && (isGlobalAdmin || isOrgOwner),
   });
@@ -227,6 +229,11 @@ export default function APIs() {
   const [tagsInput, setTagsInput] = useState("");
   const [createTags, setCreateTags] = useState<string[]>([]);
   const [testingId, setTestingId] = useState<string | null>(null);
+
+  const apisCatalog = useMemo(() => {
+    if (!designatedIds) return apisRaw;
+    return apisRaw.filter((api) => designatedIds.has(String(api.id)));
+  }, [apisRaw, designatedIds]);
 
   const branchOptions = useMemo(() => {
     const fromMy = myBranches.map((b) => ({
@@ -251,29 +258,29 @@ export default function APIs() {
 
   const categoryOptions = useMemo(() => {
     const set = new Set<string>();
-    for (const api of apisRaw) {
+    for (const api of apisCatalog) {
       const c = (api.category || "").trim();
       if (c) set.add(c);
     }
     return Array.from(set).sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
-  }, [apisRaw]);
+  }, [apisCatalog]);
 
   const tagOptions = useMemo(() => {
     const set = new Set<string>();
-    for (const api of apisRaw) {
+    for (const api of apisCatalog) {
       for (const t of api.tags ?? []) {
         const tag = String(t || "").trim();
         if (tag) set.add(tag);
       }
     }
     return Array.from(set).sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
-  }, [apisRaw]);
+  }, [apisCatalog]);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     const filteringByBranch = showBranchFilter && branchFilter !== GLOBAL_BRANCH_ID;
 
-    return apisRaw
+    return apisCatalog
       .filter((api) => {
         if (filteringByBranch) {
           if (api.is_active === false) return false;
@@ -310,7 +317,7 @@ export default function APIs() {
         if (aActive !== bActive) return aActive - bActive;
         return String(a.name || "").localeCompare(String(b.name || ""), "es");
       });
-  }, [apisRaw, search, showBranchFilter, branchFilter, categoryFilter, selectedTags]);
+  }, [apisCatalog, search, showBranchFilter, branchFilter, categoryFilter, selectedTags]);
 
   const resetCreate = () => {
     setName("");
@@ -467,7 +474,7 @@ export default function APIs() {
     </div>
   );
 
-  if (isLoading) {
+  if (isLoading || !designationReady) {
     return (
       <AdminPageMotion className="space-y-5">
         {storeHeader}

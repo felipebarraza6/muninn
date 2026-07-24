@@ -10,16 +10,21 @@ import { PageSkeleton } from "@/components/ui/page-skeleton";
 import {
   ArrowLeft,
   Bot,
+  ChevronDown,
   History,
   Loader2,
   MessageSquarePlus,
-  Send,
   Archive,
   User,
   RefreshCw,
   Wrench,
   X,
 } from "lucide-react";
+import { ChatComposer } from "@/components/chat/chat-composer";
+import { deriveChatPhase, type ChatDeliveryStatus } from "@/lib/chatPhase";
+import { chatDraftKey, loadChatDraft, saveChatDraft, clearChatDraft } from "@/lib/chatDrafts";
+import { useStickyChatScroll } from "@/hooks/useStickyChatScroll";
+import { EmptyState } from "@/components/ui/empty-state";
 import { useAgent } from "@/api/hooks/useAgents";
 import { useAgentFunctions } from "@/api/hooks/useAgentFunctions";
 import {
@@ -101,6 +106,7 @@ interface ChatMessage {
   replyToId?: string | number;
   replyToRole?: string;
   replyToPreview?: string;
+  deliveryStatus?: ChatDeliveryStatus;
 }
 
 type ReplyTarget = {
@@ -228,6 +234,8 @@ interface AgentChatCoreProps {
   };
   /** Extra a la derecha del picker (ej. filtro de sucursal). */
   headerExtra?: React.ReactNode;
+  /** Omitir PageSkeleton completa mientras carga el agente (cuando ya hay skeleton parent). */
+  skipInitialSkeleton?: boolean;
 }
 
 export function AgentChatCore({
@@ -237,6 +245,7 @@ export function AgentChatCore({
   fillParent = false,
   agentSwitcher,
   headerExtra,
+  skipInitialSkeleton = false,
 }: AgentChatCoreProps) {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -307,6 +316,7 @@ export function AgentChatCore({
   const [skillMenuOpen, setSkillMenuOpen] = useState(false);
   const [inputCursor, setInputCursor] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [attachedSkills, setAttachedSkills] = useState<AttachedSkill[]>([]);
   const [pendingSkill, setPendingSkill] = useState<PendingSkillParams | null>(null);
   const [isCreating, setIsCreating] = useState(false);
@@ -325,12 +335,17 @@ export function AgentChatCore({
   const initializedRef = useRef(false);
   const skipAutoSelectRef = useRef(false);
   const isCreatingRef = useRef(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastRemoteMessagesRef = useRef<string>("");
   const conversationIdRef = useRef<string | null>(conversationIdFromUrl);
   const streamAbortRef = useRef<AbortController | null>(null);
 
   const isBusy = sendMessage.isPending || isStreaming;
+
+  const { endRef: messagesEndRef, bindViewport, showJump, scrollToBottom } = useStickyChatScroll([
+    messages,
+    isBusy,
+    isStreaming,
+  ]);
 
   useEffect(() => {
     setReplyTo(null);
@@ -434,18 +449,34 @@ export function AgentChatCore({
 
   useEffect(() => {
     if (!conversationId || isDraftNew || !remoteMessages) return;
+    // Don't overwrite live stream data while the model is responding.
+    if (isStreaming) return;
     const next = normalizeMessages(remoteMessages);
     const key = JSON.stringify(next.map((m) => ({ id: m.id, content: m.content })));
     if (key === lastRemoteMessagesRef.current) return;
     lastRemoteMessagesRef.current = key;
     setMessages(next);
-  }, [remoteMessages, conversationId, isDraftNew]);
+  }, [remoteMessages, conversationId, isDraftNew, isStreaming]);
 
+  // Abort stream on unmount.
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({
-      behavior: reduceMotion ? "auto" : "smooth",
-    });
-  }, [messages, sendMessage.isPending, isStreaming, reduceMotion]);
+    return () => {
+      streamAbortRef.current?.abort();
+    };
+  }, []);
+
+  // Draft persistence: load when conversation/draft context changes.
+  useEffect(() => {
+    const key = chatDraftKey("studio", conversationId);
+    const saved = loadChatDraft(key);
+    if (saved) setInput(saved);
+  }, [conversationId, isDraftNew]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Draft persistence: save as user types.
+  useEffect(() => {
+    const key = chatDraftKey("studio", conversationId);
+    saveChatDraft(key, input);
+  }, [input, conversationId]);
 
   const slashQuery = useMemo(() => getSlashSkillQuery(input, inputCursor), [input, inputCursor]);
 
@@ -481,7 +512,7 @@ export function AgentChatCore({
         if (prev.some((s) => s.id === skill.id)) return prev;
         return [...prev, { id: skill.id, name: skill.name, slug: skill.slug, params: {} }];
       });
-      requestAnimationFrame(() => inputRef.current?.focus());
+      requestAnimationFrame(() => (textareaRef.current ?? inputRef.current)?.focus());
     },
     [allFunctions, input, inputCursor, slashQuery?.start],
   );
@@ -510,7 +541,7 @@ export function AgentChatCore({
       ];
     });
     setPendingSkill(null);
-    requestAnimationFrame(() => inputRef.current?.focus());
+    requestAnimationFrame(() => (textareaRef.current ?? inputRef.current)?.focus());
   }, [pendingSkill]);
 
   const ensureConversationId = useCallback(async (): Promise<string | null> => {
@@ -613,18 +644,21 @@ export function AgentChatCore({
     const activeId = conversationId ?? (await ensureConversationId());
     if (!activeId) return;
 
+    const userMsgId = makeId("user");
     const userMsg: ChatMessage = {
-      id: makeId("user"),
+      id: userMsgId,
       role: "user",
       content: text,
       created: new Date().toISOString(),
       replyToId: activeReply?.id,
       replyToRole: activeReply?.role,
       replyToPreview: activeReply?.preview,
+      deliveryStatus: "pending",
     };
 
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
+    clearChatDraft(chatDraftKey("studio", activeId));
     setInputCursor(0);
     setSkillMenuOpen(false);
     setAttachedSkills([]);
@@ -761,9 +795,16 @@ export function AgentChatCore({
         }
         return [...prev, finalMsg];
       });
+      // Mark optimistic user message as delivered.
+      setMessages((prev) =>
+        prev.map((m) => (m.id === userMsgId ? { ...m, deliveryStatus: "sent" as const } : m)),
+      );
       // Lista sí; mensajes no (la UI local ya tiene el hilo — evita flash post-stream).
-      void queryClient.invalidateQueries({ queryKey: ["conversations"] });
-      void queryClient.invalidateQueries({ queryKey: ["unified-conversations"] });
+      void queryClient.invalidateQueries({ queryKey: ["unified-conversations"], exact: true });
+      void queryClient.invalidateQueries({
+        queryKey: ["conversations", activeId, "messages"],
+        exact: true,
+      });
     } catch (err) {
       if ((err as Error)?.name === "AbortError") return;
       // Fallback al POST clásico si el stream no está disponible.
@@ -780,32 +821,43 @@ export function AgentChatCore({
               data.metadata && typeof data.metadata === "object"
                 ? (data.metadata as Record<string, unknown>)
                 : null;
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: data.id ?? makeId("agent"),
-                role: data.sender?.toLowerCase() === "user" ? "user" : "agent",
-                content: data.message ?? data.content ?? data.text ?? "",
-                created:
-                  data.created_at ?? data.created ?? data.timestamp ?? new Date().toISOString(),
-                rag_sources: data.rag_sources ?? data.sources,
-                tool_calls: data.tool_calls,
-                tool_results: data.tool_results,
-                policy_trace: data.policy_trace ?? fallbackMeta?.policy_trace,
-                flow_policy_trace: data.flow_policy_trace ?? fallbackMeta?.flow_policy_trace,
-                policies: data.policies ?? fallbackMeta?.policies,
-                metadata: fallbackMeta,
-              },
-            ]);
+            setMessages((prev) => {
+              const withSent = prev.map((m) =>
+                m.id === userMsgId ? { ...m, deliveryStatus: "sent" as const } : m,
+              );
+              return [
+                ...withSent,
+                {
+                  id: data.id ?? makeId("agent"),
+                  role: data.sender?.toLowerCase() === "user" ? "user" : ("agent" as const),
+                  content: data.message ?? data.content ?? data.text ?? "",
+                  created:
+                    data.created_at ?? data.created ?? data.timestamp ?? new Date().toISOString(),
+                  rag_sources: data.rag_sources ?? data.sources,
+                  tool_calls: data.tool_calls,
+                  tool_results: data.tool_results,
+                  policy_trace: data.policy_trace ?? fallbackMeta?.policy_trace,
+                  flow_policy_trace: data.flow_policy_trace ?? fallbackMeta?.flow_policy_trace,
+                  policies: data.policies ?? fallbackMeta?.policies,
+                  metadata: fallbackMeta,
+                },
+              ];
+            });
           }
         } catch (e) {
           toast.error(apiErrorMessage(e, "Error al enviar el mensaje"));
-          setInput(text);
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === userMsgId ? { ...m, deliveryStatus: "failed" as const } : m,
+            ),
+          );
           if (activeReply) setReplyTo(activeReply);
         }
       } else {
         toast.error(msg || "Error al enviar el mensaje");
-        setInput(text);
+        setMessages((prev) =>
+          prev.map((m) => (m.id === userMsgId ? { ...m, deliveryStatus: "failed" as const } : m)),
+        );
         if (activeReply) setReplyTo(activeReply);
       }
     } finally {
@@ -831,6 +883,16 @@ export function AgentChatCore({
     if (isBusy || isCreating) return;
     void handleSend(undefined, { text: msg.content, reply: null });
   };
+
+  const stopStreaming = useCallback(() => {
+    streamAbortRef.current?.abort();
+    setIsStreaming(false);
+    streamingDraftRef.current = "";
+    streamingMsgIdRef.current = null;
+    setStreamingMessageId(null);
+    streamAbortRef.current = null;
+    window.setTimeout(() => setLiveSteps([]), 280);
+  }, []);
 
   const handleNewConversation = () => {
     if (!agent || isCreating) return;
@@ -903,6 +965,20 @@ export function AgentChatCore({
 
   const isReady = Boolean(agent?.is_active && (agent?.llm_model || agent?.llm_model_name));
 
+  const chatPhase = deriveChatPhase({
+    agentLoading,
+    conversationsLoading,
+    initialized: initializedRef.current,
+    messagesLoading,
+    hasMessages: messages.length > 0,
+    conversationId,
+    isDraftNew,
+    isCreating,
+    isStreaming,
+    sendPending: sendMessage.isPending,
+    error: createError,
+  });
+
   const currentConversation = useMemo(() => {
     if (!conversationId) return null;
     return (
@@ -931,6 +1007,15 @@ export function AgentChatCore({
     : "h-[calc(100dvh-3.5rem)] w-full bg-background text-foreground flex flex-col overflow-hidden";
 
   if (agentLoading) {
+    if (skipInitialSkeleton) {
+      return (
+        <div
+          className={`${fillParent ? "h-full" : "h-[calc(100dvh-3.5rem)]"} w-full bg-background flex items-center justify-center`}
+        >
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      );
+    }
     return (
       <div className={`${fillParent ? "h-full" : "h-[calc(100dvh-3.5rem)]"} w-full bg-background`}>
         <PageSkeleton variant="chat" className="h-full max-w-none px-4 py-4" padded={false} />
@@ -1219,7 +1304,11 @@ export function AgentChatCore({
         </div>
       )}
 
-      <ScrollArea className="flex-1 px-4 py-6">
+      <div className="relative flex-1 min-h-0">
+        <ScrollArea
+          className="h-full px-4 py-6"
+          viewportRef={bindViewport}
+        >
         <div className="max-w-3xl mx-auto space-y-5">
           {messages.length > 0 && agent.use_rag && (
             <ConversationRagSummary
@@ -1228,12 +1317,13 @@ export function AgentChatCore({
               topK={agent.rag_top_k}
             />
           )}
-          {messagesLoading && messages.length === 0 ? (
+          {chatPhase === "resolving_thread" || chatPhase === "loading_history" ? (
             <div className="space-y-4">
               <Skeleton className="h-16 w-3/4" />
               <Skeleton className="h-12 w-2/3 ml-auto" />
+              <Skeleton className="h-16 w-3/4" />
             </div>
-          ) : !conversationId && !isCreating && !isDraftNew ? (
+          ) : !conversationId && !isCreating && !isDraftNew && !conversationsLoading ? (
             <div className="flex flex-col items-center justify-center text-center py-16 gap-4">
               <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
                 <MessageSquarePlus className="h-8 w-8 text-primary" />
@@ -1249,22 +1339,40 @@ export function AgentChatCore({
                 Nueva conversación
               </Button>
             </div>
-          ) : messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center text-center py-16">
-              <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-                <Bot className="h-8 w-8 text-primary" />
-              </div>
-              <h2 className="text-xl font-semibold mb-2">
-                {isCreating ? "Iniciando conversación…" : "¿Qué necesitas?"}
-              </h2>
-              <p className="text-muted-foreground max-w-md">
-                {isCreating
+          ) : messages.length === 0 && !isBusy ? (
+            <EmptyState
+              icon={<Bot className="h-5 w-5" />}
+              title={isCreating ? "Iniciando conversación…" : `Chatea con ${agent.name}`}
+              description={
+                isCreating
                   ? "Creando un chat nuevo…"
                   : isDraftNew
-                    ? `Escribe el primer mensaje para abrir una conversación nueva con ${agent.name}.`
-                    : `Escribe tu consulta y ${agent.name} te ayudará con lo que necesites.`}
-              </p>
-            </div>
+                    ? `Escribe el primer mensaje para abrir una conversación nueva.`
+                    : `Escribe tu consulta y ${agent.name} te ayudará con lo que necesites.`
+              }
+              className="mt-8"
+              action={
+                !isCreating ? (
+                  <div className="flex flex-wrap justify-center gap-2">
+                    {[
+                      "¿Qué puedes hacer?",
+                      "Resume tu conocimiento",
+                      "Prueba una skill con /",
+                    ].map((prompt) => (
+                      <Button
+                        key={prompt}
+                        variant="outline"
+                        size="sm"
+                        className="text-xs"
+                        onClick={() => setInput(prompt)}
+                      >
+                        {prompt}
+                      </Button>
+                    ))}
+                  </div>
+                ) : undefined
+              }
+            />
           ) : (
             messages.map((msg) => {
               const ragCount = Array.isArray(msg.rag_sources) ? msg.rag_sources.length : 0;
@@ -1380,6 +1488,15 @@ export function AgentChatCore({
                         msg.role === "user" && !isBusy ? () => resendMessage(msg) : undefined
                       }
                     />
+                    {msg.role === "user" && msg.deliveryStatus === "failed" && (
+                      <button
+                        type="button"
+                        onClick={() => resendMessage(msg)}
+                        className="text-[11px] text-destructive underline self-end font-medium"
+                      >
+                        Reintentar
+                      </button>
+                    )}
                   </div>
                 </motion.div>
               );
@@ -1392,13 +1509,28 @@ export function AgentChatCore({
                 useRag={agent.use_rag !== false}
                 skillNames={agentSkillNames}
                 liveSteps={liveSteps}
+                compact={liveSteps.length === 0}
               />
             )}
           </AnimatePresence>
 
           <div ref={messagesEndRef} />
         </div>
-      </ScrollArea>
+        </ScrollArea>
+
+        {showJump && (
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 pointer-events-auto">
+            <Button
+              size="sm"
+              variant="secondary"
+              className="rounded-full shadow-md gap-1.5 pl-3 pr-2"
+              onClick={scrollToBottom}
+            >
+              Bajar <ChevronDown className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
+      </div>
 
       {createError && (
         <div className="border-t border-border/50 bg-destructive/10 px-4 py-2 text-xs text-destructive text-center">
@@ -1425,64 +1557,7 @@ export function AgentChatCore({
       />
 
       <div className="border-t border-border/50 bg-card/50 backdrop-blur p-3 sm:p-4">
-        <div className="max-w-3xl mx-auto space-y-2">
-          {replyTo && (
-            <div className="flex items-start gap-2 rounded-xl border border-primary/25 bg-primary/5 px-3 py-2">
-              <div className="min-w-0 flex-1">
-                <p className="text-[11px] font-semibold text-primary">
-                  Respondiendo a {roleLabel(replyTo.role)}
-                </p>
-                <p className="truncate text-xs text-muted-foreground">{replyTo.preview}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setReplyTo(null)}
-                className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                title="Cancelar respuesta"
-                aria-label="Cancelar respuesta"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          )}
-          {attachedSkills.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 px-0.5">
-              {attachedSkills.map((skill) => {
-                const paramBits = Object.entries(skill.params)
-                  .filter(([, v]) => v.trim())
-                  .map(([k, v]) => `${k}=${v}`);
-                return (
-                  <span
-                    key={skill.id}
-                    className="inline-flex items-center gap-1.5 max-w-full rounded-full border border-primary/35 bg-primary/10 pl-2.5 pr-1 py-1 text-[11px] font-medium text-primary"
-                    title={paramBits.length ? `${skill.name}: ${paramBits.join(", ")}` : skill.name}
-                  >
-                    <Wrench className="h-3 w-3 shrink-0 opacity-80" />
-                    <span className="truncate">
-                      /{skill.slug}
-                      {paramBits.length > 0 ? (
-                        <span className="text-primary/70 font-normal">
-                          {" "}
-                          · {paramBits.slice(0, 2).join(", ")}
-                          {paramBits.length > 2 ? "…" : ""}
-                        </span>
-                      ) : null}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setAttachedSkills((prev) => prev.filter((s) => s.id !== skill.id))
-                      }
-                      className="shrink-0 rounded-full p-0.5 hover:bg-primary/20"
-                      aria-label={`Quitar ${skill.name}`}
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </span>
-                );
-              })}
-            </div>
-          )}
+        <div className="max-w-3xl mx-auto">
           <ChatSkillCommand
             open={skillMenuOpen && agentSkillOptions.length > 0}
             onOpenChange={setSkillMenuOpen}
@@ -1490,57 +1565,96 @@ export function AgentChatCore({
             query={slashQuery?.query ?? ""}
             onSelect={selectSkillCommand}
           >
-            <form
-              onSubmit={(e) => void handleSend(e)}
-              className="flex items-end gap-2 rounded-full bg-muted/60 border border-border/50 px-2 py-2 transition-colors focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/25 focus-within:bg-muted"
-            >
-              <Input
-                ref={inputRef}
-                value={input}
-                onChange={(e) => {
-                  setInput(e.target.value);
-                  setInputCursor(e.target.selectionStart ?? e.target.value.length);
-                }}
-                onSelect={(e) => {
-                  const t = e.currentTarget;
-                  setInputCursor(t.selectionStart ?? t.value.length);
-                }}
-                placeholder={
-                  isCreating
-                    ? "Creando conversación..."
-                    : isBusy
-                      ? "El agente está respondiendo..."
-                      : replyTo
-                        ? "Escribe tu respuesta…"
-                        : attachedSkills.length > 0
-                          ? "Añade un mensaje o envía la skill…"
-                          : isDraftNew || !conversationId
-                            ? "Escribe para iniciar… (/ para skills)"
-                            : "Escribe tu mensaje… (/ para skills)"
-                }
-                disabled={isBusy || isCreating || (!conversationId && !isDraftNew)}
-                className="flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-3 py-2 text-sm"
-              />
-              <motion.div whileTap={reduceMotion ? undefined : { scale: 0.9 }}>
-                <Button
-                  type="submit"
-                  size="icon"
-                  className="h-9 w-9 rounded-full shrink-0"
-                  disabled={
-                    (!input.trim() && attachedSkills.length === 0) ||
-                    isBusy ||
-                    isCreating ||
-                    (!conversationId && !isDraftNew)
-                  }
-                >
-                  {isBusy ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Send className="h-4 w-4" />
-                  )}
-                </Button>
-              </motion.div>
-            </form>
+            <ChatComposer
+              ref={textareaRef}
+              value={input}
+              onChange={(v) => {
+                setInput(v);
+              }}
+              onCursorChange={(cursor) => setInputCursor(cursor)}
+              onSubmit={() => void handleSend()}
+              placeholder={
+                isCreating
+                  ? "Creando conversación..."
+                  : isBusy
+                    ? "El agente está respondiendo..."
+                    : replyTo
+                      ? "Escribe tu respuesta…"
+                      : attachedSkills.length > 0
+                        ? "Añade un mensaje o envía la skill…"
+                        : isDraftNew || !conversationId
+                          ? "Escribe para iniciar… (/ para skills)"
+                          : "Escribe tu mensaje… (/ para skills)"
+              }
+              disabled={isCreating || (!conversationId && !isDraftNew)}
+              busy={isBusy}
+              canStop={isStreaming}
+              onStop={stopStreaming}
+              canSubmit={attachedSkills.length > 0}
+              leading={
+                (replyTo || attachedSkills.length > 0) ? (
+                  <div className="space-y-2">
+                    {replyTo && (
+                      <div className="flex items-start gap-2 rounded-xl border border-primary/25 bg-primary/5 px-3 py-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[11px] font-semibold text-primary">
+                            Respondiendo a {roleLabel(replyTo.role)}
+                          </p>
+                          <p className="truncate text-xs text-muted-foreground">{replyTo.preview}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setReplyTo(null)}
+                          className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                          title="Cancelar respuesta"
+                          aria-label="Cancelar respuesta"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    )}
+                    {attachedSkills.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 px-0.5">
+                        {attachedSkills.map((skill) => {
+                          const paramBits = Object.entries(skill.params)
+                            .filter(([, v]) => v.trim())
+                            .map(([k, v]) => `${k}=${v}`);
+                          return (
+                            <span
+                              key={skill.id}
+                              className="inline-flex items-center gap-1.5 max-w-full rounded-full border border-primary/35 bg-primary/10 pl-2.5 pr-1 py-1 text-[11px] font-medium text-primary"
+                              title={paramBits.length ? `${skill.name}: ${paramBits.join(", ")}` : skill.name}
+                            >
+                              <Wrench className="h-3 w-3 shrink-0 opacity-80" />
+                              <span className="truncate">
+                                /{skill.slug}
+                                {paramBits.length > 0 ? (
+                                  <span className="text-primary/70 font-normal">
+                                    {" "}
+                                    · {paramBits.slice(0, 2).join(", ")}
+                                    {paramBits.length > 2 ? "…" : ""}
+                                  </span>
+                                ) : null}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setAttachedSkills((prev) => prev.filter((s) => s.id !== skill.id))
+                                }
+                                className="shrink-0 rounded-full p-0.5 hover:bg-primary/20"
+                                aria-label={`Quitar ${skill.name}`}
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ) : undefined
+              }
+            />
           </ChatSkillCommand>
         </div>
       </div>

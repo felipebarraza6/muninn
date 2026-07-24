@@ -5,6 +5,7 @@ import { AgentChatCore } from "@/components/agent-chat-core";
 import { useAgents } from "@/api/hooks/useAgents";
 import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export default function ChatPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -58,13 +59,12 @@ export default function ChatPage() {
 
   if (activeAgents.length === 0) {
     return (
-      <div className="h-dvh w-full bg-background flex flex-col items-center justify-center gap-4 px-6">
-        <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
-          <Bot className="h-8 w-8 text-primary" />
-        </div>
-        <p className="text-muted-foreground text-center">
-          No hay agentes activos disponibles para chatear.
-        </p>
+      <div className="h-dvh w-full bg-background flex flex-col items-center justify-center px-6">
+        <EmptyState
+          icon={<Bot className="h-5 w-5" />}
+          title="Sin agentes activos"
+          description="No hay agentes disponibles para chatear en esta sucursal."
+        />
       </div>
     );
   }
@@ -77,6 +77,7 @@ export default function ChatPage() {
           showBackLink
           backTo="/"
           fillParent
+          skipInitialSkeleton
           agentSwitcher={{
             agents: activeAgents,
             onChange: handleAgentChange,

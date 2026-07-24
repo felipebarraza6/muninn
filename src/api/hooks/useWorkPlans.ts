@@ -114,9 +114,46 @@ export type CreateWorkItemPayload = {
 
 const KEY = "work-plans";
 
+export type WorkPlanRunEnvelope = {
+  ok?: boolean;
+  steps?: number;
+  results?: Array<{
+    ok?: boolean;
+    done?: boolean;
+    item_id?: string;
+    status?: string;
+    error?: string;
+    result?: unknown;
+  }>;
+  plan_status?: string;
+  stop_on_error?: boolean;
+};
+
 function invalidatePlans(qc: ReturnType<typeof useQueryClient>, planId?: string) {
   qc.invalidateQueries({ queryKey: [KEY] });
   if (planId) qc.invalidateQueries({ queryKey: [KEY, planId] });
+}
+
+async function syncPlanAfterRun(
+  qc: ReturnType<typeof useQueryClient>,
+  data: { result?: WorkPlanRunEnvelope; plan?: WorkPlan } | undefined,
+) {
+  const planId = data?.plan?.id ? String(data.plan.id) : undefined;
+  // Preferir plan fresco del GET; no confiar solo en el prefetch del POST.
+  invalidatePlans(qc, planId);
+  if (planId) {
+    await qc.refetchQueries({ queryKey: [KEY, planId] });
+  }
+  if (data?.plan?.id && data.plan) {
+    // Merge status del envelope si el GET aún va lento
+    const cached = qc.getQueryData<WorkPlan>([KEY, planId]);
+    if (cached && data.result?.plan_status && cached.status !== data.result.plan_status) {
+      qc.setQueryData<WorkPlan>([KEY, planId], {
+        ...cached,
+        status: data.result.plan_status as WorkPlanStatus,
+      });
+    }
+  }
 }
 
 export function useWorkPlans(filters?: { status?: string }) {
@@ -191,10 +228,9 @@ export function useRunNextWorkPlan() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) =>
-      POST<{ result: unknown; plan: WorkPlan }>(ENDPOINTS.workPlans.runNext(id)),
-    onSuccess: (data) => {
-      invalidatePlans(qc);
-      if (data?.plan?.id) qc.setQueryData([KEY, data.plan.id], data.plan);
+      POST<{ result: WorkPlanRunEnvelope; plan: WorkPlan }>(ENDPOINTS.workPlans.runNext(id)),
+    onSuccess: async (data) => {
+      await syncPlanAfterRun(qc, data);
     },
   });
 }
@@ -203,13 +239,12 @@ export function useRunAllWorkPlan() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, stopOnError }: { id: string; stopOnError?: boolean }) =>
-      POST<{ result: unknown; plan: WorkPlan }>(ENDPOINTS.workPlans.runAll(id), {
+      POST<{ result: WorkPlanRunEnvelope; plan: WorkPlan }>(ENDPOINTS.workPlans.runAll(id), {
         max_steps: 50,
         stop_on_error: stopOnError ?? false,
       }),
-    onSuccess: (data) => {
-      invalidatePlans(qc);
-      if (data?.plan?.id) qc.setQueryData([KEY, data.plan.id], data.plan);
+    onSuccess: async (data) => {
+      await syncPlanAfterRun(qc, data);
     },
   });
 }
@@ -227,7 +262,11 @@ export function useRunWorkItem() {
   return useMutation({
     mutationFn: (id: string) =>
       POST<{ result: unknown; item: WorkItem }>(ENDPOINTS.workItems.run(id)),
-    onSuccess: (data) => invalidatePlans(qc, data.item?.plan),
+    onSuccess: async (data) => {
+      const planId = data.item?.plan ? String(data.item.plan) : undefined;
+      invalidatePlans(qc, planId);
+      if (planId) await qc.refetchQueries({ queryKey: [KEY, planId] });
+    },
   });
 }
 
@@ -246,6 +285,10 @@ export function useRetryWorkItem() {
         return POST<{ result: unknown; item: WorkItem }>(ENDPOINTS.workItems.run(id));
       }
     },
-    onSuccess: (data) => invalidatePlans(qc, data.item?.plan),
+    onSuccess: async (data) => {
+      const planId = data.item?.plan ? String(data.item.plan) : undefined;
+      invalidatePlans(qc, planId);
+      if (planId) await qc.refetchQueries({ queryKey: [KEY, planId] });
+    },
   });
 }

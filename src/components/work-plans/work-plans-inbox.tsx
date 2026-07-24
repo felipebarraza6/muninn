@@ -39,12 +39,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
@@ -68,9 +63,10 @@ import {
   type WorkItem,
   type WorkItemKind,
   type WorkPlan,
+  type WorkPlanRunEnvelope,
   type WorkPlanStatus,
 } from "@/api/hooks/useWorkPlans";
-import { apiErrorMessage } from "@/lib/apiError";
+import { apiErrorDetail, apiErrorMessage, apiErrorStatus } from "@/lib/apiError";
 import { cn } from "@/lib/utils";
 import { isOrganizationOwnerScope, isSuperAdmin } from "@/lib/authGuards";
 import {
@@ -237,10 +233,10 @@ function payloadFromDraft(item: DraftItem): Record<string, unknown> | null {
   return {};
 }
 
-function draftFromPayload(kind: WorkItemKind, payload?: Record<string, unknown> | null): Omit<
-  DraftItem,
-  "key" | "title" | "kind"
-> {
+function draftFromPayload(
+  kind: WorkItemKind,
+  payload?: Record<string, unknown> | null,
+): Omit<DraftItem, "key" | "title" | "kind"> {
   const p = payload && typeof payload === "object" ? payload : {};
   return {
     message: typeof p.message === "string" ? p.message : "",
@@ -327,15 +323,11 @@ function extractResultView(item: WorkItem): ResultView {
     }
     if (!replyText && resultObj.result != null) {
       replyText =
-        typeof resultObj.result === "string"
-          ? resultObj.result
-          : prettyJson(resultObj.result);
+        typeof resultObj.result === "string" ? resultObj.result : prettyJson(resultObj.result);
     }
     if (!replyText && resultObj.value != null) {
       replyText =
-        typeof resultObj.value === "string"
-          ? resultObj.value
-          : prettyJson(resultObj.value);
+        typeof resultObj.value === "string" ? resultObj.value : prettyJson(resultObj.value);
     }
   }
 
@@ -363,8 +355,7 @@ function extractResultView(item: WorkItem): ResultView {
     "ok",
   ]);
   const meta =
-    resultObj &&
-    Object.fromEntries(Object.entries(resultObj).filter(([k]) => !skipKeys.has(k)));
+    resultObj && Object.fromEntries(Object.entries(resultObj).filter(([k]) => !skipKeys.has(k)));
   const metaJson = meta && Object.keys(meta).length ? prettyJson(meta) : "";
 
   const executionId =
@@ -373,12 +364,16 @@ function extractResultView(item: WorkItem): ResultView {
 
   return {
     replyText,
-    hasResult: !!resultObj || !!item.workflow_execution || !!item.error_message,
+    hasResult:
+      item.status === "done" ||
+      item.status === "failed" ||
+      Boolean(item.error_message?.trim()) ||
+      Boolean(item.workflow_execution) ||
+      (resultObj != null && Object.keys(resultObj).length > 0),
     nodes,
     metaJson,
     executionId,
-    workflowStatus:
-      typeof resultObj?.status === "string" ? resultObj.status : undefined,
+    workflowStatus: typeof resultObj?.status === "string" ? resultObj.status : undefined,
   };
 }
 
@@ -436,7 +431,13 @@ export function WorkPlansInbox() {
   const idFromUrl = searchParams.get("id");
   const showBranchFilter = isSuperAdmin() || isOrganizationOwnerScope();
 
-  const { data: plans = [], isLoading, error } = useWorkPlans();
+  const {
+    data: plans = [],
+    isLoading,
+    error,
+    refetch,
+    isFetching,
+  } = useWorkPlans();
   const [selectedId, setSelectedId] = useState(idFromUrl ?? "");
   const [bucket, setBucket] = useState<BucketId>("inbox");
   const [query, setQuery] = useState("");
@@ -444,6 +445,12 @@ export function WorkPlansInbox() {
   const [createOpen, setCreateOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [addItemOpen, setAddItemOpen] = useState(false);
+  const [runSummary, setRunSummary] = useState<{
+    planStatus?: string;
+    steps?: number;
+    ok?: boolean;
+    items: WorkItem[];
+  } | null>(null);
 
   const { data: planDetail, isLoading: detailLoading } = useWorkPlan(selectedId || undefined);
   const createPlan = useCreateWorkPlan();
@@ -480,14 +487,15 @@ export function WorkPlansInbox() {
   }, [navigate, inspectorOpen]);
 
   const filtered = useMemo(() => {
-    const meta = BUCKETS.find((b) => b.id === bucket)!;
+    const meta = BUCKETS.find((b) => b.id === bucket);
+    if (!meta) return plans;
     return plans.filter((p) => {
       if (!meta.match(p.status)) return false;
       if (!query.trim()) return true;
       const q = query.toLowerCase();
-      return (
-        p.name.toLowerCase().includes(q) || (p.description || "").toLowerCase().includes(q)
-      );
+      const name = (p.name || "").toLowerCase();
+      const desc = (p.description || "").toLowerCase();
+      return name.includes(q) || desc.includes(q);
     });
   }, [plans, bucket, query]);
 
@@ -522,6 +530,7 @@ export function WorkPlansInbox() {
   const selectPlan = (id: string) => {
     setSelectedId(id);
     setSelectedItemId(null);
+    setRunSummary(null);
     setSearchParams({ id }, { replace: true });
     setMobileShowPlan(true);
   };
@@ -531,10 +540,41 @@ export function WorkPlansInbox() {
     // Sheet solo en mobile: en md+ el inspector ya está a la derecha.
     // Abrirlo en desktop deja el overlay oscuro y el panel oculto (md:hidden).
     const isMobile =
-      typeof window !== "undefined" &&
-      window.matchMedia("(max-width: 767px)").matches;
+      typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches;
     if (isMobile) setInspectorOpen(true);
     else setInspectorOpen(false);
+  };
+
+  const focusAfterRun = (plan: WorkPlan | undefined, envelope?: WorkPlanRunEnvelope) => {
+    const status = (envelope?.plan_status || plan?.status || "") as WorkPlanStatus | string;
+    if (status === "completed") setBucket("done");
+    else if (status === "failed" || status === "cancelled") setBucket("failed");
+
+    const nextItems = (plan?.items ?? []).slice().sort((a, b) => a.sort_order - b.sort_order);
+    const withOutcome =
+      nextItems.find((i) => i.status === "done" || i.status === "failed") ||
+      nextItems.find((i) => extractResultView(i).hasResult) ||
+      nextItems[0];
+    if (withOutcome) {
+      setSelectedItemId(withOutcome.id);
+      const isMobile =
+        typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches;
+      if (isMobile) setInspectorOpen(true);
+    }
+    setRunSummary({
+      planStatus: status || undefined,
+      steps: envelope?.steps,
+      ok: envelope?.ok,
+      items: nextItems,
+    });
+    const done = nextItems.filter((i) => i.status === "done").length;
+    const failed = nextItems.filter((i) => i.status === "failed").length;
+    const pending = nextItems.filter(
+      (i) => i.status === "pending" || i.status === "queued" || i.status === "running",
+    ).length;
+    toast.success(
+      `Corrida lista · ${done} ok${failed ? ` · ${failed} error` : ""}${pending ? ` · ${pending} pendientes` : ""}`,
+    );
   };
 
   const reorderItem = (item: WorkItem, dir: -1 | 1) => {
@@ -567,14 +607,44 @@ export function WorkPlansInbox() {
   }
 
   if (error) {
+    const status = apiErrorStatus(error);
+    const detail = apiErrorDetail(error);
+    const hint =
+      status === 404
+        ? "El API no tiene la ruta work-plans (reiniciá el contenedor yggdra-light-api)."
+        : status === 403
+          ? "Sin permiso o suscripción activa para ai_agents en esta sucursal."
+          : status === 401
+            ? "Sesión inválida — volvé a iniciar sesión."
+            : status == null
+              ? "No hay respuesta del API (¿está corriendo Docker en :8000 y el proxy de Vite?)."
+              : null;
     return (
       <div className="h-dvh flex flex-col items-center justify-center gap-3 px-6">
-        <p className="text-destructive text-center">
+        <p className="text-destructive text-center font-medium">
           {apiErrorMessage(error, "No se pudieron cargar los planes de trabajo")}
         </p>
-        <Button variant="outline" asChild>
-          <Link to="/">Volver</Link>
-        </Button>
+        <p className="text-xs text-muted-foreground text-center max-w-md leading-relaxed">
+          {status != null ? `HTTP ${status}` : "Sin status HTTP"}
+          {detail ? ` · ${detail}` : ""}
+        </p>
+        {hint ? (
+          <p className="text-[11px] text-muted-foreground text-center max-w-sm leading-relaxed">{hint}</p>
+        ) : null}
+        <div className="flex gap-2">
+          <Button
+            variant="default"
+            size="sm"
+            disabled={isFetching}
+            onClick={() => void refetch()}
+          >
+            {isFetching ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
+            Reintentar
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/">Volver</Link>
+          </Button>
+        </div>
       </div>
     );
   }
@@ -585,19 +655,23 @@ export function WorkPlansInbox() {
         planWorkflowId: planDetail?.workflow ?? null,
         agentLabel: agentName(selectedItem.assigned_agent || planDetail?.assigned_agent),
         busy:
-          runItem.isPending ||
-          retryItem.isPending ||
-          updateItem.isPending ||
-          deleteItem.isPending,
+          runItem.isPending || retryItem.isPending || updateItem.isPending || deleteItem.isPending,
         onRun: () => {
           runItem.mutate(selectedItem.id, {
-            onSuccess: () => toast.success("Ítem ejecutado"),
+            onSuccess: (data) => {
+              if (data.item?.id) setSelectedItemId(String(data.item.id));
+              const isMobile =
+                typeof window !== "undefined" &&
+                window.matchMedia("(max-width: 767px)").matches;
+              if (isMobile) setInspectorOpen(true);
+              toast.success("Ítem ejecutado — revisá el resultado a la derecha");
+            },
             onError: (e) => toast.error(apiErrorMessage(e, "No se pudo ejecutar el ítem")),
           });
         },
         onRetry: () => {
           retryItem.mutate(selectedItem.id, {
-            onSuccess: () => toast.success("Reintento lanzado"),
+            onSuccess: () => toast.success("Reintento lanzado — revisá el resultado"),
             onError: (e) => toast.error(apiErrorMessage(e, "No se pudo reintentar")),
           });
         },
@@ -647,9 +721,9 @@ export function WorkPlansInbox() {
         </Button>
         <ClipboardList className="h-4 w-4 text-primary shrink-0" />
         <div className="min-w-0 flex flex-col leading-tight">
-          <span className="text-sm font-semibold tracking-tight truncate">Ops</span>
+          <span className="text-sm font-semibold tracking-tight truncate">Planes</span>
           <span className="text-[10px] text-muted-foreground hidden sm:inline truncate">
-            Planes en cadena · insumos → ejecutar → resultado
+            OPS-agents · insumos → ejecutar → resultado
           </span>
         </div>
         <span className="ml-1 hidden md:inline-flex items-center rounded-full border border-primary/25 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
@@ -657,7 +731,14 @@ export function WorkPlansInbox() {
         </span>
         <div className="ml-auto flex items-center gap-2">
           {showBranchFilter ? <StudioBranchFilter /> : null}
-          <Button size="sm" className="h-8 gap-1.5 shadow-sm shadow-primary/20" onClick={() => setCreateOpen(true)}>
+          <Button size="sm" variant="ghost" className="h-8 hidden md:inline-flex" asChild>
+            <Link to="/workflows">Workflows</Link>
+          </Button>
+          <Button
+            size="sm"
+            className="h-8 gap-1.5 shadow-sm shadow-primary/20"
+            onClick={() => setCreateOpen(true)}
+          >
             <Plus className="h-3.5 w-3.5" />
             Nuevo plan
           </Button>
@@ -712,7 +793,8 @@ export function WorkPlansInbox() {
               {filtered.length === 0 ? (
                 <div className="text-center py-10 px-4 space-y-3">
                   <p className="text-xs text-muted-foreground">
-                    No hay planes aquí. Usa una plantilla real de tu sucursal (Dentidesk o SmartHydro).
+                    No hay planes aquí. Usa una plantilla real de tu sucursal (Dentidesk o
+                    SmartHydro).
                   </p>
                   <Button size="sm" variant="outline" onClick={() => setCreateOpen(true)}>
                     Usar plantilla
@@ -800,7 +882,9 @@ export function WorkPlansInbox() {
                 onRunNext={() => {
                   if (!selectedId) return;
                   runNext.mutate(selectedId, {
-                    onSuccess: () => toast.success("Siguiente ítem ejecutado"),
+                    onSuccess: (data) => {
+                      focusAfterRun(data.plan, data.result);
+                    },
                     onError: (e) =>
                       toast.error(apiErrorMessage(e, "No se pudo ejecutar el siguiente ítem")),
                   });
@@ -810,7 +894,9 @@ export function WorkPlansInbox() {
                   runAll.mutate(
                     { id: selectedId, stopOnError: false },
                     {
-                      onSuccess: () => toast.success("Plan ejecutado"),
+                      onSuccess: (data) => {
+                        focusAfterRun(data.plan, data.result);
+                      },
                       onError: (e) =>
                         toast.error(apiErrorMessage(e, "No se pudo ejecutar el plan completo")),
                     },
@@ -849,6 +935,68 @@ export function WorkPlansInbox() {
                   );
                 }}
               />
+              {runSummary ? (
+                <div className="shrink-0 mx-3 mt-2 rounded-xl border border-primary/25 bg-primary/5 px-3 py-2.5 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-foreground">
+                        Resultados de la corrida
+                        {runSummary.planStatus ? (
+                          <span className="text-muted-foreground font-normal">
+                            {" "}
+                            · {STATUS_LABEL[runSummary.planStatus as WorkPlanStatus] ?? runSummary.planStatus}
+                          </span>
+                        ) : null}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        {runSummary.steps != null ? `${runSummary.steps} paso(s) · ` : ""}
+                        Tocá un ítem para ver el detalle a la derecha.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-[11px] shrink-0"
+                      onClick={() => setRunSummary(null)}
+                    >
+                      Cerrar
+                    </Button>
+                  </div>
+                  <ul className="space-y-1 max-h-40 overflow-y-auto">
+                    {runSummary.items.map((it, idx) => {
+                      const preview = itemPreview(it) || (it.status === "pending" ? "Sin ejecutar" : "—");
+                      return (
+                        <li key={it.id}>
+                          <button
+                            type="button"
+                            className={cn(
+                              "w-full text-left rounded-lg px-2 py-1.5 text-[11px] transition-colors",
+                              selectedItemId === it.id
+                                ? "bg-primary/15 text-foreground"
+                                : "hover:bg-muted/60 text-muted-foreground",
+                            )}
+                            onClick={() => selectItem(it.id)}
+                          >
+                            <span className="font-medium text-foreground/90">
+                              #{idx + 1} {it.title}
+                            </span>
+                            <span
+                              className={cn(
+                                "ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+                                statusTone(it.status),
+                              )}
+                            >
+                              {ITEM_STATUS_LABEL[it.status] ?? it.status}
+                            </span>
+                            <span className="block mt-0.5 line-clamp-2 opacity-80">{preview}</span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ) : null}
               <div className="shrink-0 px-4 py-2 border-b flex items-center gap-2">
                 <p className="text-[11px] text-muted-foreground flex-1">
                   Flujo del plan · insumo → ejecutar → resultado (detalle a la derecha)
@@ -980,10 +1128,7 @@ export function WorkPlansInbox() {
           setInspectorOpen(open);
         }}
       >
-        <SheetContent
-          side="right"
-          className="w-full sm:max-w-md p-0 flex flex-col gap-0 h-dvh"
-        >
+        <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col gap-0 h-dvh">
           <SheetHeader className="px-4 py-3 border-b text-left shrink-0 pr-12">
             <SheetTitle className="text-sm">Detalle del ítem</SheetTitle>
           </SheetHeader>
@@ -1051,13 +1196,7 @@ export function WorkPlansInbox() {
   );
 }
 
-function EmptyPane({
-  text,
-  cta,
-}: {
-  text: string;
-  cta?: { label: string; onClick: () => void };
-}) {
+function EmptyPane({ text, cta }: { text: string; cta?: { label: string; onClick: () => void } }) {
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-3 text-sm text-muted-foreground px-6 text-center">
       <p>{text}</p>
@@ -1089,10 +1228,7 @@ function PlanHeader({
   onRunAll: () => void;
   onCancel: () => void;
   onDelete: () => void;
-  onSaveMeta: (patch: {
-    context?: Record<string, unknown>;
-    scheduled_for?: string | null;
-  }) => void;
+  onSaveMeta: (patch: { context?: Record<string, unknown>; scheduled_for?: string | null }) => void;
 }) {
   const [contextJson, setContextJson] = useState("{}");
   const [scheduledFor, setScheduledFor] = useState("");
@@ -1151,7 +1287,11 @@ function PlanHeader({
             onClick={onRunNext}
             className="h-8 gap-1"
           >
-            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+            {busy ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Play className="h-3.5 w-3.5" />
+            )}
             <span className="hidden lg:inline">Siguiente</span>
           </Button>
           <Button size="sm" disabled={busy} onClick={onRunAll} className="h-8 gap-1">
@@ -1267,27 +1407,27 @@ function ItemInspector({
   busy: boolean;
   onRun: () => void;
   onRetry: () => void;
-  onSave: (patch: {
-    title: string;
-    kind: WorkItemKind;
-    payload: Record<string, unknown>;
-  }) => void;
+  onSave: (patch: { title: string; kind: WorkItemKind; payload: Record<string, unknown> }) => void;
   onDelete: () => void;
 }) {
-  const [title, setTitle] = useState(item.title);
-  const [kind, setKind] = useState<WorkItemKind>(item.kind);
-  const [fields, setFields] = useState(() => draftFromPayload(item.kind, item.payload));
+  const safeKind = (k: unknown): WorkItemKind =>
+    typeof k === "string" && k in ITEM_KIND_LABEL ? (k as WorkItemKind) : "note";
+  const [title, setTitle] = useState(item.title || "");
+  const [kind, setKind] = useState<WorkItemKind>(() => safeKind(item.kind));
+  const [fields, setFields] = useState(() =>
+    draftFromPayload(safeKind(item.kind), item.payload),
+  );
   const [editingInsumos, setEditingInsumos] = useState(false);
   const defaultTab =
     item.status === "pending" || item.status === "queued" ? "insumos" : "resultado";
   const [tab, setTab] = useState(defaultTab);
 
   useEffect(() => {
-    setTitle(item.title);
-    setKind(item.kind);
-    setFields(draftFromPayload(item.kind, item.payload));
-    const next =
-      item.status === "pending" || item.status === "queued" ? "insumos" : "resultado";
+    const nextKind = safeKind(item.kind);
+    setTitle(item.title || "");
+    setKind(nextKind);
+    setFields(draftFromPayload(nextKind, item.payload));
+    const next = item.status === "pending" || item.status === "queued" ? "insumos" : "resultado";
     setTab(next);
     setEditingInsumos(item.status === "pending" || item.status === "queued");
   }, [item.id, item.title, item.kind, item.payload, item.modified, item.status]);
@@ -1415,7 +1555,11 @@ function ItemInspector({
         </div>
         <div className="flex gap-1.5">
           <Button size="sm" className="flex-1 h-8 gap-1.5" disabled={busy} onClick={onRun}>
-            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+            {busy ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Play className="h-3.5 w-3.5" />
+            )}
             Ejecutar
           </Button>
           {item.status === "failed" ? (
@@ -1452,7 +1596,10 @@ function ItemInspector({
           </TabsList>
         </div>
 
-        <TabsContent value="resultado" className="flex-1 min-h-0 m-0 overflow-hidden data-[state=inactive]:hidden">
+        <TabsContent
+          value="resultado"
+          className="flex-1 min-h-0 m-0 overflow-hidden data-[state=inactive]:hidden"
+        >
           <ScrollArea className="h-full">
             <div className="p-3 space-y-3">
               {executionLoading && !liveReply && !item.error_message ? (
@@ -1504,7 +1651,10 @@ function ItemInspector({
                   </h3>
                   <ul className="space-y-1.5">
                     {liveNodes.map((n, i) => (
-                      <li key={`${n.node}-${i}`} className="rounded-lg border bg-muted/25 px-2.5 py-2">
+                      <li
+                        key={`${n.node}-${i}`}
+                        className="rounded-lg border bg-muted/25 px-2.5 py-2"
+                      >
                         <div className="flex items-center gap-2">
                           <p className="text-xs font-medium flex-1 truncate">{n.node}</p>
                           {n.node_type ? (
@@ -1550,7 +1700,10 @@ function ItemInspector({
           </ScrollArea>
         </TabsContent>
 
-        <TabsContent value="insumos" className="flex-1 min-h-0 m-0 overflow-hidden data-[state=inactive]:hidden">
+        <TabsContent
+          value="insumos"
+          className="flex-1 min-h-0 m-0 overflow-hidden data-[state=inactive]:hidden"
+        >
           <ScrollArea className="h-full">
             <div className="p-3 space-y-3">
               <p className="text-[11px] text-muted-foreground">{ITEM_KIND_HINT[kind]}</p>
@@ -1585,7 +1738,11 @@ function ItemInspector({
                 <div className="space-y-2.5">
                   <div className="rounded-lg border bg-card/50 px-3 py-2 space-y-1.5">
                     <Label className="text-[11px]">Título</Label>
-                    <Input value={title} onChange={(e) => setTitle(e.target.value)} className="h-8" />
+                    <Input
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      className="h-8"
+                    />
                   </div>
                   <div className="rounded-lg border bg-card/50 px-3 py-2 space-y-1.5">
                     <Label className="text-[11px]">Tipo de ítem</Label>
@@ -1651,7 +1808,10 @@ function ItemInspector({
           </ScrollArea>
         </TabsContent>
 
-        <TabsContent value="tecnico" className="flex-1 min-h-0 m-0 overflow-hidden data-[state=inactive]:hidden">
+        <TabsContent
+          value="tecnico"
+          className="flex-1 min-h-0 m-0 overflow-hidden data-[state=inactive]:hidden"
+        >
           <ScrollArea className="h-full">
             <div className="p-3 space-y-3">
               <div className="rounded-lg border px-3 py-2 text-xs space-y-1">
@@ -1816,15 +1976,12 @@ function CreatePlanDialog({
     return map;
   }, [agents]);
 
-  const agentSlugs = useMemo(
-    () => new Set(agents.map((a) => a.slug).filter(Boolean)),
-    [agents],
-  );
+  const agentSlugs = useMemo(() => new Set(agents.map((a) => a.slug).filter(Boolean)), [agents]);
   const workflowNames = useMemo(() => workflows.map((w) => w.name), [workflows]);
 
   const workflowIdByName = (needle: string) => {
     const hit = workflows.find((w) =>
-      w.name.toLowerCase().includes(needle.toLowerCase()),
+      (w.name || "").toLowerCase().includes(needle.toLowerCase()),
     );
     return hit?.id ?? null;
   };
@@ -1833,7 +1990,7 @@ function CreatePlanDialog({
     if (!open) return;
     setName("");
     setDescription("");
-    setAgentId(agents[0]?.id ?? "");
+    setAgentId(agents[0]?.id ? String(agents[0].id) : "");
     setWorkflowId("none");
     setScheduledFor("");
     setContextJson("{}");
@@ -1938,32 +2095,42 @@ function CreatePlanDialog({
           <div className="grid gap-2 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Agente asignado</Label>
-              <Select value={agentId} onValueChange={setAgentId}>
+              <Select
+                value={agentId || undefined}
+                onValueChange={setAgentId}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Elige un agente" />
                 </SelectTrigger>
                 <SelectContent>
-                  {agents.map((a) => (
-                    <SelectItem key={a.id} value={a.id}>
-                      {a.name}
-                    </SelectItem>
-                  ))}
+                  {agents
+                    .filter((a) => a.id)
+                    .map((a) => (
+                      <SelectItem key={a.id} value={a.id}>
+                        {a.name || a.id}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
               <Label>Workflow (opcional)</Label>
-              <Select value={workflowId} onValueChange={setWorkflowId}>
+              <Select
+                value={workflowId || "none"}
+                onValueChange={setWorkflowId}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Ninguno" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Ninguno</SelectItem>
-                  {workflows.map((w) => (
-                    <SelectItem key={w.id} value={w.id}>
-                      {w.name}
-                    </SelectItem>
-                  ))}
+                  {workflows
+                    .filter((w) => w.id)
+                    .map((w) => (
+                      <SelectItem key={w.id} value={w.id}>
+                        {w.name || w.id}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>
@@ -2216,8 +2383,7 @@ function AddItemDialog({
                 setDraft((d) => ({
                   ...d,
                   workflowId: v === "none" ? "" : v,
-                  workflowName:
-                    v === "none" ? "" : workflows.find((w) => w.id === v)?.name || "",
+                  workflowName: v === "none" ? "" : workflows.find((w) => w.id === v)?.name || "",
                 }))
               }
             >

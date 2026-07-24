@@ -46,18 +46,21 @@ export interface Conversation {
   lastTime: string;
   status: ConversationStatus;
   badges: ConversationStatus[];
-  estimatedValue: number;
+  /** Solo si el API lo provee; no inventar 0. */
+  estimatedValue?: number;
   unread: number;
   controlledBy: "ai" | "human";
   campaign: string;
   opportunityType: string;
   nextAction: string;
-  aiSummary: string;
+  aiSummary?: string;
   humanReasons: string[];
-  suggestion: string;
+  suggestion?: string;
   messages: ChatMessage[];
-  timeline: { time: string; label: string }[];
+  timeline?: { time: string; label: string }[];
   lastContact: string;
+  /** ISO de cuando entró a waiting_human (aprox. modified). */
+  waitingSince?: string;
   /** Si la IA tuvo un momento dudoso o perdió oportunidad. */
   reviewFlag?: ReviewFlag;
   /** Cita confirmada — si está presente, la conversación va a Archivadas. */

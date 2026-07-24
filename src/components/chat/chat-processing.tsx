@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Check, Database, Loader2, Shield, Sparkles, Wrench, X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -39,87 +39,34 @@ function StageIcon({ kind, className }: { kind: LiveStreamStep["icon"]; classNam
   return <Sparkles className={cls} />;
 }
 
-/** Indicador animado con eventos SSE reales (o fallback simulado). */
+
+/** Indicador animado con eventos SSE reales; sin stages inventados. */
 export function ChatProcessingIndicator({
-  useRag,
-  skillNames = [],
   liveSteps,
+  compact = false,
 }: {
+  /** @deprecated Ignorado — no se simulan etapas. */
   useRag?: boolean;
+  /** @deprecated Ignorado — no se simulan etapas. */
   skillNames?: string[];
-  /** Si hay steps del stream, se usan en lugar del ciclo simulado. */
+  /** Steps del stream SSE. */
   liveSteps?: LiveStreamStep[];
+  /** Una sola línea (label activo) sin chips. */
+  compact?: boolean;
 }) {
   const reduceMotion = useReducedMotion();
-  const usingLive = Boolean(liveSteps && liveSteps.length > 0);
-
-  const fallbackStages = useMemo<LiveStreamStep[]>(() => {
-    const list: LiveStreamStep[] = [
-      {
-        key: "read",
-        label: "Leyendo tu mensaje",
-        detail: "Preparando el contexto",
-        icon: "sparkles",
-        status: "pending",
-      },
-    ];
-    if (useRag) {
-      list.push({
-        key: "rag",
-        label: "Buscando en conocimiento",
-        detail: "RAG / documentos",
-        icon: "database",
-        status: "pending",
-      });
-    }
-    const skills = skillNames.filter(Boolean).slice(0, 6);
-    if (skills.length) {
-      for (const name of skills) {
-        list.push({
-          key: `skill-${name}`,
-          label: "Ejecutando skill",
-          detail: name,
-          icon: "wrench",
-          status: "pending",
-        });
-      }
-    } else {
-      list.push({
-        key: "tools",
-        label: "Evaluando herramientas",
-        detail: "Skills del agente",
-        icon: "wrench",
-        status: "pending",
-      });
-    }
-    list.push({
-      key: "write",
-      label: "Redactando respuesta",
-      detail: "Modelo en curso",
-      icon: "loader",
-      status: "pending",
-    });
-    return list;
-  }, [useRag, skillNames]);
-
-  const [simIndex, setSimIndex] = useState(0);
-
-  useEffect(() => {
-    if (usingLive) return;
-    setSimIndex(0);
-    if (reduceMotion || fallbackStages.length <= 1) return;
-    const id = window.setInterval(() => {
-      setSimIndex((i) => (i + 1) % fallbackStages.length);
-    }, 2200);
-    return () => window.clearInterval(id);
-  }, [fallbackStages, reduceMotion, usingLive]);
-
-  const stages: LiveStreamStep[] = usingLive
-    ? liveSteps!
-    : fallbackStages.map((s, i) => ({
-        ...s,
-        status: i < simIndex ? "done" : i === simIndex ? "active" : "pending",
-      }));
+  const stages: LiveStreamStep[] =
+    liveSteps && liveSteps.length > 0
+      ? liveSteps
+      : [
+          {
+            key: "wait",
+            label: "El agente está respondiendo…",
+            detail: undefined,
+            icon: "loader",
+            status: "active",
+          },
+        ];
 
   const current =
     stages.find((s) => s.status === "active") || stages[stages.length - 1] || stages[0];
@@ -145,7 +92,12 @@ export function ChatProcessingIndicator({
         <Loader2 className="relative h-3.5 w-3.5 text-primary/80 animate-spin [animation-duration:1.4s]" />
       </div>
 
-      <div className="max-w-[85%] sm:max-w-[75%] min-w-[12rem] rounded-2xl rounded-bl-md border border-border/60 bg-muted/50 px-3.5 py-2.5 space-y-2.5">
+      <div
+        className={cn(
+          "max-w-[85%] sm:max-w-[75%] min-w-[12rem] rounded-2xl rounded-bl-md border border-border/60 bg-muted/50 px-3.5 py-2.5",
+          !compact && "space-y-2.5",
+        )}
+      >
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={current?.key || "current"}
@@ -171,48 +123,50 @@ export function ChatProcessingIndicator({
           </motion.div>
         </AnimatePresence>
 
-        <div className="flex flex-wrap gap-1">
-          {stages.map((stage) => {
-            const done = stage.status === "done";
-            const active = stage.status === "active";
-            const err = stage.status === "error";
-            return (
-              <motion.span
-                key={stage.key}
-                layout={!reduceMotion}
-                initial={reduceMotion ? false : { opacity: 0 }}
-                animate={{
-                  opacity: active ? 1 : done || err ? 0.9 : 0.55,
-                }}
-                transition={{ duration: 0.4, ease: softEase }}
-                className={cn(
-                  "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-medium border transition-colors duration-500",
-                  done && "border-primary/20 bg-primary/8 text-primary/90",
-                  active && "border-primary/30 bg-primary/12 text-primary",
-                  err && "border-destructive/30 bg-destructive/8 text-destructive",
-                  !done &&
-                    !active &&
-                    !err &&
-                    "border-border/50 bg-background/30 text-muted-foreground",
-                )}
-                title={stage.detail ? `${stage.label}: ${stage.detail}` : stage.label}
-              >
-                {done ? (
-                  <Check className="h-2.5 w-2.5 opacity-80" />
-                ) : err ? (
-                  <X className="h-2.5 w-2.5" />
-                ) : active ? (
-                  <Loader2 className="h-2.5 w-2.5 animate-spin [animation-duration:1.6s] opacity-80" />
-                ) : (
-                  <StageIcon kind={stage.icon} className="h-2.5 w-2.5 opacity-50" />
-                )}
-                <span className="max-w-[7rem] truncate">
-                  {stage.detail && stage.icon === "wrench" ? stage.detail : stage.label}
-                </span>
-              </motion.span>
-            );
-          })}
-        </div>
+        {!compact && stages.length > 1 ? (
+          <div className="flex flex-wrap gap-1">
+            {stages.map((stage) => {
+              const done = stage.status === "done";
+              const active = stage.status === "active";
+              const err = stage.status === "error";
+              return (
+                <motion.span
+                  key={stage.key}
+                  layout={!reduceMotion}
+                  initial={reduceMotion ? false : { opacity: 0 }}
+                  animate={{
+                    opacity: active ? 1 : done || err ? 0.9 : 0.55,
+                  }}
+                  transition={{ duration: 0.4, ease: softEase }}
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-medium border transition-colors duration-500",
+                    done && "border-primary/20 bg-primary/8 text-primary/90",
+                    active && "border-primary/30 bg-primary/12 text-primary",
+                    err && "border-destructive/30 bg-destructive/8 text-destructive",
+                    !done &&
+                      !active &&
+                      !err &&
+                      "border-border/50 bg-background/30 text-muted-foreground",
+                  )}
+                  title={stage.detail ? `${stage.label}: ${stage.detail}` : stage.label}
+                >
+                  {done ? (
+                    <Check className="h-2.5 w-2.5 opacity-80" />
+                  ) : err ? (
+                    <X className="h-2.5 w-2.5" />
+                  ) : active ? (
+                    <Loader2 className="h-2.5 w-2.5 animate-spin [animation-duration:1.6s] opacity-80" />
+                  ) : (
+                    <StageIcon kind={stage.icon} className="h-2.5 w-2.5 opacity-50" />
+                  )}
+                  <span className="max-w-[7rem] truncate">
+                    {stage.detail && stage.icon === "wrench" ? stage.detail : stage.label}
+                  </span>
+                </motion.span>
+              );
+            })}
+          </div>
+        ) : null}
       </div>
     </motion.div>
   );

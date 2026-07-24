@@ -1,14 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import {
-  ArrowLeft,
-  GitBranch,
-  Loader2,
-  Play,
-  Plus,
-  Search,
-  Workflow as WorkflowIcon,
-} from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { ArrowLeft, GitBranch, Loader2, Play, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,19 +16,39 @@ import {
 } from "@/components/ui/dialog";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
+import { WorkflowFlowStrip } from "@/components/workflows/workflow-flow-strip";
 import {
+  useActivateWorkflow,
   useCreateWorkflow,
+  useCreateWorkflowEdge,
   useCreateWorkflowNode,
+  useDeactivateWorkflow,
   useExecuteWorkflow,
+  useUpdateWorkflow,
+  useWorkflow,
+  useWorkflowTriggerTypes,
   useWorkflows,
-  type Workflow,
 } from "@/api/hooks/useWorkflows";
 import { apiErrorMessage } from "@/lib/apiError";
 import { cn } from "@/lib/utils";
 import { isOrganizationOwnerScope, isSuperAdmin } from "@/lib/authGuards";
+import {
+  WORKFLOW_STATUS_OPTIONS,
+  WORKFLOW_TRIGGER_OPTIONS,
+  workflowTriggerLabel,
+} from "@/lib/workflowCatalog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 
 export default function WorkflowsPage() {
   const navigate = useNavigate();
+  const reduceMotion = useReducedMotion();
   const [searchParams, setSearchParams] = useSearchParams();
   const idFromUrl = searchParams.get("id");
   const { data: workflows = [], isLoading, error } = useWorkflows();
@@ -43,10 +56,30 @@ export default function WorkflowsPage() {
   const [query, setQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [triggerType, setTriggerType] = useState("manual");
+  const [status, setStatus] = useState("draft");
   const createWf = useCreateWorkflow();
   const createNode = useCreateWorkflowNode();
+  const createEdge = useCreateWorkflowEdge();
   const execute = useExecuteWorkflow();
+  const { data: triggerTypesApi = [] } = useWorkflowTriggerTypes();
   const showBranchFilter = isSuperAdmin() || isOrganizationOwnerScope();
+
+  const triggerOptions = useMemo(() => {
+    if (triggerTypesApi.length > 0) {
+      return triggerTypesApi.map((t) => ({
+        value: t.value,
+        label: t.label,
+        supported: t.supported !== false,
+      }));
+    }
+    return WORKFLOW_TRIGGER_OPTIONS.map((t) => ({
+      value: t.value,
+      label: t.label,
+      supported: t.supported,
+    }));
+  }, [triggerTypesApi]);
 
   useEffect(() => {
     if (idFromUrl) setSelectedId(idFromUrl);
@@ -122,7 +155,7 @@ export default function WorkflowsPage() {
         <div className="min-w-0 flex flex-col leading-tight">
           <span className="text-sm font-semibold tracking-tight truncate">Workflows</span>
           <span className="text-[10px] text-muted-foreground hidden sm:inline truncate">
-            Orquesta nodos · puente a Ops
+            OPS-agents · orquestación
           </span>
         </div>
         <span className="ml-1 hidden md:inline-flex items-center rounded-full border border-primary/25 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
@@ -130,37 +163,14 @@ export default function WorkflowsPage() {
         </span>
         <div className="ml-auto flex items-center gap-2">
           {showBranchFilter ? <StudioBranchFilter /> : null}
-          {(() => {
-            const digest = workflows.find((w) =>
-              w.name.toLowerCase().includes("digest telemetría"),
-            );
-            if (!digest) return null;
-            return (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 gap-1 hidden sm:inline-flex"
-                disabled={execute.isPending}
-                onClick={() =>
-                  execute.mutate(
-                    { id: digest.id },
-                    {
-                      onSuccess: () => toast.success("Digest telemetría lanzado"),
-                      onError: (e) =>
-                        toast.error(apiErrorMessage(e, "No se pudo ejecutar el digest")),
-                    },
-                  )
-                }
-              >
-                <Play className="h-3.5 w-3.5" />
-                Digest SH
-              </Button>
-            );
-          })()}
           <Button size="sm" variant="ghost" className="h-8 hidden md:inline-flex" asChild>
-            <Link to="/planes">Ops</Link>
+            <Link to="/planes">Planes</Link>
           </Button>
-          <Button size="sm" className="h-8 gap-1.5 shadow-sm shadow-primary/20" onClick={() => setCreateOpen(true)}>
+          <Button
+            size="sm"
+            className="h-8 gap-1.5 shadow-sm shadow-primary/20"
+            onClick={() => setCreateOpen(true)}
+          >
             <Plus className="h-3.5 w-3.5" />
             Nuevo
           </Button>
@@ -184,31 +194,54 @@ export default function WorkflowsPage() {
             <div className="p-2 space-y-1">
               {filtered.length === 0 ? (
                 <p className="text-xs text-muted-foreground text-center py-10 px-4">
-                  No hay workflows. Crea uno con un nodo agente para orquestar trabajo.
+                  No hay workflows. Creá uno para orquestar nodos.
                 </p>
               ) : (
-                filtered.map((w) => (
-                  <button
-                    key={w.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedId(w.id);
-                      setSearchParams({ id: w.id }, { replace: true });
-                    }}
-                    className={cn(
-                      "w-full text-left rounded-lg border px-3 py-2.5 transition-colors",
-                      selected?.id === w.id
-                        ? "border-primary/40 bg-primary/10"
-                        : "border-transparent hover:bg-muted/50",
-                    )}
-                  >
-                    <p className="text-sm font-medium truncate">{w.name}</p>
-                    <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
-                      {w.trigger_type || "manual"} · {w.status || "—"} ·{" "}
-                      {w.execution_count ?? 0} runs
-                    </p>
-                  </button>
-                ))
+                <AnimatePresence initial={false}>
+                  {filtered.map((w, i) => {
+                    const active = selected?.id === w.id;
+                    const st = String(w.status || "").toLowerCase();
+                    return (
+                      <motion.button
+                        key={w.id}
+                        type="button"
+                        initial={reduceMotion ? false : { opacity: 0, x: -4 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.15, delay: Math.min(i, 8) * 0.015 }}
+                        onClick={() => {
+                          setSelectedId(w.id);
+                          setSearchParams({ id: w.id }, { replace: true });
+                        }}
+                        className={cn(
+                          "w-full text-left rounded-xl border px-3 py-2.5 transition-colors",
+                          active
+                            ? "border-primary/40 bg-primary/10 shadow-[0_0_20px_-12px_rgba(45,212,191,0.5)]"
+                            : "border-transparent hover:bg-muted/50 hover:border-border/50",
+                        )}
+                      >
+                        <div className="flex items-start gap-2.5">
+                          <span
+                            className={cn(
+                              "mt-1.5 h-2 w-2 shrink-0 rounded-full",
+                              st === "active"
+                                ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.7)]"
+                                : st === "paused"
+                                  ? "bg-amber-400"
+                                  : "bg-muted-foreground/40",
+                            )}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium truncate">{w.name}</p>
+                            <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
+                              {workflowTriggerLabel(w.trigger_type)} · {w.status || "—"} ·{" "}
+                              {w.execution_count ?? 0} runs
+                            </p>
+                          </div>
+                        </div>
+                      </motion.button>
+                    );
+                  })}
+                </AnimatePresence>
               )}
             </div>
           </ScrollArea>
@@ -230,12 +263,7 @@ export default function WorkflowsPage() {
                   </p>
                 </div>
                 <div className="flex gap-1.5 shrink-0">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8"
-                    asChild
-                  >
+                  <Button size="sm" variant="outline" className="h-8" asChild>
                     <Link to={`/workflows/${selected.id}`}>Abrir canvas</Link>
                   </Button>
                   <Button
@@ -262,43 +290,108 @@ export default function WorkflowsPage() {
                   </Button>
                 </div>
               </div>
-              <WorkflowPreview workflow={selected} />
+              <WorkflowPreview
+                workflowId={selected.id}
+                onExecute={() => {
+                  execute.mutate(
+                    { id: selected.id },
+                    {
+                      onSuccess: () => toast.success("Workflow ejecutado"),
+                      onError: (e) =>
+                        toast.error(apiErrorMessage(e, "No se pudo ejecutar el workflow")),
+                    },
+                  );
+                }}
+                executePending={execute.isPending}
+              />
             </>
           )}
         </section>
       </div>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Nuevo workflow</DialogTitle>
           </DialogHeader>
-          <div className="space-y-1.5 py-1">
-            <Label htmlFor="wf-name">Nombre</Label>
-            <Input
-              id="wf-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Ej. Orquestación agente ops"
-            />
+          <div className="space-y-3 py-1">
+            <div className="space-y-1.5">
+              <Label htmlFor="wf-name">Nombre</Label>
+              <Input
+                id="wf-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Ej. Orquestación agente ops"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="wf-desc">Descripción</Label>
+              <Textarea
+                id="wf-desc"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={2}
+                placeholder="Qué hace este flujo (opcional)"
+                className="text-sm"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Trigger</Label>
+                <Select value={triggerType} onValueChange={setTriggerType}>
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="Tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {triggerOptions.map((t) => (
+                      <SelectItem key={t.value} value={t.value} disabled={!t.supported}>
+                        {t.label}
+                        {!t.supported ? " (próx.)" : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Estado</Label>
+                <Select value={status} onValueChange={setStatus}>
+                  <SelectTrigger className="h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {WORKFLOW_STATUS_OPTIONS.map((s) => (
+                      <SelectItem key={s.value} value={s.value}>
+                        {s.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Se crea con nodos Inicio → Agente. En el canvas podés sumar LLM, función, condición,
+              delay, API, etc.
+            </p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>
               Cancelar
             </Button>
             <Button
-              disabled={!name.trim() || createWf.isPending || createNode.isPending}
+              disabled={
+                !name.trim() || createWf.isPending || createNode.isPending || createEdge.isPending
+              }
               onClick={() => {
                 createWf.mutate(
                   {
                     name: name.trim(),
-                    trigger_type: "manual",
-                    status: "draft",
-                    is_active: true,
+                    description: description.trim() || undefined,
+                    trigger_type: triggerType,
+                    status,
+                    is_active: status === "active",
                   },
                   {
                     onSuccess: (wf) => {
-                      // Seed: trigger + nodo agent
                       createNode.mutate(
                         {
                           workflow: wf.id,
@@ -310,14 +403,14 @@ export default function WorkflowsPage() {
                           config: {},
                         },
                         {
-                          onSettled: () => {
+                          onSuccess: (triggerNode) => {
                             createNode.mutate(
                               {
                                 workflow: wf.id,
                                 node_type: "agent",
                                 node_key: "agent-1",
                                 name: "Agente",
-                                position_x: 320,
+                                position_x: 400,
                                 position_y: 120,
                                 config: {
                                   message: "Ejecuta la tarea del contexto del workflow",
@@ -325,27 +418,46 @@ export default function WorkflowsPage() {
                                 },
                               },
                               {
-                                onSettled: () => {
-                                  toast.success("Workflow creado");
-                                  setCreateOpen(false);
-                                  setName("");
-                                  setSelectedId(wf.id);
-                                  setSearchParams({ id: wf.id }, { replace: true });
-                                  navigate(`/workflows/${wf.id}`);
+                                onSuccess: (agentNode) => {
+                                  createEdge.mutate(
+                                    {
+                                      workflow: wf.id,
+                                      from_node: triggerNode.id,
+                                      to_node: agentNode.id,
+                                    },
+                                    {
+                                      onSettled: () => {
+                                        toast.success("Workflow creado");
+                                        setCreateOpen(false);
+                                        setName("");
+                                        setDescription("");
+                                        setTriggerType("manual");
+                                        setStatus("draft");
+                                        setSelectedId(wf.id);
+                                        setSearchParams({ id: wf.id }, { replace: true });
+                                        navigate(`/workflows/${wf.id}`);
+                                      },
+                                    },
+                                  );
                                 },
+                                onError: (e) =>
+                                  toast.error(
+                                    apiErrorMessage(e, "No se pudo crear el nodo agente"),
+                                  ),
                               },
                             );
                           },
+                          onError: (e) =>
+                            toast.error(apiErrorMessage(e, "No se pudo crear el nodo trigger")),
                         },
                       );
                     },
-                    onError: (e) =>
-                      toast.error(apiErrorMessage(e, "No se pudo crear el workflow")),
+                    onError: (e) => toast.error(apiErrorMessage(e, "No se pudo crear el workflow")),
                   },
                 );
               }}
             >
-              Crear
+              Crear y abrir
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -354,33 +466,219 @@ export default function WorkflowsPage() {
   );
 }
 
-function WorkflowPreview({ workflow }: { workflow: Workflow }) {
-  const nodes = workflow.nodes ?? [];
+function WorkflowPreview({
+  workflowId,
+  onExecute,
+  executePending,
+}: {
+  workflowId: string;
+  onExecute: () => void;
+  executePending: boolean;
+}) {
+  const reduceMotion = useReducedMotion();
+  const { data: detail, isLoading } = useWorkflow(workflowId);
+  const updateWf = useUpdateWorkflow();
+  const activate = useActivateWorkflow();
+  const deactivate = useDeactivateWorkflow();
+  const { data: triggerTypesApi = [] } = useWorkflowTriggerTypes();
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [triggerType, setTriggerType] = useState("manual");
+  const [status, setStatus] = useState("draft");
+
+  const triggerOptions = useMemo(() => {
+    if (triggerTypesApi.length > 0) {
+      return triggerTypesApi.map((t) => ({
+        value: t.value,
+        label: t.label,
+        supported: t.supported !== false,
+      }));
+    }
+    return WORKFLOW_TRIGGER_OPTIONS.map((t) => ({
+      value: t.value,
+      label: t.label,
+      supported: t.supported,
+    }));
+  }, [triggerTypesApi]);
+
+  useEffect(() => {
+    if (!detail) return;
+    setName(detail.name || "");
+    setDescription(detail.description || "");
+    setTriggerType(detail.trigger_type || "manual");
+    setStatus(detail.status || "draft");
+  }, [detail]);
+
+  const nodes = (detail?.nodes ?? []).filter((n) => n.is_active !== false);
+  const edges = (detail?.edges ?? []).filter((e) => e.is_active !== false);
+  const dirty =
+    !!detail &&
+    (name !== (detail.name || "") ||
+      description !== (detail.description || "") ||
+      triggerType !== (detail.trigger_type || "manual") ||
+      status !== (detail.status || "draft"));
+
+  const saveMeta = () => {
+    if (!detail) return;
+    updateWf.mutate(
+      {
+        id: detail.id,
+        name: name.trim() || detail.name,
+        description: description.trim(),
+        trigger_type: triggerType,
+        status,
+        is_active: status === "active",
+      },
+      {
+        onSuccess: () => toast.success("Workflow actualizado"),
+        onError: (e) => toast.error(apiErrorMessage(e, "No se pudo guardar")),
+      },
+    );
+  };
+
   return (
     <ScrollArea className="flex-1">
-      <div className="p-6 max-w-3xl mx-auto space-y-4">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <WorkflowIcon className="h-4 w-4 text-primary" />
-          {nodes.length} nodos · {(workflow.edges ?? []).length} conexiones
-        </div>
-        {nodes.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Sin nodos aún. Ábrelo en el canvas para armar el grafo.
-          </p>
-        ) : (
-          <div className="grid gap-2 sm:grid-cols-2">
-            {nodes.map((n) => (
-              <div key={n.id} className="rounded-xl border bg-card px-3 py-2.5">
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                  {n.node_type}
-                </p>
-                <p className="text-sm font-medium mt-0.5">{n.name}</p>
-                <p className="text-[11px] text-muted-foreground truncate">{n.node_key}</p>
-              </div>
-            ))}
+      <motion.div
+        key={workflowId}
+        initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.2, ease: "easeOut" }}
+        className="p-4 md:p-6 space-y-5 max-w-6xl mx-auto w-full"
+      >
+        <WorkflowFlowStrip
+          workflowId={workflowId}
+          nodes={nodes}
+          edges={edges}
+          isLoading={isLoading}
+        />
+
+        <section className="rounded-2xl border border-border/60 bg-card/50 backdrop-blur-sm overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 px-4 py-2.5 bg-muted/20">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Configuración
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {detail?.status === "active" ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-[11px]"
+                  disabled={deactivate.isPending}
+                  onClick={() =>
+                    deactivate.mutate(detail.id, {
+                      onSuccess: () => toast.success("Workflow desactivado"),
+                      onError: (e) => toast.error(apiErrorMessage(e, "No se pudo desactivar")),
+                    })
+                  }
+                >
+                  Pausar
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-[11px]"
+                  disabled={activate.isPending || !detail}
+                  onClick={() =>
+                    detail &&
+                    activate.mutate(detail.id, {
+                      onSuccess: () => toast.success("Workflow activado"),
+                      onError: (e) => toast.error(apiErrorMessage(e, "No se pudo activar")),
+                    })
+                  }
+                >
+                  Activar
+                </Button>
+              )}
+              <Button
+                size="sm"
+                className="h-7 text-[11px] gap-1"
+                disabled={executePending}
+                onClick={onExecute}
+              >
+                {executePending ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Play className="h-3 w-3" />
+                )}
+                Ejecutar
+              </Button>
+            </div>
           </div>
-        )}
-      </div>
+
+          <div className="p-4">
+            {isLoading || !detail ? (
+              <p className="text-xs text-muted-foreground">Cargando…</p>
+            ) : (
+              <div className="grid gap-4 lg:grid-cols-[1fr_220px]">
+                <div className="space-y-3 min-w-0">
+                  <div className="space-y-1">
+                    <Label className="text-[10px] text-muted-foreground">Nombre</Label>
+                    <Input
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[10px] text-muted-foreground">Descripción</Label>
+                    <Textarea
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      rows={3}
+                      className="text-sm resize-none"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <Label className="text-[10px] text-muted-foreground">Trigger</Label>
+                    <Select value={triggerType} onValueChange={setTriggerType}>
+                      <SelectTrigger className="h-9">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {triggerOptions.map((t) => (
+                          <SelectItem key={t.value} value={t.value} disabled={!t.supported}>
+                            {t.label}
+                            {!t.supported ? " (próx.)" : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[10px] text-muted-foreground">Estado</Label>
+                    <Select value={status} onValueChange={setStatus}>
+                      <SelectTrigger className="h-9">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {WORKFLOW_STATUS_OPTIONS.map((s) => (
+                          <SelectItem key={s.value} value={s.value}>
+                            {s.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button
+                    size="sm"
+                    className="w-full h-9"
+                    disabled={!dirty || updateWf.isPending}
+                    onClick={saveMeta}
+                  >
+                    {updateWf.isPending ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                    ) : null}
+                    Guardar
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+      </motion.div>
     </ScrollArea>
   );
 }

@@ -8,11 +8,13 @@ import {
   type Conversation,
   type ConversationBucket,
   type ConversationStatus,
+  getConversationBucket,
 } from "@/lib/conversation-types";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, ChevronLeft, Info } from "lucide-react";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
 import { toast } from "sonner";
 import { apiErrorMessage } from "@/lib/apiError";
 import {
@@ -42,13 +44,6 @@ function apiStatusToLocal(status?: string): ConversationStatus {
     default:
       return "ai_responding";
   }
-}
-
-function getBucket(c: Conversation): ConversationBucket {
-  const status = (c.status || "").toLowerCase();
-  if (status === "closed" || c.source === "internal") return "archived";
-  if (c.isWaitingHuman || status === "requires_human") return "mine";
-  return "ai";
 }
 
 function formatHHmm(iso?: string): string {
@@ -130,25 +125,19 @@ function mapApiConversation(api: UnifiedConversation): Conversation {
     patientName,
     phone: api.external_user_phone ?? "",
     branch: api.branch_name ?? String(api.branch ?? ""),
-    doctor: undefined,
     lastMessage: lastMsgText,
     lastTime: lastMsgTime,
     status,
     badges: [status],
-    estimatedValue: 0,
     unread: api.is_waiting_human ? 1 : 0,
     controlledBy,
     campaign: api.channel_name ?? api.channel_type ?? "",
     opportunityType: api.channel_type ?? "",
     nextAction: api.display_status ?? "",
-    aiSummary: "",
     humanReasons: api.is_waiting_human ? ["Esperando atención humana"] : [],
-    suggestion: "",
     messages: [],
-    timeline: [],
     lastContact: lastMsgTime,
-    reviewFlag: undefined,
-    appointment: undefined,
+    waitingSince: api.is_waiting_human ? (api.modified ?? api.created) : undefined,
     source: api.source ?? "channel",
     channelType: api.channel_type,
     channelName: api.channel_name,
@@ -169,20 +158,13 @@ export function ConversationsView() {
   const analysisOnly = !canInterveneInConversations();
   const isPlatformAnalysis = isSuperAdmin();
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) {
-        return;
-      }
-      navigate("/");
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [navigate]);
-
-  const { data: apiConvos = [], isLoading, error } = useUnifiedConversations();
+  const {
+    data: apiConvos = [],
+    isLoading,
+    error,
+    refetch,
+    isFetching,
+  } = useUnifiedConversations();
   const takeControlMutation = useTakeControlUnifiedConversation();
   const releaseMutation = useReleaseConversation();
   const setStatusMutation = useSetUnifiedConversationStatus();
@@ -219,7 +201,7 @@ export function ConversationsView() {
       hasSetInitialRef.current = true;
       const first = convos[0];
       setSelectedId(first.id);
-      setBucket(getBucket(first));
+      setBucket(getConversationBucket(first));
       setSubFilter("all");
     }
   }, [convos, selectedId]);
@@ -261,7 +243,7 @@ export function ConversationsView() {
   const handleSelect = (id: string) => {
     const conv = convos.find((c) => c.id === id);
     if (conv) {
-      const b = getBucket(conv);
+      const b = getConversationBucket(conv);
       if (b !== bucket) {
         setBucket(b);
         setSubFilter("all");
@@ -272,17 +254,39 @@ export function ConversationsView() {
     setSearchParams({ id }, { replace: true });
   };
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) {
+        return;
+      }
+      if (e.key === "Escape") {
+        if (mobileView === "chat") {
+          setMobileView("list");
+          return;
+        }
+        navigate("/");
+        return;
+      }
+      if (e.key !== "j" && e.key !== "k" && e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+      const inBucket = convos.filter((c) => getConversationBucket(c) === bucket);
+      if (!inBucket.length) return;
+      e.preventDefault();
+      const idx = inBucket.findIndex((c) => c.id === selectedId);
+      const delta = e.key === "j" || e.key === "ArrowDown" ? 1 : -1;
+      const nextIdx = Math.max(0, Math.min(inBucket.length - 1, (idx < 0 ? 0 : idx) + delta));
+      const next = inBucket[nextIdx];
+      if (next) handleSelect(next.id);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [navigate, mobileView, convos, bucket, selectedId]);
+
   const appendLocalMessage = (msg: ChatMessage) => {
     setLocalMessages((prev) => {
       const existing = prev[selectedId] ?? [];
       return { ...prev, [selectedId]: [...existing, msg] };
     });
-  };
-
-  const updateLocalConversation = (patch: Partial<Conversation>) => {
-    // Los cambios locales son efímeros; el siguiente refetch de la lista los normaliza.
-    // Solo actualizamos mensajes y dejamos que el hook refetch la lista.
-    void patch;
   };
 
   const handleTakeControl = () => {
@@ -390,8 +394,7 @@ export function ConversationsView() {
       );
       return;
     }
-    updateLocalConversation({ status: "closed" });
-    toast.success("Conversación marcada como resuelta");
+    toast.error("Solo se pueden cerrar conversaciones de canal");
   };
 
   const handleSetInactive = () => {
@@ -416,11 +419,13 @@ export function ConversationsView() {
 
   if (error) {
     return (
-      <div className="h-dvh flex flex-col items-center justify-center bg-background gap-4">
-        <p className="text-destructive">
+      <div className="h-dvh flex flex-col items-center justify-center bg-background gap-4 px-6">
+        <p className="text-destructive text-center">
           {apiErrorMessage(error, "Error al cargar las conversaciones")}
         </p>
-        <Button onClick={() => window.location.reload()}>Reintentar</Button>
+        <Button onClick={() => void refetch()} disabled={isFetching}>
+          Reintentar
+        </Button>
       </div>
     );
   }
@@ -502,10 +507,14 @@ export function ConversationsView() {
               onOpenDetails={() => setDetailsOpen(true)}
               onResolve={handleResolve}
               analysisOnly={analysisOnly}
+              sending={replyMutation.isPending || internalSendMutation.isPending}
             />
           ) : (
-            <div className="flex-1 flex items-center justify-center text-muted-foreground">
-              Selecciona una conversación
+            <div className="flex-1 flex items-center justify-center p-6">
+              <EmptyState
+                title="Selecciona una conversación"
+                description="Elegí un hilo en la bandeja o usá j/k para navegar."
+              />
             </div>
           )}
         </section>

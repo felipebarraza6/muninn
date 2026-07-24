@@ -32,7 +32,7 @@ type PageMeta = {
 
 function getPageMeta(pathname: string, search = ""): PageMeta {
   if (pathname === "/") {
-    return { breadcrumb: [] };
+    return { breadcrumb: [{ label: "Resumen" }] };
   }
   if (pathname.startsWith("/agentes")) {
     if (pathname === "/agentes/nuevo") {
@@ -110,11 +110,7 @@ function getPageMeta(pathname: string, search = ""): PageMeta {
   }
   if (pathname.startsWith("/planes")) {
     return {
-      breadcrumb: [
-        { label: "Resumen", to: "/" },
-        { label: "Studio" },
-        { label: "Ops" },
-      ],
+      breadcrumb: [{ label: "Resumen", to: "/" }, { label: "OPS-agents" }, { label: "Planes" }],
     };
   }
   if (pathname.startsWith("/workflows")) {
@@ -122,14 +118,18 @@ function getPageMeta(pathname: string, search = ""): PageMeta {
       return {
         breadcrumb: [
           { label: "Resumen", to: "/" },
-          { label: "Studio" },
+          { label: "OPS-agents", to: "/planes" },
           { label: "Workflows", to: "/workflows" },
           { label: "Canvas" },
         ],
       };
     }
     return {
-      breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Studio" }, { label: "Workflows" }],
+      breadcrumb: [
+        { label: "Resumen", to: "/" },
+        { label: "OPS-agents", to: "/planes" },
+        { label: "Workflows" },
+      ],
     };
   }
   if (pathname.startsWith("/admin/organizaciones")) {

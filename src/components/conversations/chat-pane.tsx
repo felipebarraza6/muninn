@@ -1,19 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  Send,
   Sparkles,
   MoreHorizontal,
   ShieldAlert,
-  ThumbsUp,
-  ThumbsDown,
   Info,
   CheckCircle2,
 } from "lucide-react";
 import { formatCLP } from "@/lib/format";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,14 +20,17 @@ import type { ChatMessage, Conversation } from "@/lib/conversation-types";
 import { channelIcon, channelLabel } from "@/lib/channels";
 import { initials, avatarColor } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
 import { ChatMarkdown } from "@/components/chat/chat-markdown";
 import { ChatCopyButton } from "@/components/chat/chat-copy-button";
+import { ChatComposer } from "@/components/chat/chat-composer";
+import { ChatThread } from "@/components/chat/chat-thread";
 import {
   MessageInsightSheet,
   MessageInspectButton,
   type InsightMessage,
 } from "@/components/chat/message-insight-sheet";
+import { chatDraftKey, clearChatDraft, loadChatDraft, saveChatDraft } from "@/lib/chatDrafts";
+import { useStickyChatScroll } from "@/hooks/useStickyChatScroll";
 
 interface Props {
   conversation: Conversation;
@@ -43,6 +41,7 @@ interface Props {
   onResolve?: () => void;
   /** Superadmin: solo lectura + insights; sin tomar control ni responder. */
   analysisOnly?: boolean;
+  sending?: boolean;
 }
 
 function toInsightMessage(m: ChatMessage): InsightMessage {
@@ -56,6 +55,20 @@ function toInsightMessage(m: ChatMessage): InsightMessage {
   };
 }
 
+const MACROS = [
+  {
+    id: "hola",
+    label: "Saludo",
+    text: "Hola, soy del equipo de atención. ¿En qué te puedo ayudar?",
+  },
+  { id: "espera", label: "Un momento", text: "Dame un momento mientras reviso tu caso." },
+  {
+    id: "gracias",
+    label: "Cierre",
+    text: "Gracias por contactarnos. Quedo atento si necesitas algo más.",
+  },
+] as const;
+
 export function ChatPane({
   conversation,
   onTakeControl,
@@ -64,38 +77,31 @@ export function ChatPane({
   onOpenDetails,
   onResolve,
   analysisOnly = false,
+  sending = false,
 }: Props) {
-  const [draft, setDraft] = useState("");
-  const [feedback, setFeedback] = useState<Record<string, "up" | "down">>({});
-  const [showSuggestion, setShowSuggestion] = useState(true);
+  const draftKey = chatDraftKey("inbox", conversation.id);
+  const [draft, setDraft] = useState(() => loadChatDraft(draftKey));
   const [inspectMessage, setInspectMessage] = useState<InsightMessage | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const { endRef, bindViewport, showJump, scrollToBottom } = useStickyChatScroll([
+    conversation.messages.length,
+    conversation.id,
+  ]);
 
   useEffect(() => {
-    setDraft("");
-    setFeedback({});
-    setShowSuggestion(true);
+    setDraft(loadChatDraft(draftKey));
     setInspectMessage(null);
-  }, [conversation.id]);
+  }, [conversation.id, draftKey]);
 
   useEffect(() => {
-    const el = scrollRef.current?.querySelector(
-      "[data-radix-scroll-area-viewport]",
-    ) as HTMLElement | null;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [conversation.messages.length, conversation.id]);
+    saveChatDraft(draftKey, draft);
+  }, [draft, draftKey]);
 
   const send = () => {
-    if (!draft.trim()) return;
+    if (!draft.trim() || sending) return;
     onSend(draft);
     setDraft("");
-    toast.success("Respuesta enviada");
-  };
-
-  const handleFeedback = (msgId: string, kind: "up" | "down") => {
-    setFeedback((prev) => ({ ...prev, [msgId]: kind }));
-    toast.success(kind === "up" ? "Buena respuesta marcada" : "Marcada para revisar");
+    clearChatDraft(draftKey);
   };
 
   const isChannel = conversation.source === "channel";
@@ -106,10 +112,10 @@ export function ChatPane({
   const showRelease =
     !analysisOnly && isOpen && conversation.isWaitingHuman === true && Boolean(onRelease);
   const ChannelIcon = channelIcon(conversation.channelType);
+  const aiWorking = isOpen && isAiControlled && !conversation.isWaitingHuman;
 
   return (
     <div className="flex flex-col flex-1 min-h-0 bg-muted/20">
-      {/* Header — limpio, una sola fila */}
       <div className="hidden md:flex items-center gap-3 border-b bg-card px-4 h-14 shrink-0">
         <Avatar className="h-9 w-9">
           <AvatarFallback
@@ -119,79 +125,82 @@ export function ChatPane({
           </AvatarFallback>
         </Avatar>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-sm truncate">{conversation.patientName}</span>
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="font-medium truncate">{conversation.patientName}</span>
             <StatusBadge status={conversation.status} size="xs" />
-            {isChannel && (
-              <span className="hidden lg:inline-flex items-center gap-1 rounded-full bg-info-soft text-info px-2 py-0.5 text-[10px] font-medium">
-                <ChannelIcon className="h-3 w-3" />
-                {channelLabel(conversation.channelType, conversation.channelName)}
-              </span>
-            )}
-            {conversation.estimatedValue > 0 && (
-              <span
-                title="Oportunidad vinculada"
-                className="hidden lg:inline-flex items-center gap-1 rounded-full bg-success-soft text-success px-2 py-0.5 text-[10px] font-medium"
-              >
+            {typeof conversation.estimatedValue === "number" && conversation.estimatedValue > 0 && (
+              <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
                 Oportunidad · {formatCLP(conversation.estimatedValue)}
               </span>
             )}
-            {conversation.campaign ? (
-              <span
-                title={`Campaña: ${conversation.campaign}`}
-                className="hidden lg:inline-flex items-center gap-1 rounded-full bg-primary-soft text-primary px-2 py-0.5 text-[10px] font-medium"
-              >
-                {conversation.campaign}
-              </span>
-            ) : null}
           </div>
-          <div className="text-[11px] text-muted-foreground truncate">
-            {conversation.phone} · {conversation.branch}
-            {conversation.appointment && (
-              <span className="ml-2 text-success font-medium">
-                · Agendada {conversation.appointment.date} {conversation.appointment.time}
-              </span>
-            )}
+          <div className="text-[11px] text-muted-foreground flex items-center gap-1.5 truncate">
+            <ChannelIcon className="h-3 w-3 shrink-0" />
+            {channelLabel(conversation.channelType, conversation.channelName)}
+            {conversation.agentName ? ` · ${conversation.agentName}` : null}
+            {aiWorking ? <span className="text-info font-medium"> · IA respondiendo</span> : null}
           </div>
         </div>
-        {showTakeControl && (
-          <Button size="sm" onClick={onTakeControl}>
-            Tomar control
-          </Button>
-        )}
-        {showRelease && (
-          <Button size="sm" variant="outline" onClick={onRelease}>
-            Devolver al agente
-          </Button>
-        )}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8">
-              <MoreHorizontal className="h-4 w-4" />
+        <div className="flex items-center gap-1.5 shrink-0">
+          {showTakeControl && (
+            <Button size="sm" variant="outline" className="h-8" onClick={onTakeControl}>
+              Tomar control
             </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-44">
-            <DropdownMenuItem onClick={onOpenDetails}>
-              <Info className="h-3.5 w-3.5 mr-2" /> Detalles
-            </DropdownMenuItem>
-            {!analysisOnly && onResolve && conversation.status !== "closed" && (
-              <DropdownMenuItem onClick={onResolve}>
-                <CheckCircle2 className="h-3.5 w-3.5 mr-2" /> Cerrar conversación
-              </DropdownMenuItem>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
+          )}
+          {showRelease && (
+            <Button size="sm" variant="outline" className="h-8" onClick={onRelease}>
+              Devolver a IA
+            </Button>
+          )}
+          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={onOpenDetails}>
+            <Info className="h-4 w-4" />
+          </Button>
+          {!analysisOnly && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="icon" variant="ghost" className="h-8 w-8">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {onResolve && (
+                  <DropdownMenuItem onClick={onResolve}>
+                    <CheckCircle2 className="h-4 w-4 mr-2" /> Cerrar
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
       </div>
 
-      {/* Messages */}
-      <ScrollArea ref={scrollRef} className="flex-1">
-        <div className="px-4 py-4 space-y-3 max-w-3xl mx-auto">
+      {conversation.appointment && (
+        <div className="shrink-0 border-b bg-success-soft/40 px-4 py-2 text-xs text-success">
+          Cita · {conversation.appointment.date} {conversation.appointment.time} —{" "}
+          {conversation.appointment.treatment}
+        </div>
+      )}
+
+      {conversation.reviewFlag && (
+        <div className="shrink-0 border-b bg-warning-soft/30 px-4 py-2 text-xs flex gap-2 items-start">
+          <ShieldAlert className="h-3.5 w-3.5 mt-0.5 text-warning shrink-0" />
+          <span>{conversation.reviewFlag.note}</span>
+        </div>
+      )}
+
+      <div className="relative flex-1 min-h-0">
+        <ChatThread
+          viewportRef={bindViewport}
+          endRef={endRef}
+          showJump={showJump}
+          onJump={scrollToBottom}
+        >
           {conversation.messages.map((m) => {
             if (m.sender === "system") {
               return (
                 <div key={m.id} className="flex justify-center">
-                  <span className="text-[11px] text-muted-foreground bg-muted rounded-full px-3 py-1 inline-flex items-center gap-1.5">
-                    <ShieldAlert className="h-3 w-3" /> {m.text}
+                  <span className="text-[11px] text-muted-foreground bg-muted/60 rounded-full px-3 py-1">
+                    {m.text}
                   </span>
                 </div>
               );
@@ -204,7 +213,6 @@ export function ChatPane({
                   ? "bg-bubble-human text-bubble-human-foreground"
                   : "bg-bubble-patient text-bubble-patient-foreground";
             const isAi = m.sender === "ai";
-            const fb = feedback[m.id];
             const ragCount = Array.isArray(m.rag_sources) ? m.rag_sources.length : 0;
             const toolCount = Array.isArray(m.tool_calls) ? m.tool_calls.length : 0;
             const canInspect = isAi || ragCount > 0 || toolCount > 0;
@@ -266,42 +274,13 @@ export function ChatPane({
                         onClick={() => setInspectMessage(toInsightMessage(m))}
                       />
                     )}
-                    {isAi && (
-                      <>
-                        <button
-                          onClick={() => handleFeedback(m.id, "up")}
-                          className={cn(
-                            "h-6 w-6 rounded-md flex items-center justify-center transition-colors opacity-60 sm:opacity-0 sm:group-hover:opacity-100",
-                            fb === "up"
-                              ? "opacity-100 bg-success-soft text-success"
-                              : "text-muted-foreground hover:bg-muted",
-                          )}
-                          title="Buena respuesta"
-                        >
-                          <ThumbsUp className="h-3 w-3" />
-                        </button>
-                        <button
-                          onClick={() => handleFeedback(m.id, "down")}
-                          className={cn(
-                            "h-6 w-6 rounded-md flex items-center justify-center transition-colors opacity-60 sm:opacity-0 sm:group-hover:opacity-100",
-                            fb === "down"
-                              ? "opacity-100 bg-destructive-soft text-destructive"
-                              : "text-muted-foreground hover:bg-muted",
-                          )}
-                          title="Marcar para revisar"
-                        >
-                          <ThumbsDown className="h-3 w-3" />
-                        </button>
-                      </>
-                    )}
                   </div>
                 </div>
               </div>
             );
           })}
-        </div>
-      </ScrollArea>
-
+        </ChatThread>
+      </div>
       <MessageInsightSheet
         open={Boolean(inspectMessage)}
         onOpenChange={(open) => {
@@ -310,94 +289,66 @@ export function ChatPane({
         message={inspectMessage}
       />
 
-      {/* Composer / modo análisis */}
       <div className="border-t bg-card px-4 py-3 shrink-0">
         <div className="max-w-3xl mx-auto space-y-2">
           {analysisOnly ? (
             <div className="rounded-lg border border-border/60 bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
               <p className="font-medium text-foreground">Modo análisis</p>
               <p className="text-xs mt-0.5 leading-relaxed">
-                Solo lectura. Revisa el hilo y usa el inspector de mensajes (insights) para
-                analizar. Filtra por sucursal en la bandeja. La intervención operativa queda en el
-                negocio.
+                Solo lectura: podés inspeccionar mensajes, no intervenir.
               </p>
+            </div>
+          ) : !canReply ? (
+            <div className="rounded-lg border border-border/60 bg-muted/40 px-4 py-3 text-sm text-muted-foreground flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-primary shrink-0" />
+              <span>
+                {aiWorking
+                  ? "La IA está al mando. Tomá el control para responder."
+                  : "No podés responder en este estado."}
+              </span>
+              {showTakeControl ? (
+                <Button size="sm" className="ml-auto shrink-0" onClick={onTakeControl}>
+                  Tomar control
+                </Button>
+              ) : null}
             </div>
           ) : (
             <>
-          {conversation.suggestion && showSuggestion && (
-            <div className="flex items-start gap-2 rounded-md bg-primary-soft/50 px-3 py-2 text-xs">
-              <Sparkles className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
-              <p className="flex-1 text-foreground/80 leading-relaxed line-clamp-2">
-                {conversation.suggestion}
-              </p>
-              <button
-                onClick={() => {
-                  setDraft(conversation.suggestion);
-                  setShowSuggestion(false);
-                }}
-                className="text-primary font-medium hover:underline shrink-0"
-              >
-                Usar
-              </button>
-              <button
-                onClick={() => setShowSuggestion(false)}
-                className="text-muted-foreground hover:text-foreground shrink-0"
-                aria-label="Descartar"
-              >
-                ×
-              </button>
-            </div>
-          )}
-
-          {isChannel && !canReply && showTakeControl ? (
-            <div className="rounded-lg border border-info/30 bg-info-soft px-4 py-3 flex items-center justify-between gap-3">
-              <div className="text-sm text-info">
-                <p className="font-medium">La IA está respondiendo</p>
-                <p className="text-xs opacity-90">
-                  Para responder manualmente, primero debes tomar el control de esta conversación.
-                </p>
-              </div>
-              <Button size="sm" onClick={onTakeControl}>
-                Tomar control
-              </Button>
-            </div>
-          ) : (
-            <div className="relative space-y-2">
-              {showRelease && (
-                <div className="flex justify-end md:hidden">
-                  <Button size="sm" variant="outline" onClick={onRelease}>
-                    Devolver al agente
-                  </Button>
-                </div>
-              )}
-              <div className="flex items-end gap-2 rounded-lg border bg-background focus-within:border-primary/60 transition-colors">
-                <Textarea
-                  ref={textareaRef}
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  placeholder={
-                    isAiControlled ? "Toma control para responder…" : "Escribe una respuesta…"
-                  }
-                  rows={1}
-                  className="resize-none border-0 bg-transparent focus-visible:ring-0 min-h-[40px] max-h-32 py-2.5"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      send();
-                    }
-                  }}
-                />
-                <Button
-                  size="icon"
-                  onClick={send}
-                  disabled={!draft.trim()}
-                  className="h-8 w-8 m-1.5 shrink-0"
+              {conversation.suggestion ? (
+                <button
+                  type="button"
+                  className="w-full text-left rounded-lg border border-primary/25 bg-primary/5 px-3 py-2 text-xs hover:bg-primary/10 transition-colors"
+                  onClick={() => setDraft(conversation.suggestion!)}
                 >
-                  <Send className="h-3.5 w-3.5" />
-                </Button>
+                  <span className="font-medium text-primary">Sugerencia</span>
+                  <span className="block text-muted-foreground mt-0.5 line-clamp-2">
+                    {conversation.suggestion}
+                  </span>
+                </button>
+              ) : null}
+              <div className="flex flex-wrap gap-1.5">
+                {MACROS.map((m) => (
+                  <Button
+                    key={m.id}
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-[11px]"
+                    onClick={() => setDraft(m.text)}
+                  >
+                    {m.label}
+                  </Button>
+                ))}
               </div>
-            </div>
-          )}
+              <ChatComposer
+                ref={textareaRef}
+                value={draft}
+                onChange={setDraft}
+                onSubmit={send}
+                busy={sending}
+                disabled={sending}
+                placeholder="Escribe una respuesta… (Enter envía, Shift+Enter salto)"
+              />
             </>
           )}
         </div>

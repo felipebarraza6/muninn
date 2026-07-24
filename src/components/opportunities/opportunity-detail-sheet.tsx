@@ -103,7 +103,7 @@ export function OpportunityDetailSheet({
             <div className="text-sm text-foreground">{opportunity.nextAction}</div>
           </section>
 
-          {convo && (
+          {convo?.aiSummary ? (
             <section className="space-y-2">
               <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
                 Resumen IA
@@ -120,15 +120,15 @@ export function OpportunityDetailSheet({
                 </ul>
               )}
             </section>
-          )}
+          ) : null}
 
-          {convo && convo.timeline.length > 0 && (
+          {convo && (convo.timeline?.length ?? 0) > 0 && (
             <section className="space-y-2">
               <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
                 Línea de tiempo
               </div>
               <ol className="space-y-2">
-                {convo.timeline.map((t, i) => (
+                {convo.timeline!.map((t, i) => (
                   <li key={i} className="flex gap-2 text-xs">
                     <span className="text-muted-foreground tabular-nums w-20 shrink-0">
                       {t.time}

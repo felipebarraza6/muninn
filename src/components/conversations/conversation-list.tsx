@@ -2,6 +2,7 @@ import { Search, Sparkles, Inbox, Archive, Bot } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { EmptyState } from "@/components/ui/empty-state";
 import {
   CONVERSATION_BUCKETS,
   CONVERSATION_SUBFILTERS,
@@ -17,6 +18,17 @@ import { isOrganizationOwnerScope, isSuperAdmin } from "@/lib/authGuards";
 import { initials, avatarColor } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
+function formatWaitingSince(iso?: string): string | null {
+  if (!iso) return null;
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return null;
+  const mins = Math.max(0, Math.floor((Date.now() - t) / 60_000));
+  if (mins < 1) return "ahora";
+  if (mins < 60) return `${mins}m en cola`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h en cola`;
+  return `${Math.floor(hrs / 24)}d en cola`;
+}
 interface Props {
   conversations: Conversation[];
   selectedId: string;
@@ -207,7 +219,9 @@ export function ConversationList({
                       )}
                       <span className="text-muted-foreground/60">·</span>
                       {c.isWaitingHuman ? (
-                        <span className="text-destructive font-medium">Esperando humano</span>
+                        <span className="text-destructive font-medium">
+                          {formatWaitingSince(c.waitingSince) ?? "Esperando humano"}
+                        </span>
                       ) : c.controlledBy === "ai" ? (
                         <span className="inline-flex items-center gap-1 text-info">
                           <Bot className="h-3 w-3" /> IA
@@ -218,7 +232,12 @@ export function ConversationList({
                       <span className="text-muted-foreground/60">·</span>
                       <span className="text-muted-foreground truncate">{statusLabel}</span>
                       {c.unread > 0 && (
-                        <span className="ml-auto h-2 w-2 rounded-full bg-destructive shrink-0" />
+                        <span
+                          className="ml-auto min-w-4 h-4 px-1 rounded-full bg-destructive text-[10px] text-destructive-foreground flex items-center justify-center tabular-nums shrink-0"
+                          title="Pendiente de humano"
+                        >
+                          {c.unread > 9 ? "9+" : c.unread}
+                        </span>
                       )}
                     </div>
                   </div>
@@ -227,10 +246,20 @@ export function ConversationList({
             );
           })}
           {filtered.length === 0 && (
-            <li className="p-8 text-center text-sm text-muted-foreground">
-              {bucket === "mine"
-                ? "Sin conversaciones pendientes. La IA las está gestionando 🎉"
-                : "Sin conversaciones para este filtro."}
+            <li className="p-4">
+              <EmptyState
+                className="py-8 border-0 bg-transparent"
+                title={
+                  bucket === "mine"
+                    ? "Sin pendientes humanos"
+                    : "Sin conversaciones para este filtro"
+                }
+                description={
+                  bucket === "mine"
+                    ? "La IA está gestionando el resto de la bandeja."
+                    : "Probá otro bucket o limpiá la búsqueda."
+                }
+              />
             </li>
           )}
         </ul>

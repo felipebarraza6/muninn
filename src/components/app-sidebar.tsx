@@ -86,7 +86,7 @@ const baseStudioItems: MenuItem[] = [
 
 function buildStudioItems(): MenuItem[] {
   const items = [...baseStudioItems];
-  // Orden: Chat → Agentes → Conocimiento → Skills → (Ops/Workflows si superadmin) → Aplicaciones
+  // Orden: Chat → Agentes → Conocimiento → Skills → Aplicaciones
   const agentesIdx = items.findIndex((i) => i.url === "/agentes");
   if (canAccessKnowledgeCatalog()) {
     items.splice(agentesIdx + 1, 0, {
@@ -103,17 +103,16 @@ function buildStudioItems(): MenuItem[] {
       icon: Sparkles,
     });
   }
-  if (isSuperAdmin()) {
-    const appsIdx = items.findIndex((i) => i.url === "/aplicaciones");
-    const insertAt = appsIdx >= 0 ? appsIdx : items.length;
-    items.splice(
-      insertAt,
-      0,
-      { title: "Ops", url: "/planes", icon: ClipboardList },
-      { title: "Workflows", url: "/workflows", icon: GitBranch },
-    );
-  }
   return items;
+}
+
+/** OPS-agents: orquestación operativa (distinto de Studio). */
+function buildOpsItems(): MenuItem[] {
+  if (!isSuperAdmin()) return [];
+  return [
+    { title: "Planes", url: "/planes", icon: ClipboardList },
+    { title: "Workflows", url: "/workflows", icon: GitBranch },
+  ];
 }
 
 const adminItems: MenuItem[] = [
@@ -198,6 +197,7 @@ export function AppSidebar() {
   const roleGestionItems = !showAdmin && !showOrgGestion ? buildRoleGestionItems() : [];
   const showRoleGestion = roleGestionItems.length > 0;
   const studioItems = buildStudioItems();
+  const opsItems = buildOpsItems();
   const comunicacionItems = buildComunicacionItems();
   const reduceMotion = useReducedMotion();
 
@@ -322,6 +322,26 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {opsItems.length > 0 && (
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-[10.5px] font-semibold tracking-wider uppercase text-muted-foreground/80">
+              OPS-agents
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <motion.div
+                  className="flex w-full min-w-0 flex-col gap-1"
+                  variants={listVariants}
+                  initial={reduceMotion ? false : "hidden"}
+                  animate="show"
+                >
+                  {renderItems(opsItems, "ops")}
+                </motion.div>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
         {showAdmin && (
           <SidebarGroup>

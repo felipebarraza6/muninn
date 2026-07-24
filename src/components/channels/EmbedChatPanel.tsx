@@ -15,6 +15,7 @@ interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
+  deliveryStatus?: "pending" | "sent" | "failed";
 }
 
 type EmbedChatPanelProps = {
@@ -76,24 +77,29 @@ export function EmbedChatPanel({ channelId, className, compact = false }: EmbedC
     e?.preventDefault();
     if (!input.trim() || sendMessage.isPending || !channelId) return;
 
+    const text = input.trim();
+    const userMsgId = `user-${Date.now()}`;
     const userMsg: ChatMessage = {
-      id: `user-${Date.now()}`,
+      id: userMsgId,
       role: "user",
-      content: input.trim(),
+      content: text,
       timestamp: new Date(),
+      deliveryStatus: "pending",
     };
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
 
     try {
       const result = await sendMessage.mutateAsync({
-        message: userMsg.content,
+        message: text,
         user_name: guestName || undefined,
         email: guestEmail || undefined,
       });
       const reply = result.reply ?? result.response ?? result.message ?? "Sin respuesta";
       setMessages((prev) => [
-        ...prev,
+        ...prev.map((m) =>
+          m.id === userMsgId ? { ...m, deliveryStatus: "sent" as const } : m,
+        ),
         {
           id: `assistant-${Date.now()}`,
           role: "assistant",
@@ -101,9 +107,19 @@ export function EmbedChatPanel({ channelId, className, compact = false }: EmbedC
           timestamp: new Date(),
         },
       ]);
-    } catch (e) {
-      toast.error(apiErrorMessage(e, "Error al enviar el mensaje"));
+    } catch (err) {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === userMsgId ? { ...m, deliveryStatus: "failed" as const } : m)),
+      );
+      setInput(text);
+      toast.error(apiErrorMessage(err, "Error al enviar el mensaje"));
     }
+  };
+
+  const resendFailed = (msg: ChatMessage) => {
+    if (msg.deliveryStatus !== "failed") return;
+    setMessages((prev) => prev.filter((m) => m.id !== msg.id));
+    setInput(msg.content);
   };
 
   if (configLoading) {
@@ -269,8 +285,20 @@ export function EmbedChatPanel({ channelId, className, compact = false }: EmbedC
               >
                 <ChatMarkdown content={msg.content} inverted={msg.role === "user"} />
               </div>
-              <div className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+              <div className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} gap-1`}>
                 <ChatCopyButton text={msg.content} />
+                {msg.role === "user" && msg.deliveryStatus === "failed" ? (
+                  <button
+                    type="button"
+                    className="text-[10px] text-destructive underline"
+                    onClick={() => resendFailed(msg)}
+                  >
+                    Reintentar
+                  </button>
+                ) : null}
+                {msg.role === "user" && msg.deliveryStatus === "pending" ? (
+                  <span className="text-[10px] text-muted-foreground">Enviando…</span>
+                ) : null}
               </div>
             </div>
           </div>
@@ -283,8 +311,8 @@ export function EmbedChatPanel({ channelId, className, compact = false }: EmbedC
             >
               <Bot className="h-3.5 w-3.5" />
             </div>
-            <div className="bg-muted rounded-2xl rounded-bl-md px-3 py-2">
-              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            <div className="bg-muted rounded-2xl rounded-bl-md px-3 py-2 text-xs text-muted-foreground">
+              Pensando…
             </div>
           </div>
         )}

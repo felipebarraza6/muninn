@@ -145,18 +145,27 @@ export function useExternalAPIs(options?: {
    * branch = solo apps habilitadas en esa sucursal (default: activa).
    */
   scope?: "store" | "branch";
+  /** Catálogo para designar apps (ignora filtro por rol; respeta cupo org). */
+  forDesignation?: boolean;
 }) {
   const activeBranchId = useActiveBranchId();
   const includeInactive = options?.includeInactive ?? false;
   const scope = options?.scope ?? "branch";
+  const forDesignation = Boolean(options?.forDesignation);
   const branchId = options?.branch ?? activeBranchId;
   return useQuery({
-    queryKey: [...QUERY_KEY, scope, scope === "store" ? "all" : branchId, { includeInactive }],
+    queryKey: [
+      ...QUERY_KEY,
+      scope,
+      scope === "store" ? "all" : branchId,
+      { includeInactive, forDesignation },
+    ],
     queryFn: () => {
       const params: Record<string, string> = {};
       if (includeInactive) params.include_inactive = "true";
       if (scope === "store") {
         params.scope = "store";
+        if (forDesignation) params.for_designation = "true";
       } else if (branchId) {
         params.branch = String(branchId);
       }
