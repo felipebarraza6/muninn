@@ -133,7 +133,7 @@ export function ConversationDetailsPanel({
       )}
       {analysisOnly && (
         <div className="p-4 border-t text-xs text-muted-foreground leading-relaxed">
-          Modo análisis: sin intervención. Usá el inspector de mensajes en el chat para revisar
+          Modo análisis: sin intervención. Usa el inspector de mensajes en el chat para revisar
           RAG y tools.
         </div>
       )}

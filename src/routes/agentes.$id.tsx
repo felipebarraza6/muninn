@@ -37,6 +37,7 @@ import { AdminPageMotion } from "@/components/admin/AdminPageMotion";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { isSuperAdmin } from "@/lib/authGuards";
 import { cn } from "@/lib/utils";
+import { apiErrorMessage } from "@/lib/apiError";
 import { toast } from "sonner";
 
 const AGENT_SECTIONS = [
@@ -252,7 +253,8 @@ export default function AgentDetailPage() {
                       toast.success("Agente reactivado");
                       refetch();
                     },
-                    onError: () => toast.error("No se pudo reactivar el agente"),
+                    onError: (e) =>
+                      toast.error(apiErrorMessage(e, "No se pudo reactivar el agente")),
                   },
                 );
               }}
@@ -302,7 +304,8 @@ export default function AgentDetailPage() {
                             toast.success("Agente desactivado");
                             navigate("/agentes");
                           },
-                          onError: () => toast.error("No se pudo desactivar el agente"),
+                          onError: (e) =>
+                            toast.error(apiErrorMessage(e, "No se pudo desactivar el agente")),
                         },
                       );
                     }}
@@ -350,7 +353,8 @@ export default function AgentDetailPage() {
                             toast.success("Agente eliminado");
                             navigate("/agentes");
                           },
-                          onError: () => toast.error("No se pudo eliminar el agente"),
+                          onError: (e) =>
+                            toast.error(apiErrorMessage(e, "No se pudo eliminar el agente")),
                         },
                       );
                     }}
@@ -453,7 +457,7 @@ export default function AgentDetailPage() {
                             );
                             toast.success("Test completado");
                           },
-                          onError: () => toast.error("Falló el test LLM"),
+                          onError: (e) => toast.error(apiErrorMessage(e, "Falló el test LLM")),
                         },
                       );
                     }}

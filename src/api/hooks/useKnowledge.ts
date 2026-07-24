@@ -22,6 +22,8 @@ export interface AgentKnowledge {
   content?: string;
   summary?: string;
   knowledge_type: KnowledgeType;
+  /** Categoría libre (max 80). Vacío = sin categoría. */
+  category?: string | null;
   source_app?: string;
   source_model?: string;
   source_id?: string;
@@ -40,6 +42,11 @@ export interface AgentKnowledge {
   branch?: number | string | null;
   created?: string;
   modified?: string;
+}
+
+export interface KnowledgeCategory {
+  name: string;
+  count: number;
 }
 
 export type KnowledgeIndexResponse = AgentKnowledge & {
@@ -96,17 +103,29 @@ export interface KnowledgeSearchResult {
   score: number;
 }
 
+function branchParams(branch?: string | number | null) {
+  return branch != null && branch !== "" ? { branch } : undefined;
+}
+
 export function useKnowledgeCatalog(filters?: {
   page_size?: number;
   includeInactive?: boolean;
+  /** Filtra por categoría exacta (API `?category=`). */
+  category?: string | null;
   /** Sucursal a listar; por defecto la activa. */
   branch?: string | number | null;
 }) {
   const activeBranchId = useActiveBranchId();
-  const { includeInactive, page_size, branch } = filters ?? {};
+  const { includeInactive, page_size, category, branch } = filters ?? {};
   const branchId = branch ?? activeBranchId;
+  const categoryFilter = (category || "").trim() || null;
   return useQuery({
-    queryKey: [...QUERY_KEY, "list", branchId, { page_size, includeInactive: !!includeInactive }],
+    queryKey: [
+      ...QUERY_KEY,
+      "list",
+      branchId,
+      { page_size, includeInactive: !!includeInactive, category: categoryFilter },
+    ],
     queryFn: () =>
       GET<AgentKnowledge[] | { count: number; results: AgentKnowledge[] }>(
         ENDPOINTS.knowledge.list,
@@ -115,10 +134,50 @@ export function useKnowledgeCatalog(filters?: {
             page_size: page_size ?? 100,
             ...(branchId ? { branch: branchId } : {}),
             ...(includeInactive ? { include_inactive: "true" } : {}),
+            ...(categoryFilter ? { category: categoryFilter } : {}),
           },
         },
       ).then((data) => normalizeListResponse<AgentKnowledge>(data)),
     staleTime: 30_000,
+  });
+}
+
+export function useKnowledgeCategories(options?: { branch?: string | number | null }) {
+  const activeBranchId = useActiveBranchId();
+  const branchId = options?.branch ?? activeBranchId;
+  return useQuery({
+    queryKey: [...QUERY_KEY, "categories", branchId],
+    queryFn: () =>
+      GET<KnowledgeCategory[]>(ENDPOINTS.knowledge.categories, {
+        params: branchId ? { branch: branchId } : undefined,
+      }),
+    staleTime: 30_000,
+  });
+}
+
+export function useRenameKnowledgeCategory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { from: string; to: string; branch?: string | number | null }) =>
+      POST<{ ok: boolean; updated: number; name: string }>(
+        ENDPOINTS.knowledge.categoriesRename,
+        { from: payload.from, to: payload.to },
+        { params: branchParams(payload.branch) },
+      ),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: QUERY_KEY }),
+  });
+}
+
+export function useDeleteKnowledgeCategory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { name: string; branch?: string | number | null }) =>
+      POST<{ ok: boolean; cleared: number }>(
+        ENDPOINTS.knowledge.categoriesDelete,
+        { name: payload.name },
+        { params: branchParams(payload.branch) },
+      ),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: QUERY_KEY }),
   });
 }
 
@@ -132,10 +191,6 @@ export function useKnowledgeList(filters?: { source_app?: string; q?: string; to
       ),
     staleTime: 30_000,
   });
-}
-
-function branchParams(branch?: string | number | null) {
-  return branch != null && branch !== "" ? { branch } : undefined;
 }
 
 type KnowledgeIdInput = string | { id: string; branch?: string | number | null; hard?: boolean };
@@ -373,10 +428,9 @@ export function useParseSpreadsheet() {
     mutationFn: (file: File) => {
       const formData = new FormData();
       formData.append("file", file);
+      // Sin Content-Type manual: el interceptor de apiClient deja el boundary al browser.
       return apiClient
-        .post<SpreadsheetParseResponse>(ENDPOINTS.knowledge.parseSpreadsheet, formData, {
-          headers: { "Content-Type": "multipart/form-data" },
-        })
+        .post<SpreadsheetParseResponse>(ENDPOINTS.knowledge.parseSpreadsheet, formData)
         .then((r) => r.data);
     },
   });

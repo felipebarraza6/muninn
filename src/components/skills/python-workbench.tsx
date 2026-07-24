@@ -87,7 +87,7 @@ export function PythonWorkbench({
       return;
     }
     if (!code.trim()) {
-      toast.error("Escribí el código Python");
+      toast.error("Escribe el código Python");
       return;
     }
     const parameters = coerceParamsFromForm(testValues, schema);

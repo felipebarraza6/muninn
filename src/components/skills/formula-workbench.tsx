@@ -140,7 +140,7 @@ export function FormulaWorkbench({
       return;
     }
     if (!expression.trim()) {
-      toast.error("Escribí la expresión matemática");
+      toast.error("Escribe la expresión matemática");
       return;
     }
     const missing = requiredKeys.filter((k) => !testValues[k]?.trim());

@@ -229,7 +229,7 @@ export function AgentSkillsPanel({ agentId }: AgentSkillsPanelProps) {
         <div className="border-b border-border/60 pb-3">
           <h2 className="text-base font-semibold tracking-tight">Aplicaciones del agente</h2>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Elegí qué apps / APIs externas usará este agente. Las skills del catálogo se filtran
+            Elige qué apps / APIs externas usará este agente. Las skills del catálogo se filtran
             según esa selección (siempre incluyen skills globales y las de la sucursal sin app).
           </p>
         </div>
@@ -285,7 +285,7 @@ export function AgentSkillsPanel({ agentId }: AgentSkillsPanelProps) {
           <div>
             <h2 className="text-base font-semibold tracking-tight">Skills del agente</h2>
             <p className="text-sm text-muted-foreground mt-0.5">
-              Asigná skills del catálogo filtrado por las apps de arriba y configurá cómo este
+              Asigna skills del catálogo filtrado por las apps de arriba y configura cómo este
               agente resuelve sus parámetros.
             </p>
           </div>
@@ -473,7 +473,7 @@ export function AgentSkillsPanel({ agentId }: AgentSkillsPanelProps) {
                   {assignSearch.trim() || typeFilter !== "all"
                     ? "No hay skills disponibles con ese filtro."
                     : selectedAppIds.size === 0
-                      ? "Seleccioná una app arriba para ver sus skills, o asigná skills globales / sin app."
+                      ? "Selecciona una app arriba para ver sus skills, o asigna skills globales / sin app."
                       : catalog.length === 0
                         ? "El catálogo está vacío."
                         : "Todas las skills disponibles ya están asignadas."}

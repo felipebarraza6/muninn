@@ -54,13 +54,13 @@ export const SLOT_EXAMPLES: Array<{
 }> = [
   {
     id: "profesional",
-    ask: "¿Con qué profesional querés agendar?",
+    ask: "¿Con qué profesional quieres agendar?",
     defaultValue: "",
     blurb: "Nombre corto interno. La pregunta es lo que escucha el usuario.",
   },
   {
     id: "fecha",
-    ask: "¿Para qué día necesitás la hora? (AAAA-MM-DD)",
+    ask: "¿Para qué día necesitas la hora? (AAAA-MM-DD)",
     defaultValue: "",
     blurb: "Sin default: siempre se pregunta si falta.",
   },
@@ -72,7 +72,7 @@ export const SLOT_EXAMPLES: Array<{
   },
   {
     id: "consentimiento",
-    ask: "¿Confirmás que querés agendar esa hora?",
+    ask: "¿Confirmas que quieres agendar esa hora?",
     defaultValue: "",
     blurb: "Ideal antes de skills que escriben (crear cita, borrar, etc.).",
   },
@@ -87,11 +87,11 @@ export const WM_RESERVAS_POLICY: FlowPolicy = {
   slots: {
     professional: {
       aliases: ["Professional", "Professional_id", "professional"],
-      ask: "¿Con qué profesional querés agendar?",
+      ask: "¿Con qué profesional quieres agendar?",
     },
     date: {
       aliases: ["Date", "date"],
-      ask: "¿Para qué día necesitás la hora? (AAAA-MM-DD)",
+      ask: "¿Para qué día necesitas la hora? (AAAA-MM-DD)",
     },
     reason: {
       aliases: ["IdReason", "reason"],
@@ -125,7 +125,7 @@ export const WM_RESERVAS_POLICY: FlowPolicy = {
     consent: {
       type: "bool",
       aliases: ["consent", "Consent"],
-      ask: "¿Confirmás que querés agendar esa hora? Respondé sí / confirmo.",
+      ask: "¿Confirmas que quieres agendar esa hora? Responde sí / confirmo.",
     },
   },
   skills: {
@@ -272,7 +272,7 @@ function askFromParamKey(key: string, description?: string): string {
     .replace(/[_-]+/g, " ")
     .trim()
     .toLowerCase();
-  return `¿Podés indicar ${nice || key}?`;
+  return `¿Puedes indicar ${nice || key}?`;
 }
 
 export type SkillParamHint = {
@@ -365,7 +365,7 @@ export function draftsToPolicy(
     if (!id) continue;
     const slot: FlowPolicySlot = {
       aliases: defaultAliasesForSlot(id, s.aliases ?? []),
-      ask: s.ask.trim() || `¿Podés indicar ${id}?`,
+      ask: s.ask.trim() || `¿Puedes indicar ${id}?`,
     };
     if (s.defaultValue.trim()) slot.default = s.defaultValue.trim();
     if (s.type) slot.type = s.type;

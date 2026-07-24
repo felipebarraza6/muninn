@@ -52,11 +52,9 @@ export interface ExternalAPI {
   category?: string | null;
   /** Tags libres para filtrar en el store. */
   tags?: string[];
-  /** Archivo subido (write / multipart). */
+  /** Path del ImageField (archivo subido / write multipart). */
   icon?: string | null;
-  /** URL pública del logo. */
-  /** Path del ImageField (archivo subido). */
-  icon?: string | null;
+  /** URL pública del logo (alternativa a archivo). */
   icon_url?: string;
   /** URL lista para UI: archivo subido o icon_url. */
   icon_display_url?: string | null;

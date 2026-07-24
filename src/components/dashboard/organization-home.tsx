@@ -126,7 +126,7 @@ export function OrganizationHome() {
             </h1>
             <p className="text-sm text-muted-foreground">
               Stores, equipo y Studio de tu organización. Conversaciones solo de tus sucursales
-              (filtrá con búsqueda).
+              (filtra con búsqueda).
             </p>
           </div>
           <StudioBranchFilter />

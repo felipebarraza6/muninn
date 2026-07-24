@@ -12,6 +12,7 @@ import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
 import { channelAccent, channelIcon, channelLabel, formatChannelTestToast } from "@/lib/channels";
 import { canManageChannels } from "@/lib/authGuards";
 import { cn } from "@/lib/utils";
+import { apiErrorMessage } from "@/lib/apiError";
 import { toast } from "sonner";
 
 export function ChannelList() {
@@ -71,7 +72,7 @@ export function ChannelList() {
           else toast.error(msg.title, { description: msg.description });
           refetch();
         },
-        onError: () => toast.error("Error al probar conexión"),
+        onError: (e) => toast.error(apiErrorMessage(e, "Error al probar conexión")),
         onSettled: () => setTestingId(null),
       },
     );
@@ -82,7 +83,7 @@ export function ChannelList() {
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
         <div className="space-y-1 min-w-0">
           <p className="text-sm text-muted-foreground">
-            Conectá WhatsApp, Telegram, web y más a tus agentes. Un canal = un puente con clientes.
+            Conecta WhatsApp, Telegram, web y más a tus agentes. Un canal = un puente con clientes.
           </p>
           {!isPending && channels.length > 0 && (
             <p className="text-[11px] text-muted-foreground/80 tabular-nums">
@@ -121,7 +122,7 @@ export function ChannelList() {
           <p className="text-sm text-muted-foreground">
             {q.trim()
               ? "Sin canales para esa búsqueda."
-              : "No hay canales aún. Creá el primero para conectar un agente."}
+              : "No hay canales aún. Crea el primero para conectar un agente."}
           </p>
           {!q.trim() && canManage && (
             <Button size="sm" className="mt-4" onClick={() => setCreating(true)}>

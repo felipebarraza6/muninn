@@ -101,6 +101,17 @@ export function useTakeControlUnifiedConversation() {
   });
 }
 
+/** Devuelve el control al agente IA después de intervención humana. */
+export function useReleaseConversation() {
+  const queryClient = useQueryClient();
+  const branchId = useBranchId();
+  return useMutation({
+    mutationFn: (id: string) =>
+      POST(ENDPOINTS.unifiedConversations.release(id), { branch: branchId }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: [QUERY_KEY] }),
+  });
+}
+
 export function useSetUnifiedConversationStatus() {
   const queryClient = useQueryClient();
   const branchId = useBranchId();

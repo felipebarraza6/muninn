@@ -27,6 +27,7 @@ import {
   serializeFaqPairs,
 } from "@/lib/knowledge-types";
 import { toast } from "sonner";
+import { apiErrorMessage } from "@/lib/apiError";
 import { useActiveBranchId } from "@/hooks/useActiveBranchId";
 import { getStoredBranches } from "@/lib/authSession";
 import { isMultiBranchUser } from "@/lib/authGuards";
@@ -53,12 +54,14 @@ export function KnowledgeCreateDialog({
 
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
+  const [category, setCategory] = useState("");
   const [knowledgeType, setKnowledgeType] = useState<KnowledgeType>("DOCUMENT");
   const [faqPairs, setFaqPairs] = useState([{ question: "", answer: "" }]);
 
   const reset = () => {
     setTitle("");
     setContent("");
+    setCategory("");
     setKnowledgeType("DOCUMENT");
     setFaqPairs([{ question: "", answer: "" }]);
   };
@@ -100,6 +103,7 @@ export function KnowledgeCreateDialog({
         title: title.trim(),
         content: body,
         knowledge_type: knowledgeType,
+        category: category.trim() || null,
         is_active: true,
       },
       {
@@ -113,7 +117,7 @@ export function KnowledgeCreateDialog({
           onOpenChange(false);
           onCreated?.();
         },
-        onError: () => toast.error("No se pudo crear el documento"),
+        onError: (e) => toast.error(apiErrorMessage(e, "No se pudo crear el documento")),
       },
     );
   };
@@ -152,6 +156,20 @@ export function KnowledgeCreateDialog({
               placeholder="Ej: Política de devoluciones"
               required
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="knowledge-category">Categoría (opcional)</Label>
+            <Input
+              id="knowledge-category"
+              value={category}
+              onChange={(e) => setCategory(e.target.value.slice(0, 80))}
+              placeholder="Ej: Políticas, FAQ clínica…"
+              maxLength={80}
+            />
+            <p className="text-xs text-muted-foreground">
+              Agrupa documentos para filtrar en el catálogo. Máximo 80 caracteres.
+            </p>
           </div>
 
           <div className="space-y-2">

@@ -54,9 +54,19 @@ export interface Agent {
   embedding_model?: string | number | null;
   semantic_weight?: number;
   use_semantic_search?: boolean;
-  top_p?: number;
-  frequency_penalty?: number;
-  presence_penalty?: number;
+  /** Iteraciones máximas del tool loop (1–8). */
+  max_tool_iterations?: number;
+  /** Icono del agente (emoji o path corto). */
+  icon?: string | null;
+  /** Color de acento (hex o token). */
+  color?: string | null;
+  /**
+   * Roles de sucursal que pueden ver/usar el agente.
+   * Lista vacía = visible para todos con acceso al módulo.
+   */
+  allowed_roles?: string[] | null;
+  /** Metadatos de runtime (solo lectura en la mayoría de casos). */
+  metadata?: Record<string, unknown> | null;
   knowledge_documents?: (string | number)[];
   functions?: (string | number)[];
   /** Apps/APIs externas que el agente puede usar (filtra skills asignables). */
@@ -197,5 +207,55 @@ export function useResetAgentSkillConfig() {
     mutationFn: ({ agentId, skillId }: { agentId: string; skillId: string }) =>
       DELETE(ENDPOINTS.agents.skillConfig(agentId, skillId)),
     onSuccess: () => qc.invalidateQueries({ queryKey: SKILL_CONFIG_KEY }),
+  });
+}
+
+export interface AgentOpsOnboarding {
+  ready_to_chat?: boolean;
+  has_api_key?: boolean;
+  has_agents?: boolean;
+  has_provider?: boolean;
+  missing?: Record<string, unknown>;
+  next_steps?: Array<{ code?: string; message?: string; path?: string }>;
+}
+
+export interface AgentOpsHealth {
+  generated_at?: string;
+  branch_id?: number | string;
+  onboarding?: AgentOpsOnboarding;
+  ready_for_production?: boolean;
+  checklist?: {
+    ready_to_chat?: boolean;
+    has_bidirectional_channel?: boolean;
+    tool_failures_24h?: number;
+    workflow_failures_24h?: number;
+  };
+  last_24h?: {
+    tool_calls_ok?: number;
+    tool_calls_failed?: number;
+    workflow_completed?: number;
+    workflow_failed?: number;
+    workflow_running?: number;
+  };
+  channels?: Array<{
+    id: string;
+    name?: string;
+    channel_type?: string;
+    supports_inbound?: boolean;
+    production_ready?: boolean;
+    deprecated?: boolean;
+  }>;
+}
+
+export function useOpsHealth(options?: { enabled?: boolean }) {
+  const branchId = useActiveBranchId();
+  return useQuery({
+    queryKey: [...QUERY_KEY, "ops-health", branchId],
+    queryFn: () =>
+      GET<AgentOpsHealth>(ENDPOINTS.agents.opsHealth, {
+        params: branchId ? { branch: branchId } : undefined,
+      }),
+    enabled: options?.enabled !== false && !!branchId,
+    staleTime: 60_000,
   });
 }

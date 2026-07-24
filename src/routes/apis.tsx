@@ -355,7 +355,7 @@ export default function APIs() {
           </div>
           <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">Store de apps</h1>
           <p className="text-sm text-muted-foreground max-w-lg leading-relaxed">
-            Catálogo de aplicaciones. Filtrá por sucursal, categoría o tags; en el detalle ves dónde
+            Catálogo de aplicaciones. Filtra por sucursal, categoría o tags; en el detalle ves dónde
             está disponible.
             {!canManage && (
               <span className="inline-flex items-center gap-1 ml-1.5">
@@ -495,7 +495,7 @@ export default function APIs() {
               {filteringByBranch
                 ? "No hay apps activas en esta sucursal."
                 : hasActiveFilter
-                  ? "Probá otra búsqueda o limpiá los filtros."
+                  ? "Prueba otra búsqueda o limpia los filtros."
                   : canManage
                     ? "Añadí la primera aplicación al catálogo y habilitala en las sucursales que correspondan."
                     : "No hay aplicaciones en el store."}

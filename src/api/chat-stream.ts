@@ -1,10 +1,9 @@
 import { getActiveBranchId, getBranchMode } from "@/lib/branchStorage";
 import { ENDPOINTS } from "@/api/endpoints/index";
 import type { ChatMessageResponse } from "@/api/hooks/useConversations";
+import { resolveApiBaseUrl } from "@/lib/apiBaseUrl";
 
-const API_BASE_URL = import.meta.env.DEV
-  ? "/api"
-  : (import.meta.env.VITE_API_URL ?? "https://api.agenciapatagoniachile.com/api");
+const API_BASE_URL = resolveApiBaseUrl();
 
 export type ChatStreamStatusEvent = {
   stage?: string;

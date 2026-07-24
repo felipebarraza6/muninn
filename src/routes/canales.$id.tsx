@@ -394,7 +394,7 @@ export default function ChannelDetailPage() {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Desactivar canal</AlertDialogTitle>
                   <AlertDialogDescription>
-                    ¿Desactivar «{channel.name}»? Dejará de recibir/enviar mensajes. Podés
+                    ¿Desactivar «{channel.name}»? Dejará de recibir/enviar mensajes. Puedes
                     reactivarlo después.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
@@ -598,7 +598,7 @@ export default function ChannelDetailPage() {
         <TabsContent value="webhook" className="mt-4">
           <ChannelPanel
             title="Webhook"
-            description="URL pública para mensajes entrantes. Configurala en el proveedor externo."
+            description="URL pública para mensajes entrantes. Configúrala en el proveedor externo."
           >
             {channel.webhook_url ? (
               <div className="space-y-1.5">
@@ -653,7 +653,7 @@ export default function ChannelDetailPage() {
               <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm space-y-1">
                 <p className="font-medium text-primary">Handshake Meta</p>
                 <p className="text-muted-foreground text-xs leading-relaxed">
-                  En la consola de Meta usá esta URL de callback y el{" "}
+                  En la consola de Meta usa esta URL de callback y el{" "}
                   <code className="text-xs">verify_token</code> que configuraste en Credenciales.
                   Meta hará un GET con <code className="text-xs">hub.challenge</code>.
                 </p>
@@ -858,7 +858,7 @@ export default function ChannelDetailPage() {
               <InlineSkeleton lines={4} />
             ) : sessions.length === 0 ? (
               <p className="text-sm text-muted-foreground py-6 text-center">
-                Aún no hay sesiones. Usá «Simular» o el widget para generar una.
+                Aún no hay sesiones. Usa «Simular» o el widget para generar una.
               </p>
             ) : (
               <div className="overflow-x-auto -mx-1">

@@ -238,10 +238,10 @@ export function SkillParameterSourcesEditor({
                                 to={`/agentes/${agentId}`}
                                 className="text-primary underline-offset-2 hover:underline"
                               >
-                                Asigná conocimiento al agente
+                                Asigna conocimiento al agente
                               </Link>
                             ) : (
-                              "Asigná conocimiento al agente primero."
+                              "Asigna conocimiento al agente primero."
                             )}
                           </>
                         ) : (
@@ -251,7 +251,7 @@ export function SkillParameterSourcesEditor({
                               to="/conocimiento"
                               className="text-primary underline-offset-2 hover:underline"
                             >
-                              Creá uno en Conocimiento
+                              Crea uno en Conocimiento
                             </Link>
                             .
                           </>

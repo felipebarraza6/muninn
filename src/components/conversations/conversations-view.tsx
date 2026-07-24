@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ConversationList } from "./conversation-list";
 import { ChatPane } from "./chat-pane";
 import { ConversationDetailsPanel } from "./details-panel";
@@ -11,14 +11,16 @@ import {
 } from "@/lib/conversation-types";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, Info } from "lucide-react";
+import { ArrowLeft, ChevronLeft, Info } from "lucide-react";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { toast } from "sonner";
+import { apiErrorMessage } from "@/lib/apiError";
 import {
   useUnifiedConversations,
   useUnifiedConversationMessages,
   useReplyUnifiedConversation,
   useTakeControlUnifiedConversation,
+  useReleaseConversation,
   useSetUnifiedConversationStatus,
   type UnifiedConversation,
   type UnifiedMessage,
@@ -162,12 +164,27 @@ function mapApiConversation(api: UnifiedConversation): Conversation {
 }
 
 export function ConversationsView() {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const analysisOnly = !canInterveneInConversations();
   const isPlatformAnalysis = isSuperAdmin();
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) {
+        return;
+      }
+      navigate("/");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [navigate]);
+
   const { data: apiConvos = [], isLoading, error } = useUnifiedConversations();
   const takeControlMutation = useTakeControlUnifiedConversation();
+  const releaseMutation = useReleaseConversation();
   const setStatusMutation = useSetUnifiedConversationStatus();
   const replyMutation = useReplyUnifiedConversation();
   const internalSendMutation = useSendConversationMessage();
@@ -280,7 +297,26 @@ export function ConversationsView() {
         });
         toast.success("Tomaste control de la conversación");
       },
-      onError: () => toast.error("Error al tomar control de la conversación"),
+      onError: (e) =>
+        toast.error(apiErrorMessage(e, "Error al tomar control de la conversación")),
+    });
+  };
+
+  const handleRelease = () => {
+    if (analysisOnly || !selectedId || selectedSource !== "channel") return;
+    if (selected?.status === "closed" || !selected?.isWaitingHuman) return;
+    releaseMutation.mutate(selectedId, {
+      onSuccess: () => {
+        appendLocalMessage({
+          id: `sys-${Date.now()}`,
+          sender: "system",
+          text: "Devolviste el control al agente IA.",
+          time: nowHHmm(),
+        });
+        toast.success("Control devuelto al agente IA");
+      },
+      onError: (e) =>
+        toast.error(apiErrorMessage(e, "Error al devolver el control al agente")),
     });
   };
 
@@ -311,9 +347,9 @@ export function ConversationsView() {
       replyMutation.mutate(
         { id: selectedId, message: trimmed },
         {
-          onError: () => {
+          onError: (e) => {
             clearLocalOutgoing(selectedId, trimmed);
-            toast.error("Error al enviar el mensaje");
+            toast.error(apiErrorMessage(e, "Error al enviar el mensaje"));
           },
         },
       );
@@ -334,9 +370,9 @@ export function ConversationsView() {
             });
           }
         },
-        onError: () => {
+        onError: (e) => {
           clearLocalOutgoing(selectedId, trimmed);
-          toast.error("Error al enviar el mensaje");
+          toast.error(apiErrorMessage(e, "Error al enviar el mensaje"));
         },
       },
     );
@@ -349,7 +385,7 @@ export function ConversationsView() {
         { id: selectedId, status: "closed" },
         {
           onSuccess: () => toast.success("Conversación cerrada"),
-          onError: () => toast.error("Error al cerrar la conversación"),
+          onError: (e) => toast.error(apiErrorMessage(e, "Error al cerrar la conversación")),
         },
       );
       return;
@@ -364,7 +400,7 @@ export function ConversationsView() {
         { id: selectedId, status: "inactive" },
         {
           onSuccess: () => toast.success("Conversación marcada como inactiva"),
-          onError: () => toast.error("Error al cambiar el estado"),
+          onError: (e) => toast.error(apiErrorMessage(e, "Error al cambiar el estado")),
         },
       );
     }
@@ -372,7 +408,7 @@ export function ConversationsView() {
 
   if (isLoading) {
     return (
-      <div className="h-[calc(100dvh-3.5rem)] bg-background">
+      <div className="h-dvh bg-background">
         <PageSkeleton variant="inbox" className="h-full max-w-none px-4 py-4" padded={false} />
       </div>
     );
@@ -380,21 +416,40 @@ export function ConversationsView() {
 
   if (error) {
     return (
-      <div className="h-[calc(100dvh-3.5rem)] flex flex-col items-center justify-center bg-background gap-4">
-        <p className="text-destructive">Error al cargar las conversaciones</p>
+      <div className="h-dvh flex flex-col items-center justify-center bg-background gap-4">
+        <p className="text-destructive">
+          {apiErrorMessage(error, "Error al cargar las conversaciones")}
+        </p>
         <Button onClick={() => window.location.reload()}>Reintentar</Button>
       </div>
     );
   }
 
   return (
-    <div className="h-[calc(100dvh-3.5rem)] flex flex-col bg-background overflow-hidden">
+    <div className="h-dvh flex flex-col bg-background overflow-hidden">
+      <div className="shrink-0 border-b border-border/60 bg-card/80 backdrop-blur px-3 py-2 flex items-center gap-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 shrink-0 gap-1.5 px-2 text-muted-foreground hover:text-foreground"
+          asChild
+        >
+          <Link to="/" title="Volver (Esc)">
+            <ArrowLeft className="h-4 w-4" />
+            <span className="text-xs font-medium">Volver</span>
+          </Link>
+        </Button>
+        <span className="text-sm font-medium truncate">Conversaciones</span>
+        {isPlatformAnalysis ? (
+          <span className="ml-auto text-[11px] text-muted-foreground truncate hidden sm:inline">
+            Análisis · solo lectura
+          </span>
+        ) : null}
+      </div>
       {isPlatformAnalysis ? (
         <div className="shrink-0 border-b border-border/60 bg-muted/30 px-4 py-2 text-xs text-muted-foreground">
-          <span className="font-medium text-foreground">Análisis de plataforma</span>
-          {" · "}
-          Filtrá por sucursal en la bandeja (con búsqueda). Solo lectura: usá el inspector de
-          mensajes para revisar el hilo.
+          Filtra por sucursal en la bandeja (con búsqueda). Usa el inspector de mensajes para
+          revisar el hilo.
         </div>
       ) : null}
       <div className="flex flex-1 min-h-0 overflow-hidden">
@@ -442,6 +497,7 @@ export function ConversationsView() {
             <ChatPane
               conversation={selectedWithMessages}
               onTakeControl={handleTakeControl}
+              onRelease={handleRelease}
               onSend={handleSend}
               onOpenDetails={() => setDetailsOpen(true)}
               onResolve={handleResolve}

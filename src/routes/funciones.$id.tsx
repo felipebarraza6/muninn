@@ -391,12 +391,12 @@ export default function FunctionDetailPage() {
     if (!id || !fn) return;
     const key = paramName.trim().replace(/\s+/g, "_");
     if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key)) {
-      toast.error("Nombre inválido. Usá letras, números y _ (sin empezar con número).");
+      toast.error("Nombre inválido. Usa letras, números y _ (sin empezar con número).");
       return;
     }
     if (fn.uses_personal_connection && CREDENTIAL_PARAM_KEYS.has(key.toLowerCase())) {
       toast.error(
-        "Esta skill usa la cuenta de la instalación. No agregues usuario/clave como parámetros; configurá la cuenta en Instalación de la Aplicación.",
+        "Esta skill usa la cuenta de la instalación. No agregues usuario/clave como parámetros; configura la cuenta en Instalación de la Aplicación.",
       );
       return;
     }
@@ -602,7 +602,7 @@ export default function FunctionDetailPage() {
                             se puede deshacer. Los agentes perderán la asignación.
                           </p>
                           <p>
-                            Escribí el nombre exacto de la skill para confirmar:{" "}
+                            Escribe el nombre exacto de la skill para confirmar:{" "}
                             <span className="font-medium text-foreground">{fn.name}</span>
                           </p>
                           <Input
@@ -616,9 +616,9 @@ export default function FunctionDetailPage() {
                       ) : (
                         <p>
                           «{fn.name}» se desactivará y dejará de estar disponible para los agentes.
-                          Podés reactivarla después
+                          Puedes reactivarla después
                           {canHardDelete
-                            ? ". Solo se borra del todo si confirmás una segunda vez."
+                            ? ". Solo se borra del todo si confirmas una segunda vez."
                             : "."}
                         </p>
                       )}
@@ -676,8 +676,8 @@ export default function FunctionDetailPage() {
       {!canManage && (
         <div className="rounded-lg border border-border/70 bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
           Skill de plataforma / de otro autor:{" "}
-          <span className="font-medium text-foreground">solo lectura</span>. Podés usarla en
-          agentes; para cambios pedile al superadministrador o creá una skill propia.
+          <span className="font-medium text-foreground">solo lectura</span>. Puedes usarla en
+          agentes; para cambios pídele al superadministrador o crea una skill propia.
         </div>
       )}
 
@@ -688,8 +688,8 @@ export default function FunctionDetailPage() {
             agentes no la usan.
             {canManage
               ? canHardDelete
-                ? " Podés reactivarla o borrarla definitivamente."
-                : " Podés reactivarla si fue un error."
+                ? " Puedes reactivarla o borrarla definitivamente."
+                : " Puedes reactivarla si fue un error."
               : ""}
           </p>
           {canManage && (
@@ -883,7 +883,7 @@ export default function FunctionDetailPage() {
                     onChange={setExpression}
                     variables={formulaVarNames}
                     label="Expresión (fórmula)"
-                    emptyVariablesHint="Agregá variables en la pestaña Parámetros para usarlas acá."
+                    emptyVariablesHint="Agrega variables en la pestaña Parámetros para usarlas acá."
                   />
                 ) : (
                   <>
@@ -990,7 +990,7 @@ export default function FunctionDetailPage() {
                 </h2>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {fn.implementation_type === "formula"
-                    ? "Estos nombres son los que podés usar en la expresión. Las fuentes (estático / documento DATA) se configuran al asignar desde el agente."
+                    ? "Estos nombres son los que puedes usar en la expresión. Las fuentes (estático / documento DATA) se configuran al asignar desde el agente."
                     : "Schema que ve el LLM. Las fuentes (estático / documento DATA) se configuran al asignar la skill desde el agente."}
                 </p>
               </div>
@@ -1149,8 +1149,8 @@ export default function FunctionDetailPage() {
                 <p className="text-sm text-muted-foreground">No hay parámetros definidos.</p>
                 <p className="text-xs text-muted-foreground max-w-md mx-auto">
                   {fn.implementation_type === "api"
-                    ? "Si el endpoint usa placeholders {{key}}, regenerá desde el endpoint. Si no, agregá parámetros a mano."
-                    : "Agregá parámetros a mano (para fórmulas, serán las variables de la expresión)."}
+                    ? "Si el endpoint usa placeholders {{key}}, regenera desde el endpoint. Si no, agrega parámetros a mano."
+                    : "Agrega parámetros a mano (para fórmulas, serán las variables de la expresión)."}
                 </p>
               </div>
             ) : (

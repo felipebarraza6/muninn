@@ -4,6 +4,8 @@ import {
   CheckCircle2,
   FileSpreadsheet,
   Loader2,
+  MoreHorizontal,
+  Pencil,
   Plus,
   RotateCcw,
   Trash2,
@@ -24,8 +26,20 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import {
   useKnowledgeCatalog,
+  useKnowledgeCategories,
   useDeleteKnowledge,
+  useDeleteKnowledgeCategory,
+  useRenameKnowledgeCategory,
   useUpdateKnowledge,
   isKnowledgeIndexed,
   type AgentKnowledge,
@@ -35,6 +49,7 @@ import { KnowledgeContentViewer } from "@/components/agents/knowledge-content-vi
 import { KnowledgeCreateDialog } from "@/components/knowledge/knowledge-create-dialog";
 import { knowledgeCardPreview, knowledgeTypeLabel, knowledgeTypeMeta } from "@/lib/knowledge-types";
 import { toast } from "sonner";
+import { apiErrorMessage } from "@/lib/apiError";
 import { AdminPageMotion } from "@/components/admin/AdminPageMotion";
 import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
 import {
@@ -44,10 +59,30 @@ import {
   canViewInactiveKnowledge,
 } from "@/lib/authGuards";
 import { cn } from "@/lib/utils";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+const ALL_CATEGORIES = "__all__";
 
 type PendingAction =
   | { type: "deactivate"; doc: AgentKnowledge }
   | { type: "hard"; doc: AgentKnowledge };
+
+type CategoryDialog =
+  | { type: "rename"; name: string }
+  | { type: "delete"; name: string }
+  | null;
 
 function KnowledgeCard({
   doc,
@@ -103,6 +138,11 @@ function KnowledgeCard({
             >
               {label}
             </span>
+            {doc.category?.trim() ? (
+              <Badge variant="outline" className="text-[10px] font-normal">
+                {doc.category.trim()}
+              </Badge>
+            ) : null}
             {inactive && (
               <Badge variant="secondary" className="text-[10px] font-normal">
                 Inactivo
@@ -194,21 +234,31 @@ function KnowledgeCard({
 
 export default function Conocimiento() {
   const showInactive = canViewInactiveKnowledge();
+  const [categoryFilter, setCategoryFilter] = useState(ALL_CATEGORIES);
+  const selectedCategory = categoryFilter === ALL_CATEGORIES ? null : categoryFilter;
   const {
     data: docsRaw = [],
     isLoading,
     refetch,
-  } = useKnowledgeCatalog(showInactive ? { includeInactive: true } : undefined);
+  } = useKnowledgeCatalog({
+    ...(showInactive ? { includeInactive: true } : {}),
+    category: selectedCategory,
+  });
+  const { data: categories = [] } = useKnowledgeCategories();
   const { data: agents = [] } = useAgents(
     showInactive ? { includeInactive: true } : { is_active: true },
   );
   const remove = useDeleteKnowledge();
   const update = useUpdateKnowledge();
+  const renameCategory = useRenameKnowledgeCategory();
+  const deleteCategory = useDeleteKnowledgeCategory();
 
   const [q, setQ] = useState("");
   const [creating, setCreating] = useState(false);
   const [pending, setPending] = useState<PendingAction | null>(null);
   const [restoringId, setRestoringId] = useState<string | null>(null);
+  const [categoryDialog, setCategoryDialog] = useState<CategoryDialog>(null);
+  const [renameValue, setRenameValue] = useState("");
 
   const docs = useMemo(() => {
     if (showInactive) {
@@ -240,13 +290,63 @@ export default function Conocimiento() {
       (d) =>
         d.title.toLowerCase().includes(term) ||
         (d.summary || "").toLowerCase().includes(term) ||
+        (d.category || "").toLowerCase().includes(term) ||
         knowledgeTypeLabel(d.knowledge_type).toLowerCase().includes(term) ||
         d.knowledge_type.toLowerCase().includes(term),
     );
   }, [docs, q]);
 
-  const errMsg = (e: unknown, fallback: string) =>
-    (e as { friendlyMessage?: string })?.friendlyMessage || fallback;
+  const openRenameCategory = (name: string) => {
+    setRenameValue(name);
+    setCategoryDialog({ type: "rename", name });
+  };
+
+  const openDeleteCategory = (name: string) => {
+    setCategoryDialog({ type: "delete", name });
+  };
+
+  const submitRenameCategory = () => {
+    if (!categoryDialog || categoryDialog.type !== "rename") return;
+    const from = categoryDialog.name;
+    const next = renameValue.trim();
+    if (!next || next === from) {
+      setCategoryDialog(null);
+      return;
+    }
+    if (next.length > 80) {
+      toast.error("La categoría admite máximo 80 caracteres");
+      return;
+    }
+    renameCategory.mutate(
+      { from, to: next },
+      {
+        onSuccess: (res) => {
+          toast.success(`Categoría renombrada (${res.updated} docs)`);
+          if (categoryFilter === from) setCategoryFilter(next);
+          setCategoryDialog(null);
+          void refetch();
+        },
+        onError: (e) => toast.error(apiErrorMessage(e, "No se pudo renombrar")),
+      },
+    );
+  };
+
+  const submitDeleteCategory = () => {
+    if (!categoryDialog || categoryDialog.type !== "delete") return;
+    const name = categoryDialog.name;
+    deleteCategory.mutate(
+      { name },
+      {
+        onSuccess: (res) => {
+          toast.success(`Categoría eliminada (${res.cleared} docs)`);
+          if (categoryFilter === name) setCategoryFilter(ALL_CATEGORIES);
+          setCategoryDialog(null);
+          void refetch();
+        },
+        onError: (e) => toast.error(apiErrorMessage(e, "No se pudo eliminar la categoría")),
+      },
+    );
+  };
 
   return (
     <AdminPageMotion className="space-y-4 px-4 md:px-6 lg:px-8 py-4">
@@ -266,13 +366,54 @@ export default function Conocimiento() {
         </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-2 sm:max-w-xl">
+      <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
         <Input
-          placeholder="Buscar por título, tipo…"
+          placeholder="Buscar por título, tipo, categoría…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          className="h-9 flex-1 min-w-0"
+          className="h-9 flex-1 min-w-0 sm:max-w-md"
         />
+        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+          <SelectTrigger className="h-9 w-full sm:w-[200px]">
+            <SelectValue placeholder="Categoría" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_CATEGORIES}>Todas las categorías</SelectItem>
+            {categories.map((c) => (
+              <SelectItem key={c.name} value={c.name}>
+                {c.name} ({c.count})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {selectedCategory && canManageKnowledge() ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-9 w-9 shrink-0"
+                title="Gestionar categoría"
+                disabled={renameCategory.isPending || deleteCategory.isPending}
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => openRenameCategory(selectedCategory)}>
+                <Pencil className="h-3.5 w-3.5 mr-2" />
+                Renombrar categoría
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onClick={() => openDeleteCategory(selectedCategory)}
+              >
+                <Trash2 className="h-3.5 w-3.5 mr-2" />
+                Quitar categoría
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
         <StudioBranchFilter />
       </div>
 
@@ -313,7 +454,7 @@ export default function Conocimiento() {
                         void refetch();
                       },
                       onError: (e) => {
-                        toast.error(errMsg(e, "No se pudo reactivar"));
+                        toast.error(apiErrorMessage(e, "No se pudo reactivar"));
                         setRestoringId(null);
                       },
                     },
@@ -324,6 +465,93 @@ export default function Conocimiento() {
           })}
         </div>
       )}
+
+      <Dialog
+        open={categoryDialog?.type === "rename"}
+        onOpenChange={(open) => {
+          if (!open) setCategoryDialog(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Renombrar categoría</DialogTitle>
+            <DialogDescription>
+              Se actualiza en todos los documentos con «{categoryDialog?.name}».
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="rename-category">Nuevo nombre</Label>
+            <Input
+              id="rename-category"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value.slice(0, 80))}
+              maxLength={80}
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  submitRenameCategory();
+                }
+              }}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setCategoryDialog(null)}
+              disabled={renameCategory.isPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={submitRenameCategory}
+              disabled={renameCategory.isPending || !renameValue.trim()}
+            >
+              {renameCategory.isPending && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
+              Guardar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={categoryDialog?.type === "delete"}
+        onOpenChange={(open) => {
+          if (!open) setCategoryDialog(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Quitar categoría?</AlertDialogTitle>
+            <AlertDialogDescription>
+              «{categoryDialog?.name}» se eliminará de todos los documentos. Los docs se mantienen
+              sin categoría.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteCategory.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteCategory.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                submitDeleteCategory();
+              }}
+            >
+              {deleteCategory.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                  Quitando…
+                </>
+              ) : (
+                "Quitar categoría"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog
         open={Boolean(pending)}
@@ -348,7 +576,7 @@ export default function Conocimiento() {
               ) : (
                 <>
                   «{pending?.doc.title}» se desactivará y dejará de estar disponible para los
-                  agentes. Después podés reactivarlo.
+                  agentes. Después puedes reactivarlo.
                 </>
               )}
             </AlertDialogDescription>
@@ -372,7 +600,10 @@ export default function Conocimiento() {
                     },
                     onError: (err) =>
                       toast.error(
-                        errMsg(err, hard ? "No se pudo eliminar" : "No se pudo desactivar"),
+                        apiErrorMessage(
+                          err,
+                          hard ? "No se pudo eliminar" : "No se pudo desactivar",
+                        ),
                       ),
                   },
                 );

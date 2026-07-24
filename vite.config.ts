@@ -12,6 +12,13 @@ export default defineConfig(({ mode }) => {
   const appName = env.VITE_PWA_NAME || "Muninn";
   const themeColor = env.VITE_PWA_THEME_COLOR || "#0b1210";
 
+  // Builds de producción/preview deben declarar la API del tenant (void ≠ clinica).
+  if (mode === "production" && !String(env.VITE_API_URL || "").trim()) {
+    throw new Error(
+      "VITE_API_URL es obligatoria en build production (ej. https://api.example.com/api).",
+    );
+  }
+
   return {
     plugins: [
       react({

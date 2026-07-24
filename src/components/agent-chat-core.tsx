@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -70,6 +70,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { apiErrorMessage } from "@/lib/apiError";
 import { useQueryClient } from "@tanstack/react-query";
 
 type AttachedSkill = {
@@ -237,9 +238,24 @@ export function AgentChatCore({
   agentSwitcher,
   headerExtra,
 }: AgentChatCoreProps) {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const conversationIdFromUrl = searchParams.get("conversation");
   const agentIdFromUrl = searchParams.get("agent");
+
+  useEffect(() => {
+    if (!showBackLink) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) {
+        return;
+      }
+      navigate(backTo);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showBackLink, backTo, navigate]);
 
   const { data: agent, isLoading: agentLoading, error: agentError } = useAgent(agentId);
   const { data: allFunctions = [] } = useAgentFunctions();
@@ -520,8 +536,9 @@ export function AgentChatCore({
       mergeSearchParams({ conversation: id });
       return id;
     } catch (err) {
-      const detail = (err as { friendlyMessage?: string })?.friendlyMessage;
-      setCreateError(detail || "No se pudo iniciar la conversación");
+      const msg = apiErrorMessage(err, "No se pudo iniciar la conversación");
+      setCreateError(msg);
+      toast.error(msg);
       return null;
     } finally {
       isCreatingRef.current = false;
@@ -594,10 +611,7 @@ export function AgentChatCore({
     const replyToId = activeReply?.id ?? null;
 
     const activeId = conversationId ?? (await ensureConversationId());
-    if (!activeId) {
-      toast.error("No se pudo crear la conversación");
-      return;
-    }
+    if (!activeId) return;
 
     const userMsg: ChatMessage = {
       id: makeId("user"),
@@ -727,8 +741,10 @@ export function AgentChatCore({
           ? (data.metadata as Record<string, unknown>)
           : null;
       setMessages((prev) => {
+        // Conservar id del draft de stream → evita remount / salto visual al llegar final.
+        const stableId = streamId ?? data.id ?? makeId("agent");
         const finalMsg: ChatMessage = {
-          id: data.id ?? streamId ?? makeId("agent"),
+          id: stableId,
           role: "agent",
           content: finalContent,
           created: data.created_at ?? data.created ?? data.timestamp ?? new Date().toISOString(),
@@ -741,15 +757,13 @@ export function AgentChatCore({
           metadata: meta,
         };
         if (streamId && prev.some((m) => m.id === streamId)) {
-          return prev.map((m) => (m.id === streamId ? { ...m, ...finalMsg } : m));
+          return prev.map((m) => (m.id === streamId ? { ...m, ...finalMsg, id: streamId } : m));
         }
         return [...prev, finalMsg];
       });
+      // Lista sí; mensajes no (la UI local ya tiene el hilo — evita flash post-stream).
       void queryClient.invalidateQueries({ queryKey: ["conversations"] });
       void queryClient.invalidateQueries({ queryKey: ["unified-conversations"] });
-      void queryClient.invalidateQueries({
-        queryKey: ["conversations", activeId, "messages"],
-      });
     } catch (err) {
       if ((err as Error)?.name === "AbortError") return;
       // Fallback al POST clásico si el stream no está disponible.
@@ -784,8 +798,8 @@ export function AgentChatCore({
               },
             ]);
           }
-        } catch {
-          toast.error("Error al enviar el mensaje");
+        } catch (e) {
+          toast.error(apiErrorMessage(e, "Error al enviar el mensaje"));
           setInput(text);
           if (activeReply) setReplyTo(activeReply);
         }
@@ -796,11 +810,12 @@ export function AgentChatCore({
       }
     } finally {
       setIsStreaming(false);
-      setLiveSteps([]);
       streamingDraftRef.current = "";
       streamingMsgIdRef.current = null;
       setStreamingMessageId(null);
       streamAbortRef.current = null;
+      // Salida suave del indicador (no vaciar en el mismo frame que el final).
+      window.setTimeout(() => setLiveSteps([]), 280);
     }
   };
 
@@ -860,12 +875,13 @@ export function AgentChatCore({
           }
         },
         onError: (err) => {
-          const detail = (err as { friendlyMessage?: string })?.friendlyMessage;
           toast.error(
-            detail ||
-              (isArchiving
+            apiErrorMessage(
+              err,
+              isArchiving
                 ? "No se pudo archivar la conversación"
-                : "No se pudo restaurar la conversación"),
+                : "No se pudo restaurar la conversación",
+            ),
           );
         },
       },
@@ -941,9 +957,15 @@ export function AgentChatCore({
     <div className={shellClass}>
       <header className="border-b border-border/50 bg-card/50 backdrop-blur px-3 sm:px-4 py-2 flex items-center gap-2 sm:gap-3 shrink-0">
         {showBackLink && (
-          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" asChild>
-            <Link to={backTo}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 shrink-0 gap-1.5 px-2 text-muted-foreground hover:text-foreground"
+            asChild
+          >
+            <Link to={backTo} title="Volver (Esc)">
               <ArrowLeft className="h-4 w-4" />
+              <span className="hidden sm:inline text-xs font-medium">Volver</span>
             </Link>
           </Button>
         )}
@@ -1365,7 +1387,7 @@ export function AgentChatCore({
           )}
 
           <AnimatePresence>
-            {isBusy && (
+            {isBusy && !streamingMessageId && (
               <ChatProcessingIndicator
                 useRag={agent.use_rag !== false}
                 skillNames={agentSkillNames}

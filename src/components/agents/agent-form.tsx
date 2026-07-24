@@ -15,9 +15,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useCreateAgent, useUpdateAgent, type Agent } from "@/api/hooks/useAgents";
 import { useLlmModels, useLlmProviders, type LlmModel } from "@/api/hooks/useLlm";
+import {
+  MUNINN_ASSIGNABLE_ROLE_CODES,
+  MUNINN_ROLE_LABELS_ES,
+} from "@/api/hooks/useBranches";
 import { agentFormSchema, type AgentFormValues } from "@/lib/schemas/agent";
+import { apiErrorMessage } from "@/lib/apiError";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 
@@ -66,6 +72,10 @@ function toDefaults(agent?: Agent | null): AgentFormValues {
     llm_model: agent?.llm_model ? String(agent.llm_model) : "",
     temperature: agent?.temperature ?? 0.7,
     max_tokens: agent?.max_tokens ?? 1024,
+    max_tool_iterations: agent?.max_tool_iterations ?? 3,
+    icon: agent?.icon ?? "",
+    color: agent?.color ?? "",
+    allowed_roles: Array.isArray(agent?.allowed_roles) ? [...agent.allowed_roles] : [],
     use_rag: agent?.use_rag ?? false,
     rag_top_k: agent?.rag_top_k ?? 5,
     embedding_model: agent?.embedding_model ? String(agent.embedding_model) : "",
@@ -89,6 +99,8 @@ export function AgentForm({ agent, onCancel, onSaved }: AgentFormProps) {
   const providerId = form.watch("llm_provider");
   const useRag = form.watch("use_rag");
   const temperature = form.watch("temperature");
+  const maxToolIterations = form.watch("max_tool_iterations");
+  const allowedRoles = form.watch("allowed_roles");
   const semanticWeight = form.watch("semantic_weight");
   const errors = form.formState.errors;
 
@@ -126,6 +138,10 @@ export function AgentForm({ agent, onCancel, onSaved }: AgentFormProps) {
       llm_model: values.llm_model || null,
       temperature: values.temperature,
       max_tokens: values.max_tokens,
+      max_tool_iterations: values.max_tool_iterations,
+      icon: values.icon?.trim() || null,
+      color: values.color?.trim() || null,
+      allowed_roles: values.allowed_roles ?? [],
       use_rag: values.use_rag,
       rag_top_k: values.rag_top_k,
       embedding_model: values.embedding_model || null,
@@ -145,7 +161,7 @@ export function AgentForm({ agent, onCancel, onSaved }: AgentFormProps) {
             toast.success("Agente actualizado");
             onSaved(saved);
           },
-          onError: () => toast.error("Error al actualizar el agente"),
+          onError: (e) => toast.error(apiErrorMessage(e, "Error al actualizar el agente")),
         },
       );
     } else {
@@ -154,7 +170,7 @@ export function AgentForm({ agent, onCancel, onSaved }: AgentFormProps) {
           toast.success("Agente creado");
           onSaved(saved);
         },
-        onError: () => toast.error("Error al crear el agente"),
+        onError: (e) => toast.error(apiErrorMessage(e, "Error al crear el agente")),
       });
     }
   });
@@ -330,6 +346,78 @@ export function AgentForm({ agent, onCancel, onSaved }: AgentFormProps) {
               {errors.max_tokens && (
                 <p className="text-xs text-destructive">{errors.max_tokens.message}</p>
               )}
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Iteraciones de tools</Label>
+                <span className="text-xs text-muted-foreground">{maxToolIterations}</span>
+              </div>
+              <Controller
+                control={form.control}
+                name="max_tool_iterations"
+                render={({ field }) => (
+                  <Slider
+                    value={[field.value]}
+                    onValueChange={(v) => field.onChange(v[0])}
+                    min={1}
+                    max={8}
+                    step={1}
+                  />
+                )}
+              />
+              <p className="text-xs text-muted-foreground">
+                Cuántas veces el agente puede encadenar skills en un turno (1–8).
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="agent-icon">Icono</Label>
+                <Input
+                  id="agent-icon"
+                  placeholder="🤖 o nombre"
+                  maxLength={64}
+                  {...form.register("icon")}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="agent-color">Color</Label>
+                <Input
+                  id="agent-color"
+                  placeholder="#2dd4bf"
+                  maxLength={32}
+                  {...form.register("color")}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2 rounded-lg border p-3">
+            <Label>Roles permitidos</Label>
+            <p className="text-xs text-muted-foreground">
+              Sin selección = visible para todos con acceso al módulo. Si marcas roles, solo esos
+              ven el agente.
+            </p>
+            <div className="flex flex-wrap gap-4 pt-1">
+              {MUNINN_ASSIGNABLE_ROLE_CODES.map((code) => {
+                const checked = allowedRoles.includes(code);
+                return (
+                  <label key={code} className="flex items-center gap-2 text-sm cursor-pointer">
+                    <Checkbox
+                      checked={checked}
+                      onCheckedChange={(v) => {
+                        const next = new Set(allowedRoles);
+                        if (v === true) next.add(code);
+                        else next.delete(code);
+                        form.setValue("allowed_roles", Array.from(next), {
+                          shouldDirty: true,
+                          shouldValidate: true,
+                        });
+                      }}
+                    />
+                    {MUNINN_ROLE_LABELS_ES[code]}
+                  </label>
+                );
+              })}
             </div>
           </div>
 

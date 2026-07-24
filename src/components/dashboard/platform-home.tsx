@@ -176,8 +176,8 @@ export function PlatformHome() {
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Conversaciones (análisis)</CardTitle>
             <CardDescription>
-              Podés inspeccionar la bandeja de cualquier sucursal en modo lectura. Filtrá por store
-              (con búsqueda) y usá el inspector de mensajes. La atención operativa queda en el
+              Puedes inspeccionar la bandeja de cualquier sucursal en modo lectura. Filtra por store
+              (con búsqueda) y usa el inspector de mensajes. La atención operativa queda en el
               negocio.
             </CardDescription>
           </CardHeader>

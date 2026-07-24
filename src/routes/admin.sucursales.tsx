@@ -1229,7 +1229,7 @@ export default function AdminSucursalesPage() {
                         description={
                           branches.length === 0
                             ? canCreate
-                              ? "Creá la primera sucursal para empezar."
+                              ? "Crea la primera sucursal para empezar."
                               : "No tienes sucursales asignadas como propietario."
                             : "Ninguna sucursal coincide con los filtros."
                         }
@@ -1795,7 +1795,7 @@ export default function AdminSucursalesPage() {
 
                   {form.social_links.length === 0 ? (
                     <p className="text-[11px] text-muted-foreground">
-                      Sin links. Agregá las redes que quieras mostrar.
+                      Sin links. Agrega las redes que quieras mostrar.
                     </p>
                   ) : (
                     <div className="space-y-3">
@@ -1891,7 +1891,7 @@ export default function AdminSucursalesPage() {
                       placeholder="portal.cliente.com"
                     />
                     <p className="mt-1 text-[11px] text-muted-foreground">
-                      Opcional. Si lo tenés, tus clientes entran por ese dominio.
+                      Opcional. Si lo tienes, tus clientes entran por ese dominio.
                     </p>
                   </div>
                   <div>
@@ -1951,7 +1951,7 @@ export default function AdminSucursalesPage() {
                   </label>
                   {form.sponsors.length === 0 ? (
                     <p className="text-[11px] text-muted-foreground">
-                      Sin patrocinadores. Agregá partners con nombre, imagen y sitio web.
+                      Sin patrocinadores. Agrega partners con nombre, imagen y sitio web.
                     </p>
                   ) : (
                     <div className="space-y-3">

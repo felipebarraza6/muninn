@@ -349,7 +349,7 @@ export function AgentFlowPolicyPanel({ agentId }: Props) {
     const ask = (preset?.ask ?? newSlotAsk).trim();
     const id = slugifySlotId(preset?.id ?? (newSlotId || ask));
     if (!id) {
-      toast.error("Escribí una pregunta o elegí un ejemplo.");
+      toast.error("Escribe una pregunta o elige un ejemplo.");
       return;
     }
     if (slots.some((s) => slugifySlotId(s.id) === id)) {
@@ -360,7 +360,7 @@ export function AgentFlowPolicyPanel({ agentId }: Props) {
       ...prev,
       {
         id,
-        ask: ask || `¿Podés indicar ${id}?`,
+        ask: ask || `¿Puedes indicar ${id}?`,
         defaultValue: preset?.defaultValue ?? "",
       },
     ]);
@@ -379,7 +379,7 @@ export function AgentFlowPolicyPanel({ agentId }: Props) {
     const merged = mergeSlotSuggestions(slots, suggestedSlots);
     const added = merged.length - slots.length;
     if (added === 0) {
-      toast.message("Ya tenés cubiertos los params de tus skills.");
+      toast.message("Ya tienes cubiertos los params de tus skills.");
       return;
     }
     // Solo agrega al final; no toca ask/aliases/defaults existentes.
@@ -555,7 +555,7 @@ export function AgentFlowPolicyPanel({ agentId }: Props) {
                 {slots.length === 0 ? (
                   <div className="space-y-2 px-1 py-2 text-center">
                     <p className="text-[11px] text-muted-foreground">
-                      Sin datos. Podés rellenar desde tus skills o crear uno.
+                      Sin datos. Puedes rellenar desde tus skills o crear uno.
                     </p>
                     {suggestedSlots.length > 0 && (
                       <Button
@@ -700,7 +700,7 @@ export function AgentFlowPolicyPanel({ agentId }: Props) {
 
                       <div className="space-y-2">
                         {slotIds.length === 0 ? (
-                          <p className="text-[10px] text-muted-foreground">Creá datos primero.</p>
+                          <p className="text-[10px] text-muted-foreground">Crea datos primero.</p>
                         ) : (
                           <>
                             <div className="space-y-1">

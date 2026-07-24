@@ -148,7 +148,7 @@ export const SCHEMA_KIND_HINT: Record<SchemaParamKind, string> = {
   integer: "Solo números enteros (ej. 3)",
   string: "Texto libre, nombres o códigos",
   boolean: "Verdadero o falso",
-  date: "Fecha enviada como texto; elegí el formato que pide la app (ej. Dentidesk)",
+  date: "Fecha enviada como texto; elige el formato que pide la app (ej. Dentidesk)",
   datetime: "Fecha y hora en ISO 8601",
   email: "Correo electrónico válido",
 };

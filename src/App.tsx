@@ -13,8 +13,12 @@ import { RequireLlmAdmin } from "./components/auth/RequireLlmAdmin";
 import { RequireKnowledgeCatalog } from "./components/auth/RequireKnowledgeCatalog";
 import { RequireConversations } from "./components/auth/RequireConversations";
 import { RequireSkills } from "./components/auth/RequireSkills";
+import { RequireSuperAdmin } from "./components/auth/RequireSuperAdmin";
 import { ThemeProvider } from "./components/theme/ThemeProvider";
 import { PageLoader } from "./components/ui/page-loader";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+import { PwaUpdatePrompt } from "./components/PwaUpdatePrompt";
+import { Toaster } from "./components/ui/sonner";
 
 const Dashboard = lazy(() => import("./routes/index"));
 const Conversaciones = lazy(() => import("./routes/conversaciones"));
@@ -23,6 +27,9 @@ const AgentesNuevo = lazy(() => import("./routes/agentes.nuevo"));
 const AgentesDetail = lazy(() => import("./routes/agentes.$id"));
 const AgentesChat = lazy(() => import("./routes/agentes.$id.chat"));
 const ChatPage = lazy(() => import("./routes/chat"));
+const PlanesPage = lazy(() => import("./routes/planes"));
+const WorkflowsPage = lazy(() => import("./routes/workflows"));
+const WorkflowCanvasPage = lazy(() => import("./routes/workflows.$id"));
 const Canales = lazy(() => import("./routes/canales"));
 const CanalesDetail = lazy(() => import("./routes/canales.$id"));
 const APIs = lazy(() => import("./routes/apis"));
@@ -64,6 +71,155 @@ function FunctionDetailRedirect() {
 
 function AnimatedOutlet() {
   const location = useLocation();
+  // Chat / bandeja: sin fade de ruta (evita “doble animación” y se siente página propia).
+  const skipRouteFade =
+    location.pathname === "/chat" ||
+    location.pathname.startsWith("/chat/") ||
+    location.pathname.startsWith("/conversaciones") ||
+    location.pathname.startsWith("/planes") ||
+    location.pathname.startsWith("/workflows") ||
+    /^\/agentes\/[^/]+\/chat\/?$/.test(location.pathname);
+
+  const routeTree = (
+    <Suspense fallback={<RouteFallback />}>
+      <ErrorBoundary title="Error en esta pantalla">
+        <Routes location={location}>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/agentes" element={<Agentes />} />
+          <Route path="/agentes/nuevo" element={<AgentesNuevo />} />
+          <Route path="/agentes/:id" element={<AgentesDetail />} />
+          <Route path="/agentes/:id/chat" element={<AgentesChat />} />
+            <Route path="/chat" element={<ChatPage />} />
+            <Route
+              path="/planes"
+              element={
+                <RequireSuperAdmin>
+                  <PlanesPage />
+                </RequireSuperAdmin>
+              }
+            />
+            <Route
+              path="/workflows"
+              element={
+                <RequireSuperAdmin>
+                  <WorkflowsPage />
+                </RequireSuperAdmin>
+              }
+            />
+            <Route
+              path="/workflows/:id"
+              element={
+                <RequireSuperAdmin>
+                  <WorkflowCanvasPage />
+                </RequireSuperAdmin>
+              }
+            />
+            <Route path="/canales" element={<Canales />} />
+          <Route path="/canales/:id" element={<CanalesDetail />} />
+          <Route
+            path="/conocimiento"
+            element={
+              <RequireKnowledgeCatalog>
+                <Conocimiento />
+              </RequireKnowledgeCatalog>
+            }
+          />
+          <Route
+            path="/conocimiento/datos"
+            element={
+              <RequireKnowledgeCatalog>
+                <ConocimientoDatos />
+              </RequireKnowledgeCatalog>
+            }
+          />
+          <Route path="/aplicaciones" element={<APIs />} />
+          <Route path="/aplicaciones/:id" element={<APIDetail />} />
+          <Route path="/apis" element={<Navigate to={APP_STORE_PATH} replace />} />
+          <Route path="/apis/:id" element={<ApiDetailRedirect />} />
+          <Route
+            path="/skills"
+            element={
+              <RequireSkills>
+                <Funciones />
+              </RequireSkills>
+            }
+          />
+          <Route
+            path="/skills/nuevo"
+            element={
+              <RequireSkills>
+                <FuncionesNuevo />
+              </RequireSkills>
+            }
+          />
+          <Route
+            path="/skills/:id"
+            element={
+              <RequireSkills>
+                <FunctionDetail />
+              </RequireSkills>
+            }
+          />
+          <Route path="/funciones" element={<Navigate to="/skills" replace />} />
+          <Route path="/funciones/nuevo" element={<Navigate to="/skills/nuevo" replace />} />
+          <Route path="/funciones/:id" element={<FunctionDetailRedirect />} />
+          <Route path="/configuracion" element={<Navigate to="/perfil" replace />} />
+          <Route path="/perfil" element={<PerfilPage />} />
+          <Route
+            path="/admin/organizaciones"
+            element={
+              <RequireOrganizationsAdmin>
+                <AdminOrganizacionesPage />
+              </RequireOrganizationsAdmin>
+            }
+          />
+          <Route
+            path="/admin/llm"
+            element={
+              <RequireLlmAdmin>
+                <AdminLlmPage />
+              </RequireLlmAdmin>
+            }
+          />
+          <Route
+            path="/admin/sucursales"
+            element={
+              <RequireBranchesAdmin>
+                <AdminSucursalesPage />
+              </RequireBranchesAdmin>
+            }
+          />
+          <Route
+            path="/admin/usuarios"
+            element={
+              <RequireUsersAdmin>
+                <AdminUsuariosPage />
+              </RequireUsersAdmin>
+            }
+          />
+          <Route
+            path="/conversaciones"
+            element={
+              <RequireConversations>
+                <Conversaciones />
+              </RequireConversations>
+            }
+          />
+          {/* ERP legacy: fuera del nav → home hasta producto formal */}
+          <Route path="/campanas" element={<Navigate to="/" replace />} />
+          <Route path="/campanas/:id" element={<Navigate to="/" replace />} />
+          <Route path="/oportunidades" element={<Navigate to="/" replace />} />
+          <Route path="/reportes" element={<Navigate to="/" replace />} />
+          <Route path="/metricas/:id" element={<Navigate to="/" replace />} />
+        </Routes>
+      </ErrorBoundary>
+    </Suspense>
+  );
+
+  if (skipRouteFade) {
+    return <div className="min-h-0 h-full">{routeTree}</div>;
+  }
+
   return (
     <AnimatePresence mode="wait">
       <motion.div
@@ -74,113 +230,7 @@ function AnimatedOutlet() {
         transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1], delay: 0.03 }}
         className="min-h-0"
       >
-        <Suspense fallback={<RouteFallback />}>
-          <Routes location={location}>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/agentes" element={<Agentes />} />
-            <Route path="/agentes/nuevo" element={<AgentesNuevo />} />
-            <Route path="/agentes/:id" element={<AgentesDetail />} />
-            <Route path="/agentes/:id/chat" element={<AgentesChat />} />
-            <Route path="/chat" element={<ChatPage />} />
-            <Route path="/canales" element={<Canales />} />
-            <Route path="/canales/:id" element={<CanalesDetail />} />
-            <Route
-              path="/conocimiento"
-              element={
-                <RequireKnowledgeCatalog>
-                  <Conocimiento />
-                </RequireKnowledgeCatalog>
-              }
-            />
-            <Route
-              path="/conocimiento/datos"
-              element={
-                <RequireKnowledgeCatalog>
-                  <ConocimientoDatos />
-                </RequireKnowledgeCatalog>
-              }
-            />
-            <Route path="/aplicaciones" element={<APIs />} />
-            <Route path="/aplicaciones/:id" element={<APIDetail />} />
-            <Route path="/apis" element={<Navigate to={APP_STORE_PATH} replace />} />
-            <Route path="/apis/:id" element={<ApiDetailRedirect />} />
-            <Route
-              path="/skills"
-              element={
-                <RequireSkills>
-                  <Funciones />
-                </RequireSkills>
-              }
-            />
-            <Route
-              path="/skills/nuevo"
-              element={
-                <RequireSkills>
-                  <FuncionesNuevo />
-                </RequireSkills>
-              }
-            />
-            <Route
-              path="/skills/:id"
-              element={
-                <RequireSkills>
-                  <FunctionDetail />
-                </RequireSkills>
-              }
-            />
-            <Route path="/funciones" element={<Navigate to="/skills" replace />} />
-            <Route path="/funciones/nuevo" element={<Navigate to="/skills/nuevo" replace />} />
-            <Route path="/funciones/:id" element={<FunctionDetailRedirect />} />
-            <Route path="/configuracion" element={<Navigate to="/perfil" replace />} />
-            <Route path="/perfil" element={<PerfilPage />} />
-            <Route
-              path="/admin/organizaciones"
-              element={
-                <RequireOrganizationsAdmin>
-                  <AdminOrganizacionesPage />
-                </RequireOrganizationsAdmin>
-              }
-            />
-            <Route
-              path="/admin/llm"
-              element={
-                <RequireLlmAdmin>
-                  <AdminLlmPage />
-                </RequireLlmAdmin>
-              }
-            />
-            <Route
-              path="/admin/sucursales"
-              element={
-                <RequireBranchesAdmin>
-                  <AdminSucursalesPage />
-                </RequireBranchesAdmin>
-              }
-            />
-            <Route
-              path="/admin/usuarios"
-              element={
-                <RequireUsersAdmin>
-                  <AdminUsuariosPage />
-                </RequireUsersAdmin>
-              }
-            />
-            <Route
-              path="/conversaciones"
-              element={
-                <RequireConversations>
-                  <Conversaciones />
-                </RequireConversations>
-              }
-            />
-            {/* ERP legacy: fuera del nav → home hasta producto formal */}
-            <Route path="/campanas" element={<Navigate to="/" replace />} />
-            <Route path="/campanas/:id" element={<Navigate to="/" replace />} />
-            <Route path="/oportunidades" element={<Navigate to="/" replace />} />
-            <Route path="/reportes" element={<Navigate to="/" replace />} />
-            <Route path="/metricas/:id" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Suspense>
+        {routeTree}
       </motion.div>
     </AnimatePresence>
   );
@@ -256,9 +306,13 @@ export default function App() {
     <HelmetProvider>
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
-          <BrowserRouter>
-            <AppRoutes />
-          </BrowserRouter>
+          <ErrorBoundary title="Error en la aplicación">
+            <BrowserRouter>
+              <AppRoutes />
+              <Toaster position="top-right" />
+              <PwaUpdatePrompt />
+            </BrowserRouter>
+          </ErrorBoundary>
         </ThemeProvider>
       </QueryClientProvider>
     </HelmetProvider>

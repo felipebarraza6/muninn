@@ -1,9 +1,8 @@
 import axios, { AxiosError, type AxiosRequestConfig, type InternalAxiosRequestConfig } from "axios";
 import { getActiveBranchId, getBranchMode } from "@/lib/branchStorage";
+import { resolveApiBaseUrl } from "@/lib/apiBaseUrl";
 
-const API_BASE_URL = import.meta.env.DEV
-  ? "/api"
-  : (import.meta.env.VITE_API_URL ?? "https://api.agenciapatagoniachile.com/api");
+const API_BASE_URL = resolveApiBaseUrl();
 
 export type ApiRequestConfig = AxiosRequestConfig & {
   /** No inyectar x-branch-id del switcher (listados admin multi-sucursal). */
@@ -100,10 +99,11 @@ apiClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const url = String(error.config?.url ?? "");
+    const status = error.response?.status;
     const isLogin =
       url.includes("/accounts/users/login") || url.includes("/accounts/users/login_complete");
 
-    if (error.response?.status === 401 && !isLogin) {
+    if (status === 401 && !isLogin) {
       localStorage.removeItem("token");
       localStorage.removeItem("user");
       localStorage.removeItem("branches");
@@ -115,10 +115,32 @@ apiClient.interceptors.response.use(
       }
     }
 
+    if (status === 429) {
+      const retryAfter = error.response?.headers?.["retry-after"];
+      const secs = retryAfter ? parseInt(retryAfter, 10) : undefined;
+      const wait = secs && Number.isFinite(secs) ? ` Intenta de nuevo en ${secs}s.` : "";
+      (error as AxiosError & { friendlyMessage?: string }).friendlyMessage =
+        `Demasiadas solicitudes.${wait} Espera un momento antes de continuar.`;
+    }
+
     if (error.response?.data) {
-      const messages = extractValidationErrors(error.response.data);
-      if (messages.length > 0) {
-        (error as AxiosError & { friendlyMessage?: string }).friendlyMessage = messages.join("\n");
+      const data = error.response.data as Record<string, unknown>;
+
+      if (status === 400 && data.plan_limit) {
+        const pl = data.plan_limit as Record<string, unknown>;
+        const resource = String(pl.resource ?? "").trim() || "este recurso";
+        const current = pl.current ?? "?";
+        const max = pl.max ?? "?";
+        (error as AxiosError & { friendlyMessage?: string }).friendlyMessage =
+          `Límite del plan alcanzado para ${resource} (${current}/${max}). Contacta a tu administrador para ampliar el plan.`;
+      }
+
+      if (!(error as AxiosError & { friendlyMessage?: string }).friendlyMessage) {
+        const messages = extractValidationErrors(data);
+        if (messages.length > 0) {
+          (error as AxiosError & { friendlyMessage?: string }).friendlyMessage =
+            messages.join("\n");
+        }
       }
     }
 

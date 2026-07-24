@@ -23,6 +23,7 @@ import {
   configPayloadForSave,
 } from "@/components/channels/channel-config-fields";
 import { toast } from "sonner";
+import { apiErrorMessage } from "@/lib/apiError";
 import { Loader2 } from "lucide-react";
 
 interface ChannelFormProps {
@@ -154,7 +155,7 @@ export function ChannelForm({ channel, onCancel, onSaved, bare }: ChannelFormPro
             toast.success("Canal actualizado");
             onSaved(data);
           },
-          onError: () => toast.error("Error al actualizar el canal"),
+          onError: (e) => toast.error(apiErrorMessage(e, "Error al actualizar el canal")),
         },
       );
     } else {
@@ -163,7 +164,7 @@ export function ChannelForm({ channel, onCancel, onSaved, bare }: ChannelFormPro
           toast.success("Canal creado");
           onSaved(data);
         },
-        onError: () => toast.error("Error al crear el canal"),
+        onError: (e) => toast.error(apiErrorMessage(e, "Error al crear el canal")),
       });
     }
   };

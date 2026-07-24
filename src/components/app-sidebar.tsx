@@ -13,6 +13,8 @@ import {
   Building2,
   Network,
   Users,
+  ClipboardList,
+  GitBranch,
 } from "lucide-react";
 import {
   Sidebar,
@@ -84,7 +86,7 @@ const baseStudioItems: MenuItem[] = [
 
 function buildStudioItems(): MenuItem[] {
   const items = [...baseStudioItems];
-  // Orden: Chat → Agentes → Conocimiento → Skills → Aplicaciones
+  // Orden: Chat → Agentes → Conocimiento → Skills → (Ops/Workflows si superadmin) → Aplicaciones
   const agentesIdx = items.findIndex((i) => i.url === "/agentes");
   if (canAccessKnowledgeCatalog()) {
     items.splice(agentesIdx + 1, 0, {
@@ -100,6 +102,16 @@ function buildStudioItems(): MenuItem[] {
       url: "/skills",
       icon: Sparkles,
     });
+  }
+  if (isSuperAdmin()) {
+    const appsIdx = items.findIndex((i) => i.url === "/aplicaciones");
+    const insertAt = appsIdx >= 0 ? appsIdx : items.length;
+    items.splice(
+      insertAt,
+      0,
+      { title: "Ops", url: "/planes", icon: ClipboardList },
+      { title: "Workflows", url: "/workflows", icon: GitBranch },
+    );
   }
   return items;
 }

@@ -129,12 +129,18 @@ export function useCreateConversation() {
   });
 }
 
-export function useTakeControl() {
+/** Cierra conversación del chat interno Studio (endpoint canónico). */
+export function useCloseConversation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => POST(ENDPOINTS.conversations.takeControl(id)),
+    mutationFn: (id: string) => POST(ENDPOINTS.conversations.closeConversation(id)),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["conversations"] }),
   });
+}
+
+/** @deprecated Preferir useCloseConversation. */
+export function useTakeControl() {
+  return useCloseConversation();
 }
 
 export function useEscalateConversation() {

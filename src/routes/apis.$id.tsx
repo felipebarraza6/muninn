@@ -938,7 +938,7 @@ export default function APIDetailPage() {
                       onValueChange={(v) => setHealthEndpointKey(v === "__none__" ? "" : v)}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Elegí endpoint" />
+                        <SelectValue placeholder="Elige endpoint" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__none__">
@@ -1183,7 +1183,7 @@ export default function APIDetailPage() {
                 <div>
                   <h2 className="text-sm font-medium">Skills vinculadas</h2>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Skills que usan esta aplicación. Podés generar skills API automáticamente desde
+                    Skills que usan esta aplicación. Puedes generar skills API automáticamente desde
                     los endpoints (se omiten login/credenciales).
                   </p>
                 </div>

@@ -846,7 +846,7 @@ export default function AdminUsuariosPage() {
       ? "Definí sucursal y rol del usuario."
       : editing
         ? "Datos de la cuenta y asignaciones."
-        : "Creá la cuenta y asignala a una sucursal.";
+        : "Crea la cuenta y asígnala a una sucursal.";
 
   // Breadcrumb (Usuarios) limpia ?view=… → cerrar formulario.
   useEffect(() => {

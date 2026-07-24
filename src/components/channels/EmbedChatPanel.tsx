@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { usePublicChannelConfig, useSendPublicMessage } from "@/api/hooks/usePublicChat";
 import { cn } from "@/lib/utils";
+import { apiErrorMessage } from "@/lib/apiError";
 import { toast } from "sonner";
 import { ChatMarkdown } from "@/components/chat/chat-markdown";
 import { ChatCopyButton } from "@/components/chat/chat-copy-button";
@@ -100,8 +101,8 @@ export function EmbedChatPanel({ channelId, className, compact = false }: EmbedC
           timestamp: new Date(),
         },
       ]);
-    } catch {
-      toast.error("Error al enviar el mensaje");
+    } catch (e) {
+      toast.error(apiErrorMessage(e, "Error al enviar el mensaje"));
     }
   };
 
@@ -116,16 +117,28 @@ export function EmbedChatPanel({ channelId, className, compact = false }: EmbedC
   }
 
   if (configError) {
+    const status =
+      typeof configError === "object" &&
+      configError !== null &&
+      "response" in configError &&
+      typeof (configError as { response?: { status?: number } }).response?.status === "number"
+        ? (configError as { response: { status: number } }).response.status
+        : null;
+    const message =
+      status === 403
+        ? "Este dominio no está autorizado para el widget. Pídele al administrador que agregue tu sitio en dominios permitidos del canal (o deje la lista vacía para público)."
+        : status === 404
+          ? "Canal no encontrado o inactivo."
+          : "No se pudo cargar el widget. Verifica que el canal esté activo y que tu dominio esté permitido.";
     return (
       <div
         className={cn(
-          "flex items-center justify-center bg-background text-destructive p-6 text-sm text-center",
+          "flex items-center justify-center bg-background text-destructive p-6 text-sm text-center max-w-md mx-auto",
           compact ? "h-80" : "h-full min-h-[320px]",
           className,
         )}
       >
-        No se pudo cargar el widget. Verifica que el canal esté activo y que tu dominio esté
-        permitido.
+        {message}
       </div>
     );
   }

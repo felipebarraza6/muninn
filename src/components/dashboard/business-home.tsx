@@ -21,6 +21,7 @@ import { formatNumber } from "@/lib/format";
 import { AdminMotionItem, AdminPageMotion } from "@/components/admin/AdminPageMotion";
 import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
 import { SummaryKpiGrid, type SummaryKpi } from "@/components/dashboard/summary-kpi-grid";
+import { OpsHealthCard } from "@/components/dashboard/ops-health-card";
 import { canAccessConversations, canAccessSkills } from "@/lib/authGuards";
 
 type HumanConversation = {
@@ -133,6 +134,12 @@ export function BusinessHome() {
       </AdminMotionItem>
       <AdminMotionItem>
         <SummaryKpiGrid items={summaryItems} columnsClass={kpiCols} />
+      </AdminMotionItem>
+
+      <AdminMotionItem>
+        <section className="mt-4">
+          <OpsHealthCard />
+        </section>
       </AdminMotionItem>
 
       {showConversations && (

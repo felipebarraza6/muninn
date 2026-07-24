@@ -747,7 +747,7 @@ export default function AdminOrganizacionesPage() {
 
     const domain = normalizePortalHost(customDomain);
     if (customDomain.trim() && !domain) {
-      toast.error("Dominio propio inválido. Usá solo el host, ej. portal.cliente.com");
+      toast.error("Dominio propio inválido. Usa solo el host, ej. portal.cliente.com");
       setPanelTab("acceso");
       return;
     }
@@ -1113,7 +1113,7 @@ export default function AdminOrganizacionesPage() {
                         description={
                           orgs.length === 0
                             ? canCreate
-                              ? "Creá la primera organización para empezar."
+                              ? "Crea la primera organización para empezar."
                               : "Sin organizaciones asignadas."
                             : "Ninguna organización coincide con los filtros."
                         }
@@ -1573,7 +1573,7 @@ export default function AdminOrganizacionesPage() {
                 </div>
                 {socialLinks.length === 0 ? (
                   <p className="text-[11px] text-muted-foreground">
-                    Sin links. Agregá las redes que quieras mostrar.
+                    Sin links. Agrega las redes que quieras mostrar.
                   </p>
                 ) : (
                   <div className="space-y-3">
@@ -1758,7 +1758,7 @@ export default function AdminOrganizacionesPage() {
                 </label>
                 {sponsors.length === 0 ? (
                   <p className="text-[11px] text-muted-foreground">
-                    Sin patrocinadores. Agregá partners con nombre, imagen y sitio web.
+                    Sin patrocinadores. Agrega partners con nombre, imagen y sitio web.
                   </p>
                 ) : (
                   <div className="space-y-3">

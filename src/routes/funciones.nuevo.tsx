@@ -238,7 +238,7 @@ export default function FuncionesNuevoPage() {
       return false;
     }
     if (skillScope === "agent" && !agentId) {
-      toast.error("Seleccioná el agente para el ámbito Agente");
+      toast.error("Selecciona el agente para el ámbito Agente");
       return false;
     }
     return true;
@@ -308,7 +308,7 @@ export default function FuncionesNuevoPage() {
         return;
       }
       if (!expression.trim()) {
-        toast.error("Escribí la expresión matemática");
+        toast.error("Escribe la expresión matemática");
         setMathTab("trabajar");
         return;
       }
@@ -339,7 +339,7 @@ export default function FuncionesNuevoPage() {
 
     // python
     if (!pythonCode.trim()) {
-      toast.error("Escribí el código Python");
+      toast.error("Escribe el código Python");
       return;
     }
     if (duplicateVarIndexes.size > 0) {
@@ -516,8 +516,8 @@ export default function FuncionesNuevoPage() {
               {mode === "formula"
                 ? "Diseñá una función matemática: variables → expresión → resultado."
                 : mode === "python"
-                  ? "Escribí código Python a medida y probalo antes de crear."
-                  : "Conectá un endpoint de una Aplicación instalada."}
+                  ? "Escribe código Python a medida y pruébalo antes de crear."
+                  : "Conecta un endpoint de una Aplicación instalada."}
             </p>
           </div>
         </div>

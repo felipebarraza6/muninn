@@ -383,8 +383,8 @@ export default function Funciones() {
             </p>
             <p className="text-sm text-muted-foreground max-w-sm mx-auto">
               {hasActiveFilters
-                ? "Probá otro filtro o búsqueda."
-                : "Creá la primera skill para que tus agentes puedan ejecutar acciones."}
+                ? "Prueba otro filtro o búsqueda."
+                : "Crea la primera skill para que tus agentes puedan ejecutar acciones."}
             </p>
           </div>
           {!hasActiveFilters && canManage && (

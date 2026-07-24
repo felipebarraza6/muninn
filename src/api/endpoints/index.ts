@@ -64,7 +64,10 @@ export const ENDPOINTS = {
     detail: (id: string) => `/ai-agents/conversations/${id}/`,
     messages: (id: string) => `/ai-agents/conversations/${id}/messages/`,
     chat: (id: string) => `/ai-agents/conversations/${id}/chat/`,
-    takeControl: (id: string) => `/ai-agents/conversations/${id}/take_control/`,
+    /** Cierra conversación del chat interno Studio (canónico). */
+    closeConversation: (id: string) => `/ai-agents/conversations/${id}/close-conversation/`,
+    /** @deprecated Usar closeConversation. Compat del back. */
+    takeControl: (id: string) => `/ai-agents/conversations/${id}/close-conversation/`,
     escalate: (id: string) => `/ai-agents/conversations/${id}/escalate/`,
   },
   unifiedConversations: {
@@ -72,6 +75,7 @@ export const ENDPOINTS = {
     messages: (id: string) => `/ai-agents/unified-conversations/${id}/messages/`,
     reply: (id: string) => `/ai-agents/unified-conversations/${id}/reply/`,
     takeControl: (id: string) => `/ai-agents/unified-conversations/${id}/take_control/`,
+    release: (id: string) => `/ai-agents/unified-conversations/${id}/release/`,
     setStatus: (id: string) => `/ai-agents/unified-conversations/${id}/set_status/`,
   },
   opportunities: {
@@ -168,6 +172,9 @@ export const ENDPOINTS = {
     bulkIndex: "/ai-agents/knowledge/bulk_index/",
     bulkCreate: "/ai-agents/knowledge/bulk_create/",
     parseSpreadsheet: "/ai-agents/knowledge/parse_spreadsheet/",
+    categories: "/ai-agents/knowledge/categories/",
+    categoriesRename: "/ai-agents/knowledge/categories/rename/",
+    categoriesDelete: "/ai-agents/knowledge/categories/delete/",
   },
   services: {
     list: "/services/services/",
@@ -175,5 +182,38 @@ export const ENDPOINTS = {
   scheduling: {
     dashboardSummary: "/scheduling/admin/dashboard/summary/",
     bookings: "/scheduling/admin/bookings/",
+  },
+  workPlans: {
+    list: "/ai-agents/work-plans/",
+    detail: (id: string) => `/ai-agents/work-plans/${id}/`,
+    createWithItems: "/ai-agents/work-plans/create-with-items/",
+    runNext: (id: string) => `/ai-agents/work-plans/${id}/run-next/`,
+    runAll: (id: string) => `/ai-agents/work-plans/${id}/run-all/`,
+  },
+  workItems: {
+    list: "/ai-agents/work-items/",
+    detail: (id: string) => `/ai-agents/work-items/${id}/`,
+    run: (id: string) => `/ai-agents/work-items/${id}/run/`,
+    retry: (id: string) => `/ai-agents/work-items/${id}/retry/`,
+  },
+  workflows: {
+    list: "/ai-agents/workflows/",
+    detail: (id: string) => `/ai-agents/workflows/${id}/`,
+    execute: (id: string) => `/ai-agents/workflows/${id}/execute/`,
+    activate: (id: string) => `/ai-agents/workflows/${id}/activate/`,
+    deactivate: (id: string) => `/ai-agents/workflows/${id}/deactivate/`,
+    triggerTypes: "/ai-agents/workflows/trigger-types/",
+  },
+  workflowNodes: {
+    list: "/ai-agents/workflow-nodes/",
+    detail: (id: string) => `/ai-agents/workflow-nodes/${id}/`,
+  },
+  workflowEdges: {
+    list: "/ai-agents/workflow-edges/",
+    detail: (id: string) => `/ai-agents/workflow-edges/${id}/`,
+  },
+  workflowExecutions: {
+    list: "/ai-agents/workflow-executions/",
+    detail: (id: string) => `/ai-agents/workflow-executions/${id}/`,
   },
 } as const;

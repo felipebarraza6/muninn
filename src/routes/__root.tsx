@@ -2,7 +2,6 @@ import { Outlet, useLocation, Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
-import { Toaster } from "@/components/ui/sonner";
 import { ChevronRight, LogOut, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -24,6 +23,7 @@ import {
   showHeaderBranchSwitcher,
 } from "@/lib/authGuards";
 import { getActiveBranchId, getBranchMode, setActiveBranchId } from "@/lib/branchStorage";
+import { isImmersiveWorkspacePath } from "@/lib/immersiveWorkspace";
 import { cn } from "@/lib/utils";
 
 type PageMeta = {
@@ -106,6 +106,30 @@ function getPageMeta(pathname: string, search = ""): PageMeta {
   if (pathname.startsWith("/chat")) {
     return {
       breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Studio" }, { label: "Chat" }],
+    };
+  }
+  if (pathname.startsWith("/planes")) {
+    return {
+      breadcrumb: [
+        { label: "Resumen", to: "/" },
+        { label: "Studio" },
+        { label: "Ops" },
+      ],
+    };
+  }
+  if (pathname.startsWith("/workflows")) {
+    if (pathname !== "/workflows") {
+      return {
+        breadcrumb: [
+          { label: "Resumen", to: "/" },
+          { label: "Studio" },
+          { label: "Workflows", to: "/workflows" },
+          { label: "Canvas" },
+        ],
+      };
+    }
+    return {
+      breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Studio" }, { label: "Workflows" }],
     };
   }
   if (pathname.startsWith("/admin/organizaciones")) {
@@ -292,6 +316,23 @@ function PageHeader() {
 export default function RootLayout() {
   // Aplica theme de la sucursal activa en toda la shell
   const { brandPending } = useBranchTheme();
+  const { pathname } = useLocation();
+  const immersive = isImmersiveWorkspacePath(pathname);
+
+  if (immersive) {
+    return (
+      <div
+        className={cn(
+          "flex h-dvh w-full overflow-hidden bg-background transition-opacity duration-300",
+          brandPending && "opacity-[0.97]",
+        )}
+      >
+        <main className="flex-1 min-w-0 min-h-0 overflow-hidden">
+          <Outlet />
+        </main>
+      </div>
+    );
+  }
 
   return (
     <SidebarProvider>
@@ -309,7 +350,6 @@ export default function RootLayout() {
           </main>
         </SidebarInset>
       </div>
-      <Toaster position="top-right" />
     </SidebarProvider>
   );
 }

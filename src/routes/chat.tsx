@@ -50,7 +50,7 @@ export default function ChatPage() {
 
   if (isLoading) {
     return (
-      <div className="h-[calc(100dvh-3.5rem)] w-full bg-background">
+      <div className="h-dvh w-full bg-background">
         <PageSkeleton variant="chat" className="h-full max-w-none px-4 py-4" padded={false} />
       </div>
     );
@@ -58,7 +58,7 @@ export default function ChatPage() {
 
   if (activeAgents.length === 0) {
     return (
-      <div className="h-[calc(100dvh-3.5rem)] w-full bg-background flex flex-col items-center justify-center gap-4 px-6">
+      <div className="h-dvh w-full bg-background flex flex-col items-center justify-center gap-4 px-6">
         <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
           <Bot className="h-8 w-8 text-primary" />
         </div>
@@ -70,11 +70,12 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="h-[calc(100dvh-3.5rem)] w-full overflow-hidden">
+    <div className="h-dvh w-full overflow-hidden">
       {selectedAgentId ? (
         <AgentChatCore
           agentId={selectedAgentId}
-          showBackLink={false}
+          showBackLink
+          backTo="/"
           fillParent
           agentSwitcher={{
             agents: activeAgents,

@@ -55,13 +55,13 @@ export default function ResetPasswordPage() {
         <div className="w-full max-w-sm space-y-6">
           <div className="space-y-3 text-center">
             <MuninnBrand layout="horizontal" className="justify-center scale-110" />
-            <p className="text-sm text-muted-foreground">Elegí una contraseña nueva.</p>
+            <p className="text-sm text-muted-foreground">Elige una contraseña nueva.</p>
           </div>
 
           {done ? (
             <div className="space-y-4 rounded-2xl border border-border/50 bg-card/80 p-5 backdrop-blur sm:p-6">
               <Alert className="border-primary/25 bg-primary/10">
-                <AlertDescription>Contraseña actualizada. Ya podés entrar.</AlertDescription>
+                <AlertDescription>Contraseña actualizada. Ya puedes entrar.</AlertDescription>
               </Alert>
               <Button type="button" className="w-full" onClick={() => navigate("/login")}>
                 Ir al login

@@ -20,6 +20,7 @@ export {
   useConversations,
   useConversation,
   useConversationMessages,
+  useCloseConversation,
   useTakeControl,
   useEscalateConversation,
 } from "./useConversations";
@@ -28,6 +29,31 @@ export {
   useUnifiedConversationMessages,
   useReplyUnifiedConversation,
   useTakeControlUnifiedConversation,
+  useReleaseConversation,
   useSetUnifiedConversationStatus,
 } from "./useUnifiedConversations";
 export { useClinicDashboard, useCompleteDashboard } from "./useAnalytics";
+export {
+  useWorkPlans,
+  useWorkPlan,
+  useCreateWorkPlan,
+  useUpdateWorkPlan,
+  useCreateWorkItem,
+  useUpdateWorkItem,
+  useDeleteWorkItem,
+  useRunNextWorkPlan,
+  useRunAllWorkPlan,
+  useDeleteWorkPlan,
+  useRunWorkItem,
+  useRetryWorkItem,
+} from "./useWorkPlans";
+export {
+  useWorkflows,
+  useWorkflow,
+  useCreateWorkflow,
+  useExecuteWorkflow,
+  useCreateWorkflowNode,
+  useUpdateWorkflowNode,
+  useWorkflowExecutions,
+  useWorkflowExecution,
+} from "./useWorkflows";

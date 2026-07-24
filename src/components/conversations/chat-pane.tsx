@@ -37,6 +37,7 @@ import {
 interface Props {
   conversation: Conversation;
   onTakeControl: () => void;
+  onRelease?: () => void;
   onSend: (text: string) => void;
   onOpenDetails: () => void;
   onResolve?: () => void;
@@ -58,6 +59,7 @@ function toInsightMessage(m: ChatMessage): InsightMessage {
 export function ChatPane({
   conversation,
   onTakeControl,
+  onRelease,
   onSend,
   onOpenDetails,
   onResolve,
@@ -98,7 +100,11 @@ export function ChatPane({
 
   const isChannel = conversation.source === "channel";
   const isAiControlled = conversation.controlledBy === "ai";
+  const isOpen = conversation.status !== "closed";
   const canReply = !isChannel || conversation.isWaitingHuman === true;
+  const showTakeControl = !analysisOnly && isOpen && isAiControlled;
+  const showRelease =
+    !analysisOnly && isOpen && conversation.isWaitingHuman === true && Boolean(onRelease);
   const ChannelIcon = channelIcon(conversation.channelType);
 
   return (
@@ -148,9 +154,14 @@ export function ChatPane({
             )}
           </div>
         </div>
-        {!analysisOnly && isAiControlled && (
+        {showTakeControl && (
           <Button size="sm" onClick={onTakeControl}>
             Tomar control
+          </Button>
+        )}
+        {showRelease && (
+          <Button size="sm" variant="outline" onClick={onRelease}>
+            Devolver al agente
           </Button>
         )}
         <DropdownMenu>
@@ -306,8 +317,8 @@ export function ChatPane({
             <div className="rounded-lg border border-border/60 bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
               <p className="font-medium text-foreground">Modo análisis</p>
               <p className="text-xs mt-0.5 leading-relaxed">
-                Solo lectura. Revisá el hilo y usá el inspector de mensajes (insights) para
-                analizar. Filtrá por sucursal en la bandeja. La intervención operativa queda en el
+                Solo lectura. Revisa el hilo y usa el inspector de mensajes (insights) para
+                analizar. Filtra por sucursal en la bandeja. La intervención operativa queda en el
                 negocio.
               </p>
             </div>
@@ -338,7 +349,7 @@ export function ChatPane({
             </div>
           )}
 
-          {isChannel && !canReply ? (
+          {isChannel && !canReply && showTakeControl ? (
             <div className="rounded-lg border border-info/30 bg-info-soft px-4 py-3 flex items-center justify-between gap-3">
               <div className="text-sm text-info">
                 <p className="font-medium">La IA está respondiendo</p>
@@ -351,7 +362,14 @@ export function ChatPane({
               </Button>
             </div>
           ) : (
-            <div className="relative">
+            <div className="relative space-y-2">
+              {showRelease && (
+                <div className="flex justify-end md:hidden">
+                  <Button size="sm" variant="outline" onClick={onRelease}>
+                    Devolver al agente
+                  </Button>
+                </div>
+              )}
               <div className="flex items-end gap-2 rounded-lg border bg-background focus-within:border-primary/60 transition-colors">
                 <Textarea
                   ref={textareaRef}
