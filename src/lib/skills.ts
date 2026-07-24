@@ -554,14 +554,7 @@ export function summarizeLogError(log: FunctionExecutionLog, max = 120): string 
   return err.length > max ? `${err.slice(0, max)}…` : err;
 }
 
-export function prettyJson(value: unknown, fallback = "{}"): string {
-  if (value == null) return fallback;
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return fallback;
-  }
-}
+export { prettyJson } from "@/lib/json";
 
 export function parseJsonObject(
   raw: string,

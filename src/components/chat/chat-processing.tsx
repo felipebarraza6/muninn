@@ -1,7 +1,9 @@
 import { useMemo } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { Check, Database, Loader2, Shield, Sparkles, Wrench, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { motion as motionTokens } from "@/lib/motion";
+import { useMotionPrefs } from "@/hooks/useMotionPrefs";
 import type { ToolCallDetail, ToolResultDetail } from "@/components/chat/chat-message-insights";
 import { isToolResultFailed } from "@/components/chat/chat-message-insights";
 import type { PolicyTrace } from "@/lib/policyTrace";
@@ -29,8 +31,6 @@ export type LiveStreamStep = {
   status: "pending" | "active" | "done" | "error";
 };
 
-const softEase = [0.25, 0.1, 0.25, 1] as const;
-
 function StageIcon({ kind, className }: { kind: LiveStreamStep["icon"]; className?: string }) {
   const cls = cn("h-3.5 w-3.5 shrink-0", className);
   if (kind === "database") return <Database className={cls} />;
@@ -45,16 +45,12 @@ export function ChatProcessingIndicator({
   liveSteps,
   compact = false,
 }: {
-  /** @deprecated Ignorado — no se simulan etapas. */
-  useRag?: boolean;
-  /** @deprecated Ignorado — no se simulan etapas. */
-  skillNames?: string[];
   /** Steps del stream SSE. */
   liveSteps?: LiveStreamStep[];
   /** Una sola línea (label activo) sin chips. */
   compact?: boolean;
 }) {
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useMotionPrefs();
   const stages: LiveStreamStep[] =
     liveSteps && liveSteps.length > 0
       ? liveSteps
@@ -76,7 +72,7 @@ export function ChatProcessingIndicator({
       initial={reduceMotion ? false : { opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       exit={reduceMotion ? undefined : { opacity: 0, y: 2 }}
-      transition={{ duration: 0.35, ease: softEase }}
+      transition={{ duration: motionTokens.slow, ease: motionTokens.ease }}
       className="flex gap-3"
       aria-live="polite"
       aria-busy="true"
@@ -89,7 +85,7 @@ export function ChatProcessingIndicator({
             transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
           />
         )}
-        <Loader2 className="relative h-3.5 w-3.5 text-primary/80 animate-spin [animation-duration:1.4s]" />
+        <Loader2 className="relative h-3.5 w-3.5 text-primary/80 animate-spin" />
       </div>
 
       <div
@@ -104,7 +100,7 @@ export function ChatProcessingIndicator({
             initial={reduceMotion ? false : { opacity: 0, y: 3 }}
             animate={{ opacity: 1, y: 0 }}
             exit={reduceMotion ? undefined : { opacity: 0, y: -2 }}
-            transition={{ duration: 0.28, ease: softEase }}
+            transition={{ duration: motionTokens.base, ease: motionTokens.ease }}
             className="flex items-start gap-2"
           >
             <span className="mt-0.5 flex h-6 w-6 items-center justify-center rounded-md bg-primary/10 text-primary/80">
@@ -137,9 +133,9 @@ export function ChatProcessingIndicator({
                   animate={{
                     opacity: active ? 1 : done || err ? 0.9 : 0.55,
                   }}
-                  transition={{ duration: 0.4, ease: softEase }}
+                  transition={{ duration: motionTokens.slow, ease: motionTokens.ease }}
                   className={cn(
-                    "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-medium border transition-colors duration-500",
+                    "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium border transition-colors duration-motion-slow",
                     done && "border-primary/20 bg-primary/8 text-primary/90",
                     active && "border-primary/30 bg-primary/12 text-primary",
                     err && "border-destructive/30 bg-destructive/8 text-destructive",
@@ -155,7 +151,7 @@ export function ChatProcessingIndicator({
                   ) : err ? (
                     <X className="h-2.5 w-2.5" />
                   ) : active ? (
-                    <Loader2 className="h-2.5 w-2.5 animate-spin [animation-duration:1.6s] opacity-80" />
+                    <Loader2 className="h-2.5 w-2.5 animate-spin opacity-80" />
                   ) : (
                     <StageIcon kind={stage.icon} className="h-2.5 w-2.5 opacity-50" />
                   )}
@@ -184,7 +180,7 @@ export function MessageActivityTrail({
   policyTrace?: PolicyTrace | null;
   className?: string;
 }) {
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useMotionPrefs();
   const labels = useMemo(() => extractToolLabels(toolCalls), [toolCalls]);
   const results = Array.isArray(toolResults) ? (toolResults as ToolResultDetail[]) : [];
   const blocked = policyTrace?.skills_blocked ?? [];
@@ -218,7 +214,7 @@ export function MessageActivityTrail({
     <motion.div
       initial={reduceMotion ? false : { opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ duration: 0.25, ease: softEase }}
+      transition={{ duration: motionTokens.base, ease: motionTokens.ease }}
       className={cn("flex flex-wrap items-center gap-1 pt-0.5", className)}
     >
       {chips.map((chip, i) => (
@@ -226,7 +222,11 @@ export function MessageActivityTrail({
           key={chip.key}
           initial={reduceMotion ? false : { opacity: 0, y: 3 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.18, delay: reduceMotion ? 0 : i * 0.04, ease: softEase }}
+          transition={{
+            duration: motionTokens.fast,
+            delay: reduceMotion ? 0 : i * motionTokens.stagger,
+            ease: motionTokens.ease,
+          }}
           className={cn(
             "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium max-w-[16rem]",
             chip.tone === "fail"

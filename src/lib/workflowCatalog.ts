@@ -40,6 +40,30 @@ export const WORKFLOW_STATUS_OPTIONS = [
   { value: "archived", label: "Archivado" },
 ] as const;
 
+export function workflowStatusLabel(value: string | undefined): string {
+  if (!value) return "—";
+  return WORKFLOW_STATUS_OPTIONS.find((s) => s.value === value)?.label || value;
+}
+
+/** Une opciones del catálogo con valores que lleguen del API. */
+export function resolveTriggerOptions(
+  apiTriggers?: Array<{ value: string; label?: string }> | null,
+): Array<{ value: string; label: string; supported?: boolean }> {
+  const fromApi = (apiTriggers || []).map((t) => ({
+    value: t.value,
+    label: t.label || t.value,
+    supported: true as boolean | undefined,
+  }));
+  if (!fromApi.length) return [...WORKFLOW_TRIGGER_OPTIONS];
+  const seen = new Set(fromApi.map((t) => t.value));
+  const extras = WORKFLOW_TRIGGER_OPTIONS.filter((t) => !seen.has(t.value)).map((t) => ({
+    value: t.value,
+    label: t.label,
+    supported: t.supported,
+  }));
+  return [...fromApi, ...extras];
+}
+
 export type WorkflowNodeCatalogItem = {
   type: WorkflowNodeType;
   label: string;

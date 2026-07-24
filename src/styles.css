@@ -79,6 +79,13 @@
 
   --shadow-card: 0 1px 2px rgb(0 0 0 / 0.06), 0 1px 3px rgb(0 0 0 / 0.08);
   --shadow-pop: 0 4px 14px rgb(45 212 191 / 0.14), 0 1px 2px rgb(0 0 0 / 0.08);
+
+  /* Motion scale — usar duration-motion-* / ease-motion-soft en Tailwind */
+  --duration-motion-fast: 150ms;
+  --duration-motion-base: 200ms;
+  --duration-motion-slow: 350ms;
+  --ease-motion-soft: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --ease-motion-out: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .dark {
@@ -580,19 +587,28 @@
 @keyframes wf-node-pulse {
   0%,
   100% {
-    box-shadow:
-      0 0 0 0 rgba(45, 212, 191, 0.45),
-      0 0 24px -6px rgba(45, 212, 191, 0.55);
+    opacity: 0.35;
+    transform: scale(1);
   }
   50% {
-    box-shadow:
-      0 0 0 6px rgba(45, 212, 191, 0),
-      0 0 32px -4px rgba(45, 212, 191, 0.7);
+    opacity: 0.75;
+    transform: scale(1.08);
   }
 }
 
 .wf-node-running {
-  animation: wf-node-pulse 1.4s ease-in-out infinite;
+  position: relative;
+}
+
+.wf-node-running::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: color-mix(in oklab, var(--primary) 28%, transparent);
+  box-shadow: 0 0 24px -4px color-mix(in oklab, var(--primary) 55%, transparent);
+  animation: wf-node-pulse 1.4s var(--ease-motion-soft, ease-in-out) infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {

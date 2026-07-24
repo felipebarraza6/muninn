@@ -232,14 +232,7 @@ export function resolveCredentialFields(
 
 export const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"] as const;
 
-export function prettyJson(value: unknown, fallback = "{}"): string {
-  if (value == null) return fallback;
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return fallback;
-  }
-}
+export { prettyJson } from "@/lib/json";
 
 export function parseJsonObject(
   raw: string,
