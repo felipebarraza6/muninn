@@ -33,6 +33,22 @@ type ChatMarkdownProps = {
   inverted?: boolean;
 };
 
+function safeMarkdownHref(href: string | undefined): string | undefined {
+  if (!href) return undefined;
+  const trimmed = href.trim();
+  if (!trimmed) return undefined;
+  // Bloquear javascript:/data: y esquemas raros; permitir http(s), mailto, anclas y relative.
+  const lower = trimmed.toLowerCase();
+  if (
+    lower.startsWith("javascript:") ||
+    lower.startsWith("data:") ||
+    lower.startsWith("vbscript:")
+  ) {
+    return undefined;
+  }
+  return trimmed;
+}
+
 function ChatMarkdownInner({ content, className, inverted = false }: ChatMarkdownProps) {
   const source = useMemo(() => normalizeChatMarkdown(content), [content]);
 
@@ -55,11 +71,17 @@ function ChatMarkdownInner({ content, className, inverted = false }: ChatMarkdow
           li: ({ children }) => <li className="chat-md__li">{children}</li>,
           strong: ({ children }) => <strong className="chat-md__strong">{children}</strong>,
           em: ({ children }) => <em className="chat-md__em">{children}</em>,
-          a: ({ href, children }) => (
-            <a href={href} target="_blank" rel="noopener noreferrer" className="chat-md__a">
-              {children}
-            </a>
-          ),
+          a: ({ href, children }) => {
+            const safeHref = safeMarkdownHref(href);
+            if (!safeHref) {
+              return <span className="chat-md__a">{children}</span>;
+            }
+            return (
+              <a href={safeHref} target="_blank" rel="noopener noreferrer" className="chat-md__a">
+                {children}
+              </a>
+            );
+          },
           code: ({ className: codeClass, children, ...props }) => {
             const isBlock = Boolean(codeClass?.includes("language-"));
             if (isBlock) {

@@ -139,21 +139,10 @@ async function syncPlanAfterRun(
   data: { result?: WorkPlanRunEnvelope; plan?: WorkPlan } | undefined,
 ) {
   const planId = data?.plan?.id ? String(data.plan.id) : undefined;
-  // Preferir plan fresco del GET; no confiar solo en el prefetch del POST.
   invalidatePlans(qc, planId);
-  if (planId) {
-    await qc.refetchQueries({ queryKey: [KEY, planId] });
-  }
-  if (data?.plan?.id && data.plan) {
-    // Merge status del envelope si el GET aún va lento
-    const cached = qc.getQueryData<WorkPlan>([KEY, planId]);
-    if (cached && data.result?.plan_status && cached.status !== data.result.plan_status) {
-      qc.setQueryData<WorkPlan>([KEY, planId], {
-        ...cached,
-        status: data.result.plan_status as WorkPlanStatus,
-      });
-    }
-  }
+  if (!planId) return;
+  // Confiar en el GET fresco; no pisar con plan_status del POST (carrera con polling).
+  await qc.refetchQueries({ queryKey: [KEY, planId] });
 }
 
 export function useWorkPlans(filters?: { status?: string }) {
@@ -218,8 +207,7 @@ export function useUpdateWorkItem() {
 export function useDeleteWorkItem() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id }: { id: string; planId?: string }) =>
-      DELETE(ENDPOINTS.workItems.detail(id)),
+    mutationFn: ({ id }: { id: string; planId?: string }) => DELETE(ENDPOINTS.workItems.detail(id)),
     onSuccess: (_d, vars) => invalidatePlans(qc, vars.planId),
   });
 }

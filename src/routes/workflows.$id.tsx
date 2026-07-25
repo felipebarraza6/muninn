@@ -590,9 +590,13 @@ export default function WorkflowCanvasPage() {
           onMouseUp={() => {
             const d = dragRef.current;
             if (!d) return;
-            const pos = positions[d.id];
             dragRef.current = null;
+            const pending = pendingDragPos.current;
+            const pos =
+              pending && pending.id === d.id ? { x: pending.x, y: pending.y } : positions[d.id];
+            pendingDragPos.current = null;
             if (!pos) return;
+            setPositions((prev) => ({ ...prev, [d.id]: pos }));
             updateNode.mutate(
               { id: d.id, position_x: Math.round(pos.x), position_y: Math.round(pos.y) },
               {
@@ -602,7 +606,22 @@ export default function WorkflowCanvasPage() {
             );
           }}
           onMouseLeave={() => {
+            const d = dragRef.current;
+            if (!d) return;
             dragRef.current = null;
+            const pending = pendingDragPos.current;
+            const pos =
+              pending && pending.id === d.id ? { x: pending.x, y: pending.y } : positions[d.id];
+            pendingDragPos.current = null;
+            if (!pos) return;
+            setPositions((prev) => ({ ...prev, [d.id]: pos }));
+            updateNode.mutate(
+              { id: d.id, position_x: Math.round(pos.x), position_y: Math.round(pos.y) },
+              {
+                onError: (err) =>
+                  toast.error(apiErrorMessage(err, "No se pudo guardar la posición")),
+              },
+            );
           }}
           onClick={() => {
             if (linkMode && linkFromId) {

@@ -7,6 +7,8 @@ const API_BASE_URL = resolveApiBaseUrl();
 export type ApiRequestConfig = AxiosRequestConfig & {
   /** No inyectar x-branch-id del switcher (listados admin multi-sucursal). */
   skipBranchHeader?: boolean;
+  /** No inyectar Authorization (endpoints públicos: embed, login theme, etc.). */
+  skipAuth?: boolean;
 };
 
 export const apiClient = axios.create({
@@ -15,6 +17,28 @@ export const apiClient = axios.create({
   headers: { "Content-Type": "application/json" },
   withCredentials: true,
 });
+
+/** Rutas de API que no deben llevar Token ni disparar logout global en 401. */
+function isPublicApiUrl(url: string): boolean {
+  return (
+    url.includes("/accounts/users/login") ||
+    url.includes("/accounts/users/login_complete") ||
+    url.includes("/accounts/users/forgot_password") ||
+    url.includes("/accounts/users/reset_password_confirm") ||
+    url.includes("/ai-agents/public/") ||
+    url.includes("/branches/public-login-theme") ||
+    url.includes("/branches/public-org-login-theme")
+  );
+}
+
+/** Páginas del frontend donde un 401 no debe forzar redirect a /login. */
+function isPublicAppPath(pathname: string): boolean {
+  if (pathname === "/login" || pathname.startsWith("/login/")) return true;
+  if (pathname.startsWith("/forgot-password")) return true;
+  if (pathname.startsWith("/reset-password")) return true;
+  if (pathname.startsWith("/embed/")) return true;
+  return false;
+}
 
 function extractValidationErrors(data: unknown): string[] {
   const errors: string[] = [];
@@ -63,12 +87,10 @@ apiClient.interceptors.request.use(
     }
 
     const url = String(config.url ?? "");
-    const isLogin =
-      url.includes("/accounts/users/login") || url.includes("/accounts/users/login_complete");
+    const skipAuth = Boolean((config as ApiRequestConfig).skipAuth) || isPublicApiUrl(url);
 
-    // No mandar Authorization en login: un token viejo en localStorage + cookie
-    // inválida no deben interferir con autenticarse de nuevo.
-    if (!isLogin) {
+    // No mandar Authorization en login/públicos: token viejo no debe interferir.
+    if (!skipAuth) {
       const token = localStorage.getItem("token");
       if (token) {
         config.headers.Authorization = `Token ${token}`;
@@ -81,7 +103,7 @@ apiClient.interceptors.request.use(
     const branchMode = getBranchMode();
 
     // No pisar un x-branch-id explícito (p.ej. roles/asignaciones de otra sucursal en admin).
-    const skipBranchHeader = Boolean((config as ApiRequestConfig).skipBranchHeader);
+    const skipBranchHeader = Boolean((config as ApiRequestConfig).skipBranchHeader) || skipAuth;
     const existingBranchHeader =
       config.headers.get?.("x-branch-id") ??
       (config.headers as Record<string, unknown>)["x-branch-id"] ??
@@ -100,17 +122,16 @@ apiClient.interceptors.response.use(
   async (error: AxiosError) => {
     const url = String(error.config?.url ?? "");
     const status = error.response?.status;
-    const isLogin =
-      url.includes("/accounts/users/login") || url.includes("/accounts/users/login_complete");
+    const isPublicApi = isPublicApiUrl(url);
 
-    if (status === 401 && !isLogin) {
+    if (status === 401 && !isPublicApi) {
       localStorage.removeItem("token");
       localStorage.removeItem("user");
       localStorage.removeItem("branches");
       localStorage.removeItem("permissions");
       localStorage.removeItem("activeBranchId");
       sessionStorage.removeItem("activeBranchId");
-      if (window.location.pathname !== "/login") {
+      if (!isPublicAppPath(window.location.pathname)) {
         window.location.href = "/login";
       }
     }

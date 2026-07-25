@@ -50,7 +50,10 @@ export function usePublicChannelConfig(channelId: string | undefined) {
     queryKey: [...QUERY_KEY, "config", channelId],
     queryFn: () =>
       apiClient
-        .get<PublicChannelConfig>(`/ai-agents/public/channels/${channelId}/config/`)
+        .get<PublicChannelConfig>(`/ai-agents/public/channels/${channelId}/config/`, {
+          skipAuth: true,
+          skipBranchHeader: true,
+        })
         .then((r) => r.data),
     enabled: !!channelId,
     staleTime: 5 * 60 * 1000,
@@ -70,12 +73,16 @@ export function useSendPublicMessage(channelId: string | undefined) {
           session_id?: string;
           conversation_id?: string | number;
           success?: boolean;
-        }>(`/ai-agents/public/channels/${channelId}/message/`, {
-          user_id: userId,
-          user_name: payload.user_name || "Visitante",
-          message: payload.message,
-          ...(payload.email ? { email: payload.email } : {}),
-        })
+        }>(
+          `/ai-agents/public/channels/${channelId}/message/`,
+          {
+            user_id: userId,
+            user_name: payload.user_name || "Visitante",
+            message: payload.message,
+            ...(payload.email ? { email: payload.email } : {}),
+          },
+          { skipAuth: true, skipBranchHeader: true },
+        )
         .then((r) => r.data);
     },
   });

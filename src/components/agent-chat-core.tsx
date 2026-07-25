@@ -301,6 +301,8 @@ export function AgentChatCore({
   const lastRemoteMessagesRef = useRef<string>("");
   const conversationIdRef = useRef<string | null>(conversationIdFromUrl);
   const streamAbortRef = useRef<AbortController | null>(null);
+  /** Evita que el finally de un stream abortado pise uno nuevo. */
+  const streamGenerationRef = useRef(0);
 
   const isBusy = sendMessage.isPending || isStreaming;
 
@@ -386,6 +388,15 @@ export function AgentChatCore({
   }, [conversationId]);
 
   useEffect(() => {
+    streamAbortRef.current?.abort();
+    streamAbortRef.current = null;
+    streamGenerationRef.current += 1;
+    setIsStreaming(false);
+    setStreamingMessageId(null);
+    streamingDraftRef.current = "";
+    streamingMsgIdRef.current = null;
+    setLiveSteps([]);
+
     setInitialized(false);
     skipAutoSelectRef.current = false;
     setIsDraftNew(false);
@@ -411,6 +422,15 @@ export function AgentChatCore({
 
   useEffect(() => {
     lastRemoteMessagesRef.current = "";
+    // Abort stream al cambiar de hilo (evita deltas en conversación equivocada).
+    streamAbortRef.current?.abort();
+    streamAbortRef.current = null;
+    streamGenerationRef.current += 1;
+    setIsStreaming(false);
+    setStreamingMessageId(null);
+    streamingDraftRef.current = "";
+    streamingMsgIdRef.current = null;
+    setLiveSteps([]);
   }, [conversationId]);
 
   useEffect(() => {
@@ -653,6 +673,7 @@ export function AgentChatCore({
     streamAbortRef.current?.abort();
     const abort = new AbortController();
     streamAbortRef.current = abort;
+    const generation = ++streamGenerationRef.current;
 
     const upsertStep = (
       key: string,
@@ -778,10 +799,9 @@ export function AgentChatCore({
         prev.map((m) => (m.id === userMsgId ? { ...m, deliveryStatus: "sent" as const } : m)),
       );
       // Lista sí; mensajes no (la UI local ya tiene el hilo — evita flash post-stream).
-      void queryClient.invalidateQueries({ queryKey: ["unified-conversations"], exact: true });
+      void queryClient.invalidateQueries({ queryKey: ["unified-conversations"] });
       void queryClient.invalidateQueries({
         queryKey: ["conversations", activeId, "messages"],
-        exact: true,
       });
     } catch (err) {
       if ((err as Error)?.name === "AbortError") return;
@@ -793,6 +813,7 @@ export function AgentChatCore({
             id: activeId,
             message: text,
             replyToId,
+            branchId: agentBranchId,
           });
           if (data?.message || data?.content || data?.text) {
             const fallbackMeta =
@@ -837,13 +858,19 @@ export function AgentChatCore({
         if (activeReply) setReplyTo(activeReply);
       }
     } finally {
-      setIsStreaming(false);
-      streamingDraftRef.current = "";
-      streamingMsgIdRef.current = null;
-      setStreamingMessageId(null);
-      streamAbortRef.current = null;
-      // Salida suave del indicador (no vaciar en el mismo frame que el final).
-      window.setTimeout(() => setLiveSteps([]), 280);
+      // Solo el stream vigente limpia estado (evita race con stop + reenvío).
+      if (streamGenerationRef.current === generation) {
+        setIsStreaming(false);
+        streamingDraftRef.current = "";
+        streamingMsgIdRef.current = null;
+        setStreamingMessageId(null);
+        if (streamAbortRef.current === abort) {
+          streamAbortRef.current = null;
+        }
+        window.setTimeout(() => {
+          if (streamGenerationRef.current === generation) setLiveSteps([]);
+        }, 280);
+      }
     }
   };
 
@@ -861,12 +888,13 @@ export function AgentChatCore({
   };
 
   const stopStreaming = useCallback(() => {
+    streamGenerationRef.current += 1;
     streamAbortRef.current?.abort();
+    streamAbortRef.current = null;
     setIsStreaming(false);
     streamingDraftRef.current = "";
     streamingMsgIdRef.current = null;
     setStreamingMessageId(null);
-    streamAbortRef.current = null;
     window.setTimeout(() => setLiveSteps([]), 280);
   }, []);
 

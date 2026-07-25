@@ -85,23 +85,33 @@ export function useSendConversationMessage() {
       id,
       message,
       replyToId,
+      branchId,
     }: {
       id: string;
       message: string;
       replyToId?: string | number | null;
+      /** Sucursal del agente (mismo criterio que el stream SSE). */
+      branchId?: string | null;
     }) => {
       const body: Record<string, unknown> = { message };
       if (replyToId != null && replyToId !== "") {
         const n = Number(replyToId);
         if (Number.isFinite(n)) body.reply_to_id = n;
       }
-      return POST<ChatMessageResponse>(ENDPOINTS.conversations.chat(id), body);
+      const headers: Record<string, string> = {};
+      if (branchId != null && String(branchId).trim() !== "") {
+        headers["x-branch-id"] = String(branchId);
+      }
+      return POST<ChatMessageResponse>(ENDPOINTS.conversations.chat(id), body, {
+        ...(Object.keys(headers).length ? { headers } : {}),
+      });
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         queryKey: ["conversations", variables.id, "messages"],
       });
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      queryClient.invalidateQueries({ queryKey: ["unified-conversations"] });
     },
   });
 }
