@@ -41,11 +41,11 @@ import {
   useWorkflow,
   useWorkflowExecution,
   useWorkflowExecutions,
-  type WorkflowExecutionLog,
   type WorkflowNode,
   type WorkflowNodeType,
 } from "@/api/hooks/useWorkflows";
 import { apiErrorMessage } from "@/lib/apiError";
+import { ErrorBanner } from "@/components/ui/error-banner";
 import { prettyJson } from "@/lib/json";
 import { cn } from "@/lib/utils";
 import {
@@ -54,52 +54,19 @@ import {
   workflowNodeLabel,
   workflowNodeMeta,
 } from "@/lib/workflowCatalog";
+import { isExecutionLive, normalizeRunStatus, resolveEdgeNodeId } from "@/lib/workflowGraph";
 import {
-  isExecutionLive,
-  layeredNodeOrder,
-  normalizeRunStatus,
-  resolveEdgeNodeId,
-  type NodeRunStatus,
-} from "@/lib/workflowGraph";
-import { ErrorBanner } from "@/components/ui/empty-state";
-
-const NODE_W = 180;
-const NODE_H = 56;
-/** CSS vars (hex en tema) — válidos en stroke SVG. */
-const EDGE_STROKE = "var(--primary)";
-const EDGE_SUCCESS = "var(--success)";
-const EDGE_FAILED = "var(--destructive)";
-const COL_GAP = 320; // separación horizontal entre nodos (~140px libres)
-const ROW_GAP = 140;
-const VIEW_PAD_X = 48;
-const VIEW_PAD_Y = 56;
+  COL_GAP,
+  EDGE_FAILED,
+  EDGE_STROKE,
+  EDGE_SUCCESS,
+  NODE_H,
+  NODE_W,
+  buildNodeRunMap,
+  layoutCenteredFlow,
+} from "@/lib/workflowLayout";
 
 type SidePanelTab = "node" | "console";
-
-function buildNodeRunMap(
-  logs: WorkflowExecutionLog[] | undefined,
-  nodes: { id: string; node_key: string; name: string }[],
-): Map<string, NodeRunStatus> {
-  const map = new Map<string, NodeRunStatus>();
-  if (!logs?.length) return map;
-  const byId = new Map(nodes.map((n) => [String(n.id), String(n.id)]));
-  const byKey = new Map(nodes.map((n) => [n.node_key, String(n.id)]));
-  const byName = new Map(nodes.map((n) => [n.name.toLowerCase(), String(n.id)]));
-
-  for (const log of logs) {
-    let nodeId = "";
-    if (log.node != null && byId.has(String(log.node))) {
-      nodeId = String(log.node);
-    } else if (log.node_name && byKey.has(log.node_name)) {
-      nodeId = byKey.get(log.node_name)!;
-    } else if (log.node_name && byName.has(log.node_name.toLowerCase())) {
-      nodeId = byName.get(log.node_name.toLowerCase())!;
-    }
-    if (!nodeId) continue;
-    map.set(nodeId, normalizeRunStatus(log.status));
-  }
-  return map;
-}
 
 function shortError(message: string, max = 160): { head: string; rest: string } {
   const trimmed = message.trim();
@@ -108,90 +75,6 @@ function shortError(message: string, max = 160): { head: string; rest: string } 
   if (first.length <= max && nl < 0) return { head: first, rest: "" };
   if (first.length <= max) return { head: first, rest: trimmed.slice(nl + 1).trim() };
   return { head: `${first.slice(0, max)}…`, rest: trimmed };
-}
-
-function isLayoutCramped(pos: Record<string, { x: number; y: number }>): boolean {
-  const pts = Object.values(pos);
-  if (pts.length < 2) return false;
-  const sorted = [...pts].sort((a, b) => a.x - b.x || a.y - b.y);
-  let minGap = Infinity;
-  for (let i = 1; i < sorted.length; i++) {
-    const gap = sorted[i].x - (sorted[i - 1].x + NODE_W);
-    minGap = Math.min(minGap, gap);
-  }
-  const minX = Math.min(...pts.map((p) => p.x));
-  const minY = Math.min(...pts.map((p) => p.y));
-  // Pegados al origen o con hueco horizontal chico
-  return minGap < 72 || (minX < 60 && minY < 60 && pts.length >= 2);
-}
-
-function layoutCenteredFlow(
-  nodes: {
-    id: string;
-    node_key: string;
-    node_type?: string;
-    position_x?: number;
-    position_y?: number;
-  }[],
-  edges: {
-    from_node?: string;
-    to_node?: string;
-    from_node_key?: string;
-    to_node_key?: string;
-  }[],
-  viewport: { w: number; h: number },
-  force = false,
-): Record<string, { x: number; y: number }> {
-  if (nodes.length === 0) return {};
-
-  const raw: Record<string, { x: number; y: number }> = {};
-  for (const n of nodes) {
-    raw[String(n.id)] = {
-      x: Number(n.position_x ?? 40),
-      y: Number(n.position_y ?? 40),
-    };
-  }
-
-  const cramped = force || isLayoutCramped(raw);
-  let placed: Record<string, { x: number; y: number }>;
-
-  if (cramped) {
-    placed = {};
-    const layers = layeredNodeOrder(nodes, edges);
-    layers.forEach((layer, col) => {
-      const blockH = Math.max(0, layer.length - 1) * ROW_GAP + NODE_H;
-      const yBase = -blockH / 2;
-      layer.forEach((id, row) => {
-        placed[id] = {
-          x: col * COL_GAP,
-          y: yBase + row * ROW_GAP,
-        };
-      });
-    });
-  } else {
-    placed = { ...raw };
-  }
-
-  const pts = Object.values(placed);
-  const minX = Math.min(...pts.map((p) => p.x));
-  const maxX = Math.max(...pts.map((p) => p.x)) + NODE_W;
-  const minY = Math.min(...pts.map((p) => p.y));
-  const maxY = Math.max(...pts.map((p) => p.y)) + NODE_H;
-  const graphW = Math.max(1, maxX - minX);
-  const graphH = Math.max(1, maxY - minY);
-  const viewW = Math.max(viewport.w || 800, graphW + VIEW_PAD_X * 2);
-  const viewH = Math.max(viewport.h || 560, graphH + VIEW_PAD_Y * 2);
-  const ox = Math.round((viewW - graphW) / 2 - minX);
-  const oy = Math.round((viewH - graphH) / 2 - minY);
-
-  const out: Record<string, { x: number; y: number }> = {};
-  for (const [id, p] of Object.entries(placed)) {
-    out[id] = {
-      x: Math.max(VIEW_PAD_X, p.x + ox),
-      y: Math.max(VIEW_PAD_Y, p.y + oy),
-    };
-  }
-  return out;
 }
 
 export default function WorkflowCanvasPage() {

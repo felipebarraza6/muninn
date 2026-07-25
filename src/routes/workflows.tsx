@@ -14,7 +14,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { EmptyState, ErrorBanner } from "@/components/ui/empty-state";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorBanner } from "@/components/ui/error-banner";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
 import { WorkflowFlowStrip } from "@/components/workflows/workflow-flow-strip";
@@ -32,7 +33,7 @@ import {
 } from "@/api/hooks/useWorkflows";
 import { useMotionPrefs } from "@/hooks/useMotionPrefs";
 import { apiErrorMessage } from "@/lib/apiError";
-import { motion as motionTokens } from "@/lib/motion";
+import { motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { isOrganizationOwnerScope, isSuperAdmin } from "@/lib/authGuards";
 import {

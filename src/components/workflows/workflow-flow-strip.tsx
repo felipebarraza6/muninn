@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import type { WorkflowEdge, WorkflowNode } from "@/api/hooks/useWorkflows";
 import { useMotionPrefs } from "@/hooks/useMotionPrefs";
-import { motion as motionTokens } from "@/lib/motion";
+import { motionTokens } from "@/lib/motion";
 import { orderNodes as orderNodeIds, resolveEdgeNodeId } from "@/lib/workflowGraph";
 import { workflowNodeMeta } from "@/lib/workflowCatalog";
 import { cn } from "@/lib/utils";

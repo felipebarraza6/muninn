@@ -25,10 +25,14 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { prettyJson } from "@/lib/json";
 import { ChatMarkdown } from "@/components/chat/chat-markdown";
 import {
   isToolResultFailed,
   normalizeRagScore,
+  scoreLabel,
+  sourceTitle,
+  toolName,
   type RagSourceDetail,
   type ToolCallDetail,
   type ToolResultDetail,
@@ -40,37 +44,6 @@ import {
   policyTraceSignalCount,
   type PolicyTrace,
 } from "@/lib/policyTrace";
-
-function prettyJson(value: unknown): string {
-  if (value == null) return "";
-  if (typeof value === "string") {
-    try {
-      return JSON.stringify(JSON.parse(value.trim()), null, 2);
-    } catch {
-      return value;
-    }
-  }
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
-}
-
-function sourceTitle(src: RagSourceDetail): string {
-  return src.title || src.name || "Documento sin título";
-}
-
-function toolName(call: ToolCallDetail): string {
-  return call.function?.name || call.name || "función";
-}
-
-function scoreLabel(src: RagSourceDetail): string {
-  if (typeof src.similarity === "number") return src.similarity.toFixed(3);
-  if (typeof src.score === "number") return src.score.toFixed(3);
-  if (typeof src.distance === "number") return `d=${src.distance.toFixed(3)}`;
-  return "—";
-}
 
 function chunkLabel(src: RagSourceDetail, index: number): string {
   if (src.chunk_index != null) return `Chunk #${Number(src.chunk_index) + 1}`;

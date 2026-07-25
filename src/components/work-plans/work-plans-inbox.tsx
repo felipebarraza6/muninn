@@ -68,8 +68,10 @@ import {
 } from "@/api/hooks/useWorkPlans";
 import { apiErrorDetail, apiErrorMessage, apiErrorStatus } from "@/lib/apiError";
 import { StatusChip } from "@/components/ui/status-chip";
-import { EmptyState, ErrorBanner } from "@/components/ui/empty-state";
-import { prettyJson } from "@/lib/json";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorBanner } from "@/components/ui/error-banner";
+import { fromDatetimeLocal, toDatetimeLocal } from "@/lib/datetime";
+import { parseJsonObject, prettyJson } from "@/lib/json";
 import { itemStatusLabel, planStatusLabel, workPlanStatusTone } from "@/lib/workPlanStatus";
 import { cn } from "@/lib/utils";
 import { isOrganizationOwnerScope, isSuperAdmin } from "@/lib/authGuards";
@@ -129,37 +131,6 @@ function ItemStatusIcon({ status }: { status?: string }) {
   return <CircleDashed className="h-3.5 w-3.5 text-muted-foreground" />;
 }
 
-function toDatetimeLocal(iso?: string | null): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-function fromDatetimeLocal(value: string): string | null {
-  if (!value.trim()) return null;
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toISOString();
-}
-
-function parseJsonObject(raw: string, label: string): Record<string, unknown> | null {
-  const t = raw.trim();
-  if (!t) return {};
-  try {
-    const parsed = JSON.parse(t);
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      return parsed as Record<string, unknown>;
-    }
-    toast.error(`${label}: debe ser un objeto JSON`);
-    return null;
-  } catch {
-    toast.error(`${label}: JSON inválido`);
-    return null;
-  }
-}
-
 function payloadFromDraft(item: DraftItem): Record<string, unknown> | null {
   if (item.kind === "agent_turn") {
     return { message: item.message.trim() || item.title };
@@ -172,9 +143,12 @@ function payloadFromDraft(item: DraftItem): Record<string, unknown> | null {
       toast.error("La skill necesita un function_slug");
       return null;
     }
-    const parameters = parseJsonObject(item.parametersJson || "{}", "Parámetros");
-    if (parameters == null) return null;
-    return { function_slug: item.functionSlug.trim(), parameters };
+    const parsed = parseJsonObject(item.parametersJson || "{}", "Parámetros");
+    if (!parsed.ok) {
+      toast.error(parsed.error);
+      return null;
+    }
+    return { function_slug: item.functionSlug.trim(), parameters: parsed.value };
   }
   if (item.kind === "workflow") {
     if (!item.workflowId.trim() && !item.workflowName.trim()) {
@@ -779,9 +753,14 @@ export function WorkPlansInbox() {
           )}
         >
           {!selectedId ? (
-            <EmptyPane
-              text="Selecciona un plan o crea uno con una plantilla de tu sucursal."
-              cta={{ label: "Nuevo plan", onClick: () => setCreateOpen(true) }}
+            <EmptyState
+              className="flex-1 border-0 bg-transparent rounded-none"
+              title="Selecciona un plan o crea uno con una plantilla de tu sucursal."
+              action={
+                <Button size="sm" variant="outline" onClick={() => setCreateOpen(true)}>
+                  Nuevo plan
+                </Button>
+              }
             />
           ) : detailLoading && !planDetail ? (
             <div className="flex-1 flex items-center justify-center">
@@ -1039,7 +1018,10 @@ export function WorkPlansInbox() {
 
         <aside className="hidden md:flex w-[340px] lg:w-[380px] bg-card flex-col shrink-0 overflow-hidden border-l">
           {!inspectorProps ? (
-            <EmptyPane text="Elige un ítem del flujo para ver insumos y lo que generó." />
+            <EmptyState
+              className="flex-1 border-0 bg-transparent rounded-none"
+              title="Elige un ítem del flujo para ver insumos y lo que generó."
+            />
           ) : (
             <ItemInspector {...inspectorProps} />
           )}
@@ -1117,22 +1099,6 @@ export function WorkPlansInbox() {
         }}
       />
     </div>
-  );
-}
-
-function EmptyPane({ text, cta }: { text: string; cta?: { label: string; onClick: () => void } }) {
-  return (
-    <EmptyState
-      className="flex-1 border-0 bg-transparent rounded-none"
-      title={text}
-      action={
-        cta ? (
-          <Button size="sm" variant="outline" onClick={cta.onClick}>
-            {cta.label}
-          </Button>
-        ) : undefined
-      }
-    />
   );
 }
 
@@ -1295,10 +1261,13 @@ function PlanHeader({
                 className="h-7 gap-1"
                 disabled={busy}
                 onClick={() => {
-                  const ctx = parseJsonObject(contextJson, "Contexto");
-                  if (ctx == null) return;
+                  const parsed = parseJsonObject(contextJson, "Contexto");
+                  if (!parsed.ok) {
+                    toast.error(parsed.error);
+                    return;
+                  }
                   onSaveMeta({
-                    context: ctx,
+                    context: parsed.value,
                     scheduled_for: fromDatetimeLocal(scheduledFor),
                   });
                 }}
@@ -2181,8 +2150,12 @@ function CreatePlanDialog({
           <Button
             disabled={pending || !name.trim() || !agentId}
             onClick={() => {
-              const ctx = parseJsonObject(contextJson, "Contexto");
-              if (ctx == null) return;
+              const parsedCtx = parseJsonObject(contextJson, "Contexto");
+              if (!parsedCtx.ok) {
+                toast.error(parsedCtx.error);
+                return;
+              }
+              const ctx = parsedCtx.value;
               const builtItems: NonNullable<CreateWorkPlanPayload["items"]> = [];
               for (let i = 0; i < items.length; i++) {
                 const it = items[i];

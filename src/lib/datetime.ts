@@ -13,6 +13,34 @@ export function formatDateTime(value: string | Date | null | undefined): string 
   });
 }
 
+/** Timestamp de logs de ejecución (dateStyle short + time medium). */
+export function formatLogWhen(iso?: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString(LOCALE, {
+    dateStyle: "short",
+    timeStyle: "medium",
+  });
+}
+
+/** Valor para `<input type="datetime-local">`. */
+export function toDatetimeLocal(iso?: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** ISO desde valor de `<input type="datetime-local">`. */
+export function fromDatetimeLocal(value: string): string | null {
+  if (!value.trim()) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+
 /** Stamp compacto para burbujas de chat. */
 export function formatMessageStamp(value: string | Date | null | undefined): string {
   if (!value) return "";

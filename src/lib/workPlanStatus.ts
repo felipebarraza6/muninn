@@ -1,4 +1,6 @@
-import type { StatusTone } from "@/components/ui/status-chip";
+import type { StatusTone } from "@/lib/statusTone";
+
+export type { StatusTone };
 
 export const PLAN_STATUS_LABEL: Record<string, string> = {
   draft: "Borrador",

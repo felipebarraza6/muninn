@@ -536,39 +536,11 @@ export function formatLogLatency(ms?: number | null): string {
   return `${(ms / 1000).toFixed(1)} s`;
 }
 
-export function formatLogWhen(iso?: string | null): string {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleString("es-CL", {
-      dateStyle: "short",
-      timeStyle: "medium",
-    });
-  } catch {
-    return iso;
-  }
-}
+export { formatLogWhen } from "@/lib/datetime";
+export { prettyJson, parseJsonObject } from "@/lib/json";
 
 export function summarizeLogError(log: FunctionExecutionLog, max = 120): string {
   const err = (log.error || "").trim();
   if (!err) return "";
   return err.length > max ? `${err.slice(0, max)}…` : err;
-}
-
-export { prettyJson } from "@/lib/json";
-
-export function parseJsonObject(
-  raw: string,
-  label = "JSON",
-): { ok: true; value: Record<string, unknown> } | { ok: false; error: string } {
-  const trimmed = raw.trim();
-  if (!trimmed) return { ok: true, value: {} };
-  try {
-    const parsed = JSON.parse(trimmed) as unknown;
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return { ok: false, error: `${label} debe ser un objeto { … }` };
-    }
-    return { ok: true, value: parsed as Record<string, unknown> };
-  } catch {
-    return { ok: false, error: `${label} inválido` };
-  }
 }

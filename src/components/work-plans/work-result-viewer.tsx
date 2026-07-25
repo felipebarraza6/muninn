@@ -10,7 +10,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { EmptyState, ErrorBanner } from "@/components/ui/empty-state";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorBanner } from "@/components/ui/error-banner";
 import { prettyJson } from "@/lib/json";
 import { cn } from "@/lib/utils";
 

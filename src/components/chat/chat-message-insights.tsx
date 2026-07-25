@@ -8,6 +8,7 @@ import {
   Sparkles,
   Wrench,
 } from "lucide-react";
+import { prettyJson } from "@/lib/json";
 import { cn } from "@/lib/utils";
 
 export interface RagSourceDetail {
@@ -61,33 +62,21 @@ export function isToolResultFailed(content: unknown): boolean {
   }
 }
 
-function prettyJson(value: unknown): string {
-  if (value == null) return "";
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    try {
-      return JSON.stringify(JSON.parse(trimmed), null, 2);
-    } catch {
-      return value;
-    }
-  }
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
-}
-
-function sourceTitle(src: RagSourceDetail): string {
+export function sourceTitle(src: RagSourceDetail): string {
   return src.title || src.name || "Documento sin título";
 }
 
-function toolName(call: ToolCallDetail): string {
+export function toolName(call: ToolCallDetail): string {
   return call.function?.name || call.name || "función";
 }
 
+/** Label legible para chips (spaces en vez de _/-). */
+export function toolLabel(call: ToolCallDetail): string {
+  return toolName(call).replace(/[_-]+/g, " ").trim() || "skill";
+}
+
 function toolArguments(call: ToolCallDetail): string {
-  return prettyJson(call.function?.arguments ?? call.arguments ?? "");
+  return prettyJson(call.function?.arguments ?? call.arguments ?? "", "");
 }
 
 /** Normaliza score a 0–1 para barras (soporta similarity, score o distance invertida). */
@@ -107,7 +96,7 @@ export function normalizeRagScore(src: RagSourceDetail): number | undefined {
   return undefined;
 }
 
-function scoreLabel(src: RagSourceDetail): string {
+export function scoreLabel(src: RagSourceDetail): string {
   if (typeof src.similarity === "number") return src.similarity.toFixed(3);
   if (typeof src.score === "number") return src.score.toFixed(3);
   if (typeof src.distance === "number") return `d=${src.distance.toFixed(3)}`;

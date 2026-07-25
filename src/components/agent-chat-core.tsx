@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChatThread } from "@/components/chat/chat-thread";
-import { ErrorBanner } from "@/components/ui/empty-state";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorBanner } from "@/components/ui/error-banner";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
@@ -27,8 +28,7 @@ import { chatDraftKey, loadChatDraft, saveChatDraft, clearChatDraft } from "@/li
 import { useStickyChatScroll } from "@/hooks/useStickyChatScroll";
 import { useMotionPrefs } from "@/hooks/useMotionPrefs";
 import { formatDateTime, formatMessageStamp, formatRelative } from "@/lib/datetime";
-import { motion as motionTokens } from "@/lib/motion";
-import { EmptyState } from "@/components/ui/empty-state";
+import { motionTokens } from "@/lib/motion";
 import { useAgent } from "@/api/hooks/useAgents";
 import { useAgentFunctions } from "@/api/hooks/useAgentFunctions";
 import {

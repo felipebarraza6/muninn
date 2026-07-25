@@ -1,7 +1,8 @@
 import { cva, type VariantProps } from "class-variance-authority";
+import type { StatusTone } from "@/lib/statusTone";
 import { cn } from "@/lib/utils";
 
-export type StatusTone = "running" | "pending" | "success" | "failed" | "idle" | "skipped";
+export type { StatusTone };
 
 const statusChipVariants = cva(
   "inline-flex items-center rounded-full border font-medium whitespace-nowrap max-w-full truncate",

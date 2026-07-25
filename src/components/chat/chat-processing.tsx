@@ -2,16 +2,11 @@ import { useMemo } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, Database, Loader2, Shield, Sparkles, Wrench, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { motion as motionTokens } from "@/lib/motion";
+import { motionTokens } from "@/lib/motion";
 import { useMotionPrefs } from "@/hooks/useMotionPrefs";
 import type { ToolCallDetail, ToolResultDetail } from "@/components/chat/chat-message-insights";
-import { isToolResultFailed } from "@/components/chat/chat-message-insights";
+import { isToolResultFailed, toolLabel } from "@/components/chat/chat-message-insights";
 import type { PolicyTrace } from "@/lib/policyTrace";
-
-function toolLabel(call: ToolCallDetail): string {
-  const raw = call.function?.name || call.name || "skill";
-  return raw.replace(/[_-]+/g, " ").trim();
-}
 
 export function extractToolLabels(toolCalls?: unknown[]): string[] {
   if (!Array.isArray(toolCalls)) return [];
