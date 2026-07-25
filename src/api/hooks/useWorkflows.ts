@@ -135,6 +135,15 @@ export function useUpdateWorkflow() {
   });
 }
 
+/** DELETE REST del detalle; el backend puede responder 405 si aún no expone destroy. */
+export function useDeleteWorkflow() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => DELETE(ENDPOINTS.workflows.detail(id)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [KEY] }),
+  });
+}
+
 export type WorkflowTriggerTypeOption = {
   value: string;
   label: string;

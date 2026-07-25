@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   CheckCircle2,
@@ -8,6 +8,7 @@ import {
   Pencil,
   Plus,
   RotateCcw,
+  Search,
   Trash2,
   Users,
 } from "lucide-react";
@@ -15,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,6 +39,7 @@ import { Label } from "@/components/ui/label";
 import {
   useKnowledgeCatalog,
   useKnowledgeCategories,
+  useKnowledgeList,
   useDeleteKnowledge,
   useDeleteKnowledgeCategory,
   useRenameKnowledgeCategory,
@@ -114,7 +117,8 @@ function KnowledgeCard({
   return (
     <article
       className={cn(
-        "group flex flex-col rounded-xl border bg-card/60 p-4 transition-colors",
+        "group flex flex-col rounded-xl border bg-card/60 p-4 transition-[border-color,box-shadow,transform] duration-200",
+        "hover:-translate-y-0.5 hover:shadow-[var(--shadow-card)] hover:border-primary/25",
         inactive ? "border-border/60 opacity-70 grayscale" : style.border,
       )}
     >
@@ -254,11 +258,22 @@ export default function Conocimiento() {
   const deleteCategory = useDeleteKnowledgeCategory();
 
   const [q, setQ] = useState("");
+  const [debouncedQ, setDebouncedQ] = useState("");
   const [creating, setCreating] = useState(false);
   const [pending, setPending] = useState<PendingAction | null>(null);
   const [restoringId, setRestoringId] = useState<string | null>(null);
   const [categoryDialog, setCategoryDialog] = useState<CategoryDialog>(null);
   const [renameValue, setRenameValue] = useState("");
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedQ(q.trim()), 280);
+    return () => window.clearTimeout(t);
+  }, [q]);
+
+  const { data: searchPayload, isFetching: searching } = useKnowledgeList({
+    q: debouncedQ,
+    top_k: 40,
+  });
 
   const docs = useMemo(() => {
     if (showInactive) {
@@ -284,7 +299,30 @@ export default function Conocimiento() {
   }, [agents]);
 
   const filtered = useMemo(() => {
-    const term = q.trim().toLowerCase();
+    const term = debouncedQ.toLowerCase();
+    const searchHits = searchPayload?.results ?? [];
+
+    // Búsqueda semántica/API cuando hay ≥2 chars; fallback local si no hay hits.
+    if (term.length >= 2 && searchHits.length > 0) {
+      const byId = new Map(docs.map((d) => [String(d.id), d]));
+      const ranked: AgentKnowledge[] = [];
+      for (const hit of searchHits) {
+        const doc = byId.get(String(hit.id));
+        if (doc) ranked.push(doc);
+      }
+      // Incluir matches locales que el search no devolvió (título/categoría).
+      const seen = new Set(ranked.map((d) => String(d.id)));
+      for (const d of docs) {
+        if (seen.has(String(d.id))) continue;
+        const localHit =
+          d.title.toLowerCase().includes(term) ||
+          (d.summary || "").toLowerCase().includes(term) ||
+          (d.category || "").toLowerCase().includes(term);
+        if (localHit) ranked.push(d);
+      }
+      return ranked;
+    }
+
     if (!term) return docs;
     return docs.filter(
       (d) =>
@@ -294,7 +332,7 @@ export default function Conocimiento() {
         knowledgeTypeLabel(d.knowledge_type).toLowerCase().includes(term) ||
         d.knowledge_type.toLowerCase().includes(term),
     );
-  }, [docs, q]);
+  }, [docs, debouncedQ, searchPayload?.results]);
 
   const openRenameCategory = (name: string) => {
     setRenameValue(name);
@@ -367,12 +405,18 @@ export default function Conocimiento() {
       </div>
 
       <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-        <Input
-          placeholder="Buscar por título, tipo, categoría…"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          className="h-9 flex-1 min-w-0 sm:max-w-md"
-        />
+        <div className="relative flex-1 min-w-0 sm:max-w-md">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Buscar en la biblioteca (título, RAG…)"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            className="h-9 pl-8"
+          />
+          {searching ? (
+            <Loader2 className="absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />
+          ) : null}
+        </div>
         <Select value={categoryFilter} onValueChange={setCategoryFilter}>
           <SelectTrigger className="h-9 w-full sm:w-[200px]">
             <SelectValue placeholder="Categoría" />
@@ -417,14 +461,30 @@ export default function Conocimiento() {
         <StudioBranchFilter />
       </div>
 
+      {debouncedQ.length >= 2 && (searchPayload?.results?.length ?? 0) > 0 ? (
+        <p className="text-[11px] text-muted-foreground -mt-1">
+          Ordenado por relevancia del índice ({searchPayload?.count ?? filtered.length} coincidencias).
+        </p>
+      ) : null}
+
       {isLoading ? (
         <PageSkeleton variant="list" padded={false} />
       ) : filtered.length === 0 ? (
-        <div className="rounded-xl border border-dashed py-16 text-center">
-          <p className="text-sm text-muted-foreground">
-            No hay documentos. Crea el primero para usarlo en agentes.
-          </p>
-        </div>
+        <EmptyState
+          title={q.trim() ? "Sin resultados" : "Biblioteca vacía"}
+          description={
+            q.trim()
+              ? "Probá otro término o limpiá el filtro de categoría."
+              : "Creá el primer documento para usarlo en agentes con RAG."
+          }
+          action={
+            !q.trim() ? (
+              <Button size="sm" onClick={() => setCreating(true)}>
+                <Plus className="h-4 w-4 mr-1.5" /> Nuevo
+              </Button>
+            ) : undefined
+          }
+        />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
           {filtered.map((doc) => {

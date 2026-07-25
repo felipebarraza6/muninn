@@ -182,14 +182,16 @@ export function useDeleteKnowledgeCategory() {
 }
 
 export function useKnowledgeList(filters?: { source_app?: string; q?: string; top_k?: number }) {
+  const q = filters?.q?.trim() ?? "";
   return useQuery({
     queryKey: [...QUERY_KEY, "search", filters],
     queryFn: () =>
       GET<{ query: string; results: KnowledgeSearchResult[]; count: number }>(
         ENDPOINTS.knowledge.search,
-        { params: filters },
+        { params: { ...filters, q } },
       ),
-    staleTime: 30_000,
+    enabled: q.length >= 2,
+    staleTime: 15_000,
   });
 }
 

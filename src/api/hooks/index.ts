@@ -52,6 +52,7 @@ export {
   useWorkflow,
   useCreateWorkflow,
   useUpdateWorkflow,
+  useDeleteWorkflow,
   useExecuteWorkflow,
   useActivateWorkflow,
   useDeactivateWorkflow,

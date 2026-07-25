@@ -5,6 +5,7 @@ import {
   ShieldAlert,
   Info,
   CheckCircle2,
+  ArrowUpRight,
 } from "lucide-react";
 import { formatCLP } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,7 @@ interface Props {
   onSend: (text: string) => void;
   onOpenDetails: () => void;
   onResolve?: () => void;
+  onEscalate?: () => void;
   /** Superadmin: solo lectura + insights; sin tomar control ni responder. */
   analysisOnly?: boolean;
   sending?: boolean;
@@ -76,6 +78,7 @@ export function ChatPane({
   onSend,
   onOpenDetails,
   onResolve,
+  onEscalate,
   analysisOnly = false,
   sending = false,
 }: Props) {
@@ -163,6 +166,11 @@ export function ChatPane({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                {onEscalate && isOpen ? (
+                  <DropdownMenuItem onClick={onEscalate}>
+                    <ArrowUpRight className="h-4 w-4 mr-2" /> Escalar
+                  </DropdownMenuItem>
+                ) : null}
                 {onResolve && (
                   <DropdownMenuItem onClick={onResolve}>
                     <CheckCircle2 className="h-4 w-4 mr-2" /> Cerrar

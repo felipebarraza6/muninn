@@ -17,6 +17,7 @@ import {
   Loader2,
   MessageSquarePlus,
   Archive,
+  ArrowUpRight,
   User,
   RefreshCw,
   Wrench,
@@ -36,6 +37,8 @@ import {
   useSendConversationMessage,
   useCreateConversation,
   useUpdateConversationStatus,
+  useCloseConversation,
+  useEscalateConversation,
   type ChatMessageResponse,
 } from "@/api/hooks/useConversations";
 import { ChatMarkdown } from "@/components/chat/chat-markdown";
@@ -236,6 +239,10 @@ export function AgentChatCore({
   const createConversation = useCreateConversation();
   const sendMessage = useSendConversationMessage();
   const updateStatus = useUpdateConversationStatus();
+  const closeConversation = useCloseConversation();
+  const escalateConversation = useEscalateConversation();
+  const [escalateOpen, setEscalateOpen] = useState(false);
+  const [escalateReason, setEscalateReason] = useState("");
   const queryClient = useQueryClient();
   const reduceMotion = useMotionPrefs();
 
@@ -964,7 +971,39 @@ export function AgentChatCore({
 
   const handleCloseCurrentConversation = () => {
     if (!conversationId) return;
-    changeConversationStatus(conversationId, "ARCHIVED");
+    closeConversation.mutate(conversationId, {
+      onSuccess: () => {
+        toast.success("Conversación cerrada");
+        void queryClient.invalidateQueries({ queryKey: ["conversations"] });
+        void queryClient.invalidateQueries({ queryKey: ["unified-conversations"] });
+      },
+      onError: () => {
+        // Fallback si el endpoint canónico no está disponible en este entorno.
+        updateStatus.mutate(
+          { id: conversationId, status: "ARCHIVED" },
+          {
+            onSuccess: () => toast.success("Conversación archivada"),
+            onError: (e) => toast.error(apiErrorMessage(e, "No se pudo cerrar")),
+          },
+        );
+      },
+    });
+  };
+
+  const handleEscalateCurrent = () => {
+    if (!conversationId || !escalateReason.trim()) return;
+    escalateConversation.mutate(
+      { id: conversationId, reason: escalateReason.trim() },
+      {
+        onSuccess: () => {
+          toast.success("Conversación escalada");
+          setEscalateOpen(false);
+          setEscalateReason("");
+          void queryClient.invalidateQueries({ queryKey: ["conversations"] });
+        },
+        onError: (e) => toast.error(apiErrorMessage(e, "No se pudo escalar")),
+      },
+    );
   };
 
   const isReady = Boolean(agent?.is_active && (agent?.llm_model || agent?.llm_model_name));
@@ -1105,17 +1144,30 @@ export function AgentChatCore({
           </Button>
 
           {conversationId && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="shrink-0 gap-1.5 cursor-pointer"
-              onClick={handleCloseCurrentConversation}
-              disabled={updateStatus.isPending}
-              title="Archivar"
-            >
-              <Archive className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Archivar</span>
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0 gap-1.5 cursor-pointer"
+                onClick={() => setEscalateOpen(true)}
+                disabled={escalateConversation.isPending}
+                title="Escalar a humano"
+              >
+                <ArrowUpRight className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Escalar</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0 gap-1.5 cursor-pointer"
+                onClick={handleCloseCurrentConversation}
+                disabled={closeConversation.isPending || updateStatus.isPending}
+                title="Cerrar conversación"
+              >
+                <Archive className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Cerrar</span>
+              </Button>
+            </>
           )}
 
           <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
@@ -1681,6 +1733,54 @@ export function AgentChatCore({
             </Button>
             <Button type="button" onClick={confirmPendingSkill}>
               Añadir skill
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={escalateOpen}
+        onOpenChange={(open) => {
+          setEscalateOpen(open);
+          if (!open) setEscalateReason("");
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base">Escalar conversación</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 py-1">
+            <Label htmlFor="escalate-reason" className="text-xs">
+              Motivo
+            </Label>
+            <Input
+              id="escalate-reason"
+              value={escalateReason}
+              onChange={(e) => setEscalateReason(e.target.value)}
+              placeholder="Ej. el usuario pide un humano"
+              className="h-9"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleEscalateCurrent();
+                }
+              }}
+            />
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="ghost" onClick={() => setEscalateOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              disabled={!escalateReason.trim() || escalateConversation.isPending}
+              onClick={handleEscalateCurrent}
+            >
+              {escalateConversation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+              ) : null}
+              Escalar
             </Button>
           </DialogFooter>
         </DialogContent>

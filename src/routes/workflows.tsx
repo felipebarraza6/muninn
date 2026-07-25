@@ -1,12 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, GitBranch, Loader2, Play, Plus, Search } from "lucide-react";
+import { ArrowLeft, GitBranch, Loader2, Play, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Dialog,
   DialogContent,
@@ -19,12 +29,14 @@ import { ErrorBanner } from "@/components/ui/error-banner";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
 import { WorkflowFlowStrip } from "@/components/workflows/workflow-flow-strip";
+import { WorkflowTriggerConfigFields } from "@/components/workflows/workflow-trigger-config-fields";
 import {
   useActivateWorkflow,
   useCreateWorkflow,
   useCreateWorkflowEdge,
   useCreateWorkflowNode,
   useDeactivateWorkflow,
+  useDeleteWorkflow,
   useExecuteWorkflow,
   useUpdateWorkflow,
   useWorkflow,
@@ -42,6 +54,12 @@ import {
   workflowStatusLabel,
   workflowTriggerLabel,
 } from "@/lib/workflowCatalog";
+import {
+  draftFromTriggerConfig,
+  emptyTriggerConfigDraft,
+  triggerConfigPayload,
+  type TriggerConfigDraft,
+} from "@/lib/workflowTriggerConfig";
 import {
   Select,
   SelectContent,
@@ -481,11 +499,15 @@ function WorkflowPreview({
   const updateWf = useUpdateWorkflow();
   const activate = useActivateWorkflow();
   const deactivate = useDeactivateWorkflow();
+  const deleteWf = useDeleteWorkflow();
   const { data: triggerTypesApi = [] } = useWorkflowTriggerTypes();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [triggerType, setTriggerType] = useState("manual");
+  const [triggerConfig, setTriggerConfig] = useState<TriggerConfigDraft>(emptyTriggerConfigDraft);
   const [status, setStatus] = useState("draft");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const navigate = useNavigate();
 
   const triggerOptions = useMemo(() => resolveTriggerOptions(triggerTypesApi), [triggerTypesApi]);
 
@@ -494,6 +516,7 @@ function WorkflowPreview({
     setName(detail.name || "");
     setDescription(detail.description || "");
     setTriggerType(detail.trigger_type || "manual");
+    setTriggerConfig(draftFromTriggerConfig(detail.trigger_type || "manual", detail.trigger_config));
     setStatus(detail.status || "draft");
   }, [detail]);
 
@@ -505,12 +528,28 @@ function WorkflowPreview({
     () => (detail?.edges ?? []).filter((e) => e.is_active !== false),
     [detail?.edges],
   );
+
+  const savedTriggerPayload = useMemo(
+    () =>
+      detail
+        ? triggerConfigPayload(
+            detail.trigger_type || "manual",
+            draftFromTriggerConfig(detail.trigger_type || "manual", detail.trigger_config),
+          )
+        : null,
+    [detail],
+  );
+  const nextTriggerPayload = triggerConfigPayload(triggerType, triggerConfig);
+  const triggerConfigDirty =
+    JSON.stringify(nextTriggerPayload ?? {}) !== JSON.stringify(savedTriggerPayload ?? {});
+
   const dirty =
     !!detail &&
     (name !== (detail.name || "") ||
       description !== (detail.description || "") ||
       triggerType !== (detail.trigger_type || "manual") ||
-      status !== (detail.status || "draft"));
+      status !== (detail.status || "draft") ||
+      triggerConfigDirty);
 
   const saveMeta = () => {
     if (!detail) return;
@@ -520,6 +559,7 @@ function WorkflowPreview({
         name: name.trim() || detail.name,
         description: description.trim(),
         trigger_type: triggerType,
+        trigger_config: nextTriggerPayload ?? {},
         status,
         is_active: status === "active",
       },
@@ -528,6 +568,24 @@ function WorkflowPreview({
         onError: (e) => toast.error(apiErrorMessage(e, "No se pudo guardar")),
       },
     );
+  };
+
+  const handleDelete = () => {
+    if (!detail) return;
+    deleteWf.mutate(detail.id, {
+      onSuccess: () => {
+        toast.success("Workflow eliminado");
+        setConfirmDelete(false);
+        navigate("/workflows", { replace: true });
+      },
+      onError: (e) =>
+        toast.error(
+          apiErrorMessage(
+            e,
+            "No se pudo eliminar. Si el API aún no lo soporta, archivá el workflow.",
+          ),
+        ),
+    });
   };
 
   return (
@@ -619,11 +677,22 @@ function WorkflowPreview({
                       className="text-sm resize-none"
                     />
                   </div>
+                  <WorkflowTriggerConfigFields
+                    triggerType={triggerType}
+                    value={triggerConfig}
+                    onChange={setTriggerConfig}
+                  />
                 </div>
                 <div className="space-y-3">
                   <div className="space-y-1">
                     <Label className="text-[10px] text-muted-foreground">Trigger</Label>
-                    <Select value={triggerType} onValueChange={setTriggerType}>
+                    <Select
+                      value={triggerType}
+                      onValueChange={(v) => {
+                        setTriggerType(v);
+                        setTriggerConfig(draftFromTriggerConfig(v, detail.trigger_config));
+                      }}
+                    >
                       <SelectTrigger className="h-9">
                         <SelectValue />
                       </SelectTrigger>
@@ -663,11 +732,46 @@ function WorkflowPreview({
                     ) : null}
                     Guardar
                   </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="w-full h-9 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    disabled={deleteWf.isPending}
+                    onClick={() => setConfirmDelete(true)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                    Eliminar
+                  </Button>
                 </div>
               </div>
             )}
           </div>
         </section>
+
+        <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>¿Eliminar este workflow?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Se borrará «{detail?.name}» y su grafo. Si el API aún no soporta DELETE, usá
+                Archivar en estado.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                disabled={deleteWf.isPending}
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleDelete();
+                }}
+              >
+                {deleteWf.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Eliminar"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </motion.div>
     </ScrollArea>
   );
