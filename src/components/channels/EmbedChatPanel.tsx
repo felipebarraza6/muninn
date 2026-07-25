@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { usePublicChannelConfig, useSendPublicMessage } from "@/api/hooks/usePublicChat";
 import { cn } from "@/lib/utils";
-import { apiErrorMessage } from "@/lib/apiError";
+import { apiErrorMessage, apiErrorStatus } from "@/lib/apiError";
+import type { ChatDeliveryStatus } from "@/lib/chatPhase";
 import { toast } from "sonner";
 import { ChatMarkdown } from "@/components/chat/chat-markdown";
 import { ChatCopyButton } from "@/components/chat/chat-copy-button";
@@ -15,7 +16,7 @@ interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
-  deliveryStatus?: "pending" | "sent" | "failed";
+  deliveryStatus?: ChatDeliveryStatus;
 }
 
 type EmbedChatPanelProps = {
@@ -97,9 +98,7 @@ export function EmbedChatPanel({ channelId, className, compact = false }: EmbedC
       });
       const reply = result.reply ?? result.response ?? result.message ?? "Sin respuesta";
       setMessages((prev) => [
-        ...prev.map((m) =>
-          m.id === userMsgId ? { ...m, deliveryStatus: "sent" as const } : m,
-        ),
+        ...prev.map((m) => (m.id === userMsgId ? { ...m, deliveryStatus: "sent" as const } : m)),
         {
           id: `assistant-${Date.now()}`,
           role: "assistant",
@@ -133,13 +132,7 @@ export function EmbedChatPanel({ channelId, className, compact = false }: EmbedC
   }
 
   if (configError) {
-    const status =
-      typeof configError === "object" &&
-      configError !== null &&
-      "response" in configError &&
-      typeof (configError as { response?: { status?: number } }).response?.status === "number"
-        ? (configError as { response: { status: number } }).response.status
-        : null;
+    const status = apiErrorStatus(configError);
     const message =
       status === 403
         ? "Este dominio no está autorizado para el widget. Pídele al administrador que agregue tu sitio en dominios permitidos del canal (o deje la lista vacía para público)."
@@ -285,7 +278,9 @@ export function EmbedChatPanel({ channelId, className, compact = false }: EmbedC
               >
                 <ChatMarkdown content={msg.content} inverted={msg.role === "user"} />
               </div>
-              <div className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} gap-1`}>
+              <div
+                className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} gap-1`}
+              >
                 <ChatCopyButton text={msg.content} />
                 {msg.role === "user" && msg.deliveryStatus === "failed" ? (
                   <button

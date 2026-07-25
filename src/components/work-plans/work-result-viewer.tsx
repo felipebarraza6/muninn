@@ -10,6 +10,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { EmptyState, ErrorBanner } from "@/components/ui/empty-state";
+import { prettyJson } from "@/lib/json";
 import { cn } from "@/lib/utils";
 
 export type ResultViewMode = "format" | "raw" | "list";
@@ -23,16 +25,6 @@ type WorkResultViewerProps = {
   className?: string;
   filenameBase?: string;
 };
-
-function prettyJson(value: unknown): string {
-  if (value == null) return "";
-  if (typeof value === "string") return value;
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
-}
 
 function toBulletList(text: string): string {
   const lines = text
@@ -85,8 +77,7 @@ export function WorkResultViewer({
   }, [rawResult, text]);
 
   const listText = useMemo(() => toBulletList(text), [text]);
-  const displayText =
-    mode === "list" ? listText : mode === "raw" ? text : text;
+  const displayText = mode === "list" ? listText : mode === "raw" ? text : text;
 
   const handleDownload = (kind: "md" | "txt" | "json") => {
     const base = filenameBase.replace(/[^\w.-]+/g, "-").slice(0, 60) || "resultado";
@@ -109,16 +100,10 @@ export function WorkResultViewer({
 
   return (
     <div className={cn("space-y-2", className)}>
-      {error ? (
-        <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-sm text-destructive whitespace-pre-wrap">
-          {error}
-        </div>
-      ) : null}
+      {error ? <ErrorBanner variant="inline" message={error} /> : null}
 
       {empty ? (
-        <p className="text-xs text-muted-foreground rounded-xl border border-dashed border-border/80 px-3 py-6 text-center">
-          {emptyHint}
-        </p>
+        <EmptyState className="py-6 px-3" title={emptyHint} />
       ) : (
         <div className="rounded-xl border border-primary/20 bg-gradient-to-b from-primary/5 to-muted/20 overflow-hidden flex flex-col min-h-0">
           <div className="shrink-0 flex items-center gap-1 px-2 py-1.5 border-b border-border/50 bg-card/40">

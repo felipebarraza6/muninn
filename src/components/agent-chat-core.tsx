@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { ChatThread } from "@/components/chat/chat-thread";
+import { ErrorBanner } from "@/components/ui/empty-state";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import {
   ArrowLeft,
   Bot,
-  ChevronDown,
   History,
   Loader2,
   MessageSquarePlus,
@@ -24,6 +25,9 @@ import { ChatComposer } from "@/components/chat/chat-composer";
 import { deriveChatPhase, type ChatDeliveryStatus } from "@/lib/chatPhase";
 import { chatDraftKey, loadChatDraft, saveChatDraft, clearChatDraft } from "@/lib/chatDrafts";
 import { useStickyChatScroll } from "@/hooks/useStickyChatScroll";
+import { useMotionPrefs } from "@/hooks/useMotionPrefs";
+import { formatDateTime, formatMessageStamp, formatRelative } from "@/lib/datetime";
+import { motion as motionTokens } from "@/lib/motion";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useAgent } from "@/api/hooks/useAgents";
 import { useAgentFunctions } from "@/api/hooks/useAgentFunctions";
@@ -169,47 +173,6 @@ function normalizeMessages(data?: ChatMessageResponse[]): ChatMessage[] {
   });
 }
 
-function formatMessageStamp(iso?: string) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleString("es-CL", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function formatDateTime(iso?: string | null) {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleString("es-CL", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function formatRelative(iso?: string | null) {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  const diffMs = Date.now() - d.getTime();
-  const mins = Math.floor(diffMs / 60_000);
-  if (mins < 1) return "ahora";
-  if (mins < 60) return `hace ${mins} min`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `hace ${hours} h`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `hace ${days} d`;
-  return formatDateTime(iso);
-}
-
 function getCurrentUserId(): number | undefined {
   try {
     const raw = localStorage.getItem("user");
@@ -274,7 +237,7 @@ export function AgentChatCore({
   const sendMessage = useSendConversationMessage();
   const updateStatus = useUpdateConversationStatus();
   const queryClient = useQueryClient();
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useMotionPrefs();
 
   const agentSkillNames = useMemo(() => {
     const ids = new Set((agent?.functions ?? []).map((id) => String(id)));
@@ -315,7 +278,6 @@ export function AgentChatCore({
   const [input, setInput] = useState("");
   const [skillMenuOpen, setSkillMenuOpen] = useState(false);
   const [inputCursor, setInputCursor] = useState(0);
-  const inputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [attachedSkills, setAttachedSkills] = useState<AttachedSkill[]>([]);
   const [pendingSkill, setPendingSkill] = useState<PendingSkillParams | null>(null);
@@ -331,8 +293,9 @@ export function AgentChatCore({
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
   const streamingMsgIdRef = useRef<string | null>(null);
   const streamingDraftRef = useRef("");
+  const deltaRafRef = useRef<number | null>(null);
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
-  const initializedRef = useRef(false);
+  const [initialized, setInitialized] = useState(false);
   const skipAutoSelectRef = useRef(false);
   const isCreatingRef = useRef(false);
   const lastRemoteMessagesRef = useRef<string>("");
@@ -341,11 +304,14 @@ export function AgentChatCore({
 
   const isBusy = sendMessage.isPending || isStreaming;
 
-  const { endRef: messagesEndRef, bindViewport, showJump, scrollToBottom } = useStickyChatScroll([
-    messages,
-    isBusy,
-    isStreaming,
-  ]);
+  const {
+    endRef: messagesEndRef,
+    bindViewport,
+    showJump,
+    scrollToBottom,
+  } = useStickyChatScroll([messages, isBusy, isStreaming], {
+    behavior: isStreaming ? "auto" : "smooth",
+  });
 
   useEffect(() => {
     setReplyTo(null);
@@ -420,7 +386,7 @@ export function AgentChatCore({
   }, [conversationId]);
 
   useEffect(() => {
-    initializedRef.current = false;
+    setInitialized(false);
     skipAutoSelectRef.current = false;
     setIsDraftNew(false);
     setConversationId(conversationIdFromUrl);
@@ -465,17 +431,25 @@ export function AgentChatCore({
     };
   }, []);
 
-  // Draft persistence: load when conversation/draft context changes.
-  useEffect(() => {
-    const key = chatDraftKey("studio", conversationId);
-    const saved = loadChatDraft(key);
-    if (saved) setInput(saved);
-  }, [conversationId, isDraftNew]); // eslint-disable-line react-hooks/exhaustive-deps
+  const draftHydratingRef = useRef(false);
 
-  // Draft persistence: save as user types.
+  // Hidratar draft al cambiar de conversación (siempre, también limpia).
   useEffect(() => {
+    draftHydratingRef.current = true;
     const key = chatDraftKey("studio", conversationId);
-    saveChatDraft(key, input);
+    setInput(loadChatDraft(key));
+    const id = requestAnimationFrame(() => {
+      draftHydratingRef.current = false;
+    });
+    return () => cancelAnimationFrame(id);
+  }, [conversationId, isDraftNew]);
+
+  // Guardar con debounce; no escribir durante hidratación.
+  useEffect(() => {
+    if (draftHydratingRef.current) return;
+    const key = chatDraftKey("studio", conversationId);
+    const t = window.setTimeout(() => saveChatDraft(key, input), 300);
+    return () => clearTimeout(t);
   }, [input, conversationId]);
 
   const slashQuery = useMemo(() => getSlashSkillQuery(input, inputCursor), [input, inputCursor]);
@@ -512,7 +486,7 @@ export function AgentChatCore({
         if (prev.some((s) => s.id === skill.id)) return prev;
         return [...prev, { id: skill.id, name: skill.name, slug: skill.slug, params: {} }];
       });
-      requestAnimationFrame(() => (textareaRef.current ?? inputRef.current)?.focus());
+      requestAnimationFrame(() => textareaRef.current?.focus());
     },
     [allFunctions, input, inputCursor, slashQuery?.start],
   );
@@ -541,7 +515,7 @@ export function AgentChatCore({
       ];
     });
     setPendingSkill(null);
-    requestAnimationFrame(() => (textareaRef.current ?? inputRef.current)?.focus());
+    requestAnimationFrame(() => textareaRef.current?.focus());
   }, [pendingSkill]);
 
   const ensureConversationId = useCallback(async (): Promise<string | null> => {
@@ -594,8 +568,8 @@ export function AgentChatCore({
   }, [agent, ensureConversationId]);
 
   useEffect(() => {
-    if (agentLoading || !agent || initializedRef.current || conversationsLoading) return;
-    initializedRef.current = true;
+    if (agentLoading || !agent || initialized || conversationsLoading) return;
+    setInitialized(true);
 
     if (skipAutoSelectRef.current) return;
 
@@ -619,6 +593,7 @@ export function AgentChatCore({
   }, [
     agentLoading,
     agent,
+    initialized,
     conversationsLoading,
     conversationIdFromUrl,
     activeAgentConversations,
@@ -743,25 +718,28 @@ export function AgentChatCore({
             const chunk = ev.text || "";
             if (!chunk) return;
             streamingDraftRef.current += chunk;
-            setMessages((prev) => {
-              const sid = streamingMsgIdRef.current;
-              if (sid && prev.some((m) => m.id === sid)) {
-                return prev.map((m) =>
-                  m.id === sid ? { ...m, content: (m.content || "") + chunk } : m,
-                );
-              }
-              const id = makeId("agent-stream");
-              streamingMsgIdRef.current = id;
-              setStreamingMessageId(id);
-              return [
-                ...prev,
-                {
-                  id,
-                  role: "agent" as const,
-                  content: chunk,
-                  created: new Date().toISOString(),
-                },
-              ];
+            if (deltaRafRef.current != null) return;
+            deltaRafRef.current = requestAnimationFrame(() => {
+              deltaRafRef.current = null;
+              const textDraft = streamingDraftRef.current;
+              setMessages((prev) => {
+                const sid = streamingMsgIdRef.current;
+                if (sid && prev.some((m) => m.id === sid)) {
+                  return prev.map((m) => (m.id === sid ? { ...m, content: textDraft } : m));
+                }
+                const id = makeId("agent-stream");
+                streamingMsgIdRef.current = id;
+                setStreamingMessageId(id);
+                return [
+                  ...prev,
+                  {
+                    id,
+                    role: "agent" as const,
+                    content: textDraft,
+                    created: new Date().toISOString(),
+                  },
+                ];
+              });
             });
           },
         },
@@ -847,9 +825,7 @@ export function AgentChatCore({
         } catch (e) {
           toast.error(apiErrorMessage(e, "Error al enviar el mensaje"));
           setMessages((prev) =>
-            prev.map((m) =>
-              m.id === userMsgId ? { ...m, deliveryStatus: "failed" as const } : m,
-            ),
+            prev.map((m) => (m.id === userMsgId ? { ...m, deliveryStatus: "failed" as const } : m)),
           );
           if (activeReply) setReplyTo(activeReply);
         }
@@ -897,7 +873,7 @@ export function AgentChatCore({
   const handleNewConversation = () => {
     if (!agent || isCreating) return;
     skipAutoSelectRef.current = true;
-    initializedRef.current = true;
+    setInitialized(true);
     isCreatingRef.current = false;
     conversationIdRef.current = null;
     lastRemoteMessagesRef.current = "";
@@ -968,7 +944,7 @@ export function AgentChatCore({
   const chatPhase = deriveChatPhase({
     agentLoading,
     conversationsLoading,
-    initialized: initializedRef.current,
+    initialized,
     messagesLoading,
     hasMessages: messages.length > 0,
     conversationId,
@@ -1304,61 +1280,63 @@ export function AgentChatCore({
         </div>
       )}
 
-      <div className="relative flex-1 min-h-0">
-        <ScrollArea
-          className="h-full px-4 py-6"
-          viewportRef={bindViewport}
-        >
-        <div className="max-w-3xl mx-auto space-y-5">
-          {messages.length > 0 && agent.use_rag && (
-            <ConversationRagSummary
-              messages={messages}
-              embeddingModel={agent.embedding_model}
-              topK={agent.rag_top_k}
-            />
-          )}
-          {chatPhase === "resolving_thread" || chatPhase === "loading_history" ? (
-            <div className="space-y-4">
-              <Skeleton className="h-16 w-3/4" />
-              <Skeleton className="h-12 w-2/3 ml-auto" />
-              <Skeleton className="h-16 w-3/4" />
-            </div>
-          ) : !conversationId && !isCreating && !isDraftNew && !conversationsLoading ? (
-            <div className="flex flex-col items-center justify-center text-center py-16 gap-4">
-              <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
-                <MessageSquarePlus className="h-8 w-8 text-primary" />
-              </div>
-              <div>
-                <h2 className="text-xl font-semibold mb-2">Sin conversación</h2>
-                <p className="text-muted-foreground max-w-md text-sm">
-                  Inicia un chat nuevo con {agent.name} para empezar a escribir.
-                </p>
-              </div>
+      <ChatThread
+        viewportRef={bindViewport}
+        endRef={messagesEndRef}
+        showJump={showJump}
+        onJump={scrollToBottom}
+        contentClassName="py-6 space-y-5"
+        footer={
+          <AnimatePresence>
+            {isBusy && !streamingMessageId ? (
+              <ChatProcessingIndicator liveSteps={liveSteps} compact={liveSteps.length === 0} />
+            ) : null}
+          </AnimatePresence>
+        }
+      >
+        {messages.length > 0 && agent.use_rag && (
+          <ConversationRagSummary
+            messages={messages}
+            embeddingModel={agent.embedding_model}
+            topK={agent.rag_top_k}
+          />
+        )}
+        {chatPhase === "resolving_thread" || chatPhase === "loading_history" ? (
+          <div className="space-y-4">
+            <Skeleton className="h-16 w-3/4" />
+            <Skeleton className="h-12 w-2/3 ml-auto" />
+            <Skeleton className="h-16 w-3/4" />
+          </div>
+        ) : !conversationId && !isCreating && !isDraftNew && !conversationsLoading ? (
+          <EmptyState
+            className="mt-8 border-0 bg-transparent"
+            icon={<MessageSquarePlus className="h-5 w-5" />}
+            title="Sin conversación"
+            description={`Inicia un chat nuevo con ${agent.name} para empezar a escribir.`}
+            action={
               <Button onClick={handleNewConversation} disabled={isCreating}>
                 <MessageSquarePlus className="h-4 w-4 mr-1.5" />
                 Nueva conversación
               </Button>
-            </div>
-          ) : messages.length === 0 && !isBusy ? (
-            <EmptyState
-              icon={<Bot className="h-5 w-5" />}
-              title={isCreating ? "Iniciando conversación…" : `Chatea con ${agent.name}`}
-              description={
-                isCreating
-                  ? "Creando un chat nuevo…"
-                  : isDraftNew
-                    ? `Escribe el primer mensaje para abrir una conversación nueva.`
-                    : `Escribe tu consulta y ${agent.name} te ayudará con lo que necesites.`
-              }
-              className="mt-8"
-              action={
-                !isCreating ? (
-                  <div className="flex flex-wrap justify-center gap-2">
-                    {[
-                      "¿Qué puedes hacer?",
-                      "Resume tu conocimiento",
-                      "Prueba una skill con /",
-                    ].map((prompt) => (
+            }
+          />
+        ) : messages.length === 0 && !isBusy ? (
+          <EmptyState
+            icon={<Bot className="h-5 w-5" />}
+            title={isCreating ? "Iniciando conversación…" : `Chatea con ${agent.name}`}
+            description={
+              isCreating
+                ? "Creando un chat nuevo…"
+                : isDraftNew
+                  ? `Escribe el primer mensaje para abrir una conversación nueva.`
+                  : `Escribe tu consulta y ${agent.name} te ayudará con lo que necesites.`
+            }
+            className="mt-8"
+            action={
+              !isCreating ? (
+                <div className="flex flex-wrap justify-center gap-2">
+                  {["¿Qué puedes hacer?", "Resume tu conocimiento", "Prueba una skill con /"].map(
+                    (prompt) => (
                       <Button
                         key={prompt}
                         variant="outline"
@@ -1368,182 +1346,144 @@ export function AgentChatCore({
                       >
                         {prompt}
                       </Button>
-                    ))}
-                  </div>
-                ) : undefined
-              }
-            />
-          ) : (
-            messages.map((msg) => {
-              const ragCount = Array.isArray(msg.rag_sources) ? msg.rag_sources.length : 0;
-              const toolCount = Array.isArray(msg.tool_calls) ? msg.tool_calls.length : 0;
-              const msgPolicy =
-                extractPolicyTrace(msg) ??
-                (msg.role === "agent"
-                  ? inferPolicyTraceFromConfig(agent.flow_policy, msg.tool_calls)
-                  : null);
-              const policyCount = policyTraceSignalCount(msgPolicy);
-              const isStreamingBubble =
-                isStreaming && streamingMessageId != null && String(msg.id) === streamingMessageId;
-              return (
-                <motion.div
-                  key={msg.id}
-                  initial={reduceMotion ? false : { opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
-                  className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}
+                    ),
+                  )}
+                </div>
+              ) : undefined
+            }
+          />
+        ) : (
+          messages.map((msg) => {
+            const ragCount = Array.isArray(msg.rag_sources) ? msg.rag_sources.length : 0;
+            const toolCount = Array.isArray(msg.tool_calls) ? msg.tool_calls.length : 0;
+            const msgPolicy =
+              extractPolicyTrace(msg) ??
+              (msg.role === "agent"
+                ? inferPolicyTraceFromConfig(agent.flow_policy, msg.tool_calls)
+                : null);
+            const policyCount = policyTraceSignalCount(msgPolicy);
+            const isStreamingBubble =
+              isStreaming && streamingMessageId != null && String(msg.id) === streamingMessageId;
+            return (
+              <motion.div
+                key={msg.id}
+                initial={reduceMotion ? false : { opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: motionTokens.base, ease: motionTokens.ease }}
+                className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}
+              >
+                <div
+                  className={`h-8 w-8 rounded-full shrink-0 flex items-center justify-center ${
+                    msg.role === "user" ? "bg-muted" : "bg-primary/10"
+                  }`}
+                >
+                  {msg.role === "user" ? (
+                    <User className="h-4 w-4" />
+                  ) : (
+                    <Bot className="h-4 w-4 text-primary" />
+                  )}
+                </div>
+                <div
+                  className={`group max-w-[85%] sm:max-w-[75%] space-y-1 ${
+                    msg.role === "user" ? "items-end" : "items-start"
+                  }`}
                 >
                   <div
-                    className={`h-8 w-8 rounded-full shrink-0 flex items-center justify-center ${
-                      msg.role === "user" ? "bg-muted" : "bg-primary/10"
+                    className={`px-4 py-2.5 text-sm leading-relaxed rounded-2xl ${
+                      msg.role === "user"
+                        ? "bg-primary text-primary-foreground rounded-br-md"
+                        : msg.role === "system"
+                          ? "bg-destructive/10 text-destructive rounded-bl-md border border-destructive/20"
+                          : "bg-muted text-foreground rounded-bl-md"
                     }`}
                   >
-                    {msg.role === "user" ? (
-                      <User className="h-4 w-4" />
-                    ) : (
-                      <Bot className="h-4 w-4 text-primary" />
-                    )}
-                  </div>
-                  <div
-                    className={`group max-w-[85%] sm:max-w-[75%] space-y-1 ${
-                      msg.role === "user" ? "items-end" : "items-start"
-                    }`}
-                  >
-                    <div
-                      className={`px-4 py-2.5 text-sm leading-relaxed rounded-2xl ${
-                        msg.role === "user"
-                          ? "bg-primary text-primary-foreground rounded-br-md"
-                          : msg.role === "system"
-                            ? "bg-destructive/10 text-destructive rounded-bl-md border border-destructive/20"
-                            : "bg-muted text-foreground rounded-bl-md"
-                      }`}
-                    >
-                      {msg.replyToPreview && (
-                        <div
-                          className={`mb-2 rounded-md border-l-2 px-2 py-1 text-[11px] leading-snug ${
-                            msg.role === "user"
-                              ? "border-primary-foreground/50 bg-primary-foreground/10 text-primary-foreground/85"
-                              : "border-primary/50 bg-background/60 text-muted-foreground"
-                          }`}
-                        >
-                          <p className="font-semibold opacity-90">
-                            Respondiendo a {roleLabel(msg.replyToRole)}
-                          </p>
-                          <p className="line-clamp-2 opacity-80">{msg.replyToPreview}</p>
-                        </div>
-                      )}
-                      <ChatMarkdown content={msg.content} inverted={msg.role === "user"} />
-                      {isStreamingBubble && !reduceMotion && (
-                        <span
-                          aria-hidden
-                          className="inline-block w-[2px] h-[1em] ml-0.5 align-[-0.1em] bg-primary/80 animate-pulse rounded-sm"
-                        />
-                      )}
+                    {msg.replyToPreview && (
                       <div
-                        className={`mt-1.5 flex items-center gap-1.5 text-[10px] tabular-nums font-medium ${
+                        className={`mb-2 rounded-md border-l-2 px-2 py-1 text-[11px] leading-snug ${
                           msg.role === "user"
-                            ? "justify-end text-primary-foreground/70"
-                            : "justify-end text-muted-foreground"
+                            ? "border-primary-foreground/50 bg-primary-foreground/10 text-primary-foreground/85"
+                            : "border-primary/50 bg-background/60 text-muted-foreground"
                         }`}
                       >
-                        <span title={formatDateTime(msg.created) ?? undefined}>
-                          {formatMessageStamp(msg.created) || "Sin fecha"}
-                        </span>
-                        {msg.role === "agent" && !isStreamingBubble && (
-                          <MessageInspectButton
-                            variant="icon"
-                            chunkCount={ragCount}
-                            toolCount={toolCount}
-                            policyCount={policyCount}
-                            onClick={() =>
-                              setInspectMessage({
-                                id: msg.id,
-                                content: msg.content,
-                                created: msg.created,
-                                rag_sources: msg.rag_sources,
-                                tool_calls: msg.tool_calls,
-                                tool_results: msg.tool_results,
-                                policy_trace: msg.policy_trace,
-                                flow_policy_trace: msg.flow_policy_trace,
-                                policies: msg.policies,
-                                metadata: msg.metadata,
-                              })
-                            }
-                          />
-                        )}
+                        <p className="font-semibold opacity-90">
+                          Respondiendo a {roleLabel(msg.replyToRole)}
+                        </p>
+                        <p className="line-clamp-2 opacity-80">{msg.replyToPreview}</p>
                       </div>
-                    </div>
-                    {msg.role === "agent" && (
-                      <MessageActivityTrail
-                        toolCalls={msg.tool_calls}
-                        toolResults={msg.tool_results}
-                        policyTrace={msgPolicy}
+                    )}
+                    <ChatMarkdown content={msg.content} inverted={msg.role === "user"} />
+                    {isStreamingBubble && !reduceMotion && (
+                      <span
+                        aria-hidden
+                        className="inline-block w-[2px] h-[1em] ml-0.5 align-[-0.1em] bg-primary/80 animate-pulse rounded-sm"
                       />
                     )}
-                    <ChatMessageActions
-                      text={msg.content}
-                      align={msg.role === "user" ? "end" : "start"}
-                      onReply={msg.role !== "system" && !isBusy ? () => startReply(msg) : undefined}
-                      onResend={
-                        msg.role === "user" && !isBusy ? () => resendMessage(msg) : undefined
-                      }
-                    />
-                    {msg.role === "user" && msg.deliveryStatus === "failed" && (
-                      <button
-                        type="button"
-                        onClick={() => resendMessage(msg)}
-                        className="text-[11px] text-destructive underline self-end font-medium"
-                      >
-                        Reintentar
-                      </button>
-                    )}
+                    <div
+                      className={`mt-1.5 flex items-center gap-1.5 text-[10px] tabular-nums font-medium ${
+                        msg.role === "user"
+                          ? "justify-end text-primary-foreground/70"
+                          : "justify-end text-muted-foreground"
+                      }`}
+                    >
+                      <span title={formatDateTime(msg.created) ?? undefined}>
+                        {formatMessageStamp(msg.created) || "Sin fecha"}
+                      </span>
+                      {msg.role === "agent" && !isStreamingBubble && (
+                        <MessageInspectButton
+                          variant="icon"
+                          chunkCount={ragCount}
+                          toolCount={toolCount}
+                          policyCount={policyCount}
+                          onClick={() =>
+                            setInspectMessage({
+                              id: msg.id,
+                              content: msg.content,
+                              created: msg.created,
+                              rag_sources: msg.rag_sources,
+                              tool_calls: msg.tool_calls,
+                              tool_results: msg.tool_results,
+                              policy_trace: msg.policy_trace,
+                              flow_policy_trace: msg.flow_policy_trace,
+                              policies: msg.policies,
+                              metadata: msg.metadata,
+                            })
+                          }
+                        />
+                      )}
+                    </div>
                   </div>
-                </motion.div>
-              );
-            })
-          )}
-
-          <AnimatePresence>
-            {isBusy && !streamingMessageId && (
-              <ChatProcessingIndicator
-                useRag={agent.use_rag !== false}
-                skillNames={agentSkillNames}
-                liveSteps={liveSteps}
-                compact={liveSteps.length === 0}
-              />
-            )}
-          </AnimatePresence>
-
-          <div ref={messagesEndRef} />
-        </div>
-        </ScrollArea>
-
-        {showJump && (
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 pointer-events-auto">
-            <Button
-              size="sm"
-              variant="secondary"
-              className="rounded-full shadow-md gap-1.5 pl-3 pr-2"
-              onClick={scrollToBottom}
-            >
-              Bajar <ChevronDown className="h-4 w-4" />
-            </Button>
-          </div>
+                  {msg.role === "agent" && (
+                    <MessageActivityTrail
+                      toolCalls={msg.tool_calls}
+                      toolResults={msg.tool_results}
+                      policyTrace={msgPolicy}
+                    />
+                  )}
+                  <ChatMessageActions
+                    text={msg.content}
+                    align={msg.role === "user" ? "end" : "start"}
+                    onReply={msg.role !== "system" && !isBusy ? () => startReply(msg) : undefined}
+                    onResend={msg.role === "user" && !isBusy ? () => resendMessage(msg) : undefined}
+                  />
+                  {msg.role === "user" && msg.deliveryStatus === "failed" && (
+                    <button
+                      type="button"
+                      onClick={() => resendMessage(msg)}
+                      className="text-[11px] text-destructive underline self-end font-medium"
+                    >
+                      Reintentar
+                    </button>
+                  )}
+                </div>
+              </motion.div>
+            );
+          })
         )}
-      </div>
+      </ChatThread>
 
-      {createError && (
-        <div className="border-t border-border/50 bg-destructive/10 px-4 py-2 text-xs text-destructive text-center">
-          {createError}{" "}
-          <button
-            type="button"
-            onClick={doCreateConversation}
-            className="underline font-medium ml-1"
-          >
-            Reintentar
-          </button>
-        </div>
-      )}
+      {createError ? (
+        <ErrorBanner variant="bar" message={createError} onRetry={doCreateConversation} />
+      ) : null}
 
       <MessageInsightSheet
         open={Boolean(inspectMessage)}
@@ -1592,7 +1532,7 @@ export function AgentChatCore({
               onStop={stopStreaming}
               canSubmit={attachedSkills.length > 0}
               leading={
-                (replyTo || attachedSkills.length > 0) ? (
+                replyTo || attachedSkills.length > 0 ? (
                   <div className="space-y-2">
                     {replyTo && (
                       <div className="flex items-start gap-2 rounded-xl border border-primary/25 bg-primary/5 px-3 py-2">
@@ -1600,7 +1540,9 @@ export function AgentChatCore({
                           <p className="text-[11px] font-semibold text-primary">
                             Respondiendo a {roleLabel(replyTo.role)}
                           </p>
-                          <p className="truncate text-xs text-muted-foreground">{replyTo.preview}</p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {replyTo.preview}
+                          </p>
                         </div>
                         <button
                           type="button"
@@ -1623,7 +1565,11 @@ export function AgentChatCore({
                             <span
                               key={skill.id}
                               className="inline-flex items-center gap-1.5 max-w-full rounded-full border border-primary/35 bg-primary/10 pl-2.5 pr-1 py-1 text-[11px] font-medium text-primary"
-                              title={paramBits.length ? `${skill.name}: ${paramBits.join(", ")}` : skill.name}
+                              title={
+                                paramBits.length
+                                  ? `${skill.name}: ${paramBits.join(", ")}`
+                                  : skill.name
+                              }
                             >
                               <Wrench className="h-3 w-3 shrink-0 opacity-80" />
                               <span className="truncate">

@@ -67,6 +67,10 @@ import {
   type WorkPlanStatus,
 } from "@/api/hooks/useWorkPlans";
 import { apiErrorDetail, apiErrorMessage, apiErrorStatus } from "@/lib/apiError";
+import { StatusChip } from "@/components/ui/status-chip";
+import { EmptyState, ErrorBanner } from "@/components/ui/empty-state";
+import { prettyJson } from "@/lib/json";
+import { itemStatusLabel, planStatusLabel, workPlanStatusTone } from "@/lib/workPlanStatus";
 import { cn } from "@/lib/utils";
 import { isOrganizationOwnerScope, isSuperAdmin } from "@/lib/authGuards";
 import {
@@ -74,15 +78,6 @@ import {
   templateAvailability,
   type WorkPlanTemplateId,
 } from "@/lib/workPlanTemplates";
-
-const STATUS_LABEL: Record<WorkPlanStatus, string> = {
-  draft: "Borrador",
-  scheduled: "Programado",
-  running: "En curso",
-  completed: "Completado",
-  cancelled: "Cancelado",
-  failed: "Fallido",
-};
 
 const ITEM_KIND_LABEL: Record<WorkItemKind, string> = {
   agent_turn: "Turno de agente",
@@ -96,17 +91,6 @@ const ITEM_KIND_HINT: Record<WorkItemKind, string> = {
   workflow: "Dispara un workflow de la sucursal (por id o nombre).",
   function: "Ejecuta una skill/función por slug con parámetros JSON.",
   note: "Solo deja una nota en el plan; no llama al modelo.",
-};
-
-const ITEM_STATUS_LABEL: Record<string, string> = {
-  pending: "Pendiente",
-  queued: "En cola",
-  running: "Ejecutando",
-  done: "Hecha",
-  completed: "Hecha",
-  failed: "Fallida",
-  skipped: "Omitida",
-  cancelled: "Cancelada",
 };
 
 const BUCKETS = [
@@ -137,40 +121,12 @@ type DraftItem = {
   noteText: string;
 };
 
-function statusTone(status?: string) {
-  switch (status) {
-    case "running":
-      return "bg-info-soft text-info";
-    case "completed":
-    case "done":
-      return "bg-success-soft text-success";
-    case "failed":
-    case "cancelled":
-      return "bg-destructive/15 text-destructive";
-    case "scheduled":
-    case "queued":
-      return "bg-primary-soft text-primary";
-    default:
-      return "bg-muted text-muted-foreground";
-  }
-}
-
 function ItemStatusIcon({ status }: { status?: string }) {
   if (status === "running") return <Loader2 className="h-3.5 w-3.5 animate-spin text-info" />;
   if (status === "done" || status === "completed")
     return <CheckCircle2 className="h-3.5 w-3.5 text-success" />;
   if (status === "failed") return <XCircle className="h-3.5 w-3.5 text-destructive" />;
   return <CircleDashed className="h-3.5 w-3.5 text-muted-foreground" />;
-}
-
-function prettyJson(value: unknown): string {
-  if (value == null) return "";
-  if (typeof value === "string") return value;
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
 }
 
 function toDatetimeLocal(iso?: string | null): string {
@@ -431,13 +387,7 @@ export function WorkPlansInbox() {
   const idFromUrl = searchParams.get("id");
   const showBranchFilter = isSuperAdmin() || isOrganizationOwnerScope();
 
-  const {
-    data: plans = [],
-    isLoading,
-    error,
-    refetch,
-    isFetching,
-  } = useWorkPlans();
+  const { data: plans = [], isLoading, error, refetch, isFetching } = useWorkPlans();
   const [selectedId, setSelectedId] = useState(idFromUrl ?? "");
   const [bucket, setBucket] = useState<BucketId>("inbox");
   const [query, setQuery] = useState("");
@@ -611,40 +561,26 @@ export function WorkPlansInbox() {
     const detail = apiErrorDetail(error);
     const hint =
       status === 404
-        ? "El API no tiene la ruta work-plans (reiniciá el contenedor yggdra-light-api)."
+        ? "El API no tiene la ruta work-plans. Reiniciá el API y volvé a intentar."
         : status === 403
           ? "Sin permiso o suscripción activa para ai_agents en esta sucursal."
           : status === 401
             ? "Sesión inválida — volvé a iniciar sesión."
             : status == null
-              ? "No hay respuesta del API (¿está corriendo Docker en :8000 y el proxy de Vite?)."
+              ? "No hay respuesta del API. Revisá que el servidor y el proxy estén activos."
               : null;
     return (
       <div className="h-dvh flex flex-col items-center justify-center gap-3 px-6">
-        <p className="text-destructive text-center font-medium">
-          {apiErrorMessage(error, "No se pudieron cargar los planes de trabajo")}
-        </p>
-        <p className="text-xs text-muted-foreground text-center max-w-md leading-relaxed">
-          {status != null ? `HTTP ${status}` : "Sin status HTTP"}
-          {detail ? ` · ${detail}` : ""}
-        </p>
-        {hint ? (
-          <p className="text-[11px] text-muted-foreground text-center max-w-sm leading-relaxed">{hint}</p>
-        ) : null}
-        <div className="flex gap-2">
-          <Button
-            variant="default"
-            size="sm"
-            disabled={isFetching}
-            onClick={() => void refetch()}
-          >
-            {isFetching ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
-            Reintentar
-          </Button>
-          <Button variant="outline" size="sm" asChild>
-            <Link to="/">Volver</Link>
-          </Button>
-        </div>
+        <ErrorBanner
+          className="max-w-md w-full"
+          message={apiErrorMessage(error, "No se pudieron cargar los planes de trabajo")}
+          status={status}
+          detail={[detail, hint].filter(Boolean).join(" · ") || undefined}
+          onRetry={() => void refetch()}
+        />
+        <Button variant="outline" size="sm" asChild>
+          <Link to="/">Volver</Link>
+        </Button>
       </div>
     );
   }
@@ -661,8 +597,7 @@ export function WorkPlansInbox() {
             onSuccess: (data) => {
               if (data.item?.id) setSelectedItemId(String(data.item.id));
               const isMobile =
-                typeof window !== "undefined" &&
-                window.matchMedia("(max-width: 767px)").matches;
+                typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches;
               if (isMobile) setInspectorOpen(true);
               toast.success("Ítem ejecutado — revisá el resultado a la derecha");
             },
@@ -815,14 +750,10 @@ export function WorkPlansInbox() {
                   >
                     <div className="flex items-start justify-between gap-2">
                       <p className="text-sm font-medium truncate">{p.name}</p>
-                      <span
-                        className={cn(
-                          "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
-                          statusTone(p.status),
-                        )}
-                      >
-                        {STATUS_LABEL[p.status] ?? p.status}
-                      </span>
+                      <StatusChip
+                        label={planStatusLabel(p.status)}
+                        tone={workPlanStatusTone(p.status)}
+                      />
                     </div>
                     <p className="text-[11px] text-muted-foreground line-clamp-2 mt-0.5">
                       {p.description || "Sin descripción"}
@@ -944,7 +875,7 @@ export function WorkPlansInbox() {
                         {runSummary.planStatus ? (
                           <span className="text-muted-foreground font-normal">
                             {" "}
-                            · {STATUS_LABEL[runSummary.planStatus as WorkPlanStatus] ?? runSummary.planStatus}
+                            · {planStatusLabel(runSummary.planStatus)}
                           </span>
                         ) : null}
                       </p>
@@ -965,7 +896,8 @@ export function WorkPlansInbox() {
                   </div>
                   <ul className="space-y-1 max-h-40 overflow-y-auto">
                     {runSummary.items.map((it, idx) => {
-                      const preview = itemPreview(it) || (it.status === "pending" ? "Sin ejecutar" : "—");
+                      const preview =
+                        itemPreview(it) || (it.status === "pending" ? "Sin ejecutar" : "—");
                       return (
                         <li key={it.id}>
                           <button
@@ -981,14 +913,10 @@ export function WorkPlansInbox() {
                             <span className="font-medium text-foreground/90">
                               #{idx + 1} {it.title}
                             </span>
-                            <span
-                              className={cn(
-                                "ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
-                                statusTone(it.status),
-                              )}
-                            >
-                              {ITEM_STATUS_LABEL[it.status] ?? it.status}
-                            </span>
+                            <StatusChip
+                              label={itemStatusLabel(it.status)}
+                              tone={workPlanStatusTone(it.status)}
+                            />
                             <span className="block mt-0.5 line-clamp-2 opacity-80">{preview}</span>
                           </button>
                         </li>
@@ -1052,14 +980,10 @@ export function WorkPlansInbox() {
                               <span className="rounded-md bg-muted/80 px-1.5 py-0.5 text-[10px] text-muted-foreground shrink-0">
                                 {ITEM_KIND_LABEL[item.kind] ?? item.kind}
                               </span>
-                              <span
-                                className={cn(
-                                  "rounded-full px-1.5 py-0.5 text-[10px] font-medium shrink-0",
-                                  statusTone(item.status),
-                                )}
-                              >
-                                {ITEM_STATUS_LABEL[item.status] ?? item.status}
-                              </span>
+                              <StatusChip
+                                label={itemStatusLabel(item.status)}
+                                tone={workPlanStatusTone(item.status)}
+                              />
                             </button>
                             <div className="flex items-center gap-0.5 shrink-0">
                               <Button
@@ -1198,14 +1122,17 @@ export function WorkPlansInbox() {
 
 function EmptyPane({ text, cta }: { text: string; cta?: { label: string; onClick: () => void } }) {
   return (
-    <div className="flex-1 flex flex-col items-center justify-center gap-3 text-sm text-muted-foreground px-6 text-center">
-      <p>{text}</p>
-      {cta ? (
-        <Button size="sm" variant="outline" onClick={cta.onClick}>
-          {cta.label}
-        </Button>
-      ) : null}
-    </div>
+    <EmptyState
+      className="flex-1 border-0 bg-transparent rounded-none"
+      title={text}
+      action={
+        cta ? (
+          <Button size="sm" variant="outline" onClick={cta.onClick}>
+            {cta.label}
+          </Button>
+        ) : undefined
+      }
+    />
   );
 }
 
@@ -1254,14 +1181,10 @@ function PlanHeader({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <h2 className="text-sm font-semibold truncate">{plan.name}</h2>
-            <span
-              className={cn(
-                "rounded-full px-2 py-0.5 text-[10px] font-medium",
-                statusTone(plan.status),
-              )}
-            >
-              {STATUS_LABEL[plan.status] ?? plan.status}
-            </span>
+            <StatusChip
+              label={planStatusLabel(plan.status)}
+              tone={workPlanStatusTone(plan.status)}
+            />
           </div>
           <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
             {plan.description || "Sin descripción"} · Agente: {agentLabel}
@@ -1414,9 +1337,7 @@ function ItemInspector({
     typeof k === "string" && k in ITEM_KIND_LABEL ? (k as WorkItemKind) : "note";
   const [title, setTitle] = useState(item.title || "");
   const [kind, setKind] = useState<WorkItemKind>(() => safeKind(item.kind));
-  const [fields, setFields] = useState(() =>
-    draftFromPayload(safeKind(item.kind), item.payload),
-  );
+  const [fields, setFields] = useState(() => draftFromPayload(safeKind(item.kind), item.payload));
   const [editingInsumos, setEditingInsumos] = useState(false);
   const defaultTab =
     item.status === "pending" || item.status === "queued" ? "insumos" : "resultado";
@@ -1544,14 +1465,7 @@ function ItemInspector({
               {maxAttempts}
             </p>
           </div>
-          <span
-            className={cn(
-              "rounded-full px-2 py-0.5 text-[10px] font-medium shrink-0",
-              statusTone(item.status),
-            )}
-          >
-            {ITEM_STATUS_LABEL[item.status] ?? item.status}
-          </span>
+          <StatusChip label={itemStatusLabel(item.status)} tone={workPlanStatusTone(item.status)} />
         </div>
         <div className="flex gap-1.5">
           <Button size="sm" className="flex-1 h-8 gap-1.5" disabled={busy} onClick={onRun}>
@@ -1661,14 +1575,10 @@ function ItemInspector({
                             <span className="text-[10px] text-muted-foreground">{n.node_type}</span>
                           ) : null}
                           {n.status ? (
-                            <span
-                              className={cn(
-                                "rounded-full px-1.5 py-0.5 text-[10px] font-medium",
-                                statusTone(n.status),
-                              )}
-                            >
-                              {n.status}
-                            </span>
+                            <StatusChip
+                              label={itemStatusLabel(n.status)}
+                              tone={workPlanStatusTone(n.status)}
+                            />
                           ) : null}
                         </div>
                         {n.error ? (
@@ -1821,7 +1731,7 @@ function ItemInspector({
                 </p>
                 <p>
                   <span className="text-muted-foreground">Estado · </span>
-                  {ITEM_STATUS_LABEL[item.status] ?? item.status}
+                  {itemStatusLabel(item.status)}
                 </p>
                 {view.executionId ? (
                   <p className="break-all">
@@ -1980,9 +1890,7 @@ function CreatePlanDialog({
   const workflowNames = useMemo(() => workflows.map((w) => w.name), [workflows]);
 
   const workflowIdByName = (needle: string) => {
-    const hit = workflows.find((w) =>
-      (w.name || "").toLowerCase().includes(needle.toLowerCase()),
-    );
+    const hit = workflows.find((w) => (w.name || "").toLowerCase().includes(needle.toLowerCase()));
     return hit?.id ?? null;
   };
 
@@ -2095,10 +2003,7 @@ function CreatePlanDialog({
           <div className="grid gap-2 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Agente asignado</Label>
-              <Select
-                value={agentId || undefined}
-                onValueChange={setAgentId}
-              >
+              <Select value={agentId || undefined} onValueChange={setAgentId}>
                 <SelectTrigger>
                   <SelectValue placeholder="Elige un agente" />
                 </SelectTrigger>
@@ -2115,10 +2020,7 @@ function CreatePlanDialog({
             </div>
             <div className="space-y-1.5">
               <Label>Workflow (opcional)</Label>
-              <Select
-                value={workflowId || "none"}
-                onValueChange={setWorkflowId}
-              >
+              <Select value={workflowId || "none"} onValueChange={setWorkflowId}>
                 <SelectTrigger>
                   <SelectValue placeholder="Ninguno" />
                 </SelectTrigger>

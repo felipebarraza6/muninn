@@ -20,10 +20,6 @@ function getMotionAttrSnapshot() {
  */
 export function useMotionPrefs(): boolean {
   const osReduced = useReducedMotion();
-  const themeOff = useSyncExternalStore(
-    subscribeMotionAttr,
-    getMotionAttrSnapshot,
-    () => false,
-  );
+  const themeOff = useSyncExternalStore(subscribeMotionAttr, getMotionAttrSnapshot, () => false);
   return Boolean(osReduced || themeOff);
 }

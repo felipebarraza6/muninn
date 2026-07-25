@@ -28,18 +28,17 @@ export function formatMessageStamp(value: string | Date | null | undefined): str
 
 /** Relativo corto: “hace 3 min”, “ayer”, etc. */
 export function formatRelative(value: string | Date | null | undefined): string {
-  if (!value) return "";
+  if (!value) return "—";
   const d = typeof value === "string" ? new Date(value) : value;
-  if (Number.isNaN(d.getTime())) return "";
+  if (Number.isNaN(d.getTime())) return "—";
   const diffMs = Date.now() - d.getTime();
-  const sec = Math.round(diffMs / 1000);
-  if (sec < 60) return "ahora";
-  const min = Math.round(sec / 60);
-  if (min < 60) return `hace ${min} min`;
-  const hr = Math.round(min / 60);
-  if (hr < 24) return `hace ${hr} h`;
-  const day = Math.round(hr / 24);
-  if (day === 1) return "ayer";
-  if (day < 7) return `hace ${day} d`;
-  return formatMessageStamp(d);
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 1) return "ahora";
+  if (mins < 60) return `hace ${mins} min`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `hace ${hours} h`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return "ayer";
+  if (days < 7) return `hace ${days} d`;
+  return formatDateTime(d);
 }

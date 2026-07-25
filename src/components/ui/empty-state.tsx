@@ -57,8 +57,10 @@ export function ErrorBanner({
     <div
       className={cn(
         "flex flex-col gap-3 border border-destructive/40 bg-destructive/10 text-destructive",
-        variant === "panel" && "rounded-lg px-4 py-3 sm:flex-row sm:items-center sm:justify-between",
-        variant === "bar" && "border-x-0 border-b-0 rounded-none px-4 py-2.5 text-center sm:flex-row sm:items-center sm:justify-between",
+        variant === "panel" &&
+          "rounded-lg px-4 py-3 sm:flex-row sm:items-center sm:justify-between",
+        variant === "bar" &&
+          "border-x-0 border-b-0 rounded-none px-4 py-2.5 text-center sm:flex-row sm:items-center sm:justify-between",
         variant === "inline" && "rounded-xl px-3 py-2.5",
         className,
       )}

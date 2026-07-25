@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { isExecutionLive } from "@/lib/workflowGraph";
 import { DELETE, GET, PATCH, POST, normalizeListResponse } from "../client";
 import { ENDPOINTS } from "../endpoints/index";
 
@@ -252,18 +253,6 @@ export function useDeleteWorkflowEdge() {
   });
 }
 
-function isExecutionLive(status?: string): boolean {
-  const s = String(status || "").toLowerCase();
-  return (
-    s.includes("run") ||
-    s.includes("pend") ||
-    s === "started" ||
-    s === "queued" ||
-    s === "in_progress" ||
-    s === "processing"
-  );
-}
-
 export function useWorkflowExecutions(workflowId?: string) {
   return useQuery({
     queryKey: ["workflow-executions", workflowId],
@@ -273,11 +262,7 @@ export function useWorkflowExecutions(workflowId?: string) {
         { params: workflowId ? { workflow: workflowId } : undefined },
       ).then((data) => normalizeListResponse<WorkflowExecution>(data)),
     enabled: !!workflowId,
-    refetchInterval: (q) => {
-      const list = q.state.data;
-      if (!list?.length) return false;
-      return list.some((ex) => isExecutionLive(ex.status)) ? 1500 : false;
-    },
+    // Sin polling: el detalle (`useWorkflowExecution`) es la fuente viva.
   });
 }
 
@@ -286,6 +271,6 @@ export function useWorkflowExecution(id: string | undefined) {
     queryKey: ["workflow-executions", "detail", id],
     queryFn: () => GET<WorkflowExecution>(ENDPOINTS.workflowExecutions.detail(id!)),
     enabled: !!id,
-    refetchInterval: (q) => (isExecutionLive(q.state.data?.status) ? 1200 : false),
+    refetchInterval: (q) => (isExecutionLive(q.state.data?.status) ? 2500 : false),
   });
 }

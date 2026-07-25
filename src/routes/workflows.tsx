@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, GitBranch, Loader2, Play, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { EmptyState, ErrorBanner } from "@/components/ui/empty-state";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
 import { WorkflowFlowStrip } from "@/components/workflows/workflow-flow-strip";
@@ -29,12 +30,15 @@ import {
   useWorkflowTriggerTypes,
   useWorkflows,
 } from "@/api/hooks/useWorkflows";
+import { useMotionPrefs } from "@/hooks/useMotionPrefs";
 import { apiErrorMessage } from "@/lib/apiError";
+import { motion as motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { isOrganizationOwnerScope, isSuperAdmin } from "@/lib/authGuards";
 import {
   WORKFLOW_STATUS_OPTIONS,
-  WORKFLOW_TRIGGER_OPTIONS,
+  resolveTriggerOptions,
+  workflowStatusLabel,
   workflowTriggerLabel,
 } from "@/lib/workflowCatalog";
 import {
@@ -48,7 +52,7 @@ import { Textarea } from "@/components/ui/textarea";
 
 export default function WorkflowsPage() {
   const navigate = useNavigate();
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useMotionPrefs();
   const [searchParams, setSearchParams] = useSearchParams();
   const idFromUrl = searchParams.get("id");
   const { data: workflows = [], isLoading, error } = useWorkflows();
@@ -66,20 +70,7 @@ export default function WorkflowsPage() {
   const { data: triggerTypesApi = [] } = useWorkflowTriggerTypes();
   const showBranchFilter = isSuperAdmin() || isOrganizationOwnerScope();
 
-  const triggerOptions = useMemo(() => {
-    if (triggerTypesApi.length > 0) {
-      return triggerTypesApi.map((t) => ({
-        value: t.value,
-        label: t.label,
-        supported: t.supported !== false,
-      }));
-    }
-    return WORKFLOW_TRIGGER_OPTIONS.map((t) => ({
-      value: t.value,
-      label: t.label,
-      supported: t.supported,
-    }));
-  }, [triggerTypesApi]);
+  const triggerOptions = useMemo(() => resolveTriggerOptions(triggerTypesApi), [triggerTypesApi]);
 
   useEffect(() => {
     if (idFromUrl) setSelectedId(idFromUrl);
@@ -127,9 +118,10 @@ export default function WorkflowsPage() {
   if (error) {
     return (
       <div className="h-dvh flex flex-col items-center justify-center gap-3 px-6">
-        <p className="text-destructive text-center">
-          {apiErrorMessage(error, "No se pudieron cargar los workflows")}
-        </p>
+        <ErrorBanner
+          className="max-w-md w-full"
+          message={apiErrorMessage(error, "No se pudieron cargar los workflows")}
+        />
         <Button variant="outline" asChild>
           <Link to="/">Volver</Link>
         </Button>
@@ -193,9 +185,11 @@ export default function WorkflowsPage() {
           <ScrollArea className="flex-1">
             <div className="p-2 space-y-1">
               {filtered.length === 0 ? (
-                <p className="text-xs text-muted-foreground text-center py-10 px-4">
-                  No hay workflows. Creá uno para orquestar nodos.
-                </p>
+                <EmptyState
+                  className="border-0 bg-transparent py-10 px-4"
+                  title="No hay workflows"
+                  description="Creá uno para orquestar nodos."
+                />
               ) : (
                 <AnimatePresence initial={false}>
                   {filtered.map((w, i) => {
@@ -207,7 +201,11 @@ export default function WorkflowsPage() {
                         type="button"
                         initial={reduceMotion ? false : { opacity: 0, x: -4 }}
                         animate={{ opacity: 1, x: 0 }}
-                        transition={{ duration: 0.15, delay: Math.min(i, 8) * 0.015 }}
+                        transition={{
+                          duration: motionTokens.fast,
+                          delay: reduceMotion ? 0 : Math.min(i, 8) * 0.015,
+                          ease: motionTokens.ease,
+                        }}
                         onClick={() => {
                           setSelectedId(w.id);
                           setSearchParams({ id: w.id }, { replace: true });
@@ -215,7 +213,7 @@ export default function WorkflowsPage() {
                         className={cn(
                           "w-full text-left rounded-xl border px-3 py-2.5 transition-colors",
                           active
-                            ? "border-primary/40 bg-primary/10 shadow-[0_0_20px_-12px_rgba(45,212,191,0.5)]"
+                            ? "border-primary/40 bg-primary/10 shadow-[0_0_20px_-12px_color-mix(in_oklab,var(--primary)_50%,transparent)]"
                             : "border-transparent hover:bg-muted/50 hover:border-border/50",
                         )}
                       >
@@ -224,17 +222,17 @@ export default function WorkflowsPage() {
                             className={cn(
                               "mt-1.5 h-2 w-2 shrink-0 rounded-full",
                               st === "active"
-                                ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.7)]"
+                                ? "bg-success shadow-[0_0_8px_color-mix(in_oklab,var(--success)_70%,transparent)]"
                                 : st === "paused"
-                                  ? "bg-amber-400"
+                                  ? "bg-warning"
                                   : "bg-muted-foreground/40",
                             )}
                           />
                           <div className="min-w-0 flex-1">
                             <p className="text-sm font-medium truncate">{w.name}</p>
                             <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
-                              {workflowTriggerLabel(w.trigger_type)} · {w.status || "—"} ·{" "}
-                              {w.execution_count ?? 0} runs
+                              {workflowTriggerLabel(w.trigger_type)} ·{" "}
+                              {workflowStatusLabel(w.status)} · {w.execution_count ?? 0} runs
                             </p>
                           </div>
                         </div>
@@ -249,9 +247,11 @@ export default function WorkflowsPage() {
 
         <section className="flex-1 min-w-0 flex flex-col">
           {!selected ? (
-            <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-              Selecciona un workflow
-            </div>
+            <EmptyState
+              className="flex-1 border-0 bg-transparent rounded-none"
+              title="Selecciona un workflow"
+              description="Elegí uno de la lista o creá uno nuevo."
+            />
           ) : (
             <>
               <div className="shrink-0 border-b px-4 py-3 flex items-start gap-3">
@@ -475,7 +475,7 @@ function WorkflowPreview({
   onExecute: () => void;
   executePending: boolean;
 }) {
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useMotionPrefs();
   const { data: detail, isLoading } = useWorkflow(workflowId);
   const updateWf = useUpdateWorkflow();
   const activate = useActivateWorkflow();
@@ -486,20 +486,7 @@ function WorkflowPreview({
   const [triggerType, setTriggerType] = useState("manual");
   const [status, setStatus] = useState("draft");
 
-  const triggerOptions = useMemo(() => {
-    if (triggerTypesApi.length > 0) {
-      return triggerTypesApi.map((t) => ({
-        value: t.value,
-        label: t.label,
-        supported: t.supported !== false,
-      }));
-    }
-    return WORKFLOW_TRIGGER_OPTIONS.map((t) => ({
-      value: t.value,
-      label: t.label,
-      supported: t.supported,
-    }));
-  }, [triggerTypesApi]);
+  const triggerOptions = useMemo(() => resolveTriggerOptions(triggerTypesApi), [triggerTypesApi]);
 
   useEffect(() => {
     if (!detail) return;
@@ -509,8 +496,14 @@ function WorkflowPreview({
     setStatus(detail.status || "draft");
   }, [detail]);
 
-  const nodes = (detail?.nodes ?? []).filter((n) => n.is_active !== false);
-  const edges = (detail?.edges ?? []).filter((e) => e.is_active !== false);
+  const nodes = useMemo(
+    () => (detail?.nodes ?? []).filter((n) => n.is_active !== false),
+    [detail?.nodes],
+  );
+  const edges = useMemo(
+    () => (detail?.edges ?? []).filter((e) => e.is_active !== false),
+    [detail?.edges],
+  );
   const dirty =
     !!detail &&
     (name !== (detail.name || "") ||
@@ -542,7 +535,7 @@ function WorkflowPreview({
         key={workflowId}
         initial={reduceMotion ? false : { opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.2, ease: "easeOut" }}
+        transition={{ duration: motionTokens.base, ease: motionTokens.easeOut }}
         className="p-4 md:p-6 space-y-5 max-w-6xl mx-auto w-full"
       >
         <WorkflowFlowStrip
@@ -614,11 +607,7 @@ function WorkflowPreview({
                 <div className="space-y-3 min-w-0">
                   <div className="space-y-1">
                     <Label className="text-[10px] text-muted-foreground">Nombre</Label>
-                    <Input
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className="h-9"
-                    />
+                    <Input value={name} onChange={(e) => setName(e.target.value)} className="h-9" />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-[10px] text-muted-foreground">Descripción</Label>

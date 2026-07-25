@@ -1,6 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Check, Copy, Link2, Loader2, Pencil, Play, Save, StretchHorizontal, Trash2, X } from "lucide-react";
+import {
+  ArrowLeft,
+  Check,
+  Copy,
+  Link2,
+  Loader2,
+  Pencil,
+  Play,
+  Save,
+  StretchHorizontal,
+  Trash2,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,10 +29,7 @@ import {
   ContextMenuShortcut,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import {
-  WorkflowNodePalette,
-  WF_PALETTE_MIME,
-} from "@/components/workflows/workflow-node-palette";
+import { WorkflowNodePalette, WF_PALETTE_MIME } from "@/components/workflows/workflow-node-palette";
 import { WorkflowNodeConfigForm } from "@/components/workflows/workflow-node-config-form";
 import {
   useCreateWorkflowEdge,
@@ -37,6 +46,7 @@ import {
   type WorkflowNodeType,
 } from "@/api/hooks/useWorkflows";
 import { apiErrorMessage } from "@/lib/apiError";
+import { prettyJson } from "@/lib/json";
 import { cn } from "@/lib/utils";
 import {
   WORKFLOW_NODE_CATALOG,
@@ -44,41 +54,27 @@ import {
   workflowNodeLabel,
   workflowNodeMeta,
 } from "@/lib/workflowCatalog";
+import {
+  isExecutionLive,
+  layeredNodeOrder,
+  normalizeRunStatus,
+  resolveEdgeNodeId,
+  type NodeRunStatus,
+} from "@/lib/workflowGraph";
+import { ErrorBanner } from "@/components/ui/empty-state";
 
 const NODE_W = 180;
 const NODE_H = 56;
-/** Hex directo: --primary es #2dd4bf; hsl(var(--primary)) rompe el stroke SVG. */
-const EDGE_STROKE = "#2dd4bf";
-const EDGE_SUCCESS = "#34d399";
-const EDGE_FAILED = "#f87171";
+/** CSS vars (hex en tema) — válidos en stroke SVG. */
+const EDGE_STROKE = "var(--primary)";
+const EDGE_SUCCESS = "var(--success)";
+const EDGE_FAILED = "var(--destructive)";
 const COL_GAP = 320; // separación horizontal entre nodos (~140px libres)
 const ROW_GAP = 140;
 const VIEW_PAD_X = 48;
 const VIEW_PAD_Y = 56;
 
 type SidePanelTab = "node" | "console";
-type NodeRunStatus = "idle" | "pending" | "running" | "success" | "failed" | "skipped";
-
-function normalizeRunStatus(status?: string): NodeRunStatus {
-  const s = String(status || "").toLowerCase();
-  if (!s) return "idle";
-  if (s.includes("fail") || s.includes("error")) return "failed";
-  if (s.includes("skip")) return "skipped";
-  if (s.includes("run") || s.includes("progress") || s === "started" || s === "active") {
-    return "running";
-  }
-  if (
-    s.includes("success") ||
-    s.includes("complet") ||
-    s === "done" ||
-    s === "ok" ||
-    s === "finished"
-  ) {
-    return "success";
-  }
-  if (s.includes("pend") || s.includes("wait") || s.includes("queued")) return "pending";
-  return "idle";
-}
 
 function buildNodeRunMap(
   logs: WorkflowExecutionLog[] | undefined,
@@ -105,19 +101,6 @@ function buildNodeRunMap(
   return map;
 }
 
-function resolveEdgeNodeId(
-  e: { from_node?: string; to_node?: string; from_node_key?: string; to_node_key?: string },
-  side: "from" | "to",
-  nodes: { id: string; node_key: string }[],
-): string {
-  const direct = side === "from" ? e.from_node : e.to_node;
-  if (direct != null && String(direct).trim() !== "") return String(direct);
-  const key = side === "from" ? e.from_node_key : e.to_node_key;
-  if (!key) return "";
-  const hit = nodes.find((n) => n.node_key === key);
-  return hit ? String(hit.id) : "";
-}
-
 function shortError(message: string, max = 160): { head: string; rest: string } {
   const trimmed = message.trim();
   const nl = trimmed.indexOf("\n");
@@ -125,63 +108,6 @@ function shortError(message: string, max = 160): { head: string; rest: string } 
   if (first.length <= max && nl < 0) return { head: first, rest: "" };
   if (first.length <= max) return { head: first, rest: trimmed.slice(nl + 1).trim() };
   return { head: `${first.slice(0, max)}…`, rest: trimmed };
-}
-
-/** Orden topológico por capas (trigger → … → fin). */
-function layeredNodeOrder(
-  nodes: { id: string; node_key: string; node_type?: string }[],
-  edges: {
-    from_node?: string;
-    to_node?: string;
-    from_node_key?: string;
-    to_node_key?: string;
-  }[],
-): string[][] {
-  const ids = nodes.map((n) => String(n.id));
-  const idSet = new Set(ids);
-  const outgoing = new Map<string, string[]>();
-  const indeg = new Map<string, number>();
-  for (const id of ids) {
-    outgoing.set(id, []);
-    indeg.set(id, 0);
-  }
-  for (const e of edges) {
-    const from = resolveEdgeNodeId(e, "from", nodes);
-    const to = resolveEdgeNodeId(e, "to", nodes);
-    if (!from || !to || !idSet.has(from) || !idSet.has(to) || from === to) continue;
-    outgoing.get(from)!.push(to);
-    indeg.set(to, (indeg.get(to) || 0) + 1);
-  }
-
-  const layers: string[][] = [];
-  const remaining = new Map(indeg);
-  let frontier = ids.filter((id) => (remaining.get(id) || 0) === 0);
-  frontier.sort((a, b) => {
-    const na = nodes.find((n) => String(n.id) === a);
-    const nb = nodes.find((n) => String(n.id) === b);
-    const sa = na?.node_type === "trigger" ? 0 : 1;
-    const sb = nb?.node_type === "trigger" ? 0 : 1;
-    return sa - sb;
-  });
-  const seen = new Set<string>();
-
-  while (frontier.length > 0) {
-    layers.push([...frontier]);
-    for (const id of frontier) seen.add(id);
-    const next: string[] = [];
-    for (const id of frontier) {
-      for (const t of outgoing.get(id) || []) {
-        if (seen.has(t)) continue;
-        remaining.set(t, (remaining.get(t) || 0) - 1);
-        if ((remaining.get(t) || 0) <= 0 && !next.includes(t)) next.push(t);
-      }
-    }
-    frontier = next;
-  }
-
-  const missing = ids.filter((id) => !seen.has(id));
-  if (missing.length) layers.push(missing);
-  return layers.length ? layers : [ids];
 }
 
 function isLayoutCramped(pos: Record<string, { x: number; y: number }>): boolean {
@@ -268,16 +194,6 @@ function layoutCenteredFlow(
   return out;
 }
 
-function pretty(value: unknown): string {
-  if (value == null) return "";
-  if (typeof value === "string") return value;
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
-}
-
 export default function WorkflowCanvasPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -306,6 +222,10 @@ export default function WorkflowCanvasPage() {
   const dragRef = useRef<{ id: string; ox: number; oy: number; sx: number; sy: number } | null>(
     null,
   );
+  const dragRafRef = useRef<number | null>(null);
+  const pendingDragPos = useRef<{ id: string; x: number; y: number } | null>(null);
+  const pointerRafRef = useRef<number | null>(null);
+  const pendingPointer = useRef<{ x: number; y: number } | null>(null);
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>({});
   const [viewport, setViewport] = useState({ w: 960, h: 640 });
@@ -490,8 +410,7 @@ export default function WorkflowCanvasPage() {
     const xs = Object.values(positions).map((p) => p.x);
     const ys = Object.values(positions).map((p) => p.y);
     const x =
-      at?.x ??
-      (xs.length ? Math.max(...xs) + COL_GAP : Math.round(viewport.w / 2 - NODE_W / 2));
+      at?.x ?? (xs.length ? Math.max(...xs) + COL_GAP : Math.round(viewport.w / 2 - NODE_W / 2));
     const y =
       at?.y ??
       (ys.length
@@ -528,17 +447,10 @@ export default function WorkflowCanvasPage() {
     [executionDetail?.logs, nodes],
   );
 
-  const executionLive = useMemo(() => {
-    const s = String(executionDetail?.status || "").toLowerCase();
-    return (
-      s.includes("run") ||
-      s.includes("pend") ||
-      s === "started" ||
-      s === "queued" ||
-      s === "in_progress" ||
-      s === "processing"
-    );
-  }, [executionDetail?.status]);
+  const executionLive = useMemo(
+    () => isExecutionLive(executionDetail?.status),
+    [executionDetail?.status],
+  );
 
   const selected = useMemo(
     () => nodes.find((n) => String(n.id) === selectedNodeId) ?? null,
@@ -624,9 +536,7 @@ export default function WorkflowCanvasPage() {
           d: `M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`,
         };
       })
-      .filter(
-        (x): x is { id: string; fromId: string; toId: string; d: string } => x != null,
-      );
+      .filter((x): x is { id: string; fromId: string; toId: string; d: string } => x != null);
   }, [edges, nodes, positions]);
 
   const canvasSize = useMemo(() => {
@@ -653,10 +563,11 @@ export default function WorkflowCanvasPage() {
 
   if (error || !workflow) {
     return (
-      <div className="h-dvh flex flex-col items-center justify-center gap-3">
-        <p className="text-destructive">
-          {apiErrorMessage(error, "No se pudo cargar el workflow")}
-        </p>
+      <div className="h-dvh flex flex-col items-center justify-center gap-3 px-6">
+        <ErrorBanner
+          className="max-w-md w-full"
+          message={apiErrorMessage(error, "No se pudo cargar el workflow")}
+        />
         <Button asChild variant="outline">
           <Link to="/workflows">Volver</Link>
         </Button>
@@ -760,18 +671,37 @@ export default function WorkflowCanvasPage() {
             if (!type) return;
             e.preventDefault();
             const pt = localPoint(e.clientX, e.clientY);
-            addNode(type, { x: Math.max(16, pt.x - NODE_W / 2), y: Math.max(16, pt.y - NODE_H / 2) });
+            addNode(type, {
+              x: Math.max(16, pt.x - NODE_W / 2),
+              y: Math.max(16, pt.y - NODE_H / 2),
+            });
           }}
           onMouseMove={(e) => {
             const d = dragRef.current;
             if (d) {
               const x = Math.max(0, d.sx + (e.clientX - d.ox));
               const y = Math.max(0, d.sy + (e.clientY - d.oy));
-              setPositions((prev) => ({ ...prev, [d.id]: { x, y } }));
+              pendingDragPos.current = { id: d.id, x, y };
+              if (dragRafRef.current == null) {
+                dragRafRef.current = requestAnimationFrame(() => {
+                  dragRafRef.current = null;
+                  const p = pendingDragPos.current;
+                  if (!p) return;
+                  setPositions((prev) => ({ ...prev, [p.id]: { x: p.x, y: p.y } }));
+                });
+              }
               return;
             }
             if (linkFromId) {
-              setPointer(localPoint(e.clientX, e.clientY));
+              const pt = localPoint(e.clientX, e.clientY);
+              pendingPointer.current = pt;
+              if (pointerRafRef.current == null) {
+                pointerRafRef.current = requestAnimationFrame(() => {
+                  pointerRafRef.current = null;
+                  const p = pendingPointer.current;
+                  if (p) setPointer(p);
+                });
+              }
             }
           }}
           onMouseUp={() => {
@@ -826,50 +756,52 @@ export default function WorkflowCanvasPage() {
                     ? EDGE_SUCCESS
                     : EDGE_STROKE;
               const flowing =
-                executionLive && (fromRun === "running" || toRun === "running" || toRun === "pending");
+                executionLive &&
+                (fromRun === "running" || toRun === "running" || toRun === "pending");
               return (
-              <g key={e.id} className="pointer-events-auto">
-                <path
-                  d={e.d}
-                  fill="none"
-                  stroke="transparent"
-                  strokeWidth="14"
-                  className="cursor-pointer"
-                  onClick={(ev) => {
-                    ev.stopPropagation();
-                    deleteEdge.mutate(
-                      { id: e.id, workflow: workflow.id },
-                      {
-                        onSuccess: () => {
-                          toast.success("Conexión eliminada");
-                          void refetch();
+                <g key={e.id} className="pointer-events-auto">
+                  <path
+                    d={e.d}
+                    fill="none"
+                    stroke="transparent"
+                    strokeWidth="14"
+                    className="cursor-pointer"
+                    onClick={(ev) => {
+                      ev.stopPropagation();
+                      deleteEdge.mutate(
+                        { id: e.id, workflow: workflow.id },
+                        {
+                          onSuccess: () => {
+                            toast.success("Conexión eliminada");
+                            void refetch();
+                          },
+                          onError: (err) =>
+                            toast.error(apiErrorMessage(err, "No se pudo eliminar")),
                         },
-                        onError: (err) => toast.error(apiErrorMessage(err, "No se pudo eliminar")),
-                      },
-                    );
-                  }}
-                />
-                <path
-                  d={e.d}
-                  fill="none"
-                  stroke={stroke}
-                  strokeOpacity={0.35}
-                  strokeWidth="2.5"
-                  className="pointer-events-none"
-                  style={{ stroke }}
-                />
-                <path
-                  d={e.d}
-                  fill="none"
-                  stroke={stroke}
-                  strokeOpacity={0.95}
-                  strokeWidth="2.5"
-                  strokeDasharray={flowing ? "8 10" : undefined}
-                  markerEnd="url(#wf-arrow)"
-                  className={cn("pointer-events-none", flowing && "wf-edge-flow")}
-                  style={{ stroke }}
-                />
-              </g>
+                      );
+                    }}
+                  />
+                  <path
+                    d={e.d}
+                    fill="none"
+                    stroke={stroke}
+                    strokeOpacity={0.35}
+                    strokeWidth="2.5"
+                    className="pointer-events-none"
+                    style={{ stroke }}
+                  />
+                  <path
+                    d={e.d}
+                    fill="none"
+                    stroke={stroke}
+                    strokeOpacity={0.95}
+                    strokeWidth="2.5"
+                    strokeDasharray={flowing ? "8 10" : undefined}
+                    markerEnd="url(#wf-arrow)"
+                    className={cn("pointer-events-none", flowing && "wf-edge-flow")}
+                    style={{ stroke }}
+                  />
+                </g>
               );
             })}
             {linkFromId && pointer && positions[linkFromId] ? (
@@ -896,145 +828,146 @@ export default function WorkflowCanvasPage() {
             return (
               <ContextMenu key={nodeId}>
                 <ContextMenuTrigger asChild>
-              <div
-                className={cn(
-                  "absolute z-10 w-[180px] rounded-xl border backdrop-blur-md px-3 py-2.5 text-left",
-                  "shadow-[0_0_0_1px_rgba(45,212,191,0.06)] transition-[box-shadow,transform] duration-200",
-                  "hover:shadow-[0_0_28px_-10px_rgba(45,212,191,0.45)] hover:-translate-y-0.5",
-                  meta?.accentBg || "bg-card/95 border-border",
-                  selected && "ring-2 ring-primary/45 shadow-[0_0_32px_-8px_rgba(45,212,191,0.55)]",
-                  isLinkSource && "ring-2 ring-primary/60",
-                  run === "running" && "wf-node-running ring-2 ring-primary/70",
-                  run === "success" && "ring-2 ring-emerald-400/50",
-                  run === "failed" && "ring-2 ring-destructive/60",
-                  run === "pending" && "opacity-80",
-                  linkMode && "cursor-crosshair",
-                )}
-                style={{ left: pos.x, top: pos.y }}
-                onContextMenu={() => {
-                  setSelectedNodeId(nodeId);
-                }}
-              >
-                {run !== "idle" ? (
-                  <span
+                  <div
                     className={cn(
-                      "absolute -top-1.5 -right-1.5 z-20 flex h-5 w-5 items-center justify-center rounded-full border bg-background shadow-sm",
-                      run === "running" && "border-primary text-primary",
-                      run === "success" && "border-emerald-400 text-emerald-400",
-                      run === "failed" && "border-destructive text-destructive",
-                      run === "pending" && "border-amber-400 text-amber-400",
-                      run === "skipped" && "border-muted-foreground text-muted-foreground",
+                      "absolute z-10 w-[180px] rounded-xl border backdrop-blur-md px-3 py-2.5 text-left",
+                      "shadow-[0_0_0_1px_color-mix(in_oklab,var(--primary)_6%,transparent)] transition-[box-shadow,transform] duration-motion-base",
+                      "hover:shadow-[0_0_28px_-10px_color-mix(in_oklab,var(--primary)_45%,transparent)] hover:-translate-y-0.5 motion-safe:hover:-translate-y-0.5",
+                      meta?.accentBg || "bg-card/95 border-border",
+                      selected &&
+                        "ring-2 ring-primary/45 shadow-[0_0_32px_-8px_color-mix(in_oklab,var(--primary)_55%,transparent)]",
+                      isLinkSource && "ring-2 ring-primary/60",
+                      run === "running" && "wf-node-running ring-2 ring-primary/70",
+                      run === "success" && "ring-2 ring-success/50",
+                      run === "failed" && "ring-2 ring-destructive/60",
+                      run === "pending" && "opacity-80",
+                      linkMode && "cursor-crosshair",
                     )}
-                    title={run}
+                    style={{ left: pos.x, top: pos.y }}
+                    onContextMenu={() => {
+                      setSelectedNodeId(nodeId);
+                    }}
                   >
-                    {run === "running" || run === "pending" ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : run === "success" ? (
-                      <Check className="h-3 w-3" />
-                    ) : run === "failed" ? (
-                      <X className="h-3 w-3" />
-                    ) : (
-                      <span className="text-[8px] font-bold">–</span>
-                    )}
-                  </span>
-                ) : null}
-                <button
-                  type="button"
-                  className={cn(
-                    "w-full text-left",
-                    !linkMode && "cursor-grab active:cursor-grabbing",
-                  )}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (linkMode) {
-                      if (!linkFromId) {
+                    {run !== "idle" ? (
+                      <span
+                        className={cn(
+                          "absolute -top-1.5 -right-1.5 z-20 flex h-5 w-5 items-center justify-center rounded-full border bg-background shadow-sm",
+                          run === "running" && "border-primary text-primary",
+                          run === "success" && "border-success text-success",
+                          run === "failed" && "border-destructive text-destructive",
+                          run === "pending" && "border-warning text-warning",
+                          run === "skipped" && "border-muted-foreground text-muted-foreground",
+                        )}
+                        title={run}
+                      >
+                        {run === "running" || run === "pending" ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : run === "success" ? (
+                          <Check className="h-3 w-3" />
+                        ) : run === "failed" ? (
+                          <X className="h-3 w-3" />
+                        ) : (
+                          <span className="text-[8px] font-bold">–</span>
+                        )}
+                      </span>
+                    ) : null}
+                    <button
+                      type="button"
+                      className={cn(
+                        "w-full text-left",
+                        !linkMode && "cursor-grab active:cursor-grabbing",
+                      )}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (linkMode) {
+                          if (!linkFromId) {
+                            setLinkFromId(nodeId);
+                            setPointer({ x: pos.x + NODE_W, y: pos.y + NODE_H / 2 });
+                          } else {
+                            connectNodes(linkFromId, nodeId);
+                          }
+                          return;
+                        }
+                        setSelectedNodeId(nodeId);
+                        setSideTab("node");
+                      }}
+                      onMouseDown={(e) => {
+                        if (linkMode) return;
+                        if (e.button !== 0) return;
+                        e.stopPropagation();
+                        dragRef.current = {
+                          id: nodeId,
+                          ox: e.clientX,
+                          oy: e.clientY,
+                          sx: pos.x,
+                          sy: pos.y,
+                        };
+                      }}
+                    >
+                      <p
+                        className={cn(
+                          "text-[10px] font-semibold uppercase tracking-wider",
+                          meta?.accent || "text-muted-foreground",
+                        )}
+                      >
+                        {meta?.label || n.node_type}
+                      </p>
+                      <p className="text-sm font-medium truncate mt-0.5">{n.name}</p>
+                    </button>
+
+                    {/* Input handle */}
+                    <button
+                      type="button"
+                      title="Entrada"
+                      aria-label="Handle de entrada"
+                      className={cn(
+                        "absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 h-3 w-3 rounded-full border-2 border-primary bg-background",
+                        linkMode &&
+                          linkFromId &&
+                          linkFromId !== nodeId &&
+                          "ring-2 ring-primary/50 scale-125",
+                      )}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!linkMode) {
+                          setLinkMode(true);
+                        }
+                        if (linkFromId && linkFromId !== nodeId) {
+                          connectNodes(linkFromId, nodeId);
+                        }
+                      }}
+                      onMouseUp={(e) => {
+                        e.stopPropagation();
+                        if (linkFromId && linkFromId !== nodeId) {
+                          connectNodes(linkFromId, nodeId);
+                        }
+                      }}
+                    />
+
+                    {/* Output handle */}
+                    <button
+                      type="button"
+                      title="Salida — arrastra o clic para conectar"
+                      aria-label="Handle de salida"
+                      className={cn(
+                        "absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 h-3 w-3 rounded-full border-2 border-primary bg-primary",
+                        "hover:scale-125 transition-transform",
+                      )}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setLinkMode(true);
                         setLinkFromId(nodeId);
                         setPointer({ x: pos.x + NODE_W, y: pos.y + NODE_H / 2 });
-                      } else {
-                        connectNodes(linkFromId, nodeId);
-                      }
-                      return;
-                    }
-                    setSelectedNodeId(nodeId);
-                    setSideTab("node");
-                  }}
-                  onMouseDown={(e) => {
-                    if (linkMode) return;
-                    if (e.button !== 0) return;
-                    e.stopPropagation();
-                    dragRef.current = {
-                      id: nodeId,
-                      ox: e.clientX,
-                      oy: e.clientY,
-                      sx: pos.x,
-                      sy: pos.y,
-                    };
-                  }}
-                >
-                  <p
-                    className={cn(
-                      "text-[10px] font-semibold uppercase tracking-wider",
-                      meta?.accent || "text-muted-foreground",
-                    )}
-                  >
-                    {meta?.label || n.node_type}
-                  </p>
-                  <p className="text-sm font-medium truncate mt-0.5">{n.name}</p>
-                </button>
-
-                {/* Input handle */}
-                <button
-                  type="button"
-                  title="Entrada"
-                  aria-label="Handle de entrada"
-                  className={cn(
-                    "absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 h-3 w-3 rounded-full border-2 border-primary bg-background",
-                    linkMode &&
-                      linkFromId &&
-                      linkFromId !== nodeId &&
-                      "ring-2 ring-primary/50 scale-125",
-                  )}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (!linkMode) {
-                      setLinkMode(true);
-                    }
-                    if (linkFromId && linkFromId !== nodeId) {
-                      connectNodes(linkFromId, nodeId);
-                    }
-                  }}
-                  onMouseUp={(e) => {
-                    e.stopPropagation();
-                    if (linkFromId && linkFromId !== nodeId) {
-                      connectNodes(linkFromId, nodeId);
-                    }
-                  }}
-                />
-
-                {/* Output handle */}
-                <button
-                  type="button"
-                  title="Salida — arrastra o clic para conectar"
-                  aria-label="Handle de salida"
-                  className={cn(
-                    "absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 h-3 w-3 rounded-full border-2 border-primary bg-primary",
-                    "hover:scale-125 transition-transform",
-                  )}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setLinkMode(true);
-                    setLinkFromId(nodeId);
-                    setPointer({ x: pos.x + NODE_W, y: pos.y + NODE_H / 2 });
-                  }}
-                  onMouseDown={(e) => {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    setLinkMode(true);
-                    setLinkFromId(nodeId);
-                    setPointer(localPoint(e.clientX, e.clientY));
-                  }}
-                />
-              </div>
+                      }}
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        setLinkMode(true);
+                        setLinkFromId(nodeId);
+                        setPointer(localPoint(e.clientX, e.clientY));
+                      }}
+                    />
+                  </div>
                 </ContextMenuTrigger>
                 <ContextMenuContent className="w-52">
                   <ContextMenuLabel className="text-[11px] truncate">{n.name}</ContextMenuLabel>
@@ -1407,40 +1340,43 @@ export default function WorkflowCanvasPage() {
                                   setSideTab("node");
                                 }}
                               >
-                              <p className="text-[11px] font-medium leading-tight">
-                                {log.node_name || "Nodo"}
-                                <span className="text-muted-foreground font-normal">
-                                  {" "}
-                                  · {log.status}
-                                </span>
-                              </p>
-                              {err ? (
-                                <div className="mt-1">
-                                  <p className="text-[10px] text-destructive leading-snug">
-                                    {err.head}
-                                  </p>
-                                  {err.rest ? (
-                                    <details className="mt-0.5" onClick={(e) => e.stopPropagation()}>
-                                      <summary className="cursor-pointer text-[10px] text-muted-foreground">
-                                        Más detalle
-                                      </summary>
-                                      <pre className="mt-1 max-h-40 overflow-auto text-[10px] whitespace-pre-wrap break-words text-destructive/90 font-mono">
-                                        {err.rest}
-                                      </pre>
-                                    </details>
-                                  ) : null}
-                                </div>
-                              ) : null}
-                              {log.output_data && Object.keys(log.output_data).length > 0 ? (
-                                <details className="mt-1" onClick={(e) => e.stopPropagation()}>
-                                  <summary className="cursor-pointer text-[10px] text-muted-foreground">
-                                    Output
-                                  </summary>
-                                  <pre className="mt-0.5 text-[10px] whitespace-pre-wrap break-words font-mono text-muted-foreground max-h-32 overflow-auto">
-                                    {pretty(log.output_data)}
-                                  </pre>
-                                </details>
-                              ) : null}
+                                <p className="text-[11px] font-medium leading-tight">
+                                  {log.node_name || "Nodo"}
+                                  <span className="text-muted-foreground font-normal">
+                                    {" "}
+                                    · {log.status}
+                                  </span>
+                                </p>
+                                {err ? (
+                                  <div className="mt-1">
+                                    <p className="text-[10px] text-destructive leading-snug">
+                                      {err.head}
+                                    </p>
+                                    {err.rest ? (
+                                      <details
+                                        className="mt-0.5"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        <summary className="cursor-pointer text-[10px] text-muted-foreground">
+                                          Más detalle
+                                        </summary>
+                                        <pre className="mt-1 max-h-40 overflow-auto text-[10px] whitespace-pre-wrap break-words text-destructive/90 font-mono">
+                                          {err.rest}
+                                        </pre>
+                                      </details>
+                                    ) : null}
+                                  </div>
+                                ) : null}
+                                {log.output_data && Object.keys(log.output_data).length > 0 ? (
+                                  <details className="mt-1" onClick={(e) => e.stopPropagation()}>
+                                    <summary className="cursor-pointer text-[10px] text-muted-foreground">
+                                      Output
+                                    </summary>
+                                    <pre className="mt-0.5 text-[10px] whitespace-pre-wrap break-words font-mono text-muted-foreground max-h-32 overflow-auto">
+                                      {prettyJson(log.output_data)}
+                                    </pre>
+                                  </details>
+                                ) : null}
                               </button>
                             </li>
                           );
@@ -1454,7 +1390,7 @@ export default function WorkflowCanvasPage() {
                           Contexto final
                         </summary>
                         <pre className="mt-1 whitespace-pre-wrap break-words font-mono text-[10px] text-muted-foreground max-h-28 overflow-auto">
-                          {pretty(executionDetail.context)}
+                          {prettyJson(executionDetail.context)}
                         </pre>
                       </details>
                     ) : null}

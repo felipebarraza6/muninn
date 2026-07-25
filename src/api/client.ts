@@ -127,13 +127,13 @@ apiClient.interceptors.response.use(
       const url = String(error.config?.url ?? "");
       if (url.includes("work-plans")) {
         (error as AxiosError & { friendlyMessage?: string }).friendlyMessage =
-          "Ruta work-plans no encontrada en el API. Reiniciá el contenedor yggdra-light-api.";
+          "Ruta work-plans no encontrada en el API.";
       }
     }
 
     if (!error.response) {
       (error as AxiosError & { friendlyMessage?: string }).friendlyMessage =
-        "Sin respuesta del servidor. Revisá que el API (Docker :8000) y el proxy de Vite estén corriendo.";
+        "Sin respuesta del servidor. Revisá que el API y el proxy estén activos.";
     }
 
     if (error.response?.data) {

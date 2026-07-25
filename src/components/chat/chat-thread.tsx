@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 type Props = {
   children: ReactNode;
   className?: string;
+  contentClassName?: string;
   /** Ref callback for sticky-scroll viewport binding. */
   viewportRef?: (node: HTMLElement | null) => void;
   endRef?: React.RefObject<HTMLDivElement | null>;
@@ -23,6 +24,7 @@ type Props = {
 export function ChatThread({
   children,
   className,
+  contentClassName,
   viewportRef,
   endRef,
   showJump,
@@ -32,7 +34,7 @@ export function ChatThread({
   return (
     <div className={cn("relative flex-1 min-h-0", className)}>
       <ScrollArea className="h-full" viewportRef={viewportRef}>
-        <div className="px-4 py-4 space-y-3 max-w-3xl mx-auto">
+        <div className={cn("px-4 py-4 space-y-3 max-w-3xl mx-auto", contentClassName)}>
           {children}
           {footer}
           <div ref={endRef} />

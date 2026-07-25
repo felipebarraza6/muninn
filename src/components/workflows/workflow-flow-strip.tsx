@@ -1,72 +1,20 @@
-import { useEffect, useMemo, useRef } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 import { Link } from "react-router-dom";
-import { motion, useReducedMotion } from "framer-motion";
+import { motion } from "framer-motion";
 import { ArrowRight, GitBranch, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import type { WorkflowEdge, WorkflowNode } from "@/api/hooks/useWorkflows";
+import { useMotionPrefs } from "@/hooks/useMotionPrefs";
+import { motion as motionTokens } from "@/lib/motion";
+import { orderNodes as orderNodeIds, resolveEdgeNodeId } from "@/lib/workflowGraph";
 import { workflowNodeMeta } from "@/lib/workflowCatalog";
 import { cn } from "@/lib/utils";
 
 const CARD_W = 168;
 const CARD_H = 72;
 const GAP = 56;
-
-function resolveIds(
-  e: WorkflowEdge,
-  nodes: WorkflowNode[],
-): { from: string; to: string } | null {
-  const from =
-    e.from_node != null
-      ? String(e.from_node)
-      : nodes.find((n) => n.node_key === e.from_node_key)?.id;
-  const to =
-    e.to_node != null
-      ? String(e.to_node)
-      : nodes.find((n) => n.node_key === e.to_node_key)?.id;
-  if (!from || !to) return null;
-  return { from: String(from), to: String(to) };
-}
-
-/** Orden lineal por edges; fallback por position_x. */
-function orderNodes(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowNode[] {
-  if (nodes.length <= 1) return nodes;
-  const byId = new Map(nodes.map((n) => [String(n.id), n]));
-  const outgoing = new Map<string, string[]>();
-  const indeg = new Map<string, number>();
-  for (const n of nodes) {
-    outgoing.set(String(n.id), []);
-    indeg.set(String(n.id), 0);
-  }
-  for (const e of edges) {
-    const ids = resolveIds(e, nodes);
-    if (!ids || !byId.has(ids.from) || !byId.has(ids.to)) continue;
-    outgoing.get(ids.from)!.push(ids.to);
-    indeg.set(ids.to, (indeg.get(ids.to) || 0) + 1);
-  }
-  const starts = nodes
-    .filter((n) => (indeg.get(String(n.id)) || 0) === 0)
-    .sort((a, b) => (a.node_type === "trigger" ? -1 : b.node_type === "trigger" ? 1 : 0));
-  const ordered: WorkflowNode[] = [];
-  const seen = new Set<string>();
-  const queue = starts.map((n) => String(n.id));
-  while (queue.length) {
-    const id = queue.shift()!;
-    if (seen.has(id)) continue;
-    seen.add(id);
-    const node = byId.get(id);
-    if (node) ordered.push(node);
-    for (const next of outgoing.get(id) || []) {
-      if (!seen.has(next)) queue.push(next);
-    }
-  }
-  for (const n of nodes) {
-    if (!seen.has(String(n.id))) ordered.push(n);
-  }
-  if (ordered.length === nodes.length) return ordered;
-  return [...nodes].sort(
-    (a, b) => (a.position_x ?? 0) - (b.position_x ?? 0) || a.name.localeCompare(b.name),
-  );
-}
+const PRIMARY_STROKE = "var(--primary)";
 
 type Props = {
   workflowId: string;
@@ -75,11 +23,20 @@ type Props = {
   isLoading?: boolean;
 };
 
-export function WorkflowFlowStrip({ workflowId, nodes, edges, isLoading }: Props) {
-  const reduceMotion = useReducedMotion();
+function WorkflowFlowStripInner({ workflowId, nodes, edges, isLoading }: Props) {
+  const reduceMotion = useMotionPrefs();
   /** Animación de entrada solo la primera vez que hay nodos (evita parpadeo en refetch). */
   const enteredRef = useRef(false);
-  const ordered = useMemo(() => orderNodes(nodes, edges), [nodes, edges]);
+  const ordered = useMemo(() => {
+    if (nodes.length <= 1) return nodes;
+    const byId = new Map(nodes.map((n) => [String(n.id), n]));
+    const ids = orderNodeIds(nodes, edges);
+    const orderedNodes = ids.map((id) => byId.get(id)).filter((n): n is WorkflowNode => !!n);
+    if (orderedNodes.length === nodes.length) return orderedNodes;
+    return [...nodes].sort(
+      (a, b) => (a.position_x ?? 0) - (b.position_x ?? 0) || a.name.localeCompare(b.name),
+    );
+  }, [nodes, edges]);
   const playEnter = !reduceMotion && !enteredRef.current && ordered.length > 0;
 
   useEffect(() => {
@@ -99,10 +56,11 @@ export function WorkflowFlowStrip({ workflowId, nodes, edges, isLoading }: Props
     const height = CARD_H + 64;
     const links: { key: string; x1: number; y1: number; x2: number; y2: number }[] = [];
     for (const e of edges) {
-      const ids = resolveIds(e, nodes);
-      if (!ids) continue;
-      const a = positions.get(ids.from);
-      const b = positions.get(ids.to);
+      const from = resolveEdgeNodeId(e, "from", nodes);
+      const to = resolveEdgeNodeId(e, "to", nodes);
+      if (!from || !to) continue;
+      const a = positions.get(from);
+      const b = positions.get(to);
       if (!a || !b) continue;
       links.push({
         key: String(e.id),
@@ -138,13 +96,17 @@ export function WorkflowFlowStrip({ workflowId, nodes, edges, isLoading }: Props
 
   if (ordered.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-border/70 bg-card/30 px-6 py-12 text-center space-y-3">
-        <Sparkles className="h-6 w-6 text-primary mx-auto opacity-80" />
-        <p className="text-sm text-muted-foreground">Sin nodos aún. Abrí el canvas para armar el grafo.</p>
-        <Button size="sm" asChild>
-          <Link to={`/workflows/${workflowId}`}>Abrir canvas</Link>
-        </Button>
-      </div>
+      <EmptyState
+        className="rounded-2xl py-12"
+        icon={<Sparkles className="h-5 w-5" aria-hidden />}
+        title="Sin nodos aún"
+        description="Abrí el canvas para armar el grafo."
+        action={
+          <Button size="sm" asChild>
+            <Link to={`/workflows/${workflowId}`}>Abrir canvas</Link>
+          </Button>
+        }
+      />
     );
   }
 
@@ -169,7 +131,12 @@ export function WorkflowFlowStrip({ workflowId, nodes, edges, isLoading }: Props
             {layout.ghost ? " · vista en cadena" : ""}
           </span>
         </div>
-        <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1 relative z-[1]" asChild>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 text-[11px] gap-1 relative z-[1]"
+          asChild
+        >
           <Link to={`/workflows/${workflowId}`}>
             Abrir canvas
             <ArrowRight className="h-3 w-3" />
@@ -197,7 +164,7 @@ export function WorkflowFlowStrip({ workflowId, nodes, edges, isLoading }: Props
                 refY="3.5"
                 orient="auto"
               >
-                <path d="M0,0 L7,3.5 L0,7 Z" fill="#2dd4bf" fillOpacity="0.85" />
+                <path d="M0,0 L7,3.5 L0,7 Z" fill={PRIMARY_STROKE} fillOpacity="0.85" />
               </marker>
             </defs>
             {layout.links.map((l) => {
@@ -208,7 +175,7 @@ export function WorkflowFlowStrip({ workflowId, nodes, edges, isLoading }: Props
                   <path
                     d={d}
                     fill="none"
-                    stroke="#2dd4bf"
+                    stroke={PRIMARY_STROKE}
                     strokeOpacity={layout.ghost ? 0.25 : 0.45}
                     strokeWidth={2}
                     strokeDasharray={layout.ghost ? "5 5" : undefined}
@@ -216,7 +183,7 @@ export function WorkflowFlowStrip({ workflowId, nodes, edges, isLoading }: Props
                   <path
                     d={d}
                     fill="none"
-                    stroke="#2dd4bf"
+                    stroke={PRIMARY_STROKE}
                     strokeOpacity={layout.ghost ? 0.5 : 0.85}
                     strokeWidth={2}
                     markerEnd={`url(#${markerId})`}
@@ -234,11 +201,15 @@ export function WorkflowFlowStrip({ workflowId, nodes, edges, isLoading }: Props
                 key={n.id}
                 initial={playEnter ? { opacity: 0, y: 8 } : false}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.22, delay: playEnter ? 0.04 * i : 0, ease: "easeOut" }}
+                transition={{
+                  duration: motionTokens.base,
+                  delay: playEnter ? motionTokens.stagger * i : 0,
+                  ease: motionTokens.easeOut,
+                }}
                 className={cn(
                   "absolute rounded-xl border backdrop-blur-sm px-3 py-2.5",
-                  "shadow-[0_0_0_1px_rgba(45,212,191,0.06)]",
-                  "hover:shadow-[0_0_24px_-8px_rgba(45,212,191,0.35)] transition-shadow duration-200",
+                  "shadow-[0_0_0_1px_color-mix(in_oklab,var(--primary)_6%,transparent)]",
+                  "hover:shadow-[0_0_24px_-8px_color-mix(in_oklab,var(--primary)_35%,transparent)] transition-shadow duration-motion-base",
                   meta?.accentBg || "bg-card/90 border-border",
                 )}
                 style={{ left: pos.x, top: pos.y, width: CARD_W, height: CARD_H }}
@@ -261,3 +232,5 @@ export function WorkflowFlowStrip({ workflowId, nodes, edges, isLoading }: Props
     </div>
   );
 }
+
+export const WorkflowFlowStrip = memo(WorkflowFlowStripInner);

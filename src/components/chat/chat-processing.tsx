@@ -39,7 +39,6 @@ function StageIcon({ kind, className }: { kind: LiveStreamStep["icon"]; classNam
   return <Sparkles className={cls} />;
 }
 
-
 /** Indicador animado con eventos SSE reales; sin stages inventados. */
 export function ChatProcessingIndicator({
   liveSteps,
