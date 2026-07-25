@@ -129,7 +129,7 @@ export default function WorkflowsPage() {
   if (isLoading) {
     return (
       <div className="h-dvh bg-background">
-        <PageSkeleton variant="inbox" className="h-full max-w-none px-4 py-4" padded={false} />
+        <PageSkeleton variant="catalog" className="h-full max-w-none" padded={false} />
       </div>
     );
   }
@@ -207,7 +207,7 @@ export default function WorkflowsPage() {
                 <EmptyState
                   className="border-0 bg-transparent py-10 px-4"
                   title="No hay workflows"
-                  description="Creá uno para orquestar nodos."
+                  description="Crea uno para orquestar nodos."
                 />
               ) : (
                 <AnimatePresence initial={false}>
@@ -269,7 +269,7 @@ export default function WorkflowsPage() {
             <EmptyState
               className="flex-1 border-0 bg-transparent rounded-none"
               title="Selecciona un workflow"
-              description="Elegí uno de la lista o creá uno nuevo."
+              description="Elige uno de la lista o crea uno nuevo."
             />
           ) : (
             <>
@@ -753,7 +753,7 @@ function WorkflowPreview({
             <AlertDialogHeader>
               <AlertDialogTitle>¿Eliminar este workflow?</AlertDialogTitle>
               <AlertDialogDescription>
-                Se borrará «{detail?.name}» y su grafo. Si el API aún no soporta DELETE, usá
+                Se borrará «{detail?.name}» y su grafo. Si el API aún no soporta DELETE, usa
                 Archivar en estado.
               </AlertDialogDescription>
             </AlertDialogHeader>

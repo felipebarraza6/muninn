@@ -1,9 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Bot,
   Building2,
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Database,
   LayoutGrid,
   Search,
@@ -29,11 +31,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { AppIcon } from "@/components/applications/app-icon";
 import { cn } from "@/lib/utils";
 
 const ALL = "__all__";
+/** Página fija: máximo 6 tarjetas visibles (controlado en cliente). */
+const PAGE_SIZE = 6;
 
 const ACCENTS = [
   {
@@ -75,6 +78,7 @@ export function ChatAgentPicker({ agents, value, onChange, className }: ChatAgen
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [branchFilter, setBranchFilter] = useState(ALL);
+  const [page, setPage] = useState(0);
   const { data: storeApps = [] } = useExternalAPIs({ scope: "store", includeInactive: true });
 
   const appsById = useMemo(() => {
@@ -99,18 +103,28 @@ export function ChatAgentPicker({ agents, value, onChange, className }: ChatAgen
     .filter(Boolean);
 
   const branchOptions = useMemo(() => {
-    const set = new Set<string>();
+    const byKey = new Map<string, string>();
     for (const a of agents) {
-      const n = (a.branch_name || "").trim();
-      if (n) set.add(n);
+      const id = a.branch != null ? String(a.branch) : "";
+      const name = (a.branch_name || "").trim();
+      if (id) byKey.set(id, name || `Sucursal ${id}`);
+      else if (name) byKey.set(`name:${name}`, name);
     }
-    return Array.from(set).sort((a, b) => a.localeCompare(b, "es"));
+    return Array.from(byKey.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label, "es"));
   }, [agents]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return agents.filter((a) => {
-      if (branchFilter !== ALL && (a.branch_name || "").trim() !== branchFilter) return false;
+      if (branchFilter !== ALL) {
+        const byId = a.branch != null && String(a.branch) === branchFilter;
+        const byName =
+          branchFilter.startsWith("name:") &&
+          (a.branch_name || "").trim() === branchFilter.slice(5);
+        if (!byId && !byName) return false;
+      }
       if (!q) return true;
       const appNames = (a.external_apis ?? [])
         .map((id) => appsById.get(String(id))?.name)
@@ -123,6 +137,20 @@ export function ChatAgentPicker({ agents, value, onChange, className }: ChatAgen
       return hay.includes(q);
     });
   }, [agents, search, branchFilter, appsById]);
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount - 1);
+  const pageItems = filtered.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
+
+  useEffect(() => {
+    setPage(0);
+  }, [search, branchFilter, agents]);
+
+  useEffect(() => {
+    if (!open || !value) return;
+    const idx = filtered.findIndex((a) => String(a.id) === String(value));
+    if (idx >= 0) setPage(Math.floor(idx / PAGE_SIZE));
+  }, [open, value, filtered]);
 
   const pick = (id: string) => {
     onChange(id);
@@ -138,6 +166,9 @@ export function ChatAgentPicker({ agents, value, onChange, className }: ChatAgen
     }
     return bits.join(" · ");
   })();
+
+  const from = filtered.length === 0 ? 0 : safePage * PAGE_SIZE + 1;
+  const to = Math.min(filtered.length, (safePage + 1) * PAGE_SIZE);
 
   return (
     <>
@@ -173,29 +204,28 @@ export function ChatAgentPicker({ agents, value, onChange, className }: ChatAgen
           if (!next) {
             setSearch("");
             setBranchFilter(ALL);
+            setPage(0);
           }
         }}
       >
         <SheetContent
           side="right"
           className={cn(
-            "w-full p-0 flex flex-col gap-0 bg-background overflow-hidden",
+            "flex h-full w-full flex-col gap-0 overflow-hidden bg-background p-0",
             "sm:max-w-xl md:max-w-2xl lg:max-w-3xl",
           )}
         >
-          <SheetHeader className="px-5 pt-5 pb-3 space-y-1 text-left border-b border-border/60 shrink-0">
+          <SheetHeader className="shrink-0 space-y-1 border-b border-border/60 px-5 pb-3 pt-5 text-left">
             <SheetTitle className="flex items-center gap-2 text-lg">
               <Sparkles className="h-5 w-5 text-primary" />
               Elige un agente
             </SheetTitle>
-            <SheetDescription>
-              Galería amplia. Filtra por nombre o sucursal y elige una tarjeta.
-            </SheetDescription>
+            <SheetDescription>Filtra y elige. Se muestran {PAGE_SIZE} por página.</SheetDescription>
           </SheetHeader>
 
-          <div className="px-5 py-3 space-y-2.5 border-b border-border/50 bg-muted/20 shrink-0">
+          <div className="shrink-0 space-y-2.5 border-b border-border/50 bg-muted/20 px-5 py-3">
             <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -212,8 +242,8 @@ export function ChatAgentPicker({ agents, value, onChange, className }: ChatAgen
                 <SelectContent>
                   <SelectItem value={ALL}>Todas las sucursales</SelectItem>
                   {branchOptions.map((b) => (
-                    <SelectItem key={b} value={b}>
-                      {b}
+                    <SelectItem key={b.value} value={b.value}>
+                      {b.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -221,18 +251,19 @@ export function ChatAgentPicker({ agents, value, onChange, className }: ChatAgen
             )}
           </div>
 
-          <ScrollArea className="flex-1 min-h-0">
+          {/* overflow nativo: ScrollArea a veces no scrollea en sheet flex */}
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
             <div className="p-4 sm:p-5">
               {filtered.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-center gap-2">
+                <div className="flex flex-col items-center justify-center gap-2 py-16 text-center">
                   <Bot className="h-8 w-8 text-muted-foreground/50" />
                   <p className="text-sm text-muted-foreground">
                     Ningún agente coincide con el filtro.
                   </p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {filtered.map((agent) => {
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {pageItems.map((agent) => {
                     const id = String(agent.id);
                     const isSelected = id === String(value);
                     const accent = accentFor(id + (agent.name || ""));
@@ -259,7 +290,7 @@ export function ChatAgentPicker({ agents, value, onChange, className }: ChatAgen
                           "group relative flex flex-col overflow-hidden rounded-2xl border text-left transition-all",
                           "hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md",
                           isSelected
-                            ? "border-primary/50 bg-primary/8 ring-1 ring-primary/25 shadow-sm"
+                            ? "border-primary/50 bg-primary/8 shadow-sm ring-1 ring-primary/25"
                             : "border-border/60 bg-card/60",
                         )}
                       >
@@ -280,7 +311,7 @@ export function ChatAgentPicker({ agents, value, onChange, className }: ChatAgen
                               )}
                             </span>
                             <div className="min-w-0 flex-1 space-y-1">
-                              <p className="text-sm font-semibold leading-snug line-clamp-2">
+                              <p className="line-clamp-2 text-sm font-semibold leading-snug">
                                 {agent.name}
                               </p>
                               {agent.branch_name && (
@@ -293,7 +324,7 @@ export function ChatAgentPicker({ agents, value, onChange, className }: ChatAgen
                           </div>
 
                           {agent.description && (
-                            <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+                            <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
                               {agent.description}
                             </p>
                           )}
@@ -301,7 +332,7 @@ export function ChatAgentPicker({ agents, value, onChange, className }: ChatAgen
                           <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-0.5">
                             <Badge
                               variant="outline"
-                              className="gap-1 text-[10px] font-medium border-primary/25 bg-primary/5 text-primary"
+                              className="gap-1 border-primary/25 bg-primary/5 text-[10px] font-medium text-primary"
                             >
                               <Wrench className="h-2.5 w-2.5" />
                               {skillsCount} skill{skillsCount === 1 ? "" : "s"}
@@ -309,7 +340,7 @@ export function ChatAgentPicker({ agents, value, onChange, className }: ChatAgen
                             {agent.use_rag && (
                               <Badge
                                 variant="outline"
-                                className="gap-1 text-[10px] font-normal border-info/30 text-info"
+                                className="gap-1 border-info/30 text-[10px] font-normal text-info"
                               >
                                 <Database className="h-2.5 w-2.5" />
                                 RAG
@@ -318,7 +349,7 @@ export function ChatAgentPicker({ agents, value, onChange, className }: ChatAgen
                             {linkedApps.length === 0 ? null : linkedApps.length === 1 ? (
                               <Badge
                                 variant="outline"
-                                className="gap-1.5 text-[10px] font-normal max-w-[11rem] border-border/80"
+                                className="max-w-[11rem] gap-1.5 border-border/80 text-[10px] font-normal"
                               >
                                 <AppIcon
                                   name={linkedApps[0].name}
@@ -331,7 +362,7 @@ export function ChatAgentPicker({ agents, value, onChange, className }: ChatAgen
                             ) : (
                               <Badge
                                 variant="outline"
-                                className="gap-1 text-[10px] font-normal border-border/80"
+                                className="gap-1 border-border/80 text-[10px] font-normal"
                                 title={linkedApps.map((a) => a.name).join(", ")}
                               >
                                 <LayoutGrid className="h-2.5 w-2.5" />
@@ -346,7 +377,42 @@ export function ChatAgentPicker({ agents, value, onChange, className }: ChatAgen
                 </div>
               )}
             </div>
-          </ScrollArea>
+          </div>
+
+          {filtered.length > 0 && (
+            <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border/60 bg-muted/15 px-4 py-3 sm:px-5">
+              <p className="text-xs text-muted-foreground">
+                {from}–{to} de {filtered.length}
+              </p>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-1 px-2"
+                  disabled={safePage <= 0}
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                  Ant
+                </Button>
+                <span className="min-w-[4.5rem] text-center text-xs tabular-nums text-muted-foreground">
+                  {safePage + 1} / {pageCount}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-1 px-2"
+                  disabled={safePage >= pageCount - 1}
+                  onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+                >
+                  Sig
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+          )}
         </SheetContent>
       </Sheet>
     </>

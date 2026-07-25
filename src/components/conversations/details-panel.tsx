@@ -9,6 +9,7 @@ import { channelIcon, channelLabel } from "@/lib/channels";
 import { initials, avatarColor } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 interface Props {
   conversation: Conversation;
@@ -27,6 +28,7 @@ export function ConversationDetailsPanel({
 }: Props) {
   const isChannel = conversation.source === "channel";
   const ChannelIcon = channelIcon(conversation.channelType);
+  const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
 
   return (
     <div className="text-sm">
@@ -58,7 +60,7 @@ export function ConversationDetailsPanel({
               variant="ghost"
               size="sm"
               className="h-7 px-2 ml-auto text-xs text-muted-foreground hover:text-foreground"
-              onClick={onResolve}
+              onClick={() => setConfirmCloseOpen(true)}
             >
               Cerrar
             </Button>
@@ -126,15 +128,31 @@ export function ConversationDetailsPanel({
               Tomar control
             </Button>
           )}
-          <Button className="w-full" variant="outline" size="sm" onClick={onResolve}>
+          <Button
+            className="w-full"
+            variant="outline"
+            size="sm"
+            onClick={() => setConfirmCloseOpen(true)}
+          >
             Cerrar conversación
           </Button>
         </div>
       )}
+      <ConfirmDialog
+        open={confirmCloseOpen}
+        onOpenChange={setConfirmCloseOpen}
+        title="¿Cerrar esta conversación?"
+        description={`Se cerrará la conversación con ${conversation.patientName}. Podrás consultarla luego desde el filtro de cerradas.`}
+        confirmLabel="Cerrar conversación"
+        onConfirm={() => {
+          setConfirmCloseOpen(false);
+          onResolve();
+        }}
+      />
       {analysisOnly && (
         <div className="p-4 border-t text-xs text-muted-foreground leading-relaxed">
-          Modo análisis: sin intervención. Usa el inspector de mensajes en el chat para revisar
-          RAG y tools.
+          Modo análisis: sin intervención. Usa el inspector de mensajes en el chat para revisar RAG
+          y tools.
         </div>
       )}
     </div>

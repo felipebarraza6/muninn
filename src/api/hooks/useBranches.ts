@@ -368,10 +368,7 @@ export function useAdminBranches(options?: {
 }) {
   return useQuery({
     queryKey: BRANCHES_KEY,
-    queryFn: () =>
-      GET<AdminBranch[] | { results: AdminBranch[] }>(ENDPOINTS.branches.list, {
-        params: { page_size: 200 },
-      }).then((data) => normalizeListResponse<AdminBranch>(data)),
+    queryFn: () => GET_ALL_PAGES<AdminBranch>(ENDPOINTS.branches.list),
     staleTime: 30_000,
     refetchOnMount: options?.refetchOnMount ?? "always",
     enabled: options?.enabled ?? true,

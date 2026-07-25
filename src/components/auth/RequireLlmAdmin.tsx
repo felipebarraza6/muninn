@@ -1,9 +1,9 @@
-import { Navigate } from "react-router-dom";
 import { canAccessLlmAdmin } from "@/lib/authGuards";
+import { AccessDenied } from "@/components/auth/AccessDenied";
 
 export function RequireLlmAdmin({ children }: { children: React.ReactNode }) {
   if (!canAccessLlmAdmin()) {
-    return <Navigate to="/" replace />;
+    return <AccessDenied section="la administración de modelos LLM" />;
   }
   return <>{children}</>;
 }

@@ -113,7 +113,7 @@ export function WorkflowNodePalette({
         </ul>
       </ScrollArea>
       <p className="shrink-0 border-t px-2 py-1.5 text-[10px] text-muted-foreground leading-snug">
-        Clic o arrastrá al canvas
+        Clic o arrastra al canvas
       </p>
     </aside>
   );

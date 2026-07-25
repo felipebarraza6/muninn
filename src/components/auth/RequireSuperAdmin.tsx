@@ -1,10 +1,10 @@
-import { Navigate } from "react-router-dom";
 import { isSuperAdmin } from "@/lib/authGuards";
+import { AccessDenied } from "@/components/auth/AccessDenied";
 
 /** Ops + Workflows: preview interno solo para superadmin por ahora. */
 export function RequireSuperAdmin({ children }: { children: React.ReactNode }) {
   if (!isSuperAdmin()) {
-    return <Navigate to="/" replace />;
+    return <AccessDenied section="esta sección (preview interno)" />;
   }
   return <>{children}</>;
 }

@@ -101,7 +101,7 @@ export function WorkflowNodeConfigForm({ nodeType, config, onChange }: Props) {
             onValueChange={(v) => patch({ agent_slug: v })}
           >
             <SelectTrigger className="h-8 text-xs">
-              <SelectValue placeholder="Elegí un agente" />
+              <SelectValue placeholder="Elige un agente" />
             </SelectTrigger>
             <SelectContent>
               {agents
@@ -146,7 +146,7 @@ export function WorkflowNodeConfigForm({ nodeType, config, onChange }: Props) {
             onValueChange={(v) => patch({ model_id: v })}
           >
             <SelectTrigger className="h-8 text-xs">
-              <SelectValue placeholder="Elegí un modelo" />
+              <SelectValue placeholder="Elige un modelo" />
             </SelectTrigger>
             <SelectContent>
               {models.map((m) => (
@@ -217,7 +217,7 @@ export function WorkflowNodeConfigForm({ nodeType, config, onChange }: Props) {
             }}
           >
             <SelectTrigger className="h-8 text-xs">
-              <SelectValue placeholder="Elegí una skill" />
+              <SelectValue placeholder="Elige una skill" />
             </SelectTrigger>
             <SelectContent>
               {functions.map((f) => (
@@ -399,7 +399,7 @@ export function WorkflowNodeConfigForm({ nodeType, config, onChange }: Props) {
             }
           >
             <SelectTrigger className="h-8 text-xs">
-              <SelectValue placeholder="Elegí una app" />
+              <SelectValue placeholder="Elige una app" />
             </SelectTrigger>
             <SelectContent>
               {externalApis.map((a) => (
@@ -417,7 +417,7 @@ export function WorkflowNodeConfigForm({ nodeType, config, onChange }: Props) {
             disabled={!selectedApiId}
           >
             <SelectTrigger className="h-8 text-xs">
-              <SelectValue placeholder={selectedApiId ? "Endpoint" : "Elegí app primero"} />
+              <SelectValue placeholder={selectedApiId ? "Endpoint" : "Elige la app primero"} />
             </SelectTrigger>
             <SelectContent>
               {endpointKeys.map((k) => (
@@ -571,7 +571,7 @@ export function WorkflowNodeConfigForm({ nodeType, config, onChange }: Props) {
 
   return (
     <p className={cn("text-[11px] text-muted-foreground")}>
-      Sin formulario tipado para «{nodeType}». Usá JSON avanzado abajo.
+      Sin formulario tipado para «{nodeType}». Usa JSON avanzado abajo.
     </p>
   );
 }

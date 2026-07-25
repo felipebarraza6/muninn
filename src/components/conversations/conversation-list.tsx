@@ -257,7 +257,7 @@ export function ConversationList({
                 description={
                   bucket === "mine"
                     ? "La IA está gestionando el resto de la bandeja."
-                    : "Probá otro bucket o limpiá la búsqueda."
+                    : "Prueba otro bucket o limpia la búsqueda."
                 }
               />
             </li>

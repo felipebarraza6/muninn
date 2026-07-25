@@ -412,7 +412,7 @@ export function ConversationsView() {
   if (isLoading) {
     return (
       <div className="h-dvh bg-background">
-        <PageSkeleton variant="inbox" className="h-full max-w-none px-4 py-4" padded={false} />
+        <PageSkeleton variant="inbox" className="h-full max-w-none" padded={false} />
       </div>
     );
   }
@@ -513,7 +513,7 @@ export function ConversationsView() {
             <div className="flex-1 flex items-center justify-center p-6">
               <EmptyState
                 title="Selecciona una conversación"
-                description="Elegí un hilo en la bandeja o usá j/k para navegar."
+                description="Elige un hilo en la bandeja o usa j/k para navegar."
               />
             </div>
           )}

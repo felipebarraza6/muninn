@@ -84,9 +84,14 @@ export function useAgents(filters?: {
   target_app?: string;
   /** Superadmin / organizador: incluir agentes con is_active=false */
   includeInactive?: boolean;
+  /**
+   * Mantener la lista anterior mientras refetch (default true).
+   * En chat conviene false: si no, al filtrar sucursal se ven agentes viejos.
+   */
+  keepPrevious?: boolean;
 }) {
   const branchId = useActiveBranchId();
-  const { includeInactive, ...rest } = filters ?? {};
+  const { includeInactive, keepPrevious = true, ...rest } = filters ?? {};
   const params: Record<string, string | number | boolean> = { ...rest };
   // Backend compara contra el string "true".
   if (includeInactive) params.include_inactive = "true";
@@ -99,7 +104,7 @@ export function useAgents(filters?: {
     // (ej. agendamiento WM) desaparecían de la grilla. Traer todas las páginas.
     queryFn: () => GET_ALL_PAGES<Agent>(ENDPOINTS.agents.list, { params }),
     staleTime: 2 * 60 * 1000,
-    placeholderData: keepPreviousData,
+    placeholderData: keepPrevious ? keepPreviousData : undefined,
   });
 }
 

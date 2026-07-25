@@ -504,7 +504,7 @@ export default function APIs() {
                 : hasActiveFilter
                   ? "Prueba otra búsqueda o limpia los filtros."
                   : canManage
-                    ? "Añadí la primera aplicación al catálogo y habilitala en las sucursales que correspondan."
+                    ? "Añade la primera aplicación al catálogo y habilítala en las sucursales que correspondan."
                     : "No hay aplicaciones en el store."}
             </p>
           </div>

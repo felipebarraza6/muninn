@@ -1,21 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import {
-  ArrowDown,
-  ArrowLeft,
-  ArrowUp,
-  Bot,
-  ClipboardList,
-  Loader2,
-  Plus,
-  Search,
-} from "lucide-react";
+import { ArrowLeft, Bot, ClipboardList, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { PageSkeleton } from "@/components/ui/page-skeleton";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { FlowCanvasSkeleton, PageSkeleton } from "@/components/ui/page-skeleton";
 import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
 import { useAgents } from "@/api/hooks/useAgents";
 import { useWorkflows } from "@/api/hooks/useWorkflows";
@@ -44,15 +35,13 @@ import { StatusChip } from "@/components/ui/status-chip";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorBanner } from "@/components/ui/error-banner";
 import { itemStatusLabel, planStatusLabel, workPlanStatusTone } from "@/lib/workPlanStatus";
+import { formatRelative } from "@/lib/datetime";
 import { cn } from "@/lib/utils";
 import { isOrganizationOwnerScope, isSuperAdmin } from "@/lib/authGuards";
 import {
   BUCKETS,
-  ITEM_KIND_LABEL,
-  ItemStatusIcon,
   draftFromPayload,
   extractResultView,
-  insumoPreview,
   itemPreview,
   newDraftItem,
   payloadFromDraft,
@@ -60,6 +49,7 @@ import {
   type DraftItem,
 } from "@/components/work-plans/work-plan-model";
 import { PlanHeader } from "@/components/work-plans/plan-header";
+import { PlanFlowList } from "@/components/work-plans/plan-flow-list";
 import { ItemInspector } from "@/components/work-plans/item-inspector";
 import { CreatePlanDialog } from "@/components/work-plans/create-plan-dialog";
 import { AddItemDialog } from "@/components/work-plans/add-item-dialog";
@@ -84,6 +74,8 @@ export function WorkPlansInbox() {
     ok?: boolean;
     items: WorkItem[];
   } | null>(null);
+  const [confirmDeletePlan, setConfirmDeletePlan] = useState(false);
+  const [confirmDeleteItem, setConfirmDeleteItem] = useState(false);
 
   const { data: planDetail, isLoading: detailLoading } = useWorkPlan(selectedId || undefined);
   const createPlan = useCreateWorkPlan();
@@ -210,31 +202,34 @@ export function WorkPlansInbox() {
     );
   };
 
-  const reorderItem = (item: WorkItem, dir: -1 | 1) => {
-    const idx = items.findIndex((i) => i.id === item.id);
-    const swap = items[idx + dir];
-    if (!swap) return;
-    const aOrder = item.sort_order ?? idx;
-    const bOrder = swap.sort_order ?? idx + dir;
-    updateItem.mutate(
-      { id: item.id, sort_order: bOrder },
-      {
-        onError: (e) => toast.error(apiErrorMessage(e, "No se pudo reordenar")),
-      },
-    );
-    updateItem.mutate(
-      { id: swap.id, sort_order: aOrder },
-      {
-        onSuccess: () => toast.success("Orden actualizado"),
-        onError: (e) => toast.error(apiErrorMessage(e, "No se pudo reordenar")),
-      },
-    );
+  const reorderByIds = (orderedIds: string[]) => {
+    const updates = orderedIds
+      .map((id, sort_order) => {
+        const cur = items.find((i) => i.id === id);
+        if (!cur || (cur.sort_order ?? 0) === sort_order) return null;
+        return { id, sort_order };
+      })
+      .filter((u): u is { id: string; sort_order: number } => !!u);
+    if (!updates.length) return;
+    Promise.all(
+      updates.map(
+        (u) =>
+          new Promise<void>((resolve, reject) => {
+            updateItem.mutate(u, {
+              onSuccess: () => resolve(),
+              onError: (e) => reject(e),
+            });
+          }),
+      ),
+    )
+      .then(() => toast.success("Orden actualizado"))
+      .catch((e) => toast.error(apiErrorMessage(e, "No se pudo reordenar")));
   };
 
   if (isLoading) {
     return (
       <div className="h-dvh bg-background">
-        <PageSkeleton variant="inbox" className="h-full max-w-none px-4 py-4" padded={false} />
+        <PageSkeleton variant="workspace" className="h-full max-w-none" padded={false} />
       </div>
     );
   }
@@ -244,11 +239,11 @@ export function WorkPlansInbox() {
     const detail = apiErrorDetail(error);
     const hint =
       status === 404
-        ? "El API no tiene la ruta work-plans. Reiniciá el API y volvé a intentar."
+        ? "El API no tiene la ruta work-plans. Reinicia el API y vuelve a intentar."
         : status === 403
           ? "Sin permiso o suscripción activa para ai_agents en esta sucursal."
           : status === 401
-            ? "Sesión inválida — volvé a iniciar sesión."
+            ? "Sesión inválida — vuelve a iniciar sesión."
             : status == null
               ? "No hay respuesta del API. Revisá que el servidor y el proxy estén activos."
               : null;
@@ -272,7 +267,12 @@ export function WorkPlansInbox() {
     ? {
         item: selectedItem,
         planWorkflowId: planDetail?.workflow ?? null,
+        planAgentId: planDetail?.assigned_agent != null ? String(planDetail.assigned_agent) : null,
         agentLabel: agentName(selectedItem.assigned_agent || planDetail?.assigned_agent),
+        agents: agents.map((a) => ({
+          id: String(a.id),
+          name: a.name || a.slug || String(a.id),
+        })),
         busy:
           runItem.isPending || retryItem.isPending || updateItem.isPending || deleteItem.isPending,
         onRun: () => {
@@ -282,14 +282,14 @@ export function WorkPlansInbox() {
               const isMobile =
                 typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches;
               if (isMobile) setInspectorOpen(true);
-              toast.success("Ítem ejecutado — revisá el resultado a la derecha");
+              toast.success("Ítem ejecutado — revisa el resultado a la derecha");
             },
             onError: (e) => toast.error(apiErrorMessage(e, "No se pudo ejecutar el ítem")),
           });
         },
         onRetry: () => {
           retryItem.mutate(selectedItem.id, {
-            onSuccess: () => toast.success("Reintento lanzado — revisá el resultado"),
+            onSuccess: () => toast.success("Reintento lanzado — revisa el resultado"),
             onError: (e) => toast.error(apiErrorMessage(e, "No se pudo reintentar")),
           });
         },
@@ -297,6 +297,7 @@ export function WorkPlansInbox() {
           title: string;
           kind: WorkItemKind;
           payload: Record<string, unknown>;
+          assigned_agent?: string | number | null;
         }) => {
           updateItem.mutate(
             { id: selectedItem.id, ...patch },
@@ -306,26 +307,13 @@ export function WorkPlansInbox() {
             },
           );
         },
-        onDelete: () => {
-          if (!window.confirm("¿Quitar este ítem del plan?")) return;
-          deleteItem.mutate(
-            { id: selectedItem.id, planId: selectedId },
-            {
-              onSuccess: () => {
-                toast.success("Ítem eliminado");
-                setInspectorOpen(false);
-                setSelectedItemId(null);
-              },
-              onError: (e) => toast.error(apiErrorMessage(e, "No se pudo eliminar el ítem")),
-            },
-          );
-        },
+        onDelete: () => setConfirmDeleteItem(true),
       }
     : null;
 
   return (
     <div className="h-dvh flex flex-col bg-background overflow-hidden">
-      <div className="shrink-0 border-b border-border/60 bg-card/80 backdrop-blur px-3 py-2 flex items-center gap-2">
+      <div className="shrink-0 border-b border-border/40 bg-background/80 backdrop-blur-md px-3 py-2 flex items-center gap-2">
         <Button
           variant="ghost"
           size="sm"
@@ -341,7 +329,7 @@ export function WorkPlansInbox() {
         <div className="min-w-0 flex flex-col leading-tight">
           <span className="text-sm font-semibold tracking-tight truncate">Planes</span>
           <span className="text-[10px] text-muted-foreground hidden sm:inline truncate">
-            OPS-agents · insumos → ejecutar → resultado
+            Planifica pasos y ejecútalos con tus agentes
           </span>
         </div>
         <span className="ml-1 hidden md:inline-flex items-center rounded-full border border-primary/25 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
@@ -366,15 +354,18 @@ export function WorkPlansInbox() {
       <div className="flex flex-1 min-h-0 overflow-hidden">
         <aside
           className={cn(
-            "w-full md:w-[300px] lg:w-[320px] border-r bg-card flex-col shrink-0",
+            "w-full md:w-[320px] lg:w-[360px] border-r border-border/40 bg-muted/15 flex-col shrink-0 min-h-0",
             mobileShowPlan && selectedId ? "hidden md:flex" : "flex",
           )}
         >
-          <div className="border-b px-3 pt-3 pb-2 space-y-2 shrink-0">
-            <p className="text-[11px] text-muted-foreground px-0.5">
-              Un plan es una cadena de pasos. Cada paso tiene insumos (entrada) y un resultado.
-            </p>
-            <div className="flex gap-1">
+          <div className="border-b border-border/40 px-3 pt-3 pb-2.5 space-y-2.5 shrink-0">
+            <div className="flex items-baseline justify-between gap-2 px-0.5">
+              <p className="text-xs font-semibold tracking-tight text-foreground">Bandeja</p>
+              <p className="text-[10px] text-muted-foreground tabular-nums">
+                {filtered.length} plan{filtered.length === 1 ? "" : "es"}
+              </p>
+            </div>
+            <div className="flex gap-0.5 rounded-lg bg-muted/30 p-0.5">
               {BUCKETS.map((b) => {
                 const count = plans.filter((p) => b.match(p.status)).length;
                 return (
@@ -383,14 +374,14 @@ export function WorkPlansInbox() {
                     type="button"
                     onClick={() => setBucket(b.id)}
                     className={cn(
-                      "flex-1 rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors",
+                      "flex-1 rounded-md px-1.5 py-1.5 text-[10px] font-medium transition-colors",
                       bucket === b.id
-                        ? "bg-primary/15 text-primary"
-                        : "text-muted-foreground hover:bg-muted/60",
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground",
                     )}
                   >
                     {b.label}
-                    <span className="ml-1 tabular-nums opacity-70">{count}</span>
+                    <span className="ml-0.5 tabular-nums opacity-60">{count}</span>
                   </button>
                 );
               })}
@@ -400,71 +391,118 @@ export function WorkPlansInbox() {
               <Input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Buscar plan…"
-                className="h-8 pl-8 text-sm"
+                placeholder="Buscar en la bandeja…"
+                className="h-8 pl-8 text-sm bg-background/50"
               />
             </div>
           </div>
 
-          <ScrollArea className="flex-1">
-            <div className="p-2 space-y-1">
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+            <div className="divide-y divide-border/40">
               {filtered.length === 0 ? (
                 <div className="text-center py-10 px-4 space-y-3">
                   <p className="text-xs text-muted-foreground">
-                    No hay planes aquí. Usa una plantilla real de tu sucursal (Dentidesk o
-                    SmartHydro).
+                    Bandeja vacía. Usa una plantilla de tu sucursal o crea un plan nuevo.
                   </p>
                   <Button size="sm" variant="outline" onClick={() => setCreateOpen(true)}>
                     Usar plantilla
                   </Button>
                 </div>
               ) : (
-                filtered.map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => selectPlan(p.id)}
-                    className={cn(
-                      "w-full text-left rounded-lg border px-3 py-2.5 transition-colors",
-                      selectedId === p.id
-                        ? "border-primary/40 bg-primary/10"
-                        : "border-transparent hover:bg-muted/50",
-                    )}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="text-sm font-medium truncate">{p.name}</p>
-                      <StatusChip
-                        label={planStatusLabel(p.status)}
-                        tone={workPlanStatusTone(p.status)}
-                      />
-                    </div>
-                    <p className="text-[11px] text-muted-foreground line-clamp-2 mt-0.5">
-                      {p.description || "Sin descripción"}
-                    </p>
-                    <div className="mt-1.5 flex items-center gap-2 text-[10px] text-muted-foreground">
-                      <Bot className="h-3 w-3" />
-                      <span className="truncate">{agentName(p.assigned_agent)}</span>
-                      <span className="ml-auto tabular-nums">
-                        {(p.items?.length ?? 0) || "—"} ítems
-                      </span>
-                    </div>
-                  </button>
-                ))
+                filtered.map((p) => {
+                  const selected = selectedId === p.id;
+                  const agent = agentName(p.assigned_agent);
+                  const tone = workPlanStatusTone(p.status);
+                  const steps = p.items?.length ?? 0;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => selectPlan(p.id)}
+                      className={cn(
+                        "w-full text-left px-3 py-3 transition-colors relative cursor-pointer",
+                        selected ? "bg-primary/10" : "hover:bg-muted/35",
+                      )}
+                    >
+                      {selected ? (
+                        <span
+                          aria-hidden
+                          className="absolute left-0 top-0 bottom-0 w-[3px] bg-primary"
+                        />
+                      ) : null}
+                      <div className="flex gap-2.5 min-w-0">
+                        <div className="relative shrink-0 mt-0.5">
+                          <span
+                            className={cn(
+                              "inline-flex h-9 w-9 items-center justify-center rounded-full ring-1",
+                              p.assigned_agent
+                                ? "bg-primary/15 text-primary ring-primary/30"
+                                : "bg-muted/80 text-muted-foreground ring-border/50",
+                            )}
+                            title={p.assigned_agent ? `Agente: ${agent}` : "Sin agente asignado"}
+                          >
+                            <Bot className="h-4 w-4" />
+                          </span>
+                          <span
+                            aria-hidden
+                            className={cn(
+                              "absolute -right-0.5 -bottom-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-background",
+                              tone === "success" && "bg-success",
+                              tone === "failed" && "bg-destructive",
+                              tone === "running" && "bg-info",
+                              tone === "pending" && "bg-warning",
+                              (tone === "idle" || tone === "skipped" || !tone) &&
+                                "bg-muted-foreground/50",
+                            )}
+                          />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-baseline gap-2">
+                            <p
+                              className={cn(
+                                "text-[13px] truncate flex-1 leading-snug",
+                                selected ? "font-semibold text-foreground" : "font-medium",
+                              )}
+                            >
+                              {p.name}
+                            </p>
+                            <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
+                              {formatRelative(p.modified || p.created)}
+                            </span>
+                          </div>
+                          <p className="mt-0.5 text-[11px] text-muted-foreground truncate">
+                            <span className="text-foreground/70">{agent}</span>
+                            <span className="mx-1 opacity-40">·</span>
+                            <span>{planStatusLabel(p.status)}</span>
+                            <span className="mx-1 opacity-40">·</span>
+                            <span className="tabular-nums">
+                              {steps} paso{steps === 1 ? "" : "s"}
+                            </span>
+                          </p>
+                          <p className="mt-1 text-[11px] text-muted-foreground/90 line-clamp-2 leading-snug">
+                            {p.description?.trim() || "Plan de agentes y flujos · sin descripción"}
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })
               )}
             </div>
-          </ScrollArea>
+          </div>
         </aside>
 
         <section
           className={cn(
-            "flex-1 min-w-0 flex-col border-r",
+            "flex-1 min-h-0 min-w-0 flex-col border-r border-border/40 relative overflow-hidden",
+            "bg-[radial-gradient(ellipse_80%_50%_at_20%_0%,rgba(45,212,191,0.08),transparent_55%),linear-gradient(to_bottom,transparent,var(--background))]",
             mobileShowPlan && selectedId ? "flex" : "hidden md:flex",
           )}
         >
           {!selectedId ? (
             <EmptyState
               className="flex-1 border-0 bg-transparent rounded-none"
-              title="Selecciona un plan o crea uno con una plantilla de tu sucursal."
+              title="Elige un plan a la izquierda o crea uno para abrir el lienzo de trabajo."
               action={
                 <Button size="sm" variant="outline" onClick={() => setCreateOpen(true)}>
                   Nuevo plan
@@ -472,9 +510,7 @@ export function WorkPlansInbox() {
               }
             />
           ) : detailLoading && !planDetail ? (
-            <div className="flex-1 flex items-center justify-center">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-            </div>
+            <FlowCanvasSkeleton />
           ) : (
             <>
               <div className="md:hidden shrink-0 border-b px-3 py-2">
@@ -492,6 +528,7 @@ export function WorkPlansInbox() {
                 plan={planDetail}
                 agentLabel={agentName(planDetail?.assigned_agent)}
                 itemCount={items.length}
+                doneCount={items.filter((i) => i.status === "done").length}
                 busy={
                   runNext.isPending ||
                   runAll.isPending ||
@@ -531,18 +568,7 @@ export function WorkPlansInbox() {
                     },
                   );
                 }}
-                onDelete={() => {
-                  if (!selectedId) return;
-                  if (!window.confirm("¿Eliminar este plan?")) return;
-                  deletePlan.mutate(selectedId, {
-                    onSuccess: () => {
-                      toast.success("Plan eliminado");
-                      setSelectedId("");
-                      setSearchParams({}, { replace: true });
-                    },
-                    onError: (e) => toast.error(apiErrorMessage(e, "No se pudo eliminar")),
-                  });
-                }}
+                onDelete={() => setConfirmDeletePlan(true)}
                 onSaveMeta={(patch) => {
                   if (!selectedId) return;
                   updatePlan.mutate(
@@ -569,7 +595,7 @@ export function WorkPlansInbox() {
                       </p>
                       <p className="text-[11px] text-muted-foreground mt-0.5">
                         {runSummary.steps != null ? `${runSummary.steps} paso(s) · ` : ""}
-                        Tocá un ítem para ver el detalle a la derecha.
+                        Toca un ítem para ver el detalle a la derecha.
                       </p>
                     </div>
                     <Button
@@ -591,7 +617,7 @@ export function WorkPlansInbox() {
                           <button
                             type="button"
                             className={cn(
-                              "w-full text-left rounded-lg px-2 py-1.5 text-[11px] transition-colors",
+                              "w-full text-left rounded-lg px-2 py-1.5 text-[11px] transition-colors cursor-pointer",
                               selectedItemId === it.id
                                 ? "bg-primary/15 text-foreground"
                                 : "hover:bg-muted/60 text-muted-foreground",
@@ -613,9 +639,9 @@ export function WorkPlansInbox() {
                   </ul>
                 </div>
               ) : null}
-              <div className="shrink-0 px-4 py-2 border-b flex items-center gap-2">
+              <div className="shrink-0 px-4 py-2.5 border-b border-border/40 flex items-center gap-2 bg-background/40 backdrop-blur-sm">
                 <p className="text-[11px] text-muted-foreground flex-1">
-                  Flujo del plan · insumo → ejecutar → resultado (detalle a la derecha)
+                  Flujo · arrastra el asa ⋮⋮ para reordenar · clic para ver detalle
                 </p>
                 <Button
                   size="sm"
@@ -624,112 +650,40 @@ export function WorkPlansInbox() {
                   onClick={() => setAddItemOpen(true)}
                 >
                   <Plus className="h-3.5 w-3.5" />
-                  Añadir ítem
+                  Añadir paso
                 </Button>
               </div>
-              <ScrollArea className="flex-1">
-                <div className="p-3 space-y-1.5 max-w-3xl mx-auto w-full">
+              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+                <div className="p-5 max-w-2xl mx-auto w-full">
                   {items.length === 0 ? (
-                    <div className="text-center py-12 space-y-3">
+                    <div className="text-center py-14 space-y-3 rounded-2xl border border-dashed border-border/50 bg-background/40">
                       <p className="text-sm text-muted-foreground">
-                        Este plan aún no tiene ítems. Añade un turno, skill, workflow o nota.
+                        Este plan aún no tiene pasos. Añade un agente, skill, workflow o nota.
                       </p>
                       <Button size="sm" onClick={() => setAddItemOpen(true)}>
-                        Añadir ítem
+                        Añadir paso
                       </Button>
                     </div>
                   ) : (
-                    items.map((item, idx) => {
-                      const insumo = insumoPreview(item);
-                      const preview = itemPreview(item);
-                      return (
-                        <div
-                          key={item.id}
-                          className={cn(
-                            "rounded-xl border px-3 py-2.5 transition-colors",
-                            selectedItemId === item.id
-                              ? "border-primary/40 bg-primary/5"
-                              : "border-border/60 hover:bg-muted/40",
-                          )}
-                        >
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              className="flex items-center gap-2 min-w-0 flex-1 text-left"
-                              onClick={() => selectItem(item.id)}
-                            >
-                              <ItemStatusIcon status={item.status} />
-                              <span className="text-[10px] text-muted-foreground tabular-nums">
-                                #{idx + 1}
-                              </span>
-                              <span className="text-sm font-medium truncate flex-1">
-                                {item.title}
-                              </span>
-                              <span className="rounded-md bg-muted/80 px-1.5 py-0.5 text-[10px] text-muted-foreground shrink-0">
-                                {ITEM_KIND_LABEL[item.kind] ?? item.kind}
-                              </span>
-                              <StatusChip
-                                label={itemStatusLabel(item.status)}
-                                tone={workPlanStatusTone(item.status)}
-                              />
-                            </button>
-                            <div className="flex items-center gap-0.5 shrink-0">
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="h-7 w-7"
-                                disabled={idx === 0 || updateItem.isPending}
-                                onClick={() => reorderItem(item, -1)}
-                                title="Subir"
-                              >
-                                <ArrowUp className="h-3.5 w-3.5" />
-                              </Button>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="h-7 w-7"
-                                disabled={idx === items.length - 1 || updateItem.isPending}
-                                onClick={() => reorderItem(item, 1)}
-                                title="Bajar"
-                              >
-                                <ArrowDown className="h-3.5 w-3.5" />
-                              </Button>
-                            </div>
-                          </div>
-                          {insumo ? (
-                            <p className="mt-1.5 text-[11px] text-foreground/75 line-clamp-1 pl-6">
-                              <span className="text-muted-foreground">Insumo · </span>
-                              {insumo}
-                            </p>
-                          ) : null}
-                          {preview ? (
-                            <p
-                              className={cn(
-                                "mt-0.5 text-[11px] line-clamp-2 pl-6",
-                                item.status === "failed"
-                                  ? "text-destructive"
-                                  : "text-muted-foreground",
-                              )}
-                            >
-                              <span className="opacity-80">Resultado · </span>
-                              {preview}
-                            </p>
-                          ) : null}
-                        </div>
-                      );
-                    })
+                    <PlanFlowList
+                      items={items}
+                      selectedItemId={selectedItemId}
+                      disabled={updateItem.isPending}
+                      onSelect={selectItem}
+                      onReorder={reorderByIds}
+                    />
                   )}
                 </div>
-              </ScrollArea>
+              </div>
             </>
           )}
         </section>
 
-        <aside className="hidden md:flex w-[340px] lg:w-[380px] bg-card flex-col shrink-0 overflow-hidden border-l">
+        <aside className="hidden md:flex w-[400px] lg:w-[440px] bg-muted/10 flex-col shrink-0 min-h-0 overflow-hidden border-l border-border/40">
           {!inspectorProps ? (
             <EmptyState
               className="flex-1 border-0 bg-transparent rounded-none"
-              title="Elige un ítem del flujo para ver insumos y lo que generó."
+              title="Elige un paso del flujo para ver archivos, métricas e insumos."
             />
           ) : (
             <ItemInspector {...inspectorProps} />
@@ -745,7 +699,7 @@ export function WorkPlansInbox() {
       >
         <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col gap-0 h-dvh">
           <SheetHeader className="px-4 py-3 border-b text-left shrink-0 pr-12">
-            <SheetTitle className="text-sm">Detalle del ítem</SheetTitle>
+            <SheetTitle className="text-sm">Paso del flujo</SheetTitle>
           </SheetHeader>
           <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
             {inspectorProps ? <ItemInspector {...inspectorProps} /> : null}
@@ -807,7 +761,61 @@ export function WorkPlansInbox() {
           );
         }}
       />
+
+      <ConfirmDialog
+        open={confirmDeletePlan}
+        onOpenChange={setConfirmDeletePlan}
+        title="¿Eliminar este plan?"
+        description={
+          planDetail?.name
+            ? `Se eliminará «${planDetail.name}» con todos sus pasos y resultados. Esta acción no se puede deshacer.`
+            : "Se eliminará el plan con todos sus pasos y resultados. Esta acción no se puede deshacer."
+        }
+        confirmLabel="Eliminar plan"
+        destructive
+        busy={deletePlan.isPending}
+        onConfirm={() => {
+          if (!selectedId) return;
+          deletePlan.mutate(selectedId, {
+            onSuccess: () => {
+              toast.success("Plan eliminado");
+              setConfirmDeletePlan(false);
+              setSelectedId("");
+              setSearchParams({}, { replace: true });
+            },
+            onError: (e) => toast.error(apiErrorMessage(e, "No se pudo eliminar")),
+          });
+        }}
+      />
+
+      <ConfirmDialog
+        open={confirmDeleteItem}
+        onOpenChange={setConfirmDeleteItem}
+        title="¿Quitar este paso del plan?"
+        description={
+          selectedItem?.title
+            ? `Se quitará «${selectedItem.title}» del flujo. Esta acción no se puede deshacer.`
+            : "Se quitará el paso del flujo. Esta acción no se puede deshacer."
+        }
+        confirmLabel="Quitar paso"
+        destructive
+        busy={deleteItem.isPending}
+        onConfirm={() => {
+          if (!selectedItem) return;
+          deleteItem.mutate(
+            { id: selectedItem.id, planId: selectedId },
+            {
+              onSuccess: () => {
+                toast.success("Ítem eliminado");
+                setConfirmDeleteItem(false);
+                setInspectorOpen(false);
+                setSelectedItemId(null);
+              },
+              onError: (e) => toast.error(apiErrorMessage(e, "No se pudo eliminar el ítem")),
+            },
+          );
+        }}
+      />
     </div>
   );
 }
-

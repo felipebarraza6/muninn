@@ -6,8 +6,8 @@ import { Input } from "@/components/ui/input";
 import { ChatThread } from "@/components/chat/chat-thread";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorBanner } from "@/components/ui/error-banner";
-import { Skeleton } from "@/components/ui/skeleton";
-import { PageSkeleton } from "@/components/ui/page-skeleton";
+import { ChatThreadSkeleton, PageSkeleton } from "@/components/ui/page-skeleton";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   ArrowLeft,
   Bot,
@@ -117,7 +117,10 @@ interface AgentChatCoreProps {
   };
   /** Extra a la derecha del picker (ej. filtro de sucursal). */
   headerExtra?: React.ReactNode;
-  /** Omitir PageSkeleton completa mientras carga el agente (cuando ya hay skeleton parent). */
+  /**
+   * @deprecated Ya no cambia el comportamiento: siempre se muestra el skeleton de chat
+   * (nunca un spinner). Se mantiene por compatibilidad con /chat.
+   */
   skipInitialSkeleton?: boolean;
 }
 
@@ -128,7 +131,7 @@ export function AgentChatCore({
   fillParent = false,
   agentSwitcher,
   headerExtra,
-  skipInitialSkeleton = false,
+  skipInitialSkeleton: _skipInitialSkeleton = false,
 }: AgentChatCoreProps) {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -160,6 +163,7 @@ export function AgentChatCore({
   const escalateConversation = useEscalateConversation();
   const [escalateOpen, setEscalateOpen] = useState(false);
   const [escalateReason, setEscalateReason] = useState("");
+  const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
   const queryClient = useQueryClient();
   const reduceMotion = useMotionPrefs();
 
@@ -891,6 +895,7 @@ export function AgentChatCore({
     closeConversation.mutate(conversationId, {
       onSuccess: () => {
         toast.success("Conversación cerrada");
+        setConfirmCloseOpen(false);
         void queryClient.invalidateQueries({ queryKey: ["conversations"] });
         void queryClient.invalidateQueries({ queryKey: ["unified-conversations"] });
       },
@@ -899,8 +904,14 @@ export function AgentChatCore({
         updateStatus.mutate(
           { id: conversationId, status: "ARCHIVED" },
           {
-            onSuccess: () => toast.success("Conversación archivada"),
-            onError: (e) => toast.error(apiErrorMessage(e, "No se pudo cerrar")),
+            onSuccess: () => {
+              toast.success("No se pudo cerrar — la conversación se archivó en su lugar");
+              setConfirmCloseOpen(false);
+            },
+            onError: (e) => {
+              toast.error(apiErrorMessage(e, "No se pudo cerrar"));
+              setConfirmCloseOpen(false);
+            },
           },
         );
       },
@@ -967,18 +978,9 @@ export function AgentChatCore({
     : "h-[calc(100dvh-3.5rem)] w-full bg-background text-foreground flex flex-col overflow-hidden";
 
   if (agentLoading) {
-    if (skipInitialSkeleton) {
-      return (
-        <div
-          className={`${fillParent ? "h-full" : "h-[calc(100dvh-3.5rem)]"} w-full bg-background flex items-center justify-center`}
-        >
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        </div>
-      );
-    }
     return (
       <div className={`${fillParent ? "h-full" : "h-[calc(100dvh-3.5rem)]"} w-full bg-background`}>
-        <PageSkeleton variant="chat" className="h-full max-w-none px-4 py-4" padded={false} />
+        <PageSkeleton variant="chat" className="h-full max-w-none" padded={false} />
       </div>
     );
   }
@@ -1000,54 +1002,73 @@ export function AgentChatCore({
 
   return (
     <div className={shellClass}>
-      <header className="border-b border-border/50 bg-card/50 backdrop-blur px-3 sm:px-4 py-2 flex items-center gap-2 sm:gap-3 shrink-0">
-        {showBackLink && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 shrink-0 gap-1.5 px-2 text-muted-foreground hover:text-foreground"
-            asChild
-          >
-            <Link to={backTo} title="Volver (Esc)">
-              <ArrowLeft className="h-4 w-4" />
-              <span className="hidden sm:inline text-xs font-medium">Volver</span>
-            </Link>
-          </Button>
-        )}
+      <header className="flex shrink-0 flex-col gap-2 border-b border-border/50 bg-card/50 px-3 py-2 backdrop-blur sm:flex-row sm:items-center sm:gap-3 sm:px-4">
+        <div className="flex min-w-0 items-center gap-2">
+          {showBackLink && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 shrink-0 gap-1.5 px-2 text-muted-foreground hover:text-foreground"
+              asChild
+            >
+              <Link to={backTo} title="Volver (Esc)">
+                <ArrowLeft className="h-4 w-4" />
+                <span className="hidden text-xs font-medium sm:inline">Volver</span>
+              </Link>
+            </Button>
+          )}
 
-        {agentSwitcher ? (
-          <ChatAgentPicker
-            agents={agentSwitcher.agents}
-            value={agentId}
-            onChange={agentSwitcher.onChange}
-            className="flex-1 min-w-0 justify-start"
-          />
-        ) : (
-          <>
-            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-              <Bot className="h-4 w-4 text-primary" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="font-medium text-sm truncate">{agent.name}</div>
-              <div className="text-xs text-muted-foreground truncate">
-                {!isReady
-                  ? agent?.is_active
-                    ? "Sin modelo de lenguaje configurado"
-                    : "Agente inactivo"
-                  : agent.use_rag
-                    ? `RAG top ${agent.rag_top_k ?? "—"} · ${agent.embedding_model || "embedding default"}`
-                    : "RAG desactivado"}
+          {agentSwitcher ? (
+            <ChatAgentPicker
+              agents={agentSwitcher.agents}
+              value={agentId}
+              onChange={agentSwitcher.onChange}
+              className="min-w-0 flex-1 justify-start"
+            />
+          ) : (
+            <>
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                <Bot className="h-4 w-4 text-primary" />
               </div>
-            </div>
-          </>
-        )}
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-medium">{agent.name}</div>
+                <div className="truncate text-xs text-muted-foreground">
+                  {!isReady
+                    ? agent?.is_active
+                      ? "Sin modelo de lenguaje configurado"
+                      : "Agente inactivo"
+                    : agent.use_rag
+                      ? `RAG top ${agent.rag_top_k ?? "—"} · ${agent.embedding_model || "embedding default"}`
+                      : "RAG desactivado"}
+                </div>
+              </div>
+            </>
+          )}
 
-        <div className="ml-auto flex items-center gap-1.5 sm:gap-2 shrink-0">
-          {headerExtra}
+          <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:hidden">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 shrink-0 cursor-pointer px-2"
+              onClick={handleNewConversation}
+              disabled={isCreating}
+              title="Nueva conversación"
+            >
+              {isCreating ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <MessageSquarePlus className="h-3.5 w-3.5" />
+              )}
+            </Button>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5 sm:ml-auto sm:gap-2">
+          {headerExtra ? <div className="min-w-0 flex-1 sm:flex-none">{headerExtra}</div> : null}
           <Button
             variant="outline"
             size="sm"
-            className="shrink-0 gap-1.5 cursor-pointer"
+            className="hidden shrink-0 cursor-pointer gap-1.5 sm:inline-flex"
             onClick={handleNewConversation}
             disabled={isCreating}
             title="Nueva conversación"
@@ -1057,7 +1078,7 @@ export function AgentChatCore({
             ) : (
               <MessageSquarePlus className="h-3.5 w-3.5" />
             )}
-            <span className="hidden sm:inline">Nueva</span>
+            <span>Nueva</span>
           </Button>
 
           {conversationId && (
@@ -1077,7 +1098,7 @@ export function AgentChatCore({
                 variant="outline"
                 size="sm"
                 className="shrink-0 gap-1.5 cursor-pointer"
-                onClick={handleCloseCurrentConversation}
+                onClick={() => setConfirmCloseOpen(true)}
                 disabled={closeConversation.isPending || updateStatus.isPending}
                 title="Cerrar conversación"
               >
@@ -1169,11 +1190,7 @@ export function AgentChatCore({
           />
         )}
         {chatPhase === "resolving_thread" || chatPhase === "loading_history" ? (
-          <div className="space-y-4">
-            <Skeleton className="h-16 w-3/4" />
-            <Skeleton className="h-12 w-2/3 ml-auto" />
-            <Skeleton className="h-16 w-3/4" />
-          </div>
+          <ChatThreadSkeleton className="min-h-[40vh] justify-start py-2" />
         ) : !conversationId && !isCreating && !isDraftNew && !conversationsLoading ? (
           <EmptyState
             className="mt-8 border-0 bg-transparent"
@@ -1572,6 +1589,16 @@ export function AgentChatCore({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={confirmCloseOpen}
+        onOpenChange={setConfirmCloseOpen}
+        title="¿Cerrar esta conversación?"
+        description="La conversación se marcará como cerrada y saldrá del hilo activo. Podrás consultarla desde el historial."
+        confirmLabel="Cerrar conversación"
+        busy={closeConversation.isPending || updateStatus.isPending}
+        onConfirm={handleCloseCurrentConversation}
+      />
     </div>
   );
 }

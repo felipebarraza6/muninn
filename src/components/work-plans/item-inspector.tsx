@@ -5,6 +5,7 @@ import {
   ArrowUp,
   Bot,
   CheckCircle2,
+  ChevronRight,
   Loader2,
   Play,
   RotateCcw,
@@ -17,7 +18,6 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -37,10 +37,12 @@ import { cn } from "@/lib/utils";
 import {
   ITEM_KIND_HINT,
   ITEM_KIND_LABEL,
+  ItemKindChip,
   draftFromPayload,
   extractResultView,
   extractToolCalls,
   insumoPreview,
+  kindMeta,
   payloadFromDraft,
   type DraftItem,
 } from "@/components/work-plans/work-plan-model";
@@ -48,7 +50,9 @@ import {
 export function ItemInspector({
   item,
   planWorkflowId,
+  planAgentId,
   agentLabel,
+  agents = [],
   busy,
   onRun,
   onRetry,
@@ -57,11 +61,18 @@ export function ItemInspector({
 }: {
   item: WorkItem;
   planWorkflowId?: string | null;
+  planAgentId?: string | null;
   agentLabel: string;
+  agents?: Array<{ id: string; name: string }>;
   busy: boolean;
   onRun: () => void;
   onRetry: () => void;
-  onSave: (patch: { title: string; kind: WorkItemKind; payload: Record<string, unknown> }) => void;
+  onSave: (patch: {
+    title: string;
+    kind: WorkItemKind;
+    payload: Record<string, unknown>;
+    assigned_agent?: string | number | null;
+  }) => void;
   onDelete: () => void;
 }) {
   const safeKind = (k: unknown): WorkItemKind =>
@@ -69,6 +80,9 @@ export function ItemInspector({
   const [title, setTitle] = useState(item.title || "");
   const [kind, setKind] = useState<WorkItemKind>(() => safeKind(item.kind));
   const [fields, setFields] = useState(() => draftFromPayload(safeKind(item.kind), item.payload));
+  const [agentId, setAgentId] = useState(
+    () => (item.assigned_agent != null ? String(item.assigned_agent) : "") || "",
+  );
   const [editingInsumos, setEditingInsumos] = useState(false);
   const defaultTab =
     item.status === "pending" || item.status === "queued" ? "insumos" : "resultado";
@@ -79,10 +93,11 @@ export function ItemInspector({
     setTitle(item.title || "");
     setKind(nextKind);
     setFields(draftFromPayload(nextKind, item.payload));
+    setAgentId(item.assigned_agent != null ? String(item.assigned_agent) : "");
     const next = item.status === "pending" || item.status === "queued" ? "insumos" : "resultado";
     setTab(next);
     setEditingInsumos(item.status === "pending" || item.status === "queued");
-  }, [item.id, item.title, item.kind, item.payload, item.modified, item.status]);
+  }, [item.id, item.title, item.kind, item.payload, item.modified, item.status, item.assigned_agent]);
 
   const view = extractResultView(item);
   const resultObj =
@@ -151,14 +166,32 @@ export function ItemInspector({
       toast.error("El ítem necesita un título");
       return;
     }
-    onSave({ title: title.trim(), kind, payload });
+    onSave({
+      title: title.trim(),
+      kind,
+      payload,
+      assigned_agent: agentId.trim() ? agentId.trim() : null,
+    });
     setEditingInsumos(false);
   };
 
   const readonlyInsumoRows = useMemo(() => {
+    const stepAgent =
+      item.assigned_agent != null
+        ? agents.find((a) => a.id === String(item.assigned_agent))?.name ||
+          String(item.assigned_agent)
+        : null;
     const rows: { label: string; value: string }[] = [
       { label: "Tipo", value: ITEM_KIND_LABEL[item.kind] ?? item.kind },
       { label: "Título", value: item.title },
+      {
+        label: "Agente",
+        value: stepAgent
+          ? `${stepAgent} (este paso)`
+          : planAgentId
+            ? `${agentLabel} (plan)`
+            : "Sin agente",
+      },
     ];
     const p = item.payload && typeof item.payload === "object" ? item.payload : {};
     if (item.kind === "agent_turn") {
@@ -183,23 +216,43 @@ export function ItemInspector({
       }
     }
     return rows.filter((r) => r.value.trim());
-  }, [item]);
+  }, [item, agents, agentLabel, planAgentId]);
+
+  const meta = kindMeta(item.kind);
+  const KindIcon = meta.Icon;
 
   return (
-    <div className="flex flex-col h-full min-h-0">
-      <div className="shrink-0 border-b px-4 py-3 space-y-2">
+    <div className="flex flex-col h-full min-h-0 bg-transparent">
+      <div className="shrink-0 border-b border-border/40 px-4 py-3 space-y-2.5">
         <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <p className="text-sm font-semibold leading-snug">{item.title}</p>
-            <p className="text-[11px] text-muted-foreground mt-0.5">
-              {ITEM_KIND_LABEL[item.kind] ?? item.kind} · {agentLabel} · intentos {attempts}/
-              {maxAttempts}
-            </p>
+          <div className="flex items-start gap-2.5 min-w-0">
+            <span
+              className={cn(
+                "mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-lg shrink-0",
+                meta.iconWrap,
+              )}
+            >
+              <KindIcon className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold leading-snug">{item.title}</p>
+              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                <ItemKindChip kind={item.kind} />
+                <span className="text-[11px] text-muted-foreground truncate">
+                  {agentLabel} · {attempts}/{maxAttempts}
+                </span>
+              </div>
+            </div>
           </div>
           <StatusChip label={itemStatusLabel(item.status)} tone={workPlanStatusTone(item.status)} />
         </div>
         <div className="flex gap-1.5">
-          <Button size="sm" className="flex-1 h-8 gap-1.5" disabled={busy} onClick={onRun}>
+          <Button
+            size="sm"
+            className="flex-1 h-9 gap-1.5 shadow-sm shadow-primary/15"
+            disabled={busy}
+            onClick={onRun}
+          >
             {busy ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
@@ -211,7 +264,7 @@ export function ItemInspector({
             <Button
               size="sm"
               variant="outline"
-              className="flex-1 h-8 gap-1.5"
+              className="flex-1 h-9 gap-1.5"
               disabled={busy}
               onClick={onRetry}
             >
@@ -245,7 +298,7 @@ export function ItemInspector({
           value="resultado"
           className="flex-1 min-h-0 m-0 overflow-hidden data-[state=inactive]:hidden"
         >
-          <ScrollArea className="h-full">
+          <div className="h-full min-h-0 overflow-y-auto overscroll-contain">
             <div className="p-3 space-y-3">
               {executionLoading && !liveReply && !item.error_message ? (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground py-3">
@@ -268,62 +321,77 @@ export function ItemInspector({
 
               {toolCalls.length > 0 ? (
                 <section className="space-y-1.5">
-                  <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    Tools
-                  </h3>
-                  <div className="flex flex-wrap gap-1.5">
-                    {toolCalls.map((tc, i) => (
-                      <details
-                        key={`${tc.name}-${i}`}
-                        className="rounded-lg border bg-muted/30 px-2.5 py-1.5 text-xs open:w-full"
-                      >
-                        <summary className="cursor-pointer font-medium text-primary list-none flex items-center gap-1">
-                          <span className="truncate">{tc.name}</span>
-                        </summary>
-                        <pre className="mt-1.5 text-[11px] whitespace-pre-wrap break-words font-sans text-muted-foreground max-h-36 overflow-auto">
-                          {tc.detail}
-                        </pre>
-                      </details>
-                    ))}
-                  </div>
+                  <details className="group rounded-xl border border-border/50 bg-background/50">
+                    <summary className="cursor-pointer list-none flex items-center gap-1.5 px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground hover:bg-muted/30 rounded-xl">
+                      <ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
+                      Tools ({toolCalls.length})
+                    </summary>
+                    <div className="px-2.5 pb-2.5 flex flex-wrap gap-1.5">
+                      {toolCalls.map((tc, i) => (
+                        <details
+                          key={`${tc.name}-${i}`}
+                          className="rounded-lg border bg-muted/30 px-2.5 py-1.5 text-xs open:w-full"
+                        >
+                          <summary className="cursor-pointer font-medium text-primary list-none flex items-center gap-1">
+                            <span className="truncate">{tc.name}</span>
+                          </summary>
+                          <pre className="mt-1.5 text-[11px] whitespace-pre-wrap break-words font-sans text-muted-foreground max-h-36 overflow-auto">
+                            {tc.detail}
+                          </pre>
+                        </details>
+                      ))}
+                    </div>
+                  </details>
                 </section>
               ) : null}
 
               {liveNodes.length > 0 ? (
                 <section className="space-y-1.5">
-                  <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-0.5">
                     Nodos del flujo
                   </h3>
                   <ul className="space-y-1.5">
-                    {liveNodes.map((n, i) => (
-                      <li
-                        key={`${n.node}-${i}`}
-                        className="rounded-lg border bg-muted/25 px-2.5 py-2"
-                      >
-                        <div className="flex items-center gap-2">
-                          <p className="text-xs font-medium flex-1 truncate">{n.node}</p>
-                          {n.node_type ? (
-                            <span className="text-[10px] text-muted-foreground">{n.node_type}</span>
-                          ) : null}
-                          {n.status ? (
-                            <StatusChip
-                              label={itemStatusLabel(n.status)}
-                              tone={workPlanStatusTone(n.status)}
-                            />
-                          ) : null}
-                        </div>
-                        {n.error ? (
-                          <p className="mt-1 text-[11px] text-destructive whitespace-pre-wrap">
-                            {n.error}
-                          </p>
-                        ) : null}
-                        {n.output && Object.keys(n.output as object).length > 0 ? (
-                          <pre className="mt-1 text-[11px] whitespace-pre-wrap break-words font-sans text-muted-foreground max-h-28 overflow-auto">
-                            {prettyJson(n.output)}
-                          </pre>
-                        ) : null}
-                      </li>
-                    ))}
+                    {liveNodes.map((n, i) => {
+                      const hasOutput =
+                        !!n.output &&
+                        typeof n.output === "object" &&
+                        Object.keys(n.output as object).length > 0;
+                      return (
+                        <li key={`${n.node}-${i}`}>
+                          <details className="group rounded-lg border border-border/50 bg-background/50 open:bg-muted/20">
+                            <summary className="cursor-pointer list-none flex items-center gap-2 px-2.5 py-2 hover:bg-muted/25 rounded-lg">
+                              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" />
+                              <p className="text-xs font-medium flex-1 truncate">{n.node}</p>
+                              {n.node_type ? (
+                                <span className="text-[10px] text-muted-foreground shrink-0">
+                                  {n.node_type}
+                                </span>
+                              ) : null}
+                              {n.status ? (
+                                <StatusChip
+                                  label={itemStatusLabel(n.status)}
+                                  tone={workPlanStatusTone(n.status)}
+                                />
+                              ) : null}
+                            </summary>
+                            <div className="px-2.5 pb-2.5 space-y-1.5">
+                              {n.error ? (
+                                <p className="text-[11px] text-destructive whitespace-pre-wrap">
+                                  {n.error}
+                                </p>
+                              ) : null}
+                              {hasOutput ? (
+                                <pre className="text-[11px] whitespace-pre-wrap break-words font-sans text-muted-foreground max-h-36 overflow-auto rounded-md border border-border/40 bg-muted/20 px-2 py-1.5">
+                                  {prettyJson(n.output)}
+                                </pre>
+                              ) : !n.error ? (
+                                <p className="text-[11px] text-muted-foreground">Sin output</p>
+                              ) : null}
+                            </div>
+                          </details>
+                        </li>
+                      );
+                    })}
                   </ul>
                 </section>
               ) : null}
@@ -338,14 +406,14 @@ export function ItemInspector({
                 </Link>
               ) : null}
             </div>
-          </ScrollArea>
+          </div>
         </TabsContent>
 
         <TabsContent
           value="insumos"
           className="flex-1 min-h-0 m-0 overflow-hidden data-[state=inactive]:hidden"
         >
-          <ScrollArea className="h-full">
+          <div className="h-full min-h-0 overflow-y-auto overscroll-contain">
             <div className="p-3 space-y-3">
               <p className="text-[11px] text-muted-foreground">{ITEM_KIND_HINT[kind]}</p>
 
@@ -400,6 +468,31 @@ export function ItemInspector({
                       </SelectContent>
                     </Select>
                   </div>
+                  <div className="rounded-lg border bg-card/50 px-3 py-2 space-y-1.5">
+                    <Label className="text-[11px]">Agente de este paso</Label>
+                    <Select
+                      value={agentId || "__plan__"}
+                      onValueChange={(v) => setAgentId(v === "__plan__" ? "" : v)}
+                    >
+                      <SelectTrigger className="h-8">
+                        <SelectValue placeholder="Usar agente del plan" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__plan__">
+                          Usar agente del plan
+                          {planAgentId ? ` (${agentLabel})` : ""}
+                        </SelectItem>
+                        {agents.map((a) => (
+                          <SelectItem key={a.id} value={a.id}>
+                            {a.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[10px] text-muted-foreground">
+                      Solo afecta turnos de agente; skills/workflows no lo usan.
+                    </p>
+                  </div>
                   <div className="rounded-lg border border-primary/15 bg-primary/5 px-3 py-2 space-y-2">
                     <p className="text-[10px] font-semibold uppercase tracking-wide text-primary/90">
                       Insumo
@@ -446,14 +539,14 @@ export function ItemInspector({
                 Quitar ítem
               </Button>
             </div>
-          </ScrollArea>
+          </div>
         </TabsContent>
 
         <TabsContent
           value="tecnico"
           className="flex-1 min-h-0 m-0 overflow-hidden data-[state=inactive]:hidden"
         >
-          <ScrollArea className="h-full">
+          <div className="h-full min-h-0 overflow-y-auto overscroll-contain">
             <div className="p-3 space-y-3">
               <div className="rounded-lg border px-3 py-2 text-xs space-y-1">
                 <p>
@@ -488,7 +581,7 @@ export function ItemInspector({
                 </Link>
               ) : null}
             </div>
-          </ScrollArea>
+          </div>
         </TabsContent>
       </Tabs>
     </div>

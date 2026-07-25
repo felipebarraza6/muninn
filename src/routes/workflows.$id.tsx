@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -94,6 +95,8 @@ export default function WorkflowCanvasPage() {
   const [showRawJson, setShowRawJson] = useState(false);
   const [rawJsonText, setRawJsonText] = useState("{}");
   const [selectedExecutionId, setSelectedExecutionId] = useState<string | null>(null);
+  const [confirmDeleteNodeId, setConfirmDeleteNodeId] = useState<string | null>(null);
+  const [confirmDeleteEdgeId, setConfirmDeleteEdgeId] = useState<string | null>(null);
   const [sideTab, setSideTab] = useState<SidePanelTab>("console");
   const [linkMode, setLinkMode] = useState(false);
   const [linkFromId, setLinkFromId] = useState<string | null>(null);
@@ -216,7 +219,7 @@ export default function WorkflowCanvasPage() {
         if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
         if (!selectedNodeId) return;
         e.preventDefault();
-        void removeNode(selectedNodeId);
+        setConfirmDeleteNodeId(selectedNodeId);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -439,7 +442,7 @@ export default function WorkflowCanvasPage() {
   if (isLoading) {
     return (
       <div className="h-dvh bg-background">
-        <PageSkeleton variant="chat" className="h-full max-w-none px-4 py-4" padded={false} />
+        <PageSkeleton variant="canvas" className="h-full max-w-none" padded={false} />
       </div>
     );
   }
@@ -670,17 +673,7 @@ export default function WorkflowCanvasPage() {
                     className="cursor-pointer"
                     onClick={(ev) => {
                       ev.stopPropagation();
-                      deleteEdge.mutate(
-                        { id: e.id, workflow: workflow.id },
-                        {
-                          onSuccess: () => {
-                            toast.success("Conexión eliminada");
-                            void refetch();
-                          },
-                          onError: (err) =>
-                            toast.error(apiErrorMessage(err, "No se pudo eliminar")),
-                        },
-                      );
+                      setConfirmDeleteEdgeId(e.id);
                     }}
                   />
                   <path
@@ -903,7 +896,7 @@ export default function WorkflowCanvasPage() {
                   <ContextMenuItem
                     className="gap-2 text-xs text-destructive focus:text-destructive"
                     disabled={deleteNode.isPending}
-                    onSelect={() => void removeNode(nodeId)}
+                    onSelect={() => setConfirmDeleteNodeId(nodeId)}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                     Eliminar
@@ -969,7 +962,7 @@ export default function WorkflowCanvasPage() {
               <div className="p-3 space-y-2.5">
                 {!selected ? (
                   <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    Tocá un nodo o agregá desde la palette. Clic derecho para editar / clonar /
+                    Toca un nodo o agrega desde la palette. Clic derecho para editar / clonar /
                     borrar.
                   </p>
                 ) : (
@@ -1090,7 +1083,7 @@ export default function WorkflowCanvasPage() {
                         variant="outline"
                         className="flex-1 h-8 gap-1.5 text-[11px] text-destructive hover:text-destructive"
                         disabled={deleteNode.isPending}
-                        onClick={() => void removeNode(String(selected.id))}
+                        onClick={() => setConfirmDeleteNodeId(String(selected.id))}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                         Borrar
@@ -1108,7 +1101,7 @@ export default function WorkflowCanvasPage() {
               <div className="shrink-0 border-b max-h-[34%] overflow-y-auto">
                 {executions.length === 0 ? (
                   <p className="px-3 py-4 text-[11px] text-muted-foreground">
-                    Sin corridas. Usá Ejecutar para probar el flujo.
+                    Sin corridas. Usa Ejecutar para probar el flujo.
                   </p>
                 ) : (
                   <ul className="p-1.5 space-y-0.5">
@@ -1153,7 +1146,7 @@ export default function WorkflowCanvasPage() {
               <div className="flex-1 min-h-0 overflow-y-auto p-2.5">
                 {!selectedExecutionId ? (
                   <p className="text-[11px] text-muted-foreground px-0.5">
-                    Elegí una corrida para ver el detalle.
+                    Elige una corrida para ver el detalle.
                   </p>
                 ) : executionDetailLoading || !executionDetail ? (
                   <div className="flex items-center gap-2 text-[11px] text-muted-foreground py-6 justify-center">
@@ -1303,6 +1296,58 @@ export default function WorkflowCanvasPage() {
           )}
         </aside>
       </div>
+
+      <ConfirmDialog
+        open={confirmDeleteNodeId != null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmDeleteNodeId(null);
+        }}
+        title="¿Eliminar este nodo?"
+        description={(() => {
+          const node = nodes.find((n) => String(n.id) === confirmDeleteNodeId);
+          const name = node?.name ? `«${node.name}»` : "el nodo";
+          return `Se eliminará ${name} junto con sus conexiones. Esta acción no se puede deshacer.`;
+        })()}
+        confirmLabel="Eliminar nodo"
+        destructive
+        busy={deleteNode.isPending || deleteEdge.isPending}
+        onConfirm={() => {
+          const id = confirmDeleteNodeId;
+          if (!id) return;
+          setConfirmDeleteNodeId(null);
+          void removeNode(id);
+        }}
+      />
+
+      <ConfirmDialog
+        open={confirmDeleteEdgeId != null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmDeleteEdgeId(null);
+        }}
+        title="¿Eliminar esta conexión?"
+        description="Se quitará la conexión entre los dos nodos. Esta acción no se puede deshacer."
+        confirmLabel="Eliminar conexión"
+        destructive
+        busy={deleteEdge.isPending}
+        onConfirm={() => {
+          const id = confirmDeleteEdgeId;
+          if (!id || !workflow) return;
+          deleteEdge.mutate(
+            { id, workflow: workflow.id },
+            {
+              onSuccess: () => {
+                toast.success("Conexión eliminada");
+                setConfirmDeleteEdgeId(null);
+                void refetch();
+              },
+              onError: (err) => {
+                toast.error(apiErrorMessage(err, "No se pudo eliminar"));
+                setConfirmDeleteEdgeId(null);
+              },
+            },
+          );
+        }}
+      />
     </div>
   );
 }

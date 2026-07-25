@@ -31,9 +31,10 @@ function isPublicApiUrl(url: string): boolean {
   );
 }
 
-/** Páginas del frontend donde un 401 no debe forzar redirect a /login. */
+/** Páginas del frontend donde un 401 no debe forzar redirect a /entrar. */
 function isPublicAppPath(pathname: string): boolean {
   if (pathname === "/login" || pathname.startsWith("/login/")) return true;
+  if (pathname === "/entrar") return true;
   if (pathname.startsWith("/forgot-password")) return true;
   if (pathname.startsWith("/reset-password")) return true;
   if (pathname.startsWith("/embed/")) return true;
@@ -132,7 +133,7 @@ apiClient.interceptors.response.use(
       localStorage.removeItem("activeBranchId");
       sessionStorage.removeItem("activeBranchId");
       if (!isPublicAppPath(window.location.pathname)) {
-        window.location.href = "/login";
+        window.location.href = "/entrar";
       }
     }
 

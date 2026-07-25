@@ -18,6 +18,7 @@ export function PlanHeader({
   agentLabel,
   busy,
   itemCount = 0,
+  doneCount = 0,
   onRunNext,
   onRunAll,
   onCancel,
@@ -28,6 +29,7 @@ export function PlanHeader({
   agentLabel: string;
   busy: boolean;
   itemCount?: number;
+  doneCount?: number;
   onRunNext: () => void;
   onRunAll: () => void;
   onCancel: () => void;
@@ -52,8 +54,11 @@ export function PlanHeader({
 
   if (!plan) return null;
 
+  const progress =
+    itemCount > 0 ? Math.min(100, Math.round((doneCount / itemCount) * 100)) : 0;
+
   return (
-    <div className="shrink-0 border-b bg-card/40">
+    <div className="shrink-0 border-b border-border/40 bg-background/50 backdrop-blur-sm">
       <div className="px-4 py-2.5 flex items-start gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
@@ -62,6 +67,11 @@ export function PlanHeader({
               label={planStatusLabel(plan.status)}
               tone={workPlanStatusTone(plan.status)}
             />
+            {itemCount > 0 ? (
+              <span className="text-[10px] tabular-nums text-muted-foreground">
+                {doneCount}/{itemCount} pasos
+              </span>
+            ) : null}
           </div>
           <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
             {plan.description || "Sin descripción"} · Agente: {agentLabel}
@@ -78,6 +88,17 @@ export function PlanHeader({
               </>
             ) : null}
           </p>
+          {itemCount > 0 ? (
+            <div
+              className="mt-2 h-1 w-full max-w-md rounded-full bg-muted/60 overflow-hidden"
+              title={`${progress}% completado`}
+            >
+              <div
+                className="h-full rounded-full bg-primary transition-[width] duration-300"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          ) : null}
         </div>
         <div className="flex items-center gap-1 shrink-0">
           <Button

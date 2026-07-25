@@ -153,6 +153,10 @@ export const ENDPOINTS = {
     categoriesRename: "/ai-agents/knowledge/categories/rename/",
     categoriesDelete: "/ai-agents/knowledge/categories/delete/",
   },
+  documents: {
+    list: "/documents/",
+    detail: (id: string) => `/documents/${id}/`,
+  },
   services: {
     list: "/services/services/",
   },

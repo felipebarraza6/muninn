@@ -4,16 +4,21 @@ import { Loader2 } from "lucide-react";
 import { useResetPasswordConfirm } from "@/api/hooks/useAuth";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
-import { MuninnBrand } from "@/components/brand/MuninnBrand";
+import { LoginAtmosphere } from "@/components/brand/LoginAtmosphere";
+import { AuthFormShell } from "@/components/auth/AuthFormShell";
+import { AuthPasswordField } from "@/components/auth/AuthPasswordField";
+import { AuthPixelBrand } from "@/components/auth/AuthPixelBrand";
+import { authPrimaryBtnClass } from "@/components/auth/auth-form-styles";
+import { useMotionPrefs } from "@/hooks/useMotionPrefs";
+import { cn } from "@/lib/utils";
 
 /** Confirmar nueva contraseña con token del email. */
 export default function ResetPasswordPage() {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
   const reset = useResetPasswordConfirm();
+  const reduceMotion = useMotionPrefs();
 
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -47,87 +52,92 @@ export default function ResetPasswordPage() {
   };
 
   return (
-    <div className="relative min-h-screen bg-background">
+    <div className="login-pixel relative min-h-screen overflow-hidden bg-background">
+      <LoginAtmosphere intensity="full" variant="pixel" />
       <div className="absolute top-4 right-4 z-20">
         <ThemeToggle />
       </div>
-      <div className="flex min-h-screen items-center justify-center px-4 py-10">
-        <div className="w-full max-w-sm space-y-6">
-          <div className="space-y-3 text-center">
-            <MuninnBrand layout="horizontal" className="justify-center scale-110" />
-            <p className="text-sm text-muted-foreground">Elige una contraseña nueva.</p>
-          </div>
+      <div className="relative z-[1] flex min-h-screen items-center justify-center px-4 py-10">
+        <div
+          className={cn("w-full max-w-sm space-y-6", !reduceMotion && "pixel-enter")}
+          style={reduceMotion ? undefined : ({ "--pixel-delay": "80ms" } as React.CSSProperties)}
+        >
+          <AuthPixelBrand
+            title="Nueva contraseña"
+            subtitle="Elige una contraseña nueva para tu cuenta."
+          />
 
           {done ? (
-            <div className="space-y-4 rounded-2xl border border-border/50 bg-card/80 p-5 backdrop-blur sm:p-6">
-              <Alert className="border-primary/25 bg-primary/10">
-                <AlertDescription>Contraseña actualizada. Ya puedes entrar.</AlertDescription>
-              </Alert>
-              <Button type="button" className="w-full" onClick={() => navigate("/login")}>
+            <AuthFormShell className="space-y-4">
+              <div aria-live="polite">
+                <Alert className="border-primary/25 bg-primary/10">
+                  <AlertDescription className="pixel-display text-[13px] leading-relaxed">
+                    Contraseña actualizada. Ya puedes entrar.
+                  </AlertDescription>
+                </Alert>
+              </div>
+              <Button
+                type="button"
+                className={cn(authPrimaryBtnClass)}
+                onClick={() => navigate("/entrar")}
+              >
                 Ir al login
               </Button>
-            </div>
+            </AuthFormShell>
           ) : (
-            <form
-              onSubmit={handleSubmit}
-              className="rounded-2xl border border-border/50 bg-card/80 p-5 backdrop-blur sm:p-6 space-y-5 shadow-sm"
-            >
-              {errorMessage && (
-                <Alert variant="destructive" className="border-destructive/30 bg-destructive/10">
-                  <AlertDescription>{errorMessage}</AlertDescription>
-                </Alert>
-              )}
-              <div className="space-y-2">
-                <Label
-                  htmlFor="new-password"
-                  className="text-xs uppercase tracking-wider text-muted-foreground"
-                >
-                  Nueva contraseña
-                </Label>
-                <Input
-                  id="new-password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  minLength={8}
-                  autoComplete="new-password"
-                  className="bg-secondary border-border/50"
-                />
+            <AuthFormShell as="form" onSubmit={handleSubmit} className="space-y-5">
+              <div aria-live="polite" aria-atomic="true">
+                {errorMessage ? (
+                  <Alert
+                    variant="destructive"
+                    className="mb-1 border-destructive/30 bg-destructive/10"
+                  >
+                    <AlertDescription>{errorMessage}</AlertDescription>
+                  </Alert>
+                ) : null}
               </div>
-              <div className="space-y-2">
-                <Label
-                  htmlFor="confirm-password"
-                  className="text-xs uppercase tracking-wider text-muted-foreground"
-                >
-                  Confirmar
-                </Label>
-                <Input
-                  id="confirm-password"
-                  type="password"
-                  value={confirm}
-                  onChange={(e) => setConfirm(e.target.value)}
-                  required
-                  minLength={8}
-                  autoComplete="new-password"
-                  className="bg-secondary border-border/50"
-                />
-              </div>
-              <Button type="submit" className="w-full" disabled={reset.isPending || !token}>
+              <AuthPasswordField
+                id="new-password"
+                label="Nueva contraseña"
+                value={password}
+                onChange={setPassword}
+                autoComplete="new-password"
+                minLength={8}
+                autoFocus
+                pixel
+              />
+              <AuthPasswordField
+                id="confirm-password"
+                label="Confirmar"
+                value={confirm}
+                onChange={setConfirm}
+                autoComplete="new-password"
+                minLength={8}
+                pixel
+              />
+              <Button
+                type="submit"
+                className={cn(authPrimaryBtnClass)}
+                disabled={reset.isPending || !token}
+              >
                 {reset.isPending ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Guardando…
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                    Guardando…
                   </>
                 ) : (
                   "Guardar contraseña"
                 )}
               </Button>
-              <p className="text-center text-sm text-muted-foreground">
-                <Link to="/login" className="text-primary hover:underline">
+              <p className="pixel-font text-center text-[8px] uppercase text-muted-foreground">
+                <Link
+                  to="/entrar"
+                  className="font-medium text-primary underline-offset-2 hover:underline"
+                >
                   Volver al login
                 </Link>
               </p>
-            </form>
+            </AuthFormShell>
           )}
         </div>
       </div>

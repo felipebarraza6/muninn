@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import muninnMark from "@/assets/muninn-mark.png";
 import { BrandMarkSkeleton } from "@/components/ui/page-loader";
+import { LOGIN_BRAND_SUBTITLE } from "@/lib/loginLanding";
 import { probeLogoNeedsDarkInvert } from "@/lib/logoDisplay";
 import { cn } from "@/lib/utils";
 
@@ -11,7 +12,7 @@ interface MuninnBrandProps {
    */
   branchLabel?: string | null;
   /**
-   * Subtítulo con sucursal: `theme.app_name` (donde iba "Agentes").
+   * Subtítulo con sucursal: `theme.app_name`.
    */
   appName?: string | null;
   /** Subtítulo fallback (login / Muninn default). */
@@ -30,7 +31,7 @@ interface MuninnBrandProps {
   /** `stacked`: logo arriba, título abajo (login org). Default horizontal. */
   layout?: "horizontal" | "stacked";
   /**
-   * Login org / hero: logo más ancho (wordmark), sin forzar cuadrado.
+   * Login / hero: mark más sólido y wordmark con más peso.
    */
   hero?: boolean;
   className?: string;
@@ -40,9 +41,8 @@ interface MuninnBrandProps {
  * Shell de marca:
  * - Con logo de org/sucursal: solo el logo (sin nombre al lado).
  * - Sin logo + tenant: monograma + nombre; subtítulo = app_name.
- * - Plataforma Muninn: cuervo + MUNINN / Agentes.
+ * - Plataforma Muninn: cuervo + MUNINN / Harness de agentes.
  * - pending: skeleton hasta que el tema/logo real esté listo.
- * - dark invert solo si el PNG/WebP tiene transparencia real.
  */
 export function MuninnBrand({
   branchLabel,
@@ -61,22 +61,17 @@ export function MuninnBrand({
   const branchName = branchLabel?.trim() || "";
   /** Marca plataforma Muninn (superadmin / login default): siempre cuervo, nunca monograma. */
   const isMuninnPlatformBrand =
-    !branchLogoUrl &&
-    (!branchName || branchName.toLowerCase() === "muninn");
+    !branchLogoUrl && (!branchName || branchName.toLowerCase() === "muninn");
   const inTenant = Boolean(branchName) && !isMuninnPlatformBrand;
   const title =
-    pending && !inTenant && !isMuninnPlatformBrand
-      ? ""
-      : inTenant
-        ? branchName
-        : "MUNINN";
+    pending && !inTenant && !isMuninnPlatformBrand ? "" : inTenant ? branchName : "MUNINN";
   const subtitle = pending
     ? null
     : stacked
       ? appName?.trim() || null
       : inTenant
         ? appName?.trim() || tagline?.trim() || null
-        : tagline?.trim() || appName?.trim() || "Agentes";
+        : tagline?.trim() || appName?.trim() || LOGIN_BRAND_SUBTITLE;
 
   const [logoFailed, setLogoFailed] = useState(false);
   const [darkInvert, setDarkInvert] = useState(false);
@@ -101,11 +96,10 @@ export function MuninnBrand({
   const showTenantSkeleton = pending && !isMuninnPlatformBrand;
   /** Org/sucursal sin logo: inicial. Superadmin / Muninn: cuervo. */
   const monogram =
-    inTenant && !showBranchLogo && !pending
-      ? branchName.charAt(0).toUpperCase() || "·"
-      : null;
+    inTenant && !showBranchLogo && !pending ? branchName.charAt(0).toUpperCase() || "·" : null;
 
   const markSize = stacked || hero ? "lg" : compact ? "sm" : "md";
+  const platformHero = isMuninnPlatformBrand && (hero || stacked);
 
   const content = (
     <>
@@ -114,12 +108,14 @@ export function MuninnBrand({
       ) : (
         <span
           className={cn(
-            "relative flex shrink-0 items-center justify-center overflow-hidden transition-opacity duration-300",
+            "relative z-[2] flex shrink-0 items-center justify-center overflow-hidden transition-opacity duration-300",
             showBranchLogo
               ? "border-0 bg-transparent p-0"
               : monogram
                 ? "rounded-lg border border-primary/30 bg-primary/15 text-primary p-0"
-                : "rounded-lg border border-primary/40 bg-primary/20 dark:bg-primary/15",
+                : platformHero
+                  ? "rounded-2xl bg-primary text-primary-foreground shadow-md shadow-primary/30 ring-1 ring-primary/40"
+                  : "rounded-lg border border-primary/40 bg-primary/20 dark:bg-primary/15",
             showBranchLogo && hero
               ? "h-14 w-auto max-w-[13rem] sm:h-16 sm:max-w-[16rem]"
               : showBranchLogo && stacked
@@ -128,13 +124,16 @@ export function MuninnBrand({
                   ? compact
                     ? "h-8 w-auto max-w-[7rem]"
                     : "h-10 w-auto max-w-[9rem]"
-                  : stacked
-                    ? "h-16 w-16 rounded-2xl"
-                    : compact
-                      ? "h-8 w-8"
-                      : "h-9 w-9",
+                  : platformHero
+                    ? "h-14 w-14 sm:h-16 sm:w-16"
+                    : stacked
+                      ? "h-16 w-16 rounded-2xl"
+                      : compact
+                        ? "h-8 w-8"
+                        : "h-9 w-9",
             !stacked &&
               !showBranchLogo &&
+              !platformHero &&
               "group-data-[collapsible=icon]:!h-8 group-data-[collapsible=icon]:!w-8",
           )}
         >
@@ -163,9 +162,16 @@ export function MuninnBrand({
               alt=""
               aria-hidden
               className={cn(
-                "object-contain opacity-95 brightness-0 dark:invert",
-                stacked ? "h-9 w-9" : compact ? "h-5 w-5" : "h-6 w-6",
-                !stacked && "group-data-[collapsible=icon]:!h-5 group-data-[collapsible=icon]:!w-5",
+                "object-contain",
+                platformHero
+                  ? // Placa mint: cuervo blanco en light, negro en dark (primary-foreground).
+                    "h-8 w-8 sm:h-9 sm:w-9 brightness-0 invert dark:invert-0"
+                  : cn(
+                      "opacity-95 brightness-0 dark:invert",
+                      stacked ? "h-9 w-9" : compact ? "h-5 w-5" : "h-6 w-6",
+                      !stacked &&
+                        "group-data-[collapsible=icon]:!h-5 group-data-[collapsible=icon]:!w-5",
+                    ),
               )}
             />
           )}
@@ -175,7 +181,7 @@ export function MuninnBrand({
       {!compact && !hideWordmark && (
         <div
           className={cn(
-            "flex min-w-0 flex-col leading-tight",
+            "relative z-[2] flex min-w-0 flex-col leading-tight",
             stacked ? "items-center text-center" : "group-data-[collapsible=icon]:hidden",
             hero && "lg:items-start lg:text-left",
           )}
@@ -191,11 +197,13 @@ export function MuninnBrand({
             <span
               className={cn(
                 "font-semibold text-foreground transition-opacity duration-300",
-                stacked || hero
-                  ? "text-xl tracking-tight sm:text-2xl"
-                  : inTenant
-                    ? "truncate text-sm tracking-tight"
-                    : "truncate text-[15px] tracking-[0.04em]",
+                platformHero
+                  ? "font-display text-2xl tracking-[-0.03em] sm:text-[1.75rem]"
+                  : stacked || hero
+                    ? "text-xl tracking-tight sm:text-2xl"
+                    : inTenant
+                      ? "truncate text-sm tracking-tight"
+                      : "truncate text-[15px] tracking-[0.04em]",
               )}
             >
               {title || "\u00a0"}
@@ -206,12 +214,14 @@ export function MuninnBrand({
           ) : subtitle ? (
             <span
               className={cn(
-                "mt-0.5 uppercase tracking-[0.14em] transition-opacity duration-300",
-                stacked || hero
-                  ? "text-[10px] text-muted-foreground"
-                  : inTenant
-                    ? "truncate text-[9.5px] text-muted-foreground"
-                    : "truncate text-[9.5px] text-primary/90",
+                "mt-1 transition-opacity duration-300",
+                platformHero
+                  ? "text-[12px] font-medium tracking-[0.04em] text-muted-foreground"
+                  : stacked || hero
+                    ? "text-[10px] uppercase tracking-[0.14em] text-muted-foreground"
+                    : inTenant
+                      ? "truncate text-[9.5px] uppercase tracking-[0.14em] text-muted-foreground"
+                      : "truncate text-[9.5px] uppercase tracking-[0.14em] text-primary/90",
               )}
             >
               {subtitle}
@@ -228,14 +238,15 @@ export function MuninnBrand({
       ? subtitle
         ? `${title} — ${subtitle}`
         : title
-      : `Muninn — ${subtitle || "Agentes"}`;
+      : `Muninn — ${subtitle || LOGIN_BRAND_SUBTITLE}`;
 
   const shellClass = cn(
     "flex min-w-0 transition-opacity duration-300",
     stacked
       ? "flex-col items-center gap-3"
       : "items-center gap-2.5 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:px-0",
-    hero && "gap-3 sm:gap-4",
+    platformHero && "gap-3.5 sm:gap-4",
+    hero && !platformHero && "gap-3 sm:gap-4",
     className,
   );
 

@@ -1,10 +1,10 @@
-import { Navigate } from "react-router-dom";
 import { canAccessSkills } from "@/lib/authGuards";
+import { AccessDenied } from "@/components/auth/AccessDenied";
 
 /** Protege /skills — solo organizador y superadmin. */
 export function RequireSkills({ children }: { children: React.ReactNode }) {
   if (!canAccessSkills()) {
-    return <Navigate to="/" replace />;
+    return <AccessDenied section="el catálogo de skills" />;
   }
   return <>{children}</>;
 }

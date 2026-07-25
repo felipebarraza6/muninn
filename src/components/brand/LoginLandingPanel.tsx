@@ -1,10 +1,14 @@
-import { motion, useReducedMotion } from "framer-motion";
-import { BookOpen, Bot, Plug, RefreshCw } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import { MuninnBrand } from "@/components/brand/MuninnBrand";
-import { BrandMarkSkeleton } from "@/components/ui/page-loader";
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { LoginProductDemo } from "@/components/brand/LoginProductDemo";
+import { PixelBoot } from "@/components/brand/LoginPixelBoot";
+import { PixelIcon, type PixelIconName } from "@/components/brand/pixel-icons";
+import { PixelRaven } from "@/components/brand/PixelRaven";
 import {
-  LOGIN_LANDING_FLOW_STEPS,
+  LOGIN_HARNESS_BLURB,
+  LOGIN_HARNESS_REF,
+  LOGIN_LANDING_CTA,
   LOGIN_LANDING_LEAD,
   LOGIN_LANDING_MODULES,
   LOGIN_LANDING_TAGLINE,
@@ -12,70 +16,360 @@ import {
 } from "@/lib/loginLanding";
 import { cn } from "@/lib/utils";
 
-const MODULE_ICONS: Record<LoginLandingModuleId, LucideIcon> = {
-  swarm: Bot,
-  knowledge: BookOpen,
-  learning: RefreshCw,
-  apis: Plug,
+/** Botón manito: “¿qué es un harness?” (después de “magia”). */
+export function HarnessHintButton({
+  onClick,
+  className,
+}: {
+  onClick: () => void;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "pixel-harness-hand ml-1.5 inline-flex h-6 w-6 cursor-pointer items-center justify-center align-middle",
+        "border-2 border-primary/55 bg-primary/15 text-primary",
+        "hover:bg-primary/25 hover:border-primary",
+        "active:translate-x-px active:translate-y-px",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+        className,
+      )}
+      aria-label="¿Qué es un harness?"
+      title="¿Qué es un harness?"
+    >
+      <PixelIcon icon="hand" className="h-4 w-4" />
+    </button>
+  );
+}
+
+const MODULE_ICONS: Record<LoginLandingModuleId, PixelIconName> = {
+  soul: "soul",
+  rules: "rules",
+  helpers: "hammer",
+  rag: "book",
+  model: "bot",
+  cron: "clock",
 };
 
-/** Más nodos, ritmos distintos (no sincronizados con los iconos). */
-const SWARM_NODES: Array<{ className: string; size: string; float: string }> = [
-  { className: "left-[8%] top-[14%]", size: "h-2.5 w-2.5", float: "login-float-a" },
-  { className: "left-[22%] top-[28%]", size: "h-1.5 w-1.5", float: "login-float-c" },
-  { className: "left-[14%] top-[48%]", size: "h-2 w-2", float: "login-float-b" },
-  { className: "left-[30%] top-[62%]", size: "h-1 w-1", float: "login-float-e" },
-  { className: "left-[10%] top-[78%]", size: "h-2 w-2", float: "login-float-d" },
-  { className: "left-[42%] top-[18%]", size: "h-1.5 w-1.5", float: "login-float-b" },
-  { className: "left-[52%] top-[36%]", size: "h-2.5 w-2.5", float: "login-float-a" },
-  { className: "right-[18%] top-[16%]", size: "h-2 w-2", float: "login-float-e" },
-  { className: "right-[10%] top-[32%]", size: "h-3 w-3", float: "login-float-c" },
-  { className: "right-[24%] top-[48%]", size: "h-1.5 w-1.5", float: "login-float-d" },
-  { className: "right-[12%] top-[64%]", size: "h-2 w-2", float: "login-float-b" },
-  { className: "right-[28%] top-[78%]", size: "h-1 w-1", float: "login-float-a" },
-  { className: "right-[40%] top-[22%]", size: "h-1.5 w-1.5", float: "login-float-d" },
-  { className: "left-[60%] top-[70%]", size: "h-2 w-2", float: "login-float-c" },
-];
+/** Acento visual distinto por pieza del harness. */
+const MODULE_TONE: Record<LoginLandingModuleId, string> = {
+  soul: "text-primary border-primary/45",
+  rules: "text-foreground border-border/70",
+  helpers: "text-foreground border-border/70",
+  rag: "text-primary border-primary/55",
+  model: "text-primary border-primary/40",
+  cron: "text-foreground border-border/70",
+};
+
+const BOOT_MS = 900;
 
 type Props = {
+  /** @deprecated Ya no se usa skeleton; se mantiene por compat. */
   loading?: boolean;
   compact?: boolean;
   className?: string;
 };
 
-export function LoginLandingPanel({ loading = false, compact = false, className }: Props) {
+function PixelEnter({
+  children,
+  delayMs = 0,
+  pop = false,
+  className,
+  as: Tag = "div",
+}: {
+  children: React.ReactNode;
+  delayMs?: number;
+  pop?: boolean;
+  className?: string;
+  as?: "div" | "li" | "section";
+}) {
   const reduceMotion = useReducedMotion();
+  return (
+    <Tag
+      className={cn(reduceMotion ? undefined : pop ? "pixel-enter-pop" : "pixel-enter", className)}
+      style={
+        reduceMotion ? undefined : ({ "--pixel-delay": `${delayMs}ms` } as React.CSSProperties)
+      }
+    >
+      {children}
+    </Tag>
+  );
+}
+
+/**
+ * Pitch fijo en altura: tagline+lead O definición de harness (reemplazo, no apila).
+ * Con `brand`, la marca (cuervo + MUNINN) vive dentro de la misma tarjeta —
+ * un solo bloque compacto en vez de dos tarjetas apiladas.
+ */
+export function PitchSwap({ centered, brand }: { centered?: boolean; brand?: boolean }) {
+  const reduceMotion = useReducedMotion();
+  const [showHarness, setShowHarness] = useState(false);
+
+  return (
+    <div className={cn("w-full max-w-lg", centered && "mx-auto")}>
+      <AnimatePresence mode="wait" initial={false}>
+        {!showHarness ? (
+          <motion.div
+            key="pitch"
+            className={cn("login-pixel-readout space-y-2.5", centered && "text-center")}
+            initial={reduceMotion ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={reduceMotion ? undefined : { opacity: 0 }}
+            transition={{ duration: 0.15, ease: "linear" }}
+          >
+            {brand && (
+              <div
+                className={cn(
+                  "flex items-end gap-2 border-b-2 border-border/40 pb-1.5",
+                  centered && "justify-center",
+                )}
+              >
+                <PixelRaven featured className="h-7 w-8 sm:h-8 sm:w-9" />
+                <p className="pixel-font text-[0.95rem] leading-none text-foreground sm:text-[1.05rem]">
+                  MUNINN
+                </p>
+              </div>
+            )}
+            <h1
+              className={cn(
+                "pixel-display text-[1.2rem] font-semibold leading-[1.25] text-foreground sm:text-[1.35rem]",
+                centered && "px-1",
+              )}
+            >
+              {LOGIN_LANDING_TAGLINE}
+              <HarnessHintButton onClick={() => setShowHarness(true)} />
+            </h1>
+            <p
+              className={cn(
+                "pixel-display text-[13px] leading-relaxed text-muted-foreground",
+                centered && "px-2",
+              )}
+            >
+              {LOGIN_LANDING_LEAD}
+            </p>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="harness"
+            className={cn(centered && "text-center")}
+            initial={reduceMotion ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={reduceMotion ? undefined : { opacity: 0 }}
+            transition={{ duration: 0.15, ease: "linear" }}
+          >
+            <div className="pixel-harness-box space-y-2.5 text-left">
+              <div className="flex items-start justify-between gap-2">
+                <p className="pixel-font text-[9px] uppercase text-primary">¿Qué es un harness?</p>
+                <button
+                  type="button"
+                  onClick={() => setShowHarness(false)}
+                  className="pixel-font shrink-0 text-[8px] uppercase text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  ← Volver
+                </button>
+              </div>
+              <p className="pixel-display text-[13px] leading-relaxed text-foreground">
+                {LOGIN_HARNESS_BLURB}
+              </p>
+              <a
+                href={LOGIN_HARNESS_REF.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="pixel-font inline-block text-[8px] uppercase text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                Ref · {LOGIN_HARNESS_REF.label}
+              </a>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function ModuleGrid() {
+  return (
+    <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      {LOGIN_LANDING_MODULES.map((m, i) => (
+        <PixelEnter key={m.id} as="li" delayMs={40 * i} pop>
+          <div
+            className={cn(
+              "flex items-start gap-2 border-2 bg-background/70 px-2.5 py-2",
+              MODULE_TONE[m.id],
+            )}
+          >
+            <PixelIcon icon={MODULE_ICONS[m.id]} className="mt-0.5 h-4 w-4 shrink-0" />
+            <div className="min-w-0 space-y-0.5">
+              <p className="pixel-display text-[12px] font-semibold leading-tight text-foreground">
+                {m.title}
+              </p>
+              <p className="pixel-display text-[11px] leading-snug text-muted-foreground">
+                {m.line}
+              </p>
+            </div>
+          </div>
+        </PixelEnter>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * Lista bajo el form — piezas del harness con explicación legible.
+ */
+export function LoginModuleList({ className }: { className?: string }) {
+  return (
+    <ul className={cn("grid grid-cols-2 gap-2", className)}>
+      {LOGIN_LANDING_MODULES.map((m, i) => (
+        <PixelEnter key={m.id} as="li" delayMs={60 + 50 * i} pop>
+          <div
+            className={cn(
+              "flex h-full min-h-[3rem] items-start gap-2 border-2 bg-card px-2.5 py-2",
+              MODULE_TONE[m.id],
+            )}
+          >
+            <PixelIcon icon={MODULE_ICONS[m.id]} className="mt-0.5 h-4 w-4 shrink-0" />
+            <div className="min-w-0 space-y-0.5">
+              <p className="pixel-display text-[12px] font-semibold leading-tight text-foreground">
+                {m.title}
+              </p>
+              <p className="pixel-display text-[10px] leading-snug text-muted-foreground sm:text-[11px]">
+                {m.line}
+              </p>
+            </div>
+          </div>
+        </PixelEnter>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * Tag compacto “Ver harness” → despliega Soul / Rules / Helpers / RAG…
+ * Sin título largo ni grilla siempre visible.
+ */
+export function HarnessPeek({ className }: { className?: string }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className={cn("space-y-3", className)}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          "pixel-harness-tag pixel-font inline-flex items-center gap-2 border-2 px-2.5 py-1.5 text-[8px] uppercase",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+          open
+            ? "border-primary bg-primary/15 text-primary"
+            : "border-border/70 bg-card text-muted-foreground hover:border-primary/55 hover:text-primary",
+        )}
+        aria-expanded={open}
+      >
+        <PixelIcon icon="hammer" className="h-3.5 w-3.5" />
+        {open ? "Ocultar harness" : "Ver harness"}
+        <span aria-hidden className="text-primary">
+          {open ? "↑" : "→"}
+        </span>
+      </button>
+
+      {open && (
+        <div className="login-pixel-readout space-y-2 !p-2.5">
+          <p className="pixel-font text-[7px] uppercase text-muted-foreground">Piezas del agente</p>
+          <LoginModuleList />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Landing comercial Muninn — pitch + demo pixel.
+ * Boot corto (barra pixel) → cascade de elementos, sin skeleton.
+ */
+export function LoginLandingPanel({ compact = false, className }: Props) {
+  const reduceMotion = useReducedMotion();
+  const [expanded, setExpanded] = useState(false);
+  const [booted, setBooted] = useState(() => Boolean(reduceMotion));
+
+  useEffect(() => {
+    if (reduceMotion) {
+      setBooted(true);
+      return;
+    }
+    const t = window.setTimeout(() => setBooted(true), BOOT_MS);
+    return () => window.clearTimeout(t);
+  }, [reduceMotion]);
 
   if (compact) {
     return (
       <div className={cn("w-full space-y-4 px-1", className)}>
-        <div className="flex justify-center">
-          {loading ? (
-            <div className="flex flex-col items-center gap-3">
-              <BrandMarkSkeleton size="md" />
-              <span className="h-3 w-24 animate-pulse rounded bg-muted" />
+        {!booted ? (
+          <PixelBoot centered />
+        ) : (
+          <>
+            <PixelEnter delayMs={0} pop>
+              <PitchSwap brand centered />
+            </PixelEnter>
+
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {LOGIN_LANDING_MODULES.slice(0, 4).map((m, i) => (
+                <PixelEnter key={m.id} delayMs={140 + i * 55} pop>
+                  <div
+                    className={cn(
+                      "flex items-start gap-2 border-2 bg-background/80 px-2.5 py-2",
+                      MODULE_TONE[m.id],
+                    )}
+                  >
+                    <PixelIcon icon={MODULE_ICONS[m.id]} className="mt-0.5 h-4 w-4 shrink-0" />
+                    <div className="min-w-0 space-y-0.5">
+                      <p className="pixel-display text-[12px] font-medium leading-tight text-foreground">
+                        {m.title}
+                      </p>
+                      <p className="pixel-display text-[11px] leading-snug text-muted-foreground">
+                        {m.line}
+                      </p>
+                    </div>
+                  </div>
+                </PixelEnter>
+              ))}
             </div>
-          ) : (
-            <MuninnBrand tagline={LOGIN_LANDING_TAGLINE} className="justify-center" />
-          )}
-        </div>
-        <p className="text-center text-sm text-muted-foreground leading-relaxed">
-          {LOGIN_LANDING_TAGLINE}
-        </p>
-        <ul className="flex flex-wrap justify-center gap-2">
-          {LOGIN_LANDING_MODULES.map((m) => {
-            const Icon = MODULE_ICONS[m.id];
-            return (
-              <li
-                key={m.id}
-                className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-foreground"
+
+            <PixelEnter delayMs={380}>
+              <button
+                type="button"
+                onClick={() => setExpanded((v) => !v)}
+                className="pixel-font mx-auto flex items-center gap-1.5 text-[8px] uppercase text-primary hover:text-primary/80"
               >
-                <Icon className="h-3 w-3 text-primary" aria-hidden />
-                {m.title}
-              </li>
-            );
-          })}
-        </ul>
+                Ver qué incluye
+                <PixelIcon
+                  icon={expanded ? "chevronLeft" : "chevronRight"}
+                  className={cn("h-3 w-3", expanded && "rotate-[-90deg]")}
+                />
+              </button>
+            </PixelEnter>
+
+            {expanded && (
+              <div className="space-y-4 pt-1">
+                <ModuleGrid />
+                <LoginProductDemo className="mx-auto" />
+              </div>
+            )}
+
+            <PixelEnter delayMs={440}>
+              <Link
+                to="/entrar"
+                className="pixel-font mx-auto flex w-fit items-center gap-1.5 text-[9px] uppercase text-foreground"
+              >
+                {LOGIN_LANDING_CTA}
+                <span aria-hidden className="text-primary">
+                  →
+                </span>
+              </Link>
+            </PixelEnter>
+          </>
+        )}
       </div>
     );
   }
@@ -83,120 +377,23 @@ export function LoginLandingPanel({ loading = false, compact = false, className 
   return (
     <div
       className={cn(
-        "relative flex h-full min-h-[28rem] flex-col justify-between overflow-hidden px-8 py-10 lg:px-12 lg:py-14",
+        "relative z-[2] flex h-full min-h-0 flex-col justify-center gap-5 px-8 py-10 lg:px-10 lg:py-12 xl:px-12",
         className,
       )}
     >
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/25 via-background to-primary-soft/50"
-      />
-      <div
-        aria-hidden
-        className={cn(
-          "pointer-events-none absolute -left-24 top-0 h-72 w-72 rounded-full bg-primary/20 blur-3xl",
-          !reduceMotion && "login-drift",
-        )}
-      />
-      <div
-        aria-hidden
-        className={cn(
-          "pointer-events-none absolute -right-16 bottom-10 h-64 w-64 rounded-full bg-primary/15 blur-3xl",
-          !reduceMotion && "login-drift-slow",
-        )}
-      />
+      {!booted ? (
+        <PixelBoot />
+      ) : (
+        <>
+          <PixelEnter delayMs={0} pop>
+            <PitchSwap brand />
+          </PixelEnter>
 
-      {!reduceMotion && (
-        <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="absolute left-[62%] top-[40%] h-32 w-32 -translate-x-1/2 -translate-y-1/2">
-            <span className="absolute inset-0 rounded-full border border-primary/30 login-pulse-ring" />
-            <span
-              className="absolute inset-3 rounded-full border border-primary/20 login-pulse-ring"
-              style={{ animationDelay: "1.15s" }}
-            />
-            <span className="absolute left-1/2 top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary shadow-[0_0_22px_color-mix(in_oklab,var(--primary)_55%,transparent)] animate-pulse" />
-          </div>
-          {SWARM_NODES.map((node, i) => (
-            <span
-              key={i}
-              className={cn(
-                "absolute rounded-full bg-primary/65 shadow-[0_0_10px_color-mix(in_oklab,var(--primary)_50%,transparent)]",
-                node.className,
-                node.size,
-                node.float,
-              )}
-            />
-          ))}
-        </div>
+          <PixelEnter delayMs={140} className="max-w-2xl">
+            <LoginProductDemo />
+          </PixelEnter>
+        </>
       )}
-
-      <div className="relative z-[1] space-y-8">
-        <motion.div
-          initial={reduceMotion ? false : { opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-          className="space-y-5"
-        >
-          {loading ? (
-            <MuninnBrand pending className="scale-110 origin-left" />
-          ) : (
-            <MuninnBrand className="scale-110 origin-left" />
-          )}
-          <div className="max-w-md space-y-3">
-            <h1 className="text-3xl font-semibold tracking-tight text-foreground lg:text-[2.1rem] leading-[1.12]">
-              {LOGIN_LANDING_TAGLINE}
-            </h1>
-            <p className="text-sm text-muted-foreground leading-relaxed">{LOGIN_LANDING_LEAD}</p>
-          </div>
-        </motion.div>
-
-        <ul className="relative z-[1] max-w-md space-y-0.5">
-          {LOGIN_LANDING_MODULES.map((m, i) => {
-            const Icon = MODULE_ICONS[m.id];
-            return (
-              <motion.li
-                key={m.id}
-                initial={reduceMotion ? false : { opacity: 0, x: -12 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{
-                  duration: 0.4,
-                  delay: reduceMotion ? 0 : 0.12 + i * 0.07,
-                  ease: [0.22, 1, 0.36, 1],
-                }}
-                className="group flex gap-3.5 rounded-xl px-2 py-2.5 transition-colors duration-300 hover:bg-primary/8"
-              >
-                {/* Iconos quietos: no usan login-float (las bolitas sí, con ritmos distintos). */}
-                <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-primary/30 bg-primary/15 text-primary transition-transform duration-300 group-hover:scale-105">
-                  <Icon className="h-4 w-4" aria-hidden />
-                </span>
-                <div className="min-w-0 space-y-0.5">
-                  <p className="text-sm font-semibold tracking-tight text-foreground">{m.title}</p>
-                  <p className="text-[13px] leading-relaxed text-muted-foreground">{m.description}</p>
-                </div>
-              </motion.li>
-            );
-          })}
-        </ul>
-      </div>
-
-      <motion.div
-        initial={reduceMotion ? false : { opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.45, delay: reduceMotion ? 0 : 0.45 }}
-        className="relative z-[1] mt-10 max-w-md space-y-3"
-      >
-        <div className="login-flow-track" aria-hidden>
-          {!reduceMotion && <span className="login-flow-sweep" />}
-        </div>
-        <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] uppercase tracking-[0.14em] text-primary/90">
-          {LOGIN_LANDING_FLOW_STEPS.map((step, i) => (
-            <span key={step} className="inline-flex items-center gap-1.5">
-              {i > 0 && <span className="text-primary/40">→</span>}
-              <span>{step}</span>
-            </span>
-          ))}
-        </p>
-      </motion.div>
     </div>
   );
 }

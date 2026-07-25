@@ -530,8 +530,8 @@ function BoardCanvas({
 
       toast.message(
         linkMode === "capture"
-          ? "Modo Recordar: arrastrá desde un Dato hacia una Skill."
-          : "Modo Obligatorio: arrastrá desde un Dato hacia una Skill.",
+          ? "Modo Recordar: arrastra desde un Dato hacia una Skill."
+          : "Modo Obligatorio: arrastra desde un Dato hacia una Skill.",
       );
     },
     [linkMode, onEnableSkill, onToggleCapture, onTogglePrerequisite, onToggleRequires],
@@ -652,7 +652,7 @@ export function FlowPolicyBoard(props: BoardProps) {
           </button>
         ) : (
           <span className="text-muted-foreground/80 hidden sm:inline">
-            Clic en skill para enfocar · arrastrá para unir
+            Clic en skill para enfocar · arrastra para unir
           </span>
         )}
       </div>

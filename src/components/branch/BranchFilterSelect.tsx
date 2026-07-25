@@ -87,10 +87,13 @@ export function BranchFilterSelect({
             <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[var(--radix-popover-trigger-width)] min-w-[14rem] p-0" align="end">
+        <PopoverContent
+          className="w-[var(--radix-popover-trigger-width)] min-w-[16rem] p-0"
+          align="end"
+        >
           <Command>
             <CommandInput placeholder={searchPlaceholder} />
-            <CommandList>
+            <CommandList className="max-h-[min(60vh,22rem)]">
               <CommandEmpty>Sin sucursales.</CommandEmpty>
               <CommandGroup>
                 {items.map((opt) => (

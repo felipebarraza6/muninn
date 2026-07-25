@@ -1,5 +1,14 @@
 import { lazy, Suspense } from "react";
-import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from "react-router-dom";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  Link,
+  Outlet,
+  useLocation,
+  useParams,
+} from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HelmetProvider } from "react-helmet-async";
 import { AnimatePresence, motion } from "framer-motion";
@@ -16,10 +25,15 @@ import { RequireSkills } from "./components/auth/RequireSkills";
 import { RequireSuperAdmin } from "./components/auth/RequireSuperAdmin";
 import { ThemeProvider } from "./components/theme/ThemeProvider";
 import { PageLoader } from "./components/ui/page-loader";
+import { LoginPixelBootScreen } from "./components/brand/LoginPixelBoot";
+import { Button } from "./components/ui/button";
+import { EmptyState } from "./components/ui/empty-state";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { PwaUpdatePrompt } from "./components/PwaUpdatePrompt";
 import { Toaster } from "./components/ui/sonner";
 import { RealtimeProvider } from "./lib/realtime";
+import Login from "./routes/login";
+import Entrar from "./routes/entrar";
 
 const Dashboard = lazy(() => import("./routes/index"));
 const Conversaciones = lazy(() => import("./routes/conversaciones"));
@@ -41,7 +55,6 @@ const FunctionDetail = lazy(() => import("./routes/funciones.$id"));
 const Conocimiento = lazy(() => import("./routes/conocimiento"));
 const ConocimientoDatos = lazy(() => import("./routes/conocimiento.datos"));
 const EmbedChat = lazy(() => import("./routes/embed.chat.$id"));
-const Login = lazy(() => import("./routes/login"));
 const ForgotPassword = lazy(() => import("./routes/forgot-password"));
 const ResetPassword = lazy(() => import("./routes/reset-password"));
 const AdminLlmPage = lazy(() => import("./routes/admin.llm"));
@@ -56,8 +69,27 @@ const queryClient = new QueryClient({
   },
 });
 
+function isAuthBootPath(pathname: string) {
+  return (
+    pathname === "/login" ||
+    pathname.startsWith("/login/") ||
+    pathname === "/entrar" ||
+    pathname.startsWith("/forgot-password") ||
+    pathname.startsWith("/reset-password") ||
+    pathname.startsWith("/app/reset-password")
+  );
+}
+
 function RouteFallback() {
-  return <PageLoader label="Cargando" />;
+  const { pathname } = useLocation();
+  if (isAuthBootPath(pathname)) {
+    return <LoginPixelBootScreen />;
+  }
+  return (
+    <div className="h-dvh w-full bg-background">
+      <PageLoader pathname={pathname} label="Cargando" />
+    </div>
+  );
 }
 
 function ApiDetailRedirect() {
@@ -68,6 +100,22 @@ function ApiDetailRedirect() {
 function FunctionDetailRedirect() {
   const { id } = useParams<{ id: string }>();
   return <Navigate to={id ? `/skills/${id}` : "/skills"} replace />;
+}
+
+function NotFoundPage() {
+  return (
+    <div className="flex min-h-[60vh] flex-col items-center justify-center px-6">
+      <EmptyState
+        title="Esta página no existe"
+        description="El enlace puede estar roto o la sección se movió. Revisa la URL o vuelve al inicio."
+        action={
+          <Button asChild size="sm">
+            <Link to="/">Ir al inicio</Link>
+          </Button>
+        }
+      />
+    </div>
+  );
 }
 
 function AnimatedOutlet() {
@@ -90,32 +138,32 @@ function AnimatedOutlet() {
           <Route path="/agentes/nuevo" element={<AgentesNuevo />} />
           <Route path="/agentes/:id" element={<AgentesDetail />} />
           <Route path="/agentes/:id/chat" element={<AgentesChat />} />
-            <Route path="/chat" element={<ChatPage />} />
-            <Route
-              path="/planes"
-              element={
-                <RequireSuperAdmin>
-                  <PlanesPage />
-                </RequireSuperAdmin>
-              }
-            />
-            <Route
-              path="/workflows"
-              element={
-                <RequireSuperAdmin>
-                  <WorkflowsPage />
-                </RequireSuperAdmin>
-              }
-            />
-            <Route
-              path="/workflows/:id"
-              element={
-                <RequireSuperAdmin>
-                  <WorkflowCanvasPage />
-                </RequireSuperAdmin>
-              }
-            />
-            <Route path="/canales" element={<Canales />} />
+          <Route path="/chat" element={<ChatPage />} />
+          <Route
+            path="/planes"
+            element={
+              <RequireSuperAdmin>
+                <PlanesPage />
+              </RequireSuperAdmin>
+            }
+          />
+          <Route
+            path="/workflows"
+            element={
+              <RequireSuperAdmin>
+                <WorkflowsPage />
+              </RequireSuperAdmin>
+            }
+          />
+          <Route
+            path="/workflows/:id"
+            element={
+              <RequireSuperAdmin>
+                <WorkflowCanvasPage />
+              </RequireSuperAdmin>
+            }
+          />
+          <Route path="/canales" element={<Canales />} />
           <Route path="/canales/:id" element={<CanalesDetail />} />
           <Route
             path="/conocimiento"
@@ -206,6 +254,7 @@ function AnimatedOutlet() {
               </RequireConversations>
             }
           />
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </ErrorBoundary>
     </Suspense>
@@ -231,18 +280,35 @@ function AnimatedOutlet() {
   );
 }
 
+/** Transición Jules: landing (/login) ↔ auth (/entrar). */
+function MuninnGateLayout() {
+  const location = useLocation();
+  return (
+    <RedirectIfAuthenticated>
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={location.pathname}
+          initial={{ opacity: 0, x: location.pathname === "/entrar" ? 20 : -14 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: location.pathname === "/entrar" ? -14 : 20 }}
+          transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+          className="min-h-dvh"
+        >
+          <Outlet />
+        </motion.div>
+      </AnimatePresence>
+    </RedirectIfAuthenticated>
+  );
+}
+
 function AppRoutes() {
   return (
     <Suspense fallback={<RouteFallback />}>
       <Routes>
-        <Route
-          path="/login"
-          element={
-            <RedirectIfAuthenticated>
-              <Login />
-            </RedirectIfAuthenticated>
-          }
-        />
+        <Route element={<MuninnGateLayout />}>
+          <Route path="/login" element={<Login />} />
+          <Route path="/entrar" element={<Entrar />} />
+        </Route>
         <Route
           path="/login/:slug"
           element={

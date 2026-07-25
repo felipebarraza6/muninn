@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, startTransition } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BranchFilterSelect } from "@/components/branch/BranchFilterSelect";
 import { useAdminBranches, useMyBranchesSelect } from "@/api/hooks/useBranches";
 import {
@@ -35,8 +35,8 @@ function readFilterValue(): string {
 }
 
 /**
- * Filtro de sucursal en Studio (agentes, canales, etc.).
- * Incluye «Todas»: sin pin de sucursal (superadmin/org ven todo su alcance).
+ * Filtro de sucursal en Studio (agentes, canales, chat…).
+ * Superadmin/org: lista completa de sucursales + «Todas».
  */
 export function StudioBranchFilter({
   className,
@@ -49,10 +49,10 @@ export function StudioBranchFilter({
   const isOrgOwner = isOrganizationOwner();
   const show = showBranchFilterUI();
 
-  const { data: adminBranches = [] } = useAdminBranches({
+  const { data: adminBranches = [], isLoading: adminLoading } = useAdminBranches({
     enabled: isGlobalAdmin || isOrgOwner,
   });
-  const { data: myBranches = [] } = useMyBranchesSelect();
+  const { data: myBranches = [], isLoading: myLoading } = useMyBranchesSelect();
   const [filterValue, setFilterValue] = useState(readFilterValue);
   const normalizedRef = useRef(false);
 
@@ -75,15 +75,19 @@ export function StudioBranchFilter({
     if (isGlobalAdmin || isOrgOwner) {
       const fromAdmin = adminBranches.map((b) => ({
         id: String(b.id),
-        label: b.fantasy_name?.trim() || b.business_name || String(b.id),
+        label:
+          b.fantasy_name?.trim() ||
+          b.business_name?.trim() ||
+          (b as { name?: string }).name?.trim() ||
+          String(b.id),
       }));
+      // Admin primero (catálogo completo); myBranches completa huecos.
       return mergeBranchOptions([...fromAdmin, ...fromMy]);
     }
 
     return mergeBranchOptions(fromMy);
   }, [adminBranches, isGlobalAdmin, isOrgOwner, myBranches]);
 
-  // Una sola normalización cuando llegan opciones (no en cada cambio de filtro).
   useEffect(() => {
     if (!show || options.length === 0 || normalizedRef.current) return;
     normalizedRef.current = true;
@@ -112,12 +116,16 @@ export function StudioBranchFilter({
         ? filterValue
         : GLOBAL_BRANCH_ID;
 
-  // Mantener montado el selector aunque options aún carguen (evita flash null→UI).
   if (!show) return null;
-  if (options.length === 0) {
+
+  const loading = (isGlobalAdmin || isOrgOwner ? adminLoading : myLoading) && options.length === 0;
+  if (loading) {
     return (
       <div
-        className={cn("h-9 w-full sm:w-[240px] shrink-0 rounded-md border border-border/60 bg-muted/30", className)}
+        className={cn(
+          "h-9 w-full shrink-0 rounded-md border border-border/60 bg-muted/30 sm:w-[240px]",
+          className,
+        )}
         aria-hidden
       />
     );
@@ -125,27 +133,24 @@ export function StudioBranchFilter({
 
   return (
     <BranchFilterSelect
-      className={cn("space-y-0 shrink-0", className)}
+      className={cn("shrink-0 space-y-0", className)}
       label=""
       includeAll
       allValue={GLOBAL_BRANCH_ID}
-      allLabel="Todas"
+      allLabel="Todas las sucursales"
       value={value}
       options={options}
-      triggerClassName={cn("h-9 w-full sm:w-[240px]", triggerClassName)}
+      triggerClassName={cn("h-9 w-full min-w-0 sm:w-[260px]", triggerClassName)}
+      searchPlaceholder="Buscar sucursal…"
       onValueChange={(id) => {
         const next = isGlobalBranchId(id) || id === GLOBAL_BRANCH_ID ? GLOBAL_BRANCH_ID : id;
         setFilterValue(next);
-        // Solo cambiar sucursal: los hooks ya tienen branchId en queryKey y refetch solos.
-        // Invalidar aquí provocaba refetch doble + flash de lista vacía.
-        startTransition(() => {
-          if (next === GLOBAL_BRANCH_ID) {
-            // Quitar pin de store (también limpia localStorage de una tienda concreta).
-            setGlobalBranchMode(true);
-          } else {
-            setActiveBranchId(next, true, false);
-          }
-        });
+        // Sin startTransition: el chat debe refetch agentes al toque.
+        if (next === GLOBAL_BRANCH_ID) {
+          setGlobalBranchMode(true);
+        } else {
+          setActiveBranchId(next, true, false);
+        }
       }}
     />
   );

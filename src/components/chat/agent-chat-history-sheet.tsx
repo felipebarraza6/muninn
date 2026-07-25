@@ -52,7 +52,7 @@ export function AgentChatHistorySheet({
         className="w-full sm:max-w-sm p-0 bg-background flex flex-col h-full"
       >
         <SheetHeader className="px-4 py-4 border-b border-border/50 shrink-0 space-y-1">
-          <SheetTitle className="text-sm font-medium">Historial de prueba</SheetTitle>
+          <SheetTitle className="text-sm font-medium">Historial de conversaciones</SheetTitle>
           <p className="text-[11px] text-muted-foreground font-normal">
             Las conversaciones solo se archivan cuando tú lo indiques.
           </p>
@@ -85,9 +85,16 @@ export function AgentChatHistorySheet({
 
           <ScrollArea className="flex-1 -mx-3 px-3">
             {conversationsLoading ? (
-              <div className="space-y-2">
-                <Skeleton className="h-10 w-full" />
-                <Skeleton className="h-10 w-full" />
+              <div className="space-y-1 py-1" role="status" aria-busy="true" aria-label="Cargando">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-2.5 rounded-lg px-2 py-2.5">
+                    <Skeleton className="h-8 w-8 shrink-0 rounded-full" delayMs={i * 45} />
+                    <div className="min-w-0 flex-1 space-y-1.5">
+                      <Skeleton className="h-3 w-[70%]" delayMs={i * 45 + 20} />
+                      <Skeleton className="h-2.5 w-[45%]" delayMs={i * 45 + 40} />
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : conversations.length === 0 ? (
               <div className="text-sm text-muted-foreground py-6 text-center">
@@ -116,9 +123,7 @@ export function AgentChatHistorySheet({
                         className="flex-1 text-left px-3 py-2.5 min-w-0"
                       >
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className="font-medium truncate">
-                            {conv.title || "Sin título"}
-                          </span>
+                          <span className="font-medium truncate">{conv.title || "Sin título"}</span>
                           <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
                             #{conv.id}
                           </span>

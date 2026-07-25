@@ -12,11 +12,7 @@ import { AppIcon } from "@/components/applications/app-icon";
 import { LoginSocialLinks } from "@/components/brand/LoginSocialLinks";
 import { MuninnBrand } from "@/components/brand/MuninnBrand";
 import { ORG_LOGIN_CAPABILITIES, type OrgLoginCapabilityId } from "@/lib/orgLoginLanding";
-import type {
-  PublicAvailableApp,
-  PublicSocialLink,
-  PublicSponsor,
-} from "@/lib/publicLoginTheme";
+import type { PublicAvailableApp, PublicSocialLink, PublicSponsor } from "@/lib/publicLoginTheme";
 import { resolveMediaUrl } from "@/lib/mediaUrl";
 import { cn } from "@/lib/utils";
 
@@ -92,7 +88,7 @@ export function OrgLoginLanding({
   const slogan = tagline?.trim() || null;
   const blurb =
     description?.trim() ||
-    `Portal de ${orgName || "la organización"}. Iniciá sesión para continuar.`;
+    `Portal de ${orgName || "la organización"}. Inicia sesión para continuar.`;
 
   const capabilityItems: GalleryItem[] = ORG_LOGIN_CAPABILITIES.map((c) => ({
     kind: "capability" as const,

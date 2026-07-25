@@ -23,6 +23,8 @@
 
   --font-sans: "DM Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-display: "Sora", "DM Sans", system-ui, sans-serif;
+  --font-pixel: "Press Start 2P", monospace;
+  --font-pixel-display: "Pixelify Sans", "Press Start 2P", monospace;
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -101,14 +103,15 @@
 :root {
   --radius: 0.625rem;
 
-  --background: #fafafa;
-  --foreground: #0a0a0a;
+  /* Off-white con matiz mint — evita blanco puro plano */
+  --background: #f2f5f4;
+  --foreground: #151a19;
 
-  --card: #ffffff;
-  --card-foreground: #0a0a0a;
+  --card: #f7f9f8;
+  --card-foreground: #151a19;
 
-  --popover: #ffffff;
-  --popover-foreground: #0a0a0a;
+  --popover: #f7f9f8;
+  --popover-foreground: #151a19;
 
   --primary: #0d9488;
   --primary-foreground: #ffffff;
@@ -116,11 +119,11 @@
   --primary-glow: #0f766e;
   --primary-deep: #0f766e;
 
-  --secondary: #f4f4f5;
-  --secondary-foreground: #18181b;
+  --secondary: #e9eeec;
+  --secondary-foreground: #1a2220;
 
-  --muted: #f4f4f5;
-  --muted-foreground: #71717a;
+  --muted: #e9eeec;
+  --muted-foreground: #5f6b68;
 
   --accent: #ecfdf5;
   --accent-foreground: #134e4a;
@@ -141,8 +144,8 @@
   --info-foreground: #ffffff;
   --info-soft: #e0e7ff;
 
-  --border: #e4e4e7;
-  --input: #e4e4e7;
+  --border: #d8e0dd;
+  --input: #d8e0dd;
   --ring: #5eead4;
 
   --chart-1: #0d9488;
@@ -151,8 +154,8 @@
   --chart-4: #f59e0b;
   --chart-5: #a1a1aa;
 
-  --sidebar: #ffffff;
-  --sidebar-foreground: #0a0a0a;
+  --sidebar: #f7f9f8;
+  --sidebar-foreground: #151a19;
   --sidebar-primary: #0d9488;
   --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: #ecfdf5;
@@ -169,14 +172,15 @@
 }
 
 .dark {
-  --background: #000000;
-  --foreground: #f0f0f0;
+  /* Negro con matiz teal — evita #000 plano */
+  --background: #0b0f0e;
+  --foreground: #e4e8e7;
 
-  --card: #0a0a0a;
-  --card-foreground: #f0f0f0;
+  --card: #121817;
+  --card-foreground: #e4e8e7;
 
-  --popover: #0a0a0a;
-  --popover-foreground: #f0f0f0;
+  --popover: #121817;
+  --popover-foreground: #e4e8e7;
 
   --primary: #2dd4bf;
   --primary-foreground: #000000;
@@ -184,11 +188,11 @@
   --primary-glow: #28bfac;
   --primary-deep: #0d9488;
 
-  --secondary: #141414;
-  --secondary-foreground: #f0f0f0;
+  --secondary: #151b1a;
+  --secondary-foreground: #e4e8e7;
 
-  --muted: #141414;
-  --muted-foreground: #a3a3a3;
+  --muted: #151b1a;
+  --muted-foreground: #9aa3a0;
 
   --accent: #072421;
   --accent-foreground: #f0f0f0;
@@ -209,8 +213,8 @@
   --info-foreground: #ffffff;
   --info-soft: #161645;
 
-  --border: #1f1f1f;
-  --input: #1f1f1f;
+  --border: #1c2422;
+  --input: #1c2422;
   --ring: #14675e;
 
   --chart-1: #2dd4bf;
@@ -219,8 +223,8 @@
   --chart-4: #f59e0b;
   --chart-5: #a3a3a3;
 
-  --sidebar: #000000;
-  --sidebar-foreground: #f0f0f0;
+  --sidebar: #0b0f0e;
+  --sidebar-foreground: #e4e8e7;
   --sidebar-primary: #2dd4bf;
   --sidebar-primary-foreground: #000000;
   --sidebar-accent: #072421;
@@ -546,6 +550,1620 @@
   animation: login-pulse-ring 3.4s ease-out infinite;
 }
 
+/* Estelas difusas (nebulosa) — sin brillitos / dash sparkle */
+@keyframes login-streak-breathe {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.login-atmosphere-streak {
+  animation: login-streak-breathe 9s ease-in-out infinite;
+}
+
+/* Estrellas / nodos borrosos */
+.login-atmosphere-dot {
+  background: color-mix(in oklab, var(--primary) 45%, transparent);
+  box-shadow: 0 0 16px 4px color-mix(in oklab, var(--primary) 22%, transparent);
+  filter: blur(1.2px);
+  opacity: 0.55;
+}
+
+.login-atmosphere-dot-glow {
+  background: color-mix(in oklab, var(--primary) 40%, transparent);
+  box-shadow: 0 0 28px 10px color-mix(in oklab, var(--primary) 18%, transparent);
+  filter: blur(2.4px);
+  opacity: 0.5;
+}
+
+.login-atmosphere-core {
+  background: color-mix(in oklab, var(--primary) 50%, transparent);
+  filter: blur(3px);
+  box-shadow: 0 0 24px 8px color-mix(in oklab, var(--primary) 20%, transparent);
+  animation: login-float-a 3.6s ease-in-out infinite;
+}
+
+/* Grain / textura tonal del login */
+.login-atmosphere-grain {
+  opacity: 0.045;
+  mix-blend-mode: soft-light;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+}
+
+.dark .login-atmosphere-grain {
+  opacity: 0.07;
+  mix-blend-mode: overlay;
+}
+
+/* ── Login pixel art (retro viking) ─────────────────────────── */
+
+/* Todo cuadrado y plano dentro del login Muninn */
+.login-pixel,
+.login-pixel * {
+  border-radius: 0 !important;
+  backdrop-filter: none !important;
+}
+
+.login-pixel {
+  /* Night-city cyberpunk tokens (Muninn mint, no purple wash) */
+  --gotham-sky-0: #010204;
+  --gotham-sky-1: #061018;
+  --gotham-sky-2: #0c1e2a;
+  --gotham-sky-3: #143040;
+  --gotham-neon: #2dd4bf;
+  --gotham-neon-dim: color-mix(in oklab, #2dd4bf 45%, #0a1820);
+  --gotham-amber: #f0b45a;
+  --gotham-rose: #e87898;
+  --gotham-cyan: #5eead4;
+  --gotham-wet: #061018;
+  --gotham-facade: #121c26;
+  --gotham-facade-mid: #0c141c;
+  --gotham-facade-far: #060c12;
+  image-rendering: pixelated;
+  font-family: var(--font-pixel-display) !important;
+  scroll-behavior: smooth;
+  background: var(--gotham-sky-0);
+}
+
+.login-pixel-nav__rail {
+  backdrop-filter: none;
+}
+
+.login-pixel-nav a {
+  image-rendering: pixelated;
+}
+
+.login-pixel-chapter-rule {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.login-pixel-chapter-rule__line {
+  flex: 1;
+  height: 2px;
+  background: repeating-linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--primary) 55%, transparent) 0 6px,
+    transparent 6px 12px
+  );
+}
+
+.login-pixel-atom {
+  transition:
+    border-color 0.2s steps(2, end),
+    box-shadow 0.2s steps(2, end),
+    background-color 0.2s steps(2, end);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-pixel-atom {
+    transition: none;
+  }
+
+  .pixel-city--parallax .pixel-city-far,
+  .pixel-city--parallax .pixel-city-mid,
+  .pixel-city--parallax .pixel-city-near,
+  .pixel-city--parallax .pixel-city-mist,
+  .pixel-city--parallax .pixel-city-mist-side {
+    transform: none !important;
+  }
+}
+
+html[data-motion="off"] .pixel-city--parallax .pixel-city-far,
+html[data-motion="off"] .pixel-city--parallax .pixel-city-mid,
+html[data-motion="off"] .pixel-city--parallax .pixel-city-near,
+html[data-motion="off"] .pixel-city--parallax .pixel-city-mist,
+html[data-motion="off"] .pixel-city--parallax .pixel-city-mist-side {
+  transform: none !important;
+}
+
+.login-pixel *:not(svg):not(svg *) {
+  font-family: inherit !important;
+  letter-spacing: 0.01em;
+}
+
+.pixel-font {
+  font-family: var(--font-pixel) !important;
+  letter-spacing: 0.04em !important;
+  line-height: 1.55;
+}
+
+.pixel-display {
+  font-family: var(--font-pixel-display) !important;
+  letter-spacing: 0.01em;
+}
+
+.login-pixel .font-display,
+.login-pixel h1,
+.login-pixel h2,
+.login-pixel h3,
+.login-pixel label,
+.login-pixel button,
+.login-pixel a,
+.login-pixel p,
+.login-pixel span,
+.login-pixel li,
+.login-pixel input,
+.login-pixel textarea {
+  font-family: var(--font-pixel-display) !important;
+}
+
+/* Labels / chrome: Press Start más marcado */
+.login-pixel .pixel-font,
+.login-pixel form label,
+.login-pixel form a,
+.login-pixel button[type="submit"],
+.login-pixel .pixel-hint,
+.login-pixel .pixel-footer {
+  font-family: var(--font-pixel) !important;
+}
+
+/* Panel plano con sombra dura (sin blur ni glow) */
+.pixel-panel {
+  border: 2px solid color-mix(in oklab, var(--foreground) 35%, transparent) !important;
+  box-shadow: 4px 4px 0 0 color-mix(in oklab, var(--foreground) 22%, transparent) !important;
+  background: var(--card) !important;
+}
+
+/* Form de login: mismo tratamiento */
+.login-pixel form {
+  border-width: 2px !important;
+  border-color: color-mix(in oklab, var(--foreground) 35%, transparent) !important;
+  background: var(--card) !important;
+  box-shadow: 5px 5px 0 0 color-mix(in oklab, var(--foreground) 22%, transparent) !important;
+}
+
+.login-pixel form label {
+  font-family: var(--font-pixel) !important;
+  font-size: 8px !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+}
+
+.login-pixel form a {
+  font-family: var(--font-pixel) !important;
+  font-size: 7px !important;
+  letter-spacing: 0.03em !important;
+  text-transform: uppercase !important;
+}
+
+.login-pixel input {
+  border-width: 2px !important;
+  background: var(--background) !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  font-family: var(--font-pixel-display) !important;
+  /* ≥16px evita zoom automático en iOS */
+  font-size: 16px !important;
+}
+
+.login-pixel input:focus-visible {
+  border-color: var(--primary) !important;
+  box-shadow: 2px 2px 0 0 color-mix(in oklab, var(--primary) 55%, transparent) !important;
+  outline: none !important;
+}
+
+.login-pixel button[type="submit"] {
+  border: 2px solid var(--primary-deep) !important;
+  box-shadow: 3px 3px 0 0 var(--primary-deep) !important;
+  font-family: var(--font-pixel) !important;
+  font-size: 11px !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+  transition: translate 80ms steps(2), box-shadow 80ms steps(2) !important;
+}
+
+.login-pixel button[type="submit"]:active {
+  translate: 2px 2px;
+  box-shadow: 1px 1px 0 0 var(--primary-deep) !important;
+}
+
+.login-pixel .pixel-hint {
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--primary);
+}
+
+.login-pixel .pixel-footer {
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: color-mix(in oklab, var(--foreground) 72%, var(--primary) 28%);
+}
+
+.login-pixel .pixel-footer a {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* Todos los interactivos del login pixel: manito clara */
+.login-pixel button:not(:disabled),
+.login-pixel a,
+.login-pixel [role="button"],
+.login-pixel label[for],
+.login-pixel select,
+.login-pixel summary {
+  cursor: pointer;
+}
+
+/* Estrellas cuadradas con parpadeo en pasos (nada difuso) */
+@keyframes pixel-twinkle {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.2;
+  }
+}
+
+.pixel-star {
+  background: color-mix(in oklab, var(--primary) 35%, #c8ddd8 40%, transparent);
+  opacity: 0.55;
+  animation: pixel-twinkle 3.2s steps(2, jump-none) infinite;
+}
+
+:root:not(.dark) .pixel-star {
+  background: color-mix(in oklab, var(--primary-deep) 50%, var(--foreground) 20%);
+  opacity: 0.4;
+}
+
+/* Cielo ciudad-cañón — negro arriba (UI), bruma baja en avenida */
+.pixel-city-sky {
+  background: linear-gradient(
+    180deg,
+    var(--gotham-sky-0, #010204) 0%,
+    var(--gotham-sky-1, #061018) 22%,
+    var(--gotham-sky-2, #0c1e2a) 52%,
+    var(--gotham-sky-3, #143040) 78%,
+    color-mix(in oklab, var(--gotham-neon, #2dd4bf) 8%, #1a343c) 100%
+  );
+}
+
+.pixel-city-dither {
+  opacity: 0.16;
+  background-image: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      color-mix(in oklab, var(--gotham-neon, var(--primary)) 10%, transparent) 2px,
+      color-mix(in oklab, var(--gotham-neon, var(--primary)) 10%, transparent) 3px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 3px,
+      color-mix(in oklab, #000 42%, transparent) 3px,
+      color-mix(in oklab, #000 42%, transparent) 4px
+    );
+  image-rendering: pixelated;
+  mix-blend-mode: soft-light;
+}
+
+.pixel-city-scanlines {
+  opacity: 0.07;
+  background-image: repeating-linear-gradient(
+    180deg,
+    transparent 0 2px,
+    color-mix(in oklab, #000 55%, transparent) 2px 3px
+  );
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+
+.pixel-city-haze {
+  opacity: 0.55;
+  background:
+    radial-gradient(
+      ellipse 55% 28% at 50% 72%,
+      color-mix(in oklab, var(--gotham-neon, var(--primary)) 14%, transparent) 0%,
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 40% 22% at 18% 55%,
+      color-mix(in oklab, var(--gotham-cyan, #5eead4) 8%, transparent) 0%,
+      transparent 65%
+    ),
+    radial-gradient(
+      ellipse 36% 20% at 84% 58%,
+      color-mix(in oklab, var(--gotham-amber, #f0b45a) 7%, transparent) 0%,
+      transparent 65%
+    );
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+
+.pixel-city-mist {
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    transparent 22%,
+    color-mix(in oklab, var(--gotham-neon, var(--primary)) 10%, transparent) 50%,
+    color-mix(in oklab, #3a6a68 28%, transparent) 78%,
+    color-mix(in oklab, var(--gotham-wet, #061018) 70%, transparent) 100%
+  );
+  opacity: 0.95;
+}
+
+.pixel-city-mist-side {
+  opacity: 0.82;
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklab, #000 92%, transparent) 0%,
+    color-mix(in oklab, #02060a 55%, transparent) 8%,
+    transparent 18%,
+    transparent 82%,
+    color-mix(in oklab, #02060a 55%, transparent) 92%,
+    color-mix(in oklab, #000 90%, transparent) 100%
+  );
+  pointer-events: none;
+}
+
+@media (min-width: 1024px) {
+  .pixel-city-mist-side {
+    opacity: 0.88;
+    background: linear-gradient(
+      90deg,
+      #000 0%,
+      color-mix(in oklab, #000 70%, transparent) 6%,
+      transparent 16%,
+      transparent 84%,
+      color-mix(in oklab, #000 70%, transparent) 94%,
+      #000 100%
+    );
+  }
+
+  .pixel-city-haze {
+    opacity: 0.65;
+  }
+}
+
+.pixel-city-lightning {
+  background: color-mix(in oklab, #b9e9e4 18%, transparent);
+  opacity: 0;
+  animation: pixel-city-lightning 11s steps(1, end) infinite;
+}
+
+:root:not(.dark) .pixel-city-sky {
+  background: linear-gradient(
+    180deg,
+    #5a7a88 0%,
+    #6a8a94 28%,
+    #7a9ca0 55%,
+    #8aaca8 78%,
+    #9ab8b0 100%
+  );
+}
+
+:root:not(.dark) .pixel-city-mist {
+  background: linear-gradient(
+    180deg,
+    transparent 30%,
+    color-mix(in oklab, white 20%, transparent) 70%,
+    color-mix(in oklab, var(--primary) 14%, transparent) 100%
+  );
+}
+
+:root:not(.dark) .pixel-city-dither {
+  opacity: 0.12;
+}
+
+.pixel-city-moon {
+  position: absolute;
+  image-rendering: pixelated;
+  opacity: 0.85;
+  border-radius: 2px;
+  background:
+    radial-gradient(
+      circle at 38% 40%,
+      #f4fffb 0%,
+      color-mix(in oklab, #e8f4f0 72%, var(--primary) 28%) 45%,
+      color-mix(in oklab, #8aa8a0 55%, #1a3030 45%) 100%
+    );
+  box-shadow: 0 0 24px color-mix(in oklab, #d8f0ea 22%, transparent);
+}
+
+.pixel-city-moon__halo {
+  position: absolute;
+  inset: -18%;
+  background: radial-gradient(
+    circle,
+    color-mix(in oklab, #d8f0ea 28%, transparent) 0%,
+    transparent 68%
+  );
+  opacity: 0.7;
+}
+
+.pixel-city-moon__body {
+  fill: color-mix(in oklab, #e8f4f0 72%, var(--primary) 28%);
+}
+
+.pixel-city-moon__shade {
+  fill: color-mix(in oklab, #8aa8a0 55%, #1a3030 45%);
+  opacity: 0.55;
+}
+
+.pixel-city-moon__crater {
+  fill: color-mix(in oklab, #6a8880 60%, #102020 40%);
+  opacity: 0.55;
+}
+
+.pixel-city-moon__highlight {
+  fill: #f4fffb;
+  opacity: 0.7;
+}
+
+.pixel-city-moon--veiled {
+  opacity: 0.38;
+  filter: saturate(0.7);
+}
+
+.pixel-city-moon--veiled .pixel-city-moon__halo {
+  opacity: 0.25;
+}
+
+:root:not(.dark) .pixel-city-moon__body {
+  fill: #fff4d8;
+}
+
+:root:not(.dark) .pixel-city-moon__shade {
+  fill: #c8b090;
+}
+
+:root:not(.dark) .pixel-city-moon__crater {
+  fill: #a89070;
+}
+
+/* Batcueva: umbral más cerrado, foco al form */
+.pixel-city--batcave .pixel-city-sky {
+  background: linear-gradient(
+    180deg,
+    #000102 0%,
+    #02060a 30%,
+    #061018 60%,
+    #0a1820 100%
+  );
+}
+
+.pixel-city--batcave .pixel-city-stars {
+  opacity: 0.28;
+}
+
+.pixel-city--batcave .pixel-city-mist-side {
+  opacity: 0.92;
+  background: linear-gradient(
+    90deg,
+    #000 0%,
+    transparent 28%,
+    transparent 72%,
+    #000 100%
+  );
+}
+
+.pixel-city--batcave .pixel-city-layer--mid {
+  opacity: 0.72;
+}
+
+.pixel-city--batcave .pixel-city-layer--far {
+  opacity: 0.65;
+}
+
+.pixel-city--batcave .pixel-city-vignette {
+  background:
+    radial-gradient(
+      ellipse 42% 48% at 50% 52%,
+      transparent 0%,
+      color-mix(in oklab, #000 55%, transparent) 58%,
+      #000 100%
+    ),
+    linear-gradient(180deg, color-mix(in oklab, #000 70%, transparent) 0%, transparent 40%);
+}
+
+.pixel-city-batcave-focus {
+  background: radial-gradient(
+    ellipse 38% 42% at 50% 55%,
+    color-mix(in oklab, var(--primary) 10%, transparent) 0%,
+    transparent 70%
+  );
+  pointer-events: none;
+}
+
+/* ── Ciudad cañón (restaurada): un SVG hecho a mano, liviano ── */
+.pixel-raven-sky,
+.pixel-city--gotham,
+.pixel-city--batcave {
+  image-rendering: pixelated;
+}
+
+.pixel-city-scene {
+  image-rendering: pixelated;
+}
+
+.pixel-city--parallax {
+  --city-enter: 0;
+  --city-par-far: 0px;
+  --city-par-mid: 0px;
+  --city-par-near: 0px;
+  --city-par-mist: 0px;
+}
+
+/* Zoom de inmersión: al scrollear “entras” a la avenida */
+.pixel-city--parallax .pixel-city-scene {
+  transform-origin: 50% 100%;
+  transform: scale(calc(1 + var(--city-enter) * 0.14))
+    translateY(calc(var(--city-enter) * 2.5%));
+  will-change: transform;
+}
+
+.pixel-city--parallax .pixel-city-haze,
+.pixel-city--parallax .pixel-city-scanlines {
+  opacity: calc(0.55 + var(--city-enter) * 0.35);
+}
+
+.pixel-city--parallax .pixel-city-far {
+  transform: translateY(var(--city-par-far));
+}
+
+.pixel-city--parallax .pixel-city-mid,
+.pixel-city--parallax .pixel-city-facade-detail,
+.pixel-city--parallax .pixel-city-fog-band {
+  transform: translateY(var(--city-par-mid));
+}
+
+.pixel-city--parallax .pixel-city-near,
+.pixel-city--parallax .pixel-city-window,
+.pixel-city--parallax .pixel-city-sign,
+.pixel-city--parallax .pixel-city-lamp,
+.pixel-city--parallax .pixel-city-lamp-glow,
+.pixel-city--parallax .pixel-city-street,
+.pixel-city--parallax .pixel-city-road,
+.pixel-city--parallax .pixel-city-road-line,
+.pixel-city--parallax .pixel-city-sidewalk,
+.pixel-city--parallax .pixel-city-reflect,
+.pixel-city--parallax .pixel-city-puddle,
+.pixel-city--parallax .pixel-city-curb {
+  transform: translateY(var(--city-par-near));
+}
+
+.pixel-city--parallax .pixel-city-mist,
+.pixel-city--parallax .pixel-city-mist-side {
+  transform: translateY(var(--city-par-mist));
+}
+
+.pixel-city-far {
+  fill: var(--gotham-facade-far, #060c12);
+  opacity: 0.9;
+}
+
+.pixel-city-mid {
+  fill: var(--gotham-facade-mid, #0c141c);
+}
+
+.pixel-city-near {
+  fill: var(--gotham-facade, #121c26);
+}
+
+.pixel-city-fog-band {
+  fill: var(--gotham-wet, #0a141c);
+  opacity: 0.62;
+}
+
+.pixel-city-sidewalk {
+  fill: #121c24;
+}
+
+.pixel-city-roof {
+  fill: #0a1218;
+}
+
+.pixel-city-facade-detail {
+  fill: #2a3a44;
+  opacity: 0.85;
+}
+
+.pixel-city-awning {
+  fill: #243038;
+}
+
+.pixel-city-window {
+  fill: color-mix(in oklab, #e0c878 65%, var(--gotham-neon, var(--primary)) 35%);
+  opacity: calc(0.42 + var(--city-enter, 0) * 0.18);
+}
+
+.pixel-city-window--cyan {
+  fill: var(--gotham-cyan, #5eead4);
+  opacity: calc(0.28 + var(--city-enter, 0) * 0.2);
+}
+
+.pixel-city-window--far {
+  fill: #a8b070;
+  opacity: 0.26;
+}
+
+.pixel-city-lamp {
+  fill: #2a343c;
+}
+
+.pixel-city-lamp-glow {
+  fill: color-mix(in oklab, #ffe9a8 70%, var(--gotham-amber, #f0b45a) 30%);
+  opacity: calc(0.32 + var(--city-enter, 0) * 0.22);
+}
+
+.pixel-city-sign {
+  fill: color-mix(in oklab, var(--gotham-neon, var(--primary)) 55%, #6a9088);
+  opacity: calc(0.42 + var(--city-enter, 0) * 0.25);
+}
+
+.pixel-city-sign-inner {
+  fill: #102028;
+}
+
+.pixel-city-sign--amber {
+  fill: var(--gotham-amber, #c09050);
+  opacity: calc(0.45 + var(--city-enter, 0) * 0.2);
+}
+
+.pixel-city-sign--rose {
+  fill: var(--gotham-rose, #e87898);
+  opacity: calc(0.4 + var(--city-enter, 0) * 0.22);
+}
+
+.pixel-city-street {
+  fill: var(--gotham-wet, #050a0e);
+}
+
+.pixel-city-road {
+  fill: #0a141a;
+}
+
+.pixel-city-road-line {
+  fill: color-mix(in oklab, var(--gotham-neon, var(--primary)) 60%, #d9eee8);
+  opacity: 0.48;
+}
+
+.pixel-city-reflect {
+  fill: color-mix(in oklab, var(--gotham-neon, var(--primary)) 45%, #4a7068);
+  opacity: calc(0.45 + var(--city-enter, 0) * 0.25);
+}
+
+.pixel-city-puddle {
+  fill: color-mix(in oklab, var(--gotham-neon, var(--primary)) 28%, #1a3840);
+  opacity: 0.72;
+}
+
+.pixel-city-curb {
+  fill: #1e2a32;
+}
+
+.pixel-city-wire {
+  fill: #2a3438;
+  opacity: 0.75;
+}
+
+.pixel-city-traffic {
+  height: 12px;
+  overflow: hidden;
+}
+
+.pixel-city-car {
+  position: absolute;
+  display: block;
+  width: 34px;
+  height: 8px;
+  border-top: 3px solid #18272c;
+  border-bottom: 2px solid #0a1014;
+  background: linear-gradient(
+    90deg,
+    #f6e8a8 0 4px,
+    transparent 4px 26px,
+    #e65d5d 26px 30px,
+    transparent 30px
+  );
+  image-rendering: pixelated;
+}
+
+.pixel-city-car--a {
+  animation: pixel-car-pass-a 12s linear -2s infinite;
+}
+
+.pixel-city-car--b {
+  transform: scaleX(-1);
+  animation: pixel-car-pass-b 16s linear -7s infinite;
+}
+
+/* Velo: centro legible, ciudad más presente a los lados (esp. desktop) */
+.pixel-city-content-veil {
+  background: radial-gradient(
+    ellipse 62% 48% at 50% 36%,
+    color-mix(in oklab, var(--gotham-sky-0, var(--background)) 48%, transparent) 0%,
+    color-mix(in oklab, var(--gotham-sky-0, var(--background)) 22%, transparent) 40%,
+    transparent 68%
+  );
+  pointer-events: none;
+}
+
+@media (min-width: 1024px) {
+  .pixel-city-content-veil {
+    background: radial-gradient(
+      ellipse 48% 42% at 50% 34%,
+      color-mix(in oklab, var(--gotham-sky-0, #010204) 42%, transparent) 0%,
+      color-mix(in oklab, var(--gotham-sky-0, #010204) 16%, transparent) 38%,
+      transparent 64%
+    );
+  }
+}
+
+.pixel-city-vignette {
+  background:
+    linear-gradient(
+      90deg,
+      color-mix(in oklab, #000 82%, transparent) 0%,
+      transparent 12%,
+      transparent 88%,
+      color-mix(in oklab, #000 80%, transparent) 100%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in oklab, #000 48%, transparent) 0%,
+      transparent 28%,
+      transparent 72%,
+      color-mix(in oklab, #000 42%, transparent) 100%
+    );
+  pointer-events: none;
+}
+
+@media (min-width: 1024px) {
+  .pixel-city-vignette {
+    background:
+      linear-gradient(
+        90deg,
+        #000 0%,
+        color-mix(in oklab, #000 55%, transparent) 7%,
+        transparent 18%,
+        transparent 82%,
+        color-mix(in oklab, #000 55%, transparent) 93%,
+        #000 100%
+      ),
+      linear-gradient(
+        180deg,
+        color-mix(in oklab, #000 52%, transparent) 0%,
+        transparent 26%,
+        transparent 68%,
+        color-mix(in oklab, #000 50%, transparent) 100%
+      );
+  }
+}
+
+.pixel-city-egg {
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  image-rendering: pixelated;
+}
+
+.pixel-city-egg:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Capas PNG estáticas (Aseprite → public/brand/gotham/) */
+.gotham-layers {
+  --gotham-par-far: 0px;
+  --gotham-par-mid: 0px;
+  --gotham-par-near: 0px;
+  background: #0a1218;
+}
+
+.gotham-layers__sky-fallback {
+  background:
+    radial-gradient(ellipse 80% 50% at 50% 0%, #1a2830 0%, transparent 55%),
+    linear-gradient(180deg, #0c141c 0%, #0a1218 40%, #081018 100%);
+}
+
+.gotham-layers__img {
+  bottom: 0;
+  top: auto;
+  width: 100%;
+  height: auto;
+  max-height: 100%;
+  object-fit: cover;
+  object-position: bottom center;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.gotham-layers__img--sky {
+  inset: 0;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+  z-index: 0;
+}
+
+.gotham-layers__img--far {
+  z-index: 1;
+}
+
+.gotham-layers__img--mid {
+  z-index: 2;
+}
+
+.gotham-layers__img--near {
+  z-index: 3;
+}
+
+.gotham-layers--parallax .gotham-layers__img--far {
+  transform: translate3d(0, var(--gotham-par-far), 0);
+  will-change: transform;
+}
+
+.gotham-layers--parallax .gotham-layers__img--mid {
+  transform: translate3d(0, var(--gotham-par-mid), 0);
+  will-change: transform;
+}
+
+.gotham-layers--parallax .gotham-layers__img--near {
+  transform: translate3d(0, var(--gotham-par-near), 0);
+  will-change: transform;
+}
+
+.gotham-layers__veil {
+  z-index: 4;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in oklab, #0a1218 55%, transparent) 0%,
+      transparent 28%,
+      transparent 58%,
+      color-mix(in oklab, #0a1218 70%, transparent) 100%
+    );
+}
+
+.gotham-layers__vignette {
+  z-index: 5;
+  background: radial-gradient(
+    ellipse 75% 70% at 50% 45%,
+    transparent 40%,
+    color-mix(in oklab, #050a10 75%, transparent) 100%
+  );
+}
+
+.gotham-layers--batcave .gotham-layers__img {
+  filter: brightness(0.35) contrast(1.15) saturate(0.55);
+}
+
+.gotham-layers--batcave .gotham-layers__veil {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in oklab, #020508 80%, transparent) 0%,
+      transparent 35%,
+      color-mix(in oklab, #020508 85%, transparent) 100%
+    );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gotham-layers--parallax .gotham-layers__img--far,
+  .gotham-layers--parallax .gotham-layers__img--mid,
+  .gotham-layers--parallax .gotham-layers__img--near {
+    transform: none;
+    will-change: auto;
+  }
+}
+
+:root:not(.dark) .pixel-city-far {
+  fill: #4a6068;
+}
+
+:root:not(.dark) .pixel-city-mid {
+  fill: #3a5058;
+}
+
+:root:not(.dark) .pixel-city-near {
+  fill: #2a4048;
+}
+
+:root:not(.dark) .pixel-city-street {
+  fill: #2a3a42;
+}
+
+:root:not(.dark) .pixel-city-road {
+  fill: #30464d;
+}
+
+:root:not(.dark) .pixel-city-sidewalk {
+  fill: #354850;
+}
+
+:root:not(.dark) .pixel-city-curb {
+  fill: #3a4a52;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pixel-city--parallax .pixel-city-scene {
+    transform: none;
+    will-change: auto;
+  }
+
+  .pixel-city--parallax .pixel-city-far,
+  .pixel-city--parallax .pixel-city-mid,
+  .pixel-city--parallax .pixel-city-near,
+  .pixel-city--parallax .pixel-city-mist,
+  .pixel-city--parallax .pixel-city-mist-side,
+  .pixel-city--parallax .pixel-city-facade-detail,
+  .pixel-city--parallax .pixel-city-fog-band,
+  .pixel-city--parallax .pixel-city-window,
+  .pixel-city--parallax .pixel-city-sign,
+  .pixel-city--parallax .pixel-city-lamp,
+  .pixel-city--parallax .pixel-city-lamp-glow,
+  .pixel-city--parallax .pixel-city-street,
+  .pixel-city--parallax .pixel-city-road,
+  .pixel-city--parallax .pixel-city-road-line,
+  .pixel-city--parallax .pixel-city-sidewalk,
+  .pixel-city--parallax .pixel-city-reflect,
+  .pixel-city--parallax .pixel-city-puddle,
+  .pixel-city--parallax .pixel-city-curb {
+    transform: none !important;
+  }
+
+  .pixel-city-car {
+    animation: none !important;
+  }
+}
+
+html[data-motion="off"] .pixel-city--parallax .pixel-city-far,
+html[data-motion="off"] .pixel-city--parallax .pixel-city-mid,
+html[data-motion="off"] .pixel-city--parallax .pixel-city-near,
+html[data-motion="off"] .pixel-city--parallax .pixel-city-mist,
+html[data-motion="off"] .pixel-city--parallax .pixel-city-mist-side {
+  transform: none !important;
+}
+
+html[data-motion="off"] .pixel-city-car {
+  animation: none !important;
+}
+
+@keyframes pixel-city-mist-drift {
+  from {
+    translate: -1.5% 0;
+  }
+  to {
+    translate: 1.5% 1%;
+  }
+}
+
+@keyframes pixel-city-lightning {
+  0%,
+  72%,
+  75%,
+  100% {
+    opacity: 0;
+  }
+  73% {
+    opacity: 0.38;
+  }
+  74% {
+    opacity: 0.08;
+  }
+}
+
+@keyframes pixel-window-flicker {
+  0%,
+  82%,
+  100% {
+    opacity: 0.9;
+  }
+  84%,
+  88% {
+    opacity: 0.25;
+  }
+  86% {
+    opacity: 1;
+  }
+}
+
+@keyframes pixel-lamp-pulse {
+  0%,
+  100% {
+    opacity: 0.38;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@keyframes pixel-neon-flicker {
+  0%,
+  88%,
+  92%,
+  100% {
+    opacity: 0.85;
+  }
+  89%,
+  91% {
+    opacity: 0.28;
+  }
+}
+
+@keyframes pixel-road-shimmer {
+  0%,
+  100% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 0.42;
+  }
+}
+
+@keyframes pixel-puddle-shimmer {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 0.82;
+  }
+}
+
+@keyframes pixel-rain-sheet {
+  from {
+    translate: 0 -10px;
+  }
+  to {
+    translate: 0 18px;
+  }
+}
+
+@keyframes pixel-car-pass-a {
+  from {
+    left: -50px;
+  }
+  to {
+    left: calc(100% + 50px);
+  }
+}
+
+@keyframes pixel-car-pass-b {
+  from {
+    right: -50px;
+  }
+  to {
+    right: calc(100% + 50px);
+  }
+}
+
+@keyframes pixel-steam-rise {
+  0% {
+    translate: 0 0;
+    opacity: 0;
+  }
+  25% {
+    opacity: 0.55;
+  }
+  100% {
+    translate: 7px -52px;
+    opacity: 0;
+  }
+}
+
+:root:not(.dark) .pixel-city--gotham,
+:root:not(.dark) .pixel-city--batcave {
+  --city-far: #4a6068;
+  --city-mid: #3a5058;
+  --city-near: #2a4048;
+  --city-roof: #304850;
+  --city-win-off: #2a3a42;
+}
+
+:root:not(.dark) .pixel-city-street {
+  fill: #2a3a42;
+}
+
+:root:not(.dark) .pixel-city-road {
+  fill: #30464d;
+}
+
+:root:not(.dark) .pixel-city-mist-side {
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklab, #5a7a88 55%, transparent) 0%,
+    transparent 22%,
+    transparent 78%,
+    color-mix(in oklab, #5a7a88 50%, transparent) 100%
+  );
+}
+
+:root:not(.dark) .pixel-city-puddle {
+  fill: color-mix(in oklab, var(--primary) 30%, #5a7a80);
+}
+
+:root:not(.dark) .pixel-city-reflect {
+  fill: color-mix(in oklab, white 45%, var(--primary) 40%);
+  opacity: 0.45;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pixel-city-mist,
+  .pixel-city-mist-low,
+  .pixel-city-fog-band-a,
+  .pixel-city-fog-band-b,
+  .pixel-city-lightning,
+  .pixel-city-stars,
+  .pixel-city-win-lit,
+  .pixel-city-win-lit--flicker-a,
+  .pixel-city-win-lit--flicker-b,
+  .pixel-city-win-lit--flicker-c,
+  .pixel-city-lamp-glow,
+  .pixel-city-neon,
+  .pixel-city-billboard__lit,
+  .pixel-city-train,
+  .pixel-city-road-line,
+  .pixel-city-puddle,
+  .pixel-city-near-rain,
+  .pixel-city-car,
+  .pixel-city-steam span {
+    animation: none !important;
+  }
+
+  .pixel-city-near-rain {
+    display: none;
+  }
+}
+
+html[data-motion="off"] .pixel-city-mist,
+html[data-motion="off"] .pixel-city-mist-low,
+html[data-motion="off"] .pixel-city-fog-band-a,
+html[data-motion="off"] .pixel-city-fog-band-b,
+html[data-motion="off"] .pixel-city-lightning,
+html[data-motion="off"] .pixel-city-stars,
+html[data-motion="off"] .pixel-city-win-lit,
+html[data-motion="off"] .pixel-city-win-lit--flicker-a,
+html[data-motion="off"] .pixel-city-win-lit--flicker-b,
+html[data-motion="off"] .pixel-city-win-lit--flicker-c,
+html[data-motion="off"] .pixel-city-lamp-glow,
+html[data-motion="off"] .pixel-city-neon,
+html[data-motion="off"] .pixel-city-billboard__lit,
+html[data-motion="off"] .pixel-city-train,
+html[data-motion="off"] .pixel-city-road-line,
+html[data-motion="off"] .pixel-city-puddle,
+html[data-motion="off"] .pixel-city-near-rain,
+html[data-motion="off"] .pixel-city-car,
+html[data-motion="off"] .pixel-city-steam span {
+  animation: none !important;
+}
+
+html[data-motion="off"] .pixel-city-near-rain {
+  display: none;
+}
+
+/* Batcueva: menos brillo, capas más quietas */
+.pixel-city--batcave .pixel-city-layer--far .pixel-city-tower__body {
+  opacity: 0.7;
+}
+
+.pixel-city--batcave .pixel-city-win-lit {
+  opacity: 0.22;
+}
+
+.pixel-city--batcave .pixel-city-layer--near .pixel-city-win-lit {
+  opacity: 0.35;
+}
+
+.pixel-city--batcave .pixel-city-content-veil {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in oklab, #000 55%, transparent) 0%,
+      color-mix(in oklab, var(--background) 50%, transparent) 35%,
+      color-mix(in oklab, var(--background) 28%, transparent) 60%,
+      transparent 85%
+    ),
+    radial-gradient(
+      ellipse 55% 50% at 50% 48%,
+      color-mix(in oklab, var(--background) 42%, transparent) 0%,
+      transparent 68%
+    );
+}
+
+/* Panel de auth siempre visible sobre la lluvia */
+.login-pixel-auth__card {
+  position: relative;
+  z-index: 20;
+  border: 3px solid color-mix(in oklab, var(--foreground) 32%, transparent);
+  background: var(--card);
+  box-shadow:
+    5px 5px 0 0 color-mix(in oklab, var(--foreground) 18%, transparent),
+    inset 0 0 0 1px color-mix(in oklab, var(--primary) 12%, transparent);
+}
+
+.login-pixel-auth__card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.07;
+  background-image: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 3px,
+      color-mix(in oklab, var(--foreground) 40%, transparent) 3px,
+      color-mix(in oklab, var(--foreground) 40%, transparent) 4px
+    );
+  image-rendering: pixelated;
+}
+
+:root:not(.dark) .login-pixel-auth__card {
+  background: color-mix(in oklab, var(--card) 94%, white 6%) !important;
+  border-color: color-mix(in oklab, var(--foreground) 28%, transparent);
+}
+
+/* compat: clase antigua del fiordo único */
+.pixel-fjord-fill {
+  fill: color-mix(in oklab, var(--foreground) 22%, var(--background));
+}
+
+/*
+ * Regla de contraste: cualquier copy / control que pueda quedar
+ * sobre luna, estrellas o siluetas usa superficie opaca (no translucidez).
+ */
+.login-pixel-readout {
+  position: relative;
+  z-index: 2;
+  padding: 0.85rem 1rem;
+  border: 3px solid color-mix(in oklab, var(--foreground) 30%, transparent);
+  background: var(--card);
+  box-shadow: 4px 4px 0 0 color-mix(in oklab, var(--foreground) 16%, transparent);
+}
+
+.login-pixel-readout::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.06;
+  background-image: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 3px,
+    color-mix(in oklab, var(--foreground) 50%, transparent) 3px,
+    color-mix(in oklab, var(--foreground) 50%, transparent) 4px
+  );
+  image-rendering: pixelated;
+}
+
+/* Desktop también: pitch en placa (no flotar sobre el cielo) */
+.login-pixel aside .login-pixel-readout {
+  padding: 0.85rem 1rem;
+  border: 2px solid color-mix(in oklab, var(--foreground) 28%, transparent);
+  background: var(--card) !important;
+  box-shadow: 3px 3px 0 0 color-mix(in oklab, var(--foreground) 16%, transparent) !important;
+}
+
+.login-pixel-theme-toggle {
+  position: relative;
+  z-index: 30;
+  background: var(--card) !important;
+  color: var(--foreground) !important;
+}
+
+.login-pixel-theme-toggle:hover {
+  background: color-mix(in oklab, var(--card) 88%, var(--primary) 12%) !important;
+}
+
+/* Form / paneles: siempre opacos (modo claro no “trasluce”) */
+.login-pixel form,
+.login-pixel .pixel-panel,
+.login-pixel .login-pixel-readout,
+.login-pixel .login-pixel-auth__card {
+  background: var(--card) !important;
+  opacity: 1 !important;
+}
+
+:root:not(.dark) .login-pixel form,
+:root:not(.dark) .login-pixel .pixel-panel,
+:root:not(.dark) .login-pixel .login-pixel-readout,
+:root:not(.dark) .login-pixel .pixel-harness-box,
+:root:not(.dark) .login-pixel .login-pixel-auth__card {
+  background: color-mix(in oklab, var(--card) 94%, white 6%) !important;
+  border-color: color-mix(in oklab, var(--foreground) 28%, transparent) !important;
+  box-shadow: 4px 4px 0 0 color-mix(in oklab, var(--foreground) 14%, transparent) !important;
+}
+
+:root:not(.dark) .login-pixel input {
+  background: #fff !important;
+  border-color: color-mix(in oklab, var(--foreground) 22%, transparent) !important;
+}
+
+.login-pixel [class*="bg-card"],
+.login-pixel [class*="bg-background"] {
+  opacity: 1;
+}
+
+/* Tiles del harness: fondo sólido */
+.login-pixel ul li > div {
+  background: var(--card) !important;
+}
+
+:root:not(.dark) .login-pixel ul li > div {
+  background: color-mix(in oklab, var(--card) 96%, white 4%) !important;
+}
+
+/* Cuervos en vuelo — bobbing en pasos */
+@keyframes pixel-raven-bob {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: 0 -3px;
+  }
+}
+
+.pixel-raven-fly {
+  animation: pixel-raven-bob 2.8s steps(2, jump-none) infinite;
+  opacity: 0.55;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pixel-star,
+  .pixel-raven-fly {
+    animation: none !important;
+  }
+}
+
+html[data-motion="off"] .pixel-star,
+html[data-motion="off"] .pixel-raven-fly {
+  animation: none !important;
+}
+
+/* (legacy aurora removida — se usa pixel-sky-bands + mist) */
+.pixel-aurora {
+  display: none;
+}
+
+/* Cuervo destacado */
+.pixel-raven {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.pixel-raven__sprite {
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+.pixel-raven--featured .pixel-raven__sprite {
+  padding: 4px;
+  border: 2px solid color-mix(in oklab, var(--primary) 55%, transparent);
+  background: color-mix(in oklab, var(--primary) 12%, var(--background));
+  box-shadow:
+    3px 3px 0 0 color-mix(in oklab, var(--primary) 40%, transparent),
+    inset 0 0 0 1px color-mix(in oklab, var(--primary) 25%, transparent);
+}
+
+.pixel-raven__pedestal {
+  display: block;
+  width: 70%;
+  height: 4px;
+  background: var(--primary);
+  box-shadow: 2px 2px 0 0 color-mix(in oklab, var(--primary-deep) 80%, transparent);
+}
+
+.pixel-harness-box {
+  border: 2px solid color-mix(in oklab, var(--primary) 45%, transparent);
+  background: color-mix(in oklab, var(--primary) 10%, var(--card));
+  padding: 0.75rem 0.85rem;
+  box-shadow: 3px 3px 0 0 color-mix(in oklab, var(--primary) 30%, transparent);
+  height: 100%;
+}
+
+/* Manito clickable: hint “¿qué es un harness?” */
+.pixel-harness-hand {
+  vertical-align: -0.2em;
+  image-rendering: pixelated;
+  transition: background-color 0.12s linear, border-color 0.12s linear;
+}
+
+.pixel-harness-tag {
+  box-shadow: 2px 2px 0 0 color-mix(in oklab, var(--foreground) 14%, transparent);
+  transition: background-color 0.12s linear, border-color 0.12s linear, color 0.12s linear;
+}
+
+.pixel-harness-tag:active {
+  translate: 1px 1px;
+  box-shadow: 1px 1px 0 0 color-mix(in oklab, var(--foreground) 14%, transparent);
+}
+
+@keyframes pixel-hand-nudge {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: 1px -1px;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .pixel-harness-hand {
+    animation: pixel-hand-nudge 1.6s steps(2, end) infinite;
+  }
+
+  .pixel-harness-hand:hover,
+  .pixel-harness-hand:focus-visible {
+    animation: none;
+  }
+}
+
+/* Entrada escalonada estilo videojuego (pasos duros, sin blink a vacío) */
+@keyframes pixel-enter {
+  0% {
+    opacity: 0;
+    translate: 0 8px;
+  }
+  33% {
+    opacity: 1;
+    translate: 0 8px;
+  }
+  66% {
+    opacity: 1;
+    translate: 0 3px;
+  }
+  100% {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+@keyframes pixel-enter-pop {
+  0% {
+    opacity: 0;
+    scale: 0.9;
+  }
+  50% {
+    opacity: 1;
+    scale: 1.03;
+  }
+  100% {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+@keyframes pixel-boot-bar {
+  0% {
+    width: 0%;
+  }
+  100% {
+    width: 100%;
+  }
+}
+
+.pixel-enter {
+  --pixel-delay: 0ms;
+  animation: pixel-enter 0.52s steps(4, jump-none) both;
+  animation-delay: var(--pixel-delay);
+}
+
+.pixel-enter-pop {
+  --pixel-delay: 0ms;
+  animation: pixel-enter-pop 0.48s steps(3, jump-none) both;
+  animation-delay: var(--pixel-delay);
+}
+
+@keyframes pixel-enter-fade {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.pixel-enter-fade {
+  --pixel-delay: 0ms;
+  animation: pixel-enter-fade 0.4s steps(3, jump-none) both;
+  animation-delay: var(--pixel-delay);
+}
+
+.pixel-boot {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.65rem;
+}
+
+.pixel-boot__bar {
+  position: relative;
+  height: 8px;
+  width: 11rem;
+  max-width: 100%;
+  border: 2px solid color-mix(in oklab, var(--primary) 55%, transparent);
+  background: color-mix(in oklab, var(--primary) 8%, var(--background));
+  overflow: hidden;
+}
+
+.pixel-boot__bar > span {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--primary);
+  box-shadow: inset -2px 0 0 0 color-mix(in oklab, var(--primary-deep) 70%, transparent);
+  animation: pixel-boot-bar 0.85s steps(8, jump-none) forwards;
+}
+
+.pixel-boot__label {
+  font-family: var(--font-pixel) !important;
+  font-size: 8px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pixel-enter,
+  .pixel-enter-pop,
+  .pixel-enter-fade {
+    animation: none !important;
+    opacity: 1 !important;
+    translate: none !important;
+    scale: none !important;
+  }
+
+  .pixel-boot__bar > span {
+    animation: none !important;
+    width: 100%;
+  }
+}
+
+html[data-motion="off"] .pixel-enter,
+html[data-motion="off"] .pixel-enter-pop,
+html[data-motion="off"] .pixel-enter-fade {
+  animation: none !important;
+  opacity: 1 !important;
+  translate: none !important;
+  scale: none !important;
+}
+
+html[data-motion="off"] .pixel-boot__bar > span {
+  animation: none !important;
+  width: 100%;
+}
+
 .login-flow-track {
   position: relative;
   overflow: hidden;
@@ -577,8 +2195,62 @@
   .login-drift,
   .login-drift-slow,
   .login-pulse-ring,
-  .login-flow-sweep {
+  .login-flow-sweep,
+  .login-atmosphere-core,
+  .login-atmosphere-streak {
     animation: none !important;
+  }
+}
+
+html[data-motion="off"] .login-float-a,
+html[data-motion="off"] .login-float-b,
+html[data-motion="off"] .login-float-c,
+html[data-motion="off"] .login-float-d,
+html[data-motion="off"] .login-float-e,
+html[data-motion="off"] .login-drift,
+html[data-motion="off"] .login-drift-slow,
+html[data-motion="off"] .login-pulse-ring,
+html[data-motion="off"] .login-flow-sweep,
+html[data-motion="off"] .login-atmosphere-core,
+html[data-motion="off"] .login-atmosphere-streak {
+  animation: none !important;
+}
+
+/* Skeleton / loading bones — shimmer coherente en toda la app */
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 120% 0;
+  }
+  100% {
+    background-position: -120% 0;
+  }
+}
+
+.skeleton-bone {
+  --skeleton-delay: 0ms;
+  background-color: color-mix(in oklab, var(--muted) 88%, var(--primary) 12%);
+  background-image: linear-gradient(
+    105deg,
+    transparent 0%,
+    color-mix(in oklab, var(--primary) 14%, transparent) 42%,
+    color-mix(in oklab, var(--foreground) 6%, transparent) 50%,
+    color-mix(in oklab, var(--primary) 14%, transparent) 58%,
+    transparent 100%
+  );
+  background-size: 220% 100%;
+  background-repeat: no-repeat;
+  animation: skeleton-shimmer 1.55s var(--ease-motion-soft, ease-in-out) infinite;
+  animation-delay: var(--skeleton-delay);
+  will-change: background-position;
+}
+
+html[data-motion="off"] .skeleton-bone,
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-bone {
+    animation: none !important;
+    background-image: none;
+    background-color: color-mix(in oklab, var(--muted) 90%, var(--primary) 10%);
+    will-change: auto;
   }
 }
 

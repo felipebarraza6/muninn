@@ -1,10 +1,26 @@
 import type { WorkItem, WorkItemKind, WorkPlanStatus } from "@/api/hooks/useWorkPlans";
-import { CheckCircle2, CircleDashed, Loader2, XCircle } from "lucide-react";
+import {
+  Bot,
+  CheckCircle2,
+  CircleDashed,
+  Loader2,
+  StickyNote,
+  Workflow,
+  XCircle,
+  Zap,
+  type LucideIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 import { parseJsonObject, prettyJson } from "@/lib/json";
+import {
+  extractResultArtifacts,
+  humanFileKind,
+  summarizeWorkResult,
+} from "@/lib/workResultArtifacts";
+import { cn } from "@/lib/utils";
 
 export const ITEM_KIND_LABEL: Record<WorkItemKind, string> = {
-  agent_turn: "Turno de agente",
+  agent_turn: "Agente",
   workflow: "Workflow",
   function: "Skill",
   note: "Nota",
@@ -17,10 +33,97 @@ export const ITEM_KIND_HINT: Record<WorkItemKind, string> = {
   note: "Solo deja una nota en el plan; no llama al modelo.",
 };
 
+export type ItemKindMeta = {
+  label: string;
+  shortLabel: string;
+  Icon: LucideIcon;
+  /** Chip de kind */
+  chip: string;
+  /** Nodo del flujo (círculo) */
+  node: string;
+  /** Línea del eje cuando este paso está activo / done */
+  rail: string;
+  /** Panel del paso seleccionado */
+  selectedBg: string;
+  iconWrap: string;
+};
+
+/** Paleta por rol de paso (no “azul genérico de dashboard”). */
+export const ITEM_KIND_META: Record<WorkItemKind, ItemKindMeta> = {
+  function: {
+    label: "Skill",
+    shortLabel: "Skill",
+    Icon: Zap,
+    chip: "bg-[#f59e0b]/15 text-[#fbbf24] border-[#f59e0b]/35",
+    node: "bg-[#f59e0b]/20 text-[#fbbf24] ring-1 ring-[#f59e0b]/45",
+    rail: "bg-[#f59e0b]/55",
+    selectedBg: "bg-[#f59e0b]/10 border-[#f59e0b]/40 shadow-[0_0_0_1px_rgba(245,158,11,0.12)]",
+    iconWrap: "bg-[#f59e0b]/15 text-[#fbbf24]",
+  },
+  workflow: {
+    label: "Workflow",
+    shortLabel: "Flow",
+    Icon: Workflow,
+    chip: "bg-sky-500/15 text-sky-300 border-sky-400/35",
+    node: "bg-sky-500/20 text-sky-300 ring-1 ring-sky-400/45",
+    rail: "bg-sky-400/55",
+    selectedBg: "bg-sky-500/10 border-sky-400/40 shadow-[0_0_0_1px_rgba(56,189,248,0.12)]",
+    iconWrap: "bg-sky-500/15 text-sky-300",
+  },
+  agent_turn: {
+    label: "Agente",
+    shortLabel: "Agente",
+    Icon: Bot,
+    chip: "bg-primary/15 text-primary border-primary/35",
+    node: "bg-primary/20 text-primary ring-1 ring-primary/50",
+    rail: "bg-primary/60",
+    selectedBg: "bg-primary/10 border-primary/45 shadow-[0_0_24px_-12px_rgba(45,212,191,0.55)]",
+    iconWrap: "bg-primary/15 text-primary",
+  },
+  note: {
+    label: "Nota",
+    shortLabel: "Nota",
+    Icon: StickyNote,
+    chip: "bg-stone-500/15 text-stone-300 border-stone-400/30",
+    node: "bg-stone-500/20 text-stone-300 ring-1 ring-stone-400/35",
+    rail: "bg-stone-400/40",
+    selectedBg: "bg-stone-500/10 border-stone-400/35",
+    iconWrap: "bg-stone-500/15 text-stone-300",
+  },
+};
+
+export function kindMeta(kind: string | undefined): ItemKindMeta {
+  if (kind && kind in ITEM_KIND_META) return ITEM_KIND_META[kind as WorkItemKind];
+  return ITEM_KIND_META.note;
+}
+
+export function ItemKindChip({
+  kind,
+  className,
+}: {
+  kind: string | undefined;
+  className?: string;
+}) {
+  const meta = kindMeta(kind);
+  const Icon = meta.Icon;
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium shrink-0",
+        meta.chip,
+        className,
+      )}
+    >
+      <Icon className="h-3 w-3" />
+      {meta.shortLabel}
+    </span>
+  );
+}
+
 export const BUCKETS = [
   {
     id: "inbox",
-    label: "Bandeja",
+    label: "Pendientes",
     match: (s: WorkPlanStatus) => s === "draft" || s === "scheduled" || s === "running",
   },
   { id: "done", label: "Hechos", match: (s: WorkPlanStatus) => s === "completed" },
@@ -230,12 +333,23 @@ export function extractResultView(item: WorkItem): ResultView {
 }
 
 export function itemPreview(item: WorkItem): string {
-  const view = extractResultView(item);
   if (item.error_message) return item.error_message;
-  if (view.replyText) return view.replyText;
+  const view = extractResultView(item);
+  const summary = summarizeWorkResult(item.result, view.replyText);
+  if (summary) return summary;
   if (view.workflowStatus) return `Workflow: ${view.workflowStatus}`;
   if (item.status === "done") return "Completado (sin texto de respuesta)";
   return "";
+}
+
+/** Chips cortos de archivos del resultado (Excel / PDF). */
+export function itemArtifactChips(item: WorkItem): string[] {
+  const view = extractResultView(item);
+  const arts = extractResultArtifacts(item.result, view.replyText);
+  const labels = arts
+    .filter((a) => a.kind === "document" || a.kind === "url" || a.kind === "base64")
+    .map((a) => humanFileKind(a.name, a.mime));
+  return [...new Set(labels)].slice(0, 4);
 }
 
 export function insumoPreview(item: WorkItem): string {

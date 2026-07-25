@@ -474,8 +474,8 @@ export default function Conocimiento() {
           title={q.trim() ? "Sin resultados" : "Biblioteca vacía"}
           description={
             q.trim()
-              ? "Probá otro término o limpiá el filtro de categoría."
-              : "Creá el primer documento para usarlo en agentes con RAG."
+              ? "Prueba otro término o limpia el filtro de categoría."
+              : "Crea el primer documento para usarlo en agentes con RAG."
           }
           action={
             !q.trim() ? (

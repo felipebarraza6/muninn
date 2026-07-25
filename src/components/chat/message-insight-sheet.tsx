@@ -192,7 +192,7 @@ function DocumentationSection() {
               chunk a la pregunta.
               <span className="mt-1.5 flex flex-col gap-0.5 pl-3 border-l-2 border-border text-xs">
                 <span className="text-success">≥ 70% → bueno</span>
-                <span className="text-warning">45–70% → revisá el documento</span>
+                <span className="text-warning">45–70% → revisa el documento</span>
                 <span className="text-destructive">&lt; 45% → débil</span>
               </span>
             </li>

@@ -4,7 +4,7 @@ import { isAuthenticated } from "@/lib/authSession";
 export function RequireAuth() {
   const location = useLocation();
   if (!isAuthenticated()) {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+    return <Navigate to="/entrar" replace state={{ from: location.pathname }} />;
   }
   return <Outlet />;
 }
