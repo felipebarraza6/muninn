@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Loader2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,7 +21,8 @@ import {
 } from "@/components/ui/select";
 import type { CreateWorkPlanPayload, WorkItemKind } from "@/api/hooks/useWorkPlans";
 import { apiErrorMessage } from "@/lib/apiError";
-import { fromDatetimeLocal } from "@/lib/datetime";
+import { fromDatetimeLocal, toDatetimeLocal } from "@/lib/datetime";
+import { parseJsonObject, prettyJson } from "@/lib/json";
 import {
   WORK_PLAN_TEMPLATES,
   templateAvailability,
@@ -30,6 +31,7 @@ import {
 import {
   ITEM_KIND_HINT,
   ITEM_KIND_LABEL,
+  draftFromPayload,
   newDraftItem,
   payloadFromDraft,
   type DraftItem,

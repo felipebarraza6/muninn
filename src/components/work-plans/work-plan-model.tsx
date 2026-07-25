@@ -1,6 +1,7 @@
 import type { WorkItem, WorkItemKind, WorkPlanStatus } from "@/api/hooks/useWorkPlans";
 import { CheckCircle2, CircleDashed, Loader2, XCircle } from "lucide-react";
-import { parseJsonObject } from "@/lib/json";
+import { toast } from "sonner";
+import { parseJsonObject, prettyJson } from "@/lib/json";
 
 export const ITEM_KIND_LABEL: Record<WorkItemKind, string> = {
   agent_turn: "Turno de agente",

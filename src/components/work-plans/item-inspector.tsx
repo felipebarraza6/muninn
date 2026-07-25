@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   ArrowDown,
   ArrowUp,
@@ -7,10 +8,12 @@ import {
   Loader2,
   Play,
   RotateCcw,
+  Save,
   Trash2,
   Workflow,
   XCircle,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,9 +37,11 @@ import { cn } from "@/lib/utils";
 import {
   ITEM_KIND_HINT,
   ITEM_KIND_LABEL,
+  draftFromPayload,
   extractResultView,
   extractToolCalls,
   insumoPreview,
+  payloadFromDraft,
   type DraftItem,
 } from "@/components/work-plans/work-plan-model";
 

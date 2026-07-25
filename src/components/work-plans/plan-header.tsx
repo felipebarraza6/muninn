@@ -11,6 +11,7 @@ import { fromDatetimeLocal, toDatetimeLocal } from "@/lib/datetime";
 import { parseJsonObject, prettyJson } from "@/lib/json";
 import { planStatusLabel, workPlanStatusTone } from "@/lib/workPlanStatus";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 export function PlanHeader({
   plan,

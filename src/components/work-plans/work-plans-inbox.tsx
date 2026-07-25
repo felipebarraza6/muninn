@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
+  ArrowDown,
   ArrowLeft,
+  ArrowUp,
+  Bot,
   ClipboardList,
   Loader2,
   Plus,
@@ -31,6 +34,7 @@ import {
   useWorkPlans,
   type CreateWorkPlanPayload,
   type WorkItem,
+  type WorkItemKind,
   type WorkPlan,
   type WorkPlanRunEnvelope,
   type WorkPlanStatus,
@@ -39,13 +43,16 @@ import { apiErrorDetail, apiErrorMessage, apiErrorStatus } from "@/lib/apiError"
 import { StatusChip } from "@/components/ui/status-chip";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorBanner } from "@/components/ui/error-banner";
-import { planStatusLabel, workPlanStatusTone } from "@/lib/workPlanStatus";
+import { itemStatusLabel, planStatusLabel, workPlanStatusTone } from "@/lib/workPlanStatus";
 import { cn } from "@/lib/utils";
 import { isOrganizationOwnerScope, isSuperAdmin } from "@/lib/authGuards";
 import {
   BUCKETS,
+  ITEM_KIND_LABEL,
   ItemStatusIcon,
   draftFromPayload,
+  extractResultView,
+  insumoPreview,
   itemPreview,
   newDraftItem,
   payloadFromDraft,
