@@ -281,5 +281,6 @@ export function useWorkflowExecution(id: string | undefined) {
     queryFn: () => GET<WorkflowExecution>(ENDPOINTS.workflowExecutions.detail(id!)),
     enabled: !!id,
     refetchInterval: (q) => (isExecutionLive(q.state.data?.status) ? 2500 : false),
+    refetchIntervalInBackground: false,
   });
 }

@@ -19,6 +19,7 @@ import { PageLoader } from "./components/ui/page-loader";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { PwaUpdatePrompt } from "./components/PwaUpdatePrompt";
 import { Toaster } from "./components/ui/sonner";
+import { RealtimeProvider } from "./lib/realtime";
 
 const Dashboard = lazy(() => import("./routes/index"));
 const Conversaciones = lazy(() => import("./routes/conversaciones"));
@@ -302,9 +303,11 @@ export default function App() {
         <ThemeProvider>
           <ErrorBoundary title="Error en la aplicación">
             <BrowserRouter>
-              <AppRoutes />
-              <Toaster position="top-right" />
-              <PwaUpdatePrompt />
+              <RealtimeProvider>
+                <AppRoutes />
+                <Toaster position="top-right" />
+                <PwaUpdatePrompt />
+              </RealtimeProvider>
             </BrowserRouter>
           </ErrorBoundary>
         </ThemeProvider>

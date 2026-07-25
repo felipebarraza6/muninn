@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { GET, POST, PATCH, normalizeListResponse } from "../client";
 import { ENDPOINTS } from "../endpoints/index";
 import { getActiveBranchIdInt } from "@/lib/branchStorage";
+import { POLL } from "@/lib/pollInterval";
 
 export interface Conversation {
   id: string | number;
@@ -21,7 +22,8 @@ export function useConversations(filters?: { status?: string }) {
         ENDPOINTS.conversations.list,
         { params: filters },
       ).then((data) => normalizeListResponse<Conversation>(data)),
-    refetchInterval: 10_000,
+    refetchInterval: POLL.idle,
+    refetchIntervalInBackground: false,
     staleTime: 5_000,
   });
 }
@@ -31,7 +33,8 @@ export function useConversation(id: string | undefined) {
     queryKey: ["conversations", id],
     queryFn: () => GET(ENDPOINTS.conversations.detail(id!)),
     enabled: !!id,
-    refetchInterval: 10_000,
+    refetchInterval: POLL.idle,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -74,7 +77,8 @@ export function useConversationMessages(
     queryKey: ["conversations", id, "messages"],
     queryFn: () => GET<ChatMessageResponse[]>(ENDPOINTS.conversations.messages(id!)),
     enabled: !!id,
-    refetchInterval: options?.refetchInterval ?? 10_000,
+    refetchInterval: options?.refetchInterval ?? false,
+    refetchIntervalInBackground: false,
   });
 }
 

@@ -3,23 +3,19 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChatThread } from "@/components/chat/chat-thread";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorBanner } from "@/components/ui/error-banner";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import {
   ArrowLeft,
   Bot,
-  History,
   Loader2,
   MessageSquarePlus,
   Archive,
   ArrowUpRight,
   User,
-  RefreshCw,
   Wrench,
   X,
 } from "lucide-react";
@@ -66,6 +62,7 @@ import {
   type SkillCommandOption,
 } from "@/components/chat/chat-skill-command";
 import { ChatAgentPicker } from "@/components/chat/chat-agent-picker";
+import { AgentChatHistorySheet } from "@/components/chat/agent-chat-history-sheet";
 import {
   extractPolicyTrace,
   inferPolicyTraceFromConfig,
@@ -84,6 +81,15 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { apiErrorMessage } from "@/lib/apiError";
 import { useQueryClient } from "@tanstack/react-query";
+import {
+  getCurrentUserId,
+  makeChatId,
+  normalizeAgentChatMessages,
+  previewText,
+  roleLabel,
+  type AgentChatMessage as ChatMessage,
+  type AgentChatReplyTarget as ReplyTarget,
+} from "@/lib/agentChatMessages";
 
 type AttachedSkill = {
   id: string;
@@ -97,95 +103,6 @@ type PendingSkillParams = {
   fields: Array<{ key: string; label: string; description?: string; type?: string }>;
   values: Record<string, string>;
 };
-
-interface ChatMessage {
-  id: string | number;
-  role: "user" | "agent" | "system";
-  content: string;
-  created?: string;
-  rag_sources?: unknown[];
-  tool_calls?: unknown[];
-  tool_results?: unknown[];
-  policy_trace?: unknown;
-  flow_policy_trace?: unknown;
-  policies?: unknown;
-  metadata?: Record<string, unknown> | null;
-  replyToId?: string | number;
-  replyToRole?: string;
-  replyToPreview?: string;
-  deliveryStatus?: ChatDeliveryStatus;
-}
-
-type ReplyTarget = {
-  id: string | number;
-  role: ChatMessage["role"];
-  preview: string;
-};
-
-function previewText(text: string, max = 120) {
-  const t = text.trim().replace(/\s+/g, " ");
-  if (t.length <= max) return t;
-  return `${t.slice(0, max - 1)}…`;
-}
-
-function roleLabel(role: string | undefined) {
-  const r = (role || "").toLowerCase();
-  if (r === "user") return "Tú";
-  if (r === "agent" || r === "assistant") return "Agente";
-  if (r === "system") return "Sistema";
-  return "Mensaje";
-}
-
-function makeId(prefix: string) {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function normalizeMessages(data?: ChatMessageResponse[]): ChatMessage[] {
-  if (!Array.isArray(data)) return [];
-  return data.map((m) => {
-    const meta = m.metadata && typeof m.metadata === "object" ? m.metadata : null;
-    const replyRoleRaw = String(meta?.reply_to_role || "").toLowerCase();
-    return {
-      id: m.id ?? makeId("msg"),
-      role: (m.role?.toLowerCase() === "user"
-        ? "user"
-        : m.role?.toLowerCase() === "system"
-          ? "system"
-          : "agent") as ChatMessage["role"],
-      content: m.content ?? m.text ?? m.message ?? "",
-      created: m.created_at ?? m.created ?? m.timestamp ?? m.modified,
-      rag_sources: m.rag_sources ?? m.sources,
-      tool_calls: m.tool_calls,
-      tool_results: m.tool_results,
-      policy_trace: m.policy_trace ?? meta?.policy_trace,
-      flow_policy_trace: m.flow_policy_trace ?? meta?.flow_policy_trace,
-      policies: m.policies ?? meta?.policies,
-      metadata: meta as Record<string, unknown> | null,
-      replyToId: meta?.reply_to_id,
-      replyToRole:
-        replyRoleRaw === "user"
-          ? "user"
-          : replyRoleRaw === "system"
-            ? "system"
-            : meta?.reply_to_id
-              ? "agent"
-              : undefined,
-      replyToPreview:
-        typeof meta?.reply_to_preview === "string" ? meta.reply_to_preview : undefined,
-    };
-  });
-}
-
-function getCurrentUserId(): number | undefined {
-  try {
-    const raw = localStorage.getItem("user");
-    if (!raw) return undefined;
-    const parsed = JSON.parse(raw);
-    return parsed?.id;
-  } catch {
-    return undefined;
-  }
-}
 
 interface AgentChatCoreProps {
   agentId: string;
@@ -444,7 +361,7 @@ export function AgentChatCore({
     if (!conversationId || isDraftNew || !remoteMessages) return;
     // Don't overwrite live stream data while the model is responding.
     if (isStreaming) return;
-    const next = normalizeMessages(remoteMessages);
+    const next = normalizeAgentChatMessages(remoteMessages);
     const key = JSON.stringify(next.map((m) => ({ id: m.id, content: m.content })));
     if (key === lastRemoteMessagesRef.current) return;
     lastRemoteMessagesRef.current = key;
@@ -584,7 +501,7 @@ export function AgentChatCore({
       if (agent.welcome_message) {
         setMessages([
           {
-            id: makeId("welcome"),
+            id: makeChatId("welcome"),
             role: "agent",
             content: agent.welcome_message,
             created: new Date().toISOString(),
@@ -646,7 +563,7 @@ export function AgentChatCore({
     const activeId = conversationId ?? (await ensureConversationId());
     if (!activeId) return;
 
-    const userMsgId = makeId("user");
+    const userMsgId = makeChatId("user");
     const userMsg: ChatMessage = {
       id: userMsgId,
       role: "user",
@@ -724,7 +641,7 @@ export function AgentChatCore({
             });
           },
           onToolStart: (ev) => {
-            const key = `tool-${ev.id || ev.name || makeId("tool")}`;
+            const key = `tool-${ev.id || ev.name || makeChatId("tool")}`;
             upsertStep(key, "Ejecutando skill", ev.label || ev.name || "skill", "wrench", {
               demoteActive: "non-tools",
             });
@@ -755,7 +672,7 @@ export function AgentChatCore({
                 if (sid && prev.some((m) => m.id === sid)) {
                   return prev.map((m) => (m.id === sid ? { ...m, content: textDraft } : m));
                 }
-                const id = makeId("agent-stream");
+                const id = makeChatId("agent-stream");
                 streamingMsgIdRef.current = id;
                 setStreamingMessageId(id);
                 return [
@@ -782,7 +699,7 @@ export function AgentChatCore({
           : null;
       setMessages((prev) => {
         // Conservar id del draft de stream → evita remount / salto visual al llegar final.
-        const stableId = streamId ?? data.id ?? makeId("agent");
+        const stableId = streamId ?? data.id ?? makeChatId("agent");
         const finalMsg: ChatMessage = {
           id: stableId,
           role: "agent",
@@ -834,7 +751,7 @@ export function AgentChatCore({
               return [
                 ...withSent,
                 {
-                  id: data.id ?? makeId("agent"),
+                  id: data.id ?? makeChatId("agent"),
                   role: data.sender?.toLowerCase() === "user" ? "user" : ("agent" as const),
                   content: data.message ?? data.content ?? data.text ?? "",
                   created:
@@ -1170,149 +1087,19 @@ export function AgentChatCore({
             </>
           )}
 
-          <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-            <SheetTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 shrink-0 cursor-pointer"
-                title="Historial"
-              >
-                <History className="h-4 w-4" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent
-              side="right"
-              className="w-full sm:max-w-sm p-0 bg-background flex flex-col h-full"
-            >
-              <SheetHeader className="px-4 py-4 border-b border-border/50 shrink-0 space-y-1">
-                <SheetTitle className="text-sm font-medium">Historial de prueba</SheetTitle>
-                <p className="text-[11px] text-muted-foreground font-normal">
-                  Las conversaciones solo se archivan cuando tú lo indiques.
-                </p>
-              </SheetHeader>
-              <div className="flex flex-col flex-1 min-h-0 p-3">
-                <div className="flex rounded-lg border border-border/50 p-0.5 mb-3 shrink-0">
-                  <button
-                    onClick={() => setHistoryTab("active")}
-                    className={`flex-1 text-xs font-medium py-1 rounded-md transition-colors ${
-                      historyTab === "active"
-                        ? "bg-primary text-primary-foreground"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    Activas
-                  </button>
-                  <button
-                    onClick={() => setHistoryTab("archived")}
-                    className={`flex-1 text-xs font-medium py-1 rounded-md transition-colors ${
-                      historyTab === "archived"
-                        ? "bg-primary text-primary-foreground"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    Archivadas
-                  </button>
-                </div>
-
-                <ScrollArea className="flex-1 -mx-3 px-3">
-                  {conversationsLoading ? (
-                    <div className="space-y-2">
-                      <Skeleton className="h-10 w-full" />
-                      <Skeleton className="h-10 w-full" />
-                    </div>
-                  ) : agentConversations.length === 0 ? (
-                    <div className="text-sm text-muted-foreground py-6 text-center">
-                      No hay conversaciones previas
-                    </div>
-                  ) : (
-                    <div className="space-y-1 pb-2">
-                      {agentConversations.map((conv) => {
-                        const isArchived =
-                          historyTab === "archived" ||
-                          (conv.status || "").toLowerCase().trim() === "archived" ||
-                          (conv.status || "").toLowerCase().trim() === "closed" ||
-                          (conv.status || "").toLowerCase().trim() === "inactive";
-                        return (
-                          <div
-                            key={conv.id}
-                            className={`group flex items-center gap-1 rounded-md text-sm transition-colors ${
-                              String(conv.id) === conversationId
-                                ? "bg-primary/10 text-primary"
-                                : "hover:bg-muted/50 text-foreground"
-                            }`}
-                          >
-                            <button
-                              onClick={() => handleSelectConversation(String(conv.id))}
-                              className="flex-1 text-left px-3 py-2.5 min-w-0"
-                            >
-                              <div className="flex items-center gap-2 min-w-0">
-                                <span className="font-medium truncate">
-                                  {conv.title || "Sin título"}
-                                </span>
-                                <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
-                                  #{conv.id}
-                                </span>
-                              </div>
-                              <div className="text-[11px] text-muted-foreground mt-0.5 space-y-0.5">
-                                <div className="flex flex-wrap gap-x-2 gap-y-0.5">
-                                  <span>{conv.message_count ?? 0} msgs</span>
-                                  {conv.created && (
-                                    <span title={formatDateTime(conv.created) ?? undefined}>
-                                      Inicio {formatRelative(conv.created)}
-                                    </span>
-                                  )}
-                                  {conv.modified && (
-                                    <span title={formatDateTime(conv.modified) ?? undefined}>
-                                      Act. {formatRelative(conv.modified)}
-                                    </span>
-                                  )}
-                                </div>
-                                {conv.last_message && (
-                                  <p className="truncate text-[10px] opacity-80">
-                                    {conv.last_message}
-                                  </p>
-                                )}
-                              </div>
-                            </button>
-                            {isArchived ? (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleRestoreConversation(conv.id);
-                                }}
-                                disabled={updateStatus.isPending}
-                                className="shrink-0 inline-flex items-center gap-1 px-2 py-2 text-xs text-muted-foreground hover:text-primary transition-colors cursor-pointer disabled:opacity-50"
-                                title="Restaurar"
-                              >
-                                <RefreshCw className="h-3.5 w-3.5" />
-                                <span className="hidden sm:inline">Restaurar</span>
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleArchiveConversation(conv.id);
-                                }}
-                                disabled={updateStatus.isPending}
-                                className="shrink-0 inline-flex items-center gap-1 px-2 py-2 text-xs text-muted-foreground hover:text-destructive transition-colors cursor-pointer disabled:opacity-50"
-                                title="Archivar"
-                              >
-                                <Archive className="h-3.5 w-3.5" />
-                                <span className="hidden sm:inline">Archivar</span>
-                              </button>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </ScrollArea>
-              </div>
-            </SheetContent>
-          </Sheet>
+          <AgentChatHistorySheet
+            open={sidebarOpen}
+            onOpenChange={setSidebarOpen}
+            historyTab={historyTab}
+            onHistoryTabChange={setHistoryTab}
+            conversations={agentConversations}
+            conversationsLoading={conversationsLoading}
+            conversationId={conversationId}
+            updatePending={updateStatus.isPending}
+            onSelect={handleSelectConversation}
+            onArchive={handleArchiveConversation}
+            onRestore={handleRestoreConversation}
+          />
         </div>
       </header>
 

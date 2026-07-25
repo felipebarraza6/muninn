@@ -6,12 +6,14 @@ import { cn } from "@/lib/utils";
 type ScrollAreaProps = React.ComponentPropsWithoutRef<typeof ScrollAreaPrimitive.Root> & {
   /** Callback to receive the scrollable viewport DOM element (for sticky-scroll hooks). */
   viewportRef?: (el: HTMLElement | null) => void;
+  /** Mostrar thumb Radix (por defecto oculto: scroll invisible como el resto de la app). */
+  showScrollbar?: boolean;
 };
 
 const ScrollArea = React.forwardRef<
   React.ElementRef<typeof ScrollAreaPrimitive.Root>,
   ScrollAreaProps
->(({ className, children, viewportRef, ...props }, ref) => (
+>(({ className, children, viewportRef, showScrollbar = false, ...props }, ref) => (
   <ScrollAreaPrimitive.Root
     ref={ref}
     className={cn("relative overflow-hidden", className)}
@@ -20,7 +22,7 @@ const ScrollArea = React.forwardRef<
     <ScrollAreaPrimitive.Viewport ref={viewportRef} className="h-full w-full rounded-[inherit]">
       {children}
     </ScrollAreaPrimitive.Viewport>
-    <ScrollBar />
+    {showScrollbar ? <ScrollBar /> : null}
     <ScrollAreaPrimitive.Corner />
   </ScrollAreaPrimitive.Root>
 ));

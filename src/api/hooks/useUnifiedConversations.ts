@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { GET, POST, normalizeListResponse } from "../client";
 import { ENDPOINTS } from "../endpoints/index";
 import { useActiveBranchId } from "@/hooks/useActiveBranchId";
+import { isConversationLive, POLL } from "@/lib/pollInterval";
 
 export interface UnifiedConversation {
   id: string | number;
@@ -59,7 +60,12 @@ export function useUnifiedConversations(filters?: { status?: string }) {
         ENDPOINTS.unifiedConversations.list,
         { params },
       ).then((data) => normalizeListResponse<UnifiedConversation>(data)),
-    refetchInterval: 10_000,
+    refetchInterval: (q) => {
+      const list = q.state.data ?? [];
+      const live = list.some((c) => isConversationLive(c));
+      return live ? POLL.live : POLL.idle;
+    },
+    refetchIntervalInBackground: false,
     staleTime: 5_000,
   });
 }
@@ -71,7 +77,8 @@ export function useUnifiedConversationMessages(id: string | undefined, source: s
     queryKey: [QUERY_KEY, id, "messages", params],
     queryFn: () => GET<UnifiedMessage[]>(ENDPOINTS.unifiedConversations.messages(id!), { params }),
     enabled: !!id && !!source,
-    refetchInterval: 5_000,
+    refetchInterval: POLL.messagesLive,
+    refetchIntervalInBackground: false,
   });
 }
 

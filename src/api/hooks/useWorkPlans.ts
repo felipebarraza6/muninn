@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DELETE, GET, PATCH, POST, normalizeListResponse } from "../client";
 import { ENDPOINTS } from "../endpoints/index";
+import { isWorkPlanLiveStatus, POLL } from "@/lib/pollInterval";
 
 export type WorkPlanStatus =
   | "draft"
@@ -152,7 +153,12 @@ export function useWorkPlans(filters?: { status?: string }) {
       GET<WorkPlan[] | { count: number; results: WorkPlan[] }>(ENDPOINTS.workPlans.list, {
         params: filters,
       }).then((data) => normalizeListResponse<WorkPlan>(data)),
-    refetchInterval: 10_000,
+    refetchInterval: (q) => {
+      const list = q.state.data ?? [];
+      const live = list.some((p) => isWorkPlanLiveStatus(p.status));
+      return live ? POLL.live : POLL.idle;
+    },
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -161,7 +167,9 @@ export function useWorkPlan(id: string | undefined) {
     queryKey: [KEY, id],
     queryFn: () => GET<WorkPlan>(ENDPOINTS.workPlans.detail(id!)),
     enabled: !!id,
-    refetchInterval: (q) => (q.state.data?.status === "running" ? 3_000 : 15_000),
+    refetchInterval: (q) =>
+      isWorkPlanLiveStatus(q.state.data?.status) ? POLL.detailLive : POLL.detailIdle,
+    refetchIntervalInBackground: false,
   });
 }
 
