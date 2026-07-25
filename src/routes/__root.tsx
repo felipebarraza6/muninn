@@ -14,6 +14,10 @@ import {
 import { logout } from "@/api/hooks/useAuth";
 import { BranchSwitcher } from "@/components/branch/BranchSwitcher";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import {
+  CommandPaletteProvider,
+  CommandPaletteTrigger,
+} from "@/components/command-palette";
 import { useBranchTheme } from "@/api/hooks/useBranchTheme";
 import { getStoredBranches, getStoredUser } from "@/lib/authSession";
 import {
@@ -268,6 +272,7 @@ function PageHeader() {
           </div>
         )}
 
+        <CommandPaletteTrigger />
         <ThemeToggle />
 
         <DropdownMenu>
@@ -309,35 +314,41 @@ export default function RootLayout() {
 
   if (immersive) {
     return (
-      <div
-        className={cn(
-          "flex h-dvh w-full overflow-hidden bg-background transition-opacity duration-300",
-          brandPending && "opacity-[0.97]",
-        )}
-      >
-        <main className="flex-1 min-w-0 min-h-0 overflow-hidden">
-          <Outlet />
-        </main>
-      </div>
+      <CommandPaletteProvider>
+        <div
+          className={cn(
+            "relative flex h-dvh w-full overflow-hidden bg-background transition-opacity duration-300",
+            "before:pointer-events-none before:absolute before:inset-0 before:bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,color-mix(in_oklab,var(--primary)_14%,transparent),transparent)]",
+            brandPending && "opacity-[0.97]",
+          )}
+        >
+          <main className="relative flex-1 min-w-0 min-h-0 overflow-hidden">
+            <Outlet />
+          </main>
+        </div>
+      </CommandPaletteProvider>
     );
   }
 
   return (
-    <SidebarProvider>
-      <div
-        className={cn(
-          "flex min-h-screen w-full bg-background transition-opacity duration-300",
-          brandPending && "opacity-[0.97]",
-        )}
-      >
-        <AppSidebar />
-        <SidebarInset className="flex flex-1 flex-col min-w-0">
-          <PageHeader />
-          <main className="flex-1 min-w-0">
-            <Outlet />
-          </main>
-        </SidebarInset>
-      </div>
-    </SidebarProvider>
+    <CommandPaletteProvider>
+      <SidebarProvider>
+        <div
+          className={cn(
+            "relative flex min-h-screen w-full bg-background transition-opacity duration-300",
+            "before:pointer-events-none before:absolute before:inset-0 before:bg-[radial-gradient(ellipse_90%_55%_at_12%_-10%,color-mix(in_oklab,var(--primary)_12%,transparent),transparent)]",
+            brandPending && "opacity-[0.97]",
+          )}
+        >
+          <AppSidebar />
+          <SidebarInset className="relative flex flex-1 flex-col min-w-0">
+            <PageHeader />
+            <main className="flex-1 min-w-0">
+              <Outlet />
+            </main>
+          </SidebarInset>
+        </div>
+      </SidebarProvider>
+    </CommandPaletteProvider>
   );
 }

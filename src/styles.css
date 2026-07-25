@@ -3,7 +3,7 @@
 @import "tw-animate-css";
 
 /* Muninn design system — mint accent; light/dark via `.dark` class.
- * Inter se carga desde index.html (<link>) — @import url() no puede ir tras Tailwind. */
+ * Fuentes: DM Sans (UI) + Sora (display) desde index.html. */
 
 /* Manual dark mode — https://tailwindcss.com/docs/dark-mode */
 @custom-variant dark (&:where(.dark, .dark *));
@@ -21,8 +21,8 @@
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
 
-  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-display: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-sans: "DM Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Sora", "DM Sans", system-ui, sans-serif;
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -256,7 +256,8 @@
   h4,
   .font-display {
     font-family: var(--font-display);
-    letter-spacing: -0.01em;
+    letter-spacing: -0.025em;
+    font-weight: 600;
   }
 
   /* Preferencias de UI desde theme-config (sucursal/org) */
