@@ -1,6 +1,5 @@
 /**
  * Tipos y helpers de conversaciones de la bandeja (flujo real).
- * Separados de mock-data para no acoplar la UI de inbox a fixtures.
  */
 
 export type ConversationStatus =

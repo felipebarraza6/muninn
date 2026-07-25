@@ -179,18 +179,6 @@ function getPageMeta(pathname: string, search = ""): PageMeta {
   if (pathname.startsWith("/perfil")) {
     return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Mi perfil" }] };
   }
-  if (pathname.startsWith("/campanas")) {
-    return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Campañas" }] };
-  }
-  if (pathname.startsWith("/oportunidades")) {
-    return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Oportunidades" }] };
-  }
-  if (pathname.startsWith("/reportes")) {
-    return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Reportes" }] };
-  }
-  if (pathname.startsWith("/metricas")) {
-    return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Métricas" }] };
-  }
   return { breadcrumb: [] };
 }
 

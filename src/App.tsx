@@ -205,12 +205,6 @@ function AnimatedOutlet() {
               </RequireConversations>
             }
           />
-          {/* ERP legacy: fuera del nav → home hasta producto formal */}
-          <Route path="/campanas" element={<Navigate to="/" replace />} />
-          <Route path="/campanas/:id" element={<Navigate to="/" replace />} />
-          <Route path="/oportunidades" element={<Navigate to="/" replace />} />
-          <Route path="/reportes" element={<Navigate to="/" replace />} />
-          <Route path="/metricas/:id" element={<Navigate to="/" replace />} />
         </Routes>
       </ErrorBoundary>
     </Suspense>

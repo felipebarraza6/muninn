@@ -1,22 +1,5 @@
 export { useLogin, useProfile, logout } from "./useAuth";
 export {
-  useCampaigns,
-  useCampaign,
-  useCampaignAggregates,
-  useCampaignHints,
-  useChangeCampaignStatus,
-  useDuplicateCampaign,
-} from "./useCampaigns";
-export {
-  useOpportunities,
-  useOpportunity,
-  useChangeOpportunityStage,
-  useMarkOpportunityRecovered,
-  useMarkOpportunityLost,
-  useOpportunityFollowUp,
-  useAssignOpportunity,
-} from "./useOpportunities";
-export {
   useConversations,
   useConversation,
   useConversationMessages,

@@ -45,20 +45,6 @@ export const ENDPOINTS = {
     generatePassword: (id: string | number) => `/accounts/users/${id}/generate-password/`,
     resetPassword: "/accounts/users/reset_password/",
   },
-  campaigns: {
-    list: "/campaigns/",
-    detail: (id: string) => `/campaigns/${id}/`,
-    patients: (id: string) => `/campaigns/${id}/patients/`,
-    results: (id: string) => `/campaigns/${id}/results/`,
-    changeStatus: (id: string) => `/campaigns/${id}/change_status/`,
-    duplicate: (id: string) => `/campaigns/${id}/duplicate/`,
-    aggregates: "/campaigns/aggregates/",
-    hints: "/campaigns/hints/",
-  },
-  patients: {
-    list: "/customers/clients/",
-    detail: (id: string) => `/customers/clients/${id}/`,
-  },
   conversations: {
     list: "/ai-agents/conversations/",
     detail: (id: string) => `/ai-agents/conversations/${id}/`,
@@ -77,15 +63,6 @@ export const ENDPOINTS = {
     takeControl: (id: string) => `/ai-agents/unified-conversations/${id}/take_control/`,
     release: (id: string) => `/ai-agents/unified-conversations/${id}/release/`,
     setStatus: (id: string) => `/ai-agents/unified-conversations/${id}/set_status/`,
-  },
-  opportunities: {
-    list: "/services/contracts/",
-    detail: (id: string) => `/services/contracts/${id}/`,
-    changeStage: (id: string) => `/services/contracts/${id}/change_stage/`,
-    markRecovered: (id: string) => `/services/contracts/${id}/mark_recovered/`,
-    markLost: (id: string) => `/services/contracts/${id}/mark_lost/`,
-    followUp: (id: string) => `/services/contracts/${id}/follow_up/`,
-    assign: (id: string) => `/services/contracts/${id}/assign/`,
   },
   analytics: {
     clinicDashboard: "/analytics/dashboard/clinic-dashboard/",
