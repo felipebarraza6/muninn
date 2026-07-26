@@ -54,6 +54,8 @@ const FuncionesNuevo = lazy(() => import("./routes/funciones.nuevo"));
 const FunctionDetail = lazy(() => import("./routes/funciones.$id"));
 const Conocimiento = lazy(() => import("./routes/conocimiento"));
 const ConocimientoDatos = lazy(() => import("./routes/conocimiento.datos"));
+const ConocimientoNuevo = lazy(() => import("./routes/conocimiento.nuevo"));
+const ConocimientoDetail = lazy(() => import("./routes/conocimiento.$id"));
 const EmbedChat = lazy(() => import("./routes/embed.chat.$id"));
 const ForgotPassword = lazy(() => import("./routes/forgot-password"));
 const ResetPassword = lazy(() => import("./routes/reset-password"));
@@ -71,8 +73,7 @@ const queryClient = new QueryClient({
 
 function isAuthBootPath(pathname: string) {
   return (
-    pathname === "/login" ||
-    pathname.startsWith("/login/") ||
+    pathname === "/" ||
     pathname === "/entrar" ||
     pathname.startsWith("/forgot-password") ||
     pathname.startsWith("/reset-password") ||
@@ -110,7 +111,7 @@ function NotFoundPage() {
         description="El enlace puede estar roto o la sección se movió. Revisa la URL o vuelve al inicio."
         action={
           <Button asChild size="sm">
-            <Link to="/">Ir al inicio</Link>
+            <Link to="/app">Ir al inicio</Link>
           </Button>
         }
       />
@@ -174,10 +175,26 @@ function AnimatedOutlet() {
             }
           />
           <Route
+            path="/conocimiento/nuevo"
+            element={
+              <RequireKnowledgeCatalog>
+                <ConocimientoNuevo />
+              </RequireKnowledgeCatalog>
+            }
+          />
+          <Route
             path="/conocimiento/datos"
             element={
               <RequireKnowledgeCatalog>
                 <ConocimientoDatos />
+              </RequireKnowledgeCatalog>
+            }
+          />
+          <Route
+            path="/conocimiento/:id"
+            element={
+              <RequireKnowledgeCatalog>
+                <ConocimientoDetail />
               </RequireKnowledgeCatalog>
             }
           />
@@ -280,7 +297,7 @@ function AnimatedOutlet() {
   );
 }
 
-/** Transición Jules: landing (/login) ↔ auth (/entrar). */
+/** Transición Jules: landing (/) ↔ auth (/entrar). */
 function MuninnGateLayout() {
   const location = useLocation();
   return (
@@ -306,17 +323,9 @@ function AppRoutes() {
     <Suspense fallback={<RouteFallback />}>
       <Routes>
         <Route element={<MuninnGateLayout />}>
-          <Route path="/login" element={<Login />} />
+          <Route path="/" element={<Login />} />
           <Route path="/entrar" element={<Entrar />} />
         </Route>
-        <Route
-          path="/login/:slug"
-          element={
-            <RedirectIfAuthenticated>
-              <Login />
-            </RedirectIfAuthenticated>
-          }
-        />
         <Route
           path="/forgot-password"
           element={
@@ -353,9 +362,18 @@ function AppRoutes() {
         <Route path="/embed/chat/:id" element={<EmbedChat />} />
         <Route element={<RequireAuth />}>
           <Route element={<RootLayout />}>
-            <Route path="/*" element={<AnimatedOutlet />} />
+            <Route path="/app/*" element={<AnimatedOutlet />} />
           </Route>
         </Route>
+        {/* Org-specific landing: /:slug (must be after all explicit routes) */}
+        <Route
+          path="/:slug"
+          element={
+            <RedirectIfAuthenticated>
+              <Login />
+            </RedirectIfAuthenticated>
+          }
+        />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>

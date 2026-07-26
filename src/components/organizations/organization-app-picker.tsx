@@ -92,7 +92,13 @@ export function OrganizationAppPicker({
           {selected.size} seleccionada{selected.size === 1 ? "" : "s"}
         </Badge>
         {!disabled && selected.size > 0 && (
-          <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={() => onChange([])}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() => onChange([])}
+          >
             Quitar todas
           </Button>
         )}
@@ -112,9 +118,7 @@ export function OrganizationAppPicker({
                   onClick={() => toggle(id)}
                   className={cn(
                     "w-full flex items-start gap-2.5 rounded-md border px-2.5 py-2 text-left transition-colors",
-                    on
-                      ? "border-teal-500/40 bg-teal-500/10"
-                      : "border-border/60 hover:bg-muted/40",
+                    on ? "border-teal-500/40 bg-teal-500/10" : "border-border/60 hover:bg-muted/40",
                     disabled && "opacity-60 cursor-not-allowed",
                   )}
                 >

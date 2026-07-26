@@ -54,8 +54,7 @@ export function PlanHeader({
 
   if (!plan) return null;
 
-  const progress =
-    itemCount > 0 ? Math.min(100, Math.round((doneCount / itemCount) * 100)) : 0;
+  const progress = itemCount > 0 ? Math.min(100, Math.round((doneCount / itemCount) * 100)) : 0;
 
   return (
     <div className="shrink-0 border-b border-border/40 bg-background/50 backdrop-blur-sm">
@@ -214,4 +213,3 @@ export function PlanHeader({
     </div>
   );
 }
-

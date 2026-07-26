@@ -67,8 +67,7 @@ export function resolveEffectiveTheme(
     return {
       ...apiTheme,
       primary_color: apiTheme!.primary_color?.trim() || MUNINN_DEFAULT_THEME.primary_color,
-      secondary_color:
-        apiTheme!.secondary_color?.trim() || MUNINN_DEFAULT_THEME.secondary_color,
+      secondary_color: apiTheme!.secondary_color?.trim() || MUNINN_DEFAULT_THEME.secondary_color,
       algorithm: "dark",
     };
   }

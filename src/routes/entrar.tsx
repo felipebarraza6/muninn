@@ -15,7 +15,7 @@ const GITHUB_CREDIT_LABEL = "felipebarraza6";
 
 /**
  * Auth Muninn (app default): solo form + atmósfera.
- * La landing comercial vive en /login.
+ * La landing comercial vive en /.
  */
 export default function EntrarPage() {
   const navigate = useNavigate();
@@ -29,7 +29,7 @@ export default function EntrarPage() {
     login.mutate(
       { email, password },
       {
-        onSuccess: () => navigate("/"),
+        onSuccess: () => navigate("/app"),
       },
     );
   };
@@ -67,7 +67,7 @@ export default function EntrarPage() {
             </p>
             <PitchSwap brand centered />
             <Link
-              to="/login"
+              to="/"
               className="pixel-font inline-flex text-[8px] uppercase text-muted-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
               ← Volver a Gotham

@@ -18,10 +18,7 @@ import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useCreateAgent, useUpdateAgent, type Agent } from "@/api/hooks/useAgents";
 import { useLlmModels, useLlmProviders, type LlmModel } from "@/api/hooks/useLlm";
-import {
-  MUNINN_ASSIGNABLE_ROLE_CODES,
-  MUNINN_ROLE_LABELS_ES,
-} from "@/api/hooks/useBranches";
+import { MUNINN_ASSIGNABLE_ROLE_CODES, MUNINN_ROLE_LABELS_ES } from "@/api/hooks/useBranches";
 import { agentFormSchema, type AgentFormValues } from "@/lib/schemas/agent";
 import { apiErrorMessage } from "@/lib/apiError";
 import { toast } from "sonner";

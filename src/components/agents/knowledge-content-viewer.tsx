@@ -6,6 +6,7 @@ import {
   Eye,
   Pencil,
   Plus,
+  RefreshCw,
   Save,
   Trash2,
   X,
@@ -34,12 +35,18 @@ import {
   useKnowledgeChunks,
   useUpdateKnowledge,
   isKnowledgeIndexed,
+  type ApiRefreshConfig,
   type KnowledgeType,
   type AgentKnowledge,
   type KnowledgeChunk,
 } from "@/api/hooks/useKnowledge";
 import { useAgents, type Agent } from "@/api/hooks/useAgents";
 import { KNOWLEDGE_TYPE_LABEL, parseFaqPairs, serializeFaqPairs } from "@/lib/knowledge-types";
+import {
+  KnowledgeApiRefreshSection,
+  cronLabel,
+  mappingLabel,
+} from "@/components/knowledge/knowledge-api-refresh-section";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { InlineSkeleton } from "@/components/ui/page-skeleton";
@@ -87,13 +94,17 @@ interface QAPair {
   answer: string;
 }
 
+export type { QAPair };
+
 type GridRow = Record<string, string>;
+
+export type { GridRow };
 
 function parseQAContent(content?: string): QAPair[] {
   return parseFaqPairs(content).filter((p) => p.question || p.answer);
 }
 
-function parseDataContent(content?: string): Record<string, unknown>[] {
+export function parseDataContent(content?: string): Record<string, unknown>[] {
   if (!content) return [];
   try {
     let parsed = JSON.parse(content.trim() || "[]");
@@ -130,6 +141,8 @@ function rowsToGrid(raw: Record<string, unknown>[]): { columns: string[]; rows: 
   });
   return { columns, rows };
 }
+
+export { rowsToGrid };
 
 interface FunctionContent {
   function_id?: string;
@@ -179,7 +192,7 @@ function FAQViewer({ content }: { content?: string }) {
   );
 }
 
-function DataViewer({ content }: { content?: string }) {
+export function DataViewer({ content }: { content?: string }) {
   const rows = useMemo(() => parseDataContent(content), [content]);
   const headers = useMemo(() => collectHeaders(rows), [rows]);
 
@@ -392,7 +405,7 @@ function ChunkCard({ chunk, total }: { chunk: KnowledgeChunk; total: number }) {
   );
 }
 
-function UsagePanel({
+export function UsagePanel({
   knowledgeId,
   enabled,
   usageCount,
@@ -496,7 +509,7 @@ function UsagePanel({
   );
 }
 
-function VectorsPanel({
+export function VectorsPanel({
   knowledgeId,
   enabled,
   branchId,
@@ -612,7 +625,7 @@ function VectorsPanel({
   );
 }
 
-function ContentRenderer({ doc }: { doc: AgentKnowledge }) {
+export function ContentRenderer({ doc }: { doc: AgentKnowledge }) {
   switch (doc.knowledge_type) {
     case "FAQ":
       return <FAQViewer content={doc.content} />;
@@ -625,8 +638,52 @@ function ContentRenderer({ doc }: { doc: AgentKnowledge }) {
   }
 }
 
+/** Panel solo-lectura con la config de auto-refresh (cron → API → reindex). */
+export function AutoRefreshInfoPanel({ doc }: { doc: AgentKnowledge }) {
+  const cfg = doc.api_refresh_config;
+  if (!cfg) return null;
+  const mapping = cfg.content_mapping;
+  return (
+    <section className="rounded-lg border border-primary/25 bg-primary/5 p-3 space-y-2">
+      <div className="flex items-center gap-2">
+        <RefreshCw className="h-4 w-4 text-primary shrink-0" />
+        <p className="text-sm font-medium">Auto-refresh desde API</p>
+        <Badge variant="outline" className="text-[10px] border-primary/40 text-primary">
+          {cronLabel(cfg.cron) || cfg.cron}
+        </Badge>
+      </div>
+      <dl className="grid gap-x-6 gap-y-1.5 sm:grid-cols-2 text-[12px]">
+        <div className="flex gap-1.5">
+          <dt className="text-muted-foreground shrink-0">Endpoint:</dt>
+          <dd className="font-mono truncate">{cfg.endpoint || "—"}</dd>
+        </div>
+        <div className="flex gap-1.5">
+          <dt className="text-muted-foreground shrink-0">Mapping:</dt>
+          <dd>{mappingLabel(mapping?.type) || "—"}</dd>
+        </div>
+        {mapping?.path ? (
+          <div className="flex gap-1.5">
+            <dt className="text-muted-foreground shrink-0">Path:</dt>
+            <dd className="font-mono truncate">{mapping.path}</dd>
+          </div>
+        ) : null}
+        {mapping?.columns?.length ? (
+          <div className="flex gap-1.5 sm:col-span-2">
+            <dt className="text-muted-foreground shrink-0">Columnas:</dt>
+            <dd className="font-mono truncate">{mapping.columns.join(", ")}</dd>
+          </div>
+        ) : null}
+      </dl>
+      <p className="text-[11px] text-muted-foreground leading-snug">
+        El contenido se regenera solo desde la API (ciclo de 1 h). Si no hay cambios, no se
+        re-indexa. Evita editar el contenido a mano.
+      </p>
+    </section>
+  );
+}
+
 /** Editor de tabla DATA (celdas + columnas renombrables + filas). */
-function DataEditor({
+export function DataEditor({
   columns,
   rows,
   onColumnsChange,
@@ -782,7 +839,13 @@ function DataEditor({
   );
 }
 
-function FaqEditor({ pairs, onChange }: { pairs: QAPair[]; onChange: (pairs: QAPair[]) => void }) {
+export function FaqEditor({
+  pairs,
+  onChange,
+}: {
+  pairs: QAPair[];
+  onChange: (pairs: QAPair[]) => void;
+}) {
   return (
     <div className="space-y-3">
       <div className="flex justify-end">
@@ -853,6 +916,7 @@ export function KnowledgeContentViewer({
   const [faqPairs, setFaqPairs] = useState<QAPair[]>([{ question: "", answer: "" }]);
   const [dataColumns, setDataColumns] = useState<string[]>([]);
   const [dataRows, setDataRows] = useState<GridRow[]>([]);
+  const [editApiRefresh, setEditApiRefresh] = useState<ApiRefreshConfig | null>(null);
 
   const {
     data: doc,
@@ -873,6 +937,7 @@ export function KnowledgeContentViewer({
       const docType = current.knowledge_type ?? knowledgeType;
       setEditTitle(current.title || "");
       setEditContent(current.content || "");
+      setEditApiRefresh(current.api_refresh_config ?? null);
       if (docType === "FAQ") {
         setFaqPairs(parseFaqPairs(current.content));
       }
@@ -918,6 +983,8 @@ export function KnowledgeContentViewer({
     if (isData) {
       const clean = dataRows.filter((row) => dataColumns.some((c) => (row[c] ?? "").trim()));
       if (clean.length === 0) {
+        // Con auto-refresh la tabla la genera la API en el próximo ciclo.
+        if (editApiRefresh) return doc?.content ?? "";
         toast.error("La tabla no tiene filas con datos");
         return null;
       }
@@ -930,6 +997,7 @@ export function KnowledgeContentViewer({
       );
     }
     if (!editContent.trim()) {
+      if (editApiRefresh) return doc?.content ?? "";
       toast.error("El contenido es obligatorio");
       return null;
     }
@@ -942,13 +1010,27 @@ export function KnowledgeContentViewer({
       toast.error("El título es obligatorio");
       return;
     }
+    if (editApiRefresh) {
+      if (!editApiRefresh.external_api_id) {
+        toast.error("Selecciona la External API para el auto-refresh");
+        return;
+      }
+      if (!editApiRefresh.endpoint) {
+        toast.error("Selecciona el endpoint para el auto-refresh");
+        return;
+      }
+    }
     const content = buildContent();
     if (content == null) return;
 
     update.mutate(
       {
         id: String(doc.id),
-        data: { title: editTitle.trim(), content },
+        data: {
+          title: editTitle.trim(),
+          content,
+          api_refresh_config: editApiRefresh,
+        },
         branch: branchId ?? doc.branch,
       },
       {
@@ -1003,6 +1085,15 @@ export function KnowledgeContentViewer({
                 <Badge variant="outline" className="text-[10px]">
                   {KNOWLEDGE_TYPE_LABEL[type]}
                 </Badge>
+                {doc?.api_refresh_config && !editing ? (
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] gap-1 border-primary/40 text-primary"
+                  >
+                    <RefreshCw className="h-3 w-3" />
+                    Auto-refresh
+                  </Badge>
+                ) : null}
               </div>
               <DialogDescription>
                 {editing
@@ -1086,6 +1177,14 @@ export function KnowledgeContentViewer({
                 />
               </div>
             )}
+            <div className="shrink-0 max-h-[46vh] overflow-y-auto pr-1">
+              <KnowledgeApiRefreshSection
+                value={editApiRefresh}
+                onChange={setEditApiRefresh}
+                disabled={saving}
+                branch={branchId ?? doc.branch}
+              />
+            </div>
           </div>
         ) : (
           <Tabs
@@ -1126,12 +1225,14 @@ export function KnowledgeContentViewer({
               className="flex-1 min-h-0 mt-0 overflow-hidden data-[state=inactive]:hidden"
             >
               {isData ? (
-                <div className="h-full flex flex-col p-4 pt-3">
+                <div className="h-full flex flex-col gap-3 p-4 pt-3">
+                  {doc.api_refresh_config ? <AutoRefreshInfoPanel doc={doc} /> : null}
                   <DataViewer content={doc.content} />
                 </div>
               ) : (
                 <ScrollArea className="h-full px-6 pb-6">
-                  <div className="pr-4 pt-3">
+                  <div className="pr-4 pt-3 space-y-4">
+                    {doc.api_refresh_config ? <AutoRefreshInfoPanel doc={doc} /> : null}
                     <ContentRenderer doc={doc} />
                   </div>
                 </ScrollArea>

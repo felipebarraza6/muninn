@@ -61,10 +61,7 @@ export function resolveRealtimeUrl(branchId?: string | number | null): string | 
   }
 }
 
-function invalidateForEvent(
-  qc: ReturnType<typeof useQueryClient>,
-  event: RealtimeEvent,
-) {
+function invalidateForEvent(qc: ReturnType<typeof useQueryClient>, event: RealtimeEvent) {
   switch (event.type) {
     case "conversation.updated":
     case "conversation.message":

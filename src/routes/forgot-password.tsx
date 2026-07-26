@@ -25,8 +25,8 @@ import { motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
 function loginPath(slug?: string | null, isAppDefault = false) {
-  if (slug) return `/login/${encodeURIComponent(slug)}`;
-  return isAppDefault ? "/entrar" : "/login";
+  if (slug) return `/${encodeURIComponent(slug)}`;
+  return isAppDefault ? "/entrar" : "/";
 }
 
 /** Solicitar email de recuperación (público). */

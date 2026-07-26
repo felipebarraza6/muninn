@@ -261,7 +261,7 @@ export function AppSidebar() {
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
       <SidebarHeader className="border-b border-sidebar-border group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:!px-0 group-data-[collapsible=icon]:!py-2">
         <MuninnBrand
-          to="/"
+          to="/app"
           onClick={handleNavClick}
           branchLabel={showAdmin ? null : fantasyName}
           appName={showAdmin ? "Agentes" : appName}

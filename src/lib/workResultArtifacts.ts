@@ -192,7 +192,10 @@ export function structuredResultRows(
   const period = data.period;
   if (isRecord(period)) {
     const label =
-      asString(period.label) || asString(period.period) || asString(period.month) || prettyInline(period);
+      asString(period.label) ||
+      asString(period.period) ||
+      asString(period.month) ||
+      prettyInline(period);
     rows.push({ label: "Periodo", value: label });
   } else if (asString(period)) {
     rows.push({ label: "Periodo", value: asString(period)! });
@@ -310,8 +313,7 @@ function ensureExtension(name: string, mimeOrFormat: string): string {
   if (/\.[a-z0-9]{2,5}$/i.test(name)) return name;
   const fmt = mimeOrFormat.toLowerCase();
   if (fmt.includes("pdf") || fmt === "pdf") return `${name}.pdf`;
-  if (fmt.includes("spreadsheet") || fmt.includes("xlsx") || fmt === "xlsx")
-    return `${name}.xlsx`;
+  if (fmt.includes("spreadsheet") || fmt.includes("xlsx") || fmt === "xlsx") return `${name}.xlsx`;
   if (fmt.includes("ms-excel") || fmt === "xls") return `${name}.xls`;
   if (fmt.includes("csv") || fmt === "csv") return `${name}.csv`;
   return name;
@@ -351,10 +353,7 @@ function artifactFromObject(
         : undefined);
 
   const storagePath =
-    asString(obj.filename) ||
-    asString(obj.file_name) ||
-    asString(obj.file) ||
-    asString(obj.path);
+    asString(obj.filename) || asString(obj.file_name) || asString(obj.file) || asString(obj.path);
   const rawName =
     storagePath ||
     asString(obj.name) ||
@@ -382,10 +381,7 @@ function artifactFromObject(
       documentId,
       href: mediaHref,
       mime,
-      sizeHint:
-        typeof obj.bytes === "number"
-          ? `${Math.round(obj.bytes / 1024)} KB`
-          : undefined,
+      sizeHint: typeof obj.bytes === "number" ? `${Math.round(obj.bytes / 1024)} KB` : undefined,
     };
   }
 
@@ -447,12 +443,7 @@ const NESTED_FILE_KEYS = new Set([
   "nodes",
 ]);
 
-function walkForArtifacts(
-  value: unknown,
-  out: ResultArtifact[],
-  depth: number,
-  hintKey = "",
-) {
+function walkForArtifacts(value: unknown, out: ResultArtifact[], depth: number, hintKey = "") {
   if (value == null || depth > 8) return;
 
   if (typeof value === "string") {
@@ -535,10 +526,7 @@ function walkForArtifacts(
 }
 
 /** Escanea result del ítem y el texto principal. */
-export function extractResultArtifacts(
-  rawResult: unknown,
-  replyText = "",
-): ResultArtifact[] {
+export function extractResultArtifacts(rawResult: unknown, replyText = ""): ResultArtifact[] {
   const out: ResultArtifact[] = [];
   walkForArtifacts(rawResult, out, 0);
 
@@ -683,9 +671,7 @@ async function downloadDocumentArtifact(artifact: ResultArtifact) {
     }
   }
 
-  throw new Error(
-    errors.filter(Boolean).join(" · ") || "No se pudo descargar el archivo",
-  );
+  throw new Error(errors.filter(Boolean).join(" · ") || "No se pudo descargar el archivo");
 }
 
 /** Resuelve URL de media/API para preview o descarga. */
@@ -724,7 +710,11 @@ export function artifactPreviewKind(
   ) {
     return "text";
   }
-  if (kind === "excel" || artifact.mime.includes("spreadsheet") || artifact.mime.includes("excel")) {
+  if (
+    kind === "excel" ||
+    artifact.mime.includes("spreadsheet") ||
+    artifact.mime.includes("excel")
+  ) {
     return "office";
   }
   return "other";

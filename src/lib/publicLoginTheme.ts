@@ -136,8 +136,7 @@ export function flattenPublicLoginTheme(theme: PublicLoginThemeResponse) {
   const b = theme.branding;
   const prefs = theme.ui_preferences;
   const socialLinks = normalizePublicSocialLinks(theme.social_links ?? b?.social_links ?? null);
-  const showSponsors =
-    theme.show_sponsor_logos !== false && b?.login?.show_sponsor_logos !== false;
+  const showSponsors = theme.show_sponsor_logos !== false && b?.login?.show_sponsor_logos !== false;
   const sponsors = normalizePublicSponsors(
     theme.enabled_sponsors ?? theme.sponsors ?? b?.login?.sponsors ?? null,
   );
@@ -199,9 +198,7 @@ function normalizePublicSocialLinks(
     .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
 }
 
-function normalizePublicSponsors(
-  raw: PublicSponsor[] | null | undefined,
-): PublicSponsor[] {
+function normalizePublicSponsors(raw: PublicSponsor[] | null | undefined): PublicSponsor[] {
   if (!Array.isArray(raw) || raw.length === 0) return [];
   return [...raw]
     .filter((s) => s && (s.logo_url?.trim() || s.name?.trim()))

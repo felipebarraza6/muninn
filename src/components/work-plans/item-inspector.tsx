@@ -97,7 +97,15 @@ export function ItemInspector({
     const next = item.status === "pending" || item.status === "queued" ? "insumos" : "resultado";
     setTab(next);
     setEditingInsumos(item.status === "pending" || item.status === "queued");
-  }, [item.id, item.title, item.kind, item.payload, item.modified, item.status, item.assigned_agent]);
+  }, [
+    item.id,
+    item.title,
+    item.kind,
+    item.payload,
+    item.modified,
+    item.status,
+    item.assigned_agent,
+  ]);
 
   const view = extractResultView(item);
   const resultObj =
@@ -671,4 +679,3 @@ export function KindFields({
     </div>
   );
 }
-

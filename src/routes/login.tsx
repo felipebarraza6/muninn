@@ -64,7 +64,7 @@ export default function Login() {
     login.mutate(
       { email, password },
       {
-        onSuccess: () => navigate("/"),
+        onSuccess: () => navigate("/app"),
       },
     );
   };

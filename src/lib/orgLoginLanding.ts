@@ -3,12 +3,7 @@
  * el login org cubre toda la organización).
  */
 
-export type OrgLoginCapabilityId =
-  | "agents"
-  | "channels"
-  | "apps"
-  | "conversations"
-  | "team";
+export type OrgLoginCapabilityId = "agents" | "channels" | "apps" | "conversations" | "team";
 
 export type OrgLoginCapability = {
   id: OrgLoginCapabilityId;

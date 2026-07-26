@@ -390,4 +390,3 @@ export function newDraftItem(partial?: Partial<DraftItem>): DraftItem {
     ...partial,
   };
 }
-

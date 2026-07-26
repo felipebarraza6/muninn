@@ -20,7 +20,7 @@ export function AccessDenied({ section }: { section?: string }) {
         }
         action={
           <Button asChild size="sm">
-            <Link to="/">Ir al inicio</Link>
+            <Link to="/app">Ir al inicio</Link>
           </Button>
         }
       />

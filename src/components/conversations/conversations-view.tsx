@@ -158,13 +158,7 @@ export function ConversationsView() {
   const analysisOnly = !canInterveneInConversations();
   const isPlatformAnalysis = isSuperAdmin();
 
-  const {
-    data: apiConvos = [],
-    isLoading,
-    error,
-    refetch,
-    isFetching,
-  } = useUnifiedConversations();
+  const { data: apiConvos = [], isLoading, error, refetch, isFetching } = useUnifiedConversations();
   const takeControlMutation = useTakeControlUnifiedConversation();
   const releaseMutation = useReleaseConversation();
   const setStatusMutation = useSetUnifiedConversationStatus();
@@ -265,7 +259,7 @@ export function ConversationsView() {
           setMobileView("list");
           return;
         }
-        navigate("/");
+        navigate("/app");
         return;
       }
       if (e.key !== "j" && e.key !== "k" && e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
@@ -301,8 +295,7 @@ export function ConversationsView() {
         });
         toast.success("Tomaste control de la conversación");
       },
-      onError: (e) =>
-        toast.error(apiErrorMessage(e, "Error al tomar control de la conversación")),
+      onError: (e) => toast.error(apiErrorMessage(e, "Error al tomar control de la conversación")),
     });
   };
 
@@ -319,8 +312,7 @@ export function ConversationsView() {
         });
         toast.success("Control devuelto al agente IA");
       },
-      onError: (e) =>
-        toast.error(apiErrorMessage(e, "Error al devolver el control al agente")),
+      onError: (e) => toast.error(apiErrorMessage(e, "Error al devolver el control al agente")),
     });
   };
 
@@ -439,7 +431,7 @@ export function ConversationsView() {
           className="h-8 shrink-0 gap-1.5 px-2 text-muted-foreground hover:text-foreground"
           asChild
         >
-          <Link to="/" title="Volver (Esc)">
+          <Link to="/app" title="Volver (Esc)">
             <ArrowLeft className="h-4 w-4" />
             <span className="text-xs font-medium">Volver</span>
           </Link>

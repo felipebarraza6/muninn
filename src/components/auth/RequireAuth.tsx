@@ -11,7 +11,7 @@ export function RequireAuth() {
 
 export function RedirectIfAuthenticated({ children }: { children: React.ReactNode }) {
   if (isAuthenticated()) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/app" replace />;
   }
   return <>{children}</>;
 }

@@ -16,6 +16,25 @@ export type KnowledgeType =
   | "CODE"
   | "CUSTOM";
 
+export type ApiRefreshMappingType = "json_to_table" | "raw_string" | "title_and_body" | "json_path";
+
+export interface ApiRefreshContentMapping {
+  type: ApiRefreshMappingType;
+  /** Ruta dentro del JSON response (json_path / json_to_table). Ej: "data.products". */
+  path?: string;
+  /** Columnas a mostrar (solo json_to_table). */
+  columns?: string[];
+}
+
+export interface ApiRefreshConfig {
+  external_api_id: string;
+  /** Key del endpoint dentro de ExternalAPI.endpoints. Ej: "get_products". */
+  endpoint: string;
+  /** Metadata de frecuencia (backend ejecuta cada 1h). Ej: "0 *\/6 * * *". */
+  cron: string;
+  content_mapping: ApiRefreshContentMapping;
+}
+
 export interface AgentKnowledge {
   id: string;
   title: string;
@@ -42,6 +61,7 @@ export interface AgentKnowledge {
   branch?: number | string | null;
   created?: string;
   modified?: string;
+  api_refresh_config?: ApiRefreshConfig | null;
 }
 
 export interface KnowledgeCategory {

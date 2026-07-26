@@ -108,7 +108,9 @@ export function WorkflowNodePalette({
             </li>
           ))}
           {items.length === 0 ? (
-            <li className="px-2 py-6 text-center text-[11px] text-muted-foreground">Sin resultados</li>
+            <li className="px-2 py-6 text-center text-[11px] text-muted-foreground">
+              Sin resultados
+            </li>
           ) : null}
         </ul>
       </ScrollArea>

@@ -347,10 +347,7 @@ export function mergeSlotSuggestions(existing: SlotDraft[], suggested: SlotDraft
 }
 
 /** Cuántas sugerencias aún no están cubiertas por los slots actuales. */
-export function countMissingSlotSuggestions(
-  existing: SlotDraft[],
-  suggested: SlotDraft[],
-): number {
+export function countMissingSlotSuggestions(existing: SlotDraft[], suggested: SlotDraft[]): number {
   return suggested.filter((s) => !slotAlreadyCovered(existing, s)).length;
 }
 

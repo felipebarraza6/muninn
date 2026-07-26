@@ -35,8 +35,7 @@ export function AppIcon({
   }, [primary]);
 
   const fallback = primary ? faviconFallback(primary) : null;
-  const resolved =
-    phase === "fallback" ? fallback || "" : phase === "primary" ? primary : "";
+  const resolved = phase === "fallback" ? fallback || "" : phase === "primary" ? primary : "";
 
   const sizeCls =
     size === "lg"

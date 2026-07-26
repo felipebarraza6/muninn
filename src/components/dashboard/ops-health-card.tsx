@@ -46,7 +46,10 @@ export function OpsHealthCard() {
       </CardHeader>
       <CardContent className="space-y-3">
         <ul className="space-y-1.5 text-sm">
-          <CheckRow ok={Boolean(checklist.ready_to_chat)} label="Listo para chatear (LLM + agente)" />
+          <CheckRow
+            ok={Boolean(checklist.ready_to_chat)}
+            label="Listo para chatear (LLM + agente)"
+          />
           <CheckRow
             ok={Boolean(checklist.has_bidirectional_channel)}
             label="Canal bidireccional activo"

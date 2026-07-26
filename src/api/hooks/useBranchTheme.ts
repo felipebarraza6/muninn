@@ -300,9 +300,7 @@ export function useResolvePublicLoginTheme(slug?: string | null) {
   const raw = query.data ?? null;
   const flat = useMemo(() => (raw ? flattenPublicLoginTheme(raw) : null), [raw]);
   // Con slug: nunca pitch Muninn mientras carga (evita flash crow→org).
-  const isAppDefault = query.isLoading
-    ? !slug
-    : !raw || !hasUsablePublicBranding(raw);
+  const isAppDefault = query.isLoading ? !slug : !raw || !hasUsablePublicBranding(raw);
 
   const effectiveTheme = useMemo(() => {
     if (isAppDefault) {

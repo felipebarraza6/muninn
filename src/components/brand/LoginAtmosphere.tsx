@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useReducedMotion } from "framer-motion";
 import { PixelCityLayers } from "@/components/brand/PixelCityLayers";
-import { PixelRainCityScene } from "@/components/brand/PixelRainCity";
+import { PixelNordicScene } from "@/components/brand/PixelNordicScene";
 import { GOTHAM_USE_STATIC_LAYERS } from "@/lib/gothamAssets";
 import { cn } from "@/lib/utils";
 
@@ -162,7 +162,7 @@ export function LoginAtmosphere({
       );
     }
     return (
-      <PixelRainCityScene
+      <PixelNordicScene
         className={className ?? "absolute inset-0"}
         parallax={parallax}
         mood={mood}

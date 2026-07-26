@@ -1,8 +1,5 @@
 import { useMemo } from "react";
-import {
-  useOrganizationRoleApps,
-  useOrganizations,
-} from "@/api/hooks/useBranches";
+import { useOrganizationRoleApps, useOrganizations } from "@/api/hooks/useBranches";
 import { getStoredBranches } from "@/lib/authSession";
 import {
   getAssignmentRoleCode,
@@ -38,9 +35,11 @@ export function useDesignatedStoreAppIds(): {
     return null;
   }, [ownedIds, orgs]);
 
-  const { data: roleApps, isLoading: roleLoading, isError } = useOrganizationRoleApps(
-    isSA ? null : orgId,
-  );
+  const {
+    data: roleApps,
+    isLoading: roleLoading,
+    isError,
+  } = useOrganizationRoleApps(isSA ? null : orgId);
 
   const userRoles = useMemo(() => {
     const roles = new Set<string>();

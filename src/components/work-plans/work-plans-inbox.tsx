@@ -105,7 +105,7 @@ export function WorkPlansInbox() {
         setInspectorOpen(false);
         return;
       }
-      navigate("/");
+      navigate("/app");
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -257,7 +257,7 @@ export function WorkPlansInbox() {
           onRetry={() => void refetch()}
         />
         <Button variant="outline" size="sm" asChild>
-          <Link to="/">Volver</Link>
+          <Link to="/app">Volver</Link>
         </Button>
       </div>
     );
@@ -320,7 +320,7 @@ export function WorkPlansInbox() {
           className="h-8 shrink-0 gap-1.5 px-2 text-muted-foreground hover:text-foreground"
           asChild
         >
-          <Link to="/" title="Volver (Esc)">
+          <Link to="/app" title="Volver (Esc)">
             <ArrowLeft className="h-4 w-4" />
             <span className="text-xs font-medium">Volver</span>
           </Link>

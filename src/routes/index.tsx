@@ -1,8 +1,5 @@
 import type { ComponentType } from "react";
-import {
-  getHomeDashboardKind,
-  type HomeDashboardKind,
-} from "@/lib/authGuards";
+import { getHomeDashboardKind, type HomeDashboardKind } from "@/lib/authGuards";
 import { PlatformHome } from "@/components/dashboard/platform-home";
 import { OrganizationHome } from "@/components/dashboard/organization-home";
 import { BusinessHome } from "@/components/dashboard/business-home";

@@ -268,11 +268,9 @@ export type ResetPasswordConfirmPayload = {
 export function useResetPasswordConfirm() {
   return useMutation({
     mutationFn: (data: ResetPasswordConfirmPayload) =>
-      POST<{ message?: string; error?: string }>(
-        ENDPOINTS.auth.resetPasswordConfirm,
-        data,
-        { skipBranchHeader: true },
-      ),
+      POST<{ message?: string; error?: string }>(ENDPOINTS.auth.resetPasswordConfirm, data, {
+        skipBranchHeader: true,
+      }),
   });
 }
 

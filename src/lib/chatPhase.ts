@@ -30,12 +30,7 @@ export function deriveChatPhase(input: {
   if (input.isStreaming) return "streaming";
   if (input.sendPending) return "awaiting_model";
   if (!input.initialized && input.conversationsLoading) return "resolving_thread";
-  if (
-    input.conversationId &&
-    !input.isDraftNew &&
-    input.messagesLoading &&
-    !input.hasMessages
-  ) {
+  if (input.conversationId && !input.isDraftNew && input.messagesLoading && !input.hasMessages) {
     return "loading_history";
   }
   return "idle";

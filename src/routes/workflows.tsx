@@ -100,7 +100,7 @@ export default function WorkflowsPage() {
       if (e.key !== "Escape") return;
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
-      navigate("/");
+      navigate("/app");
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -142,7 +142,7 @@ export default function WorkflowsPage() {
           message={apiErrorMessage(error, "No se pudieron cargar los workflows")}
         />
         <Button variant="outline" asChild>
-          <Link to="/">Volver</Link>
+          <Link to="/app">Volver</Link>
         </Button>
       </div>
     );
@@ -157,7 +157,7 @@ export default function WorkflowsPage() {
           className="h-8 shrink-0 gap-1.5 px-2 text-muted-foreground hover:text-foreground"
           asChild
         >
-          <Link to="/" title="Volver (Esc)">
+          <Link to="/app" title="Volver (Esc)">
             <ArrowLeft className="h-4 w-4" />
             <span className="text-xs font-medium">Volver</span>
           </Link>
@@ -516,7 +516,9 @@ function WorkflowPreview({
     setName(detail.name || "");
     setDescription(detail.description || "");
     setTriggerType(detail.trigger_type || "manual");
-    setTriggerConfig(draftFromTriggerConfig(detail.trigger_type || "manual", detail.trigger_config));
+    setTriggerConfig(
+      draftFromTriggerConfig(detail.trigger_type || "manual", detail.trigger_config),
+    );
     setStatus(detail.status || "draft");
   }, [detail]);
 

@@ -21,7 +21,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { ExternalAPIEndpoint } from "@/api/hooks/useExternalAPIs";
-import { HTTP_METHODS, parseJsonObject, parseJsonObjectOrArray, prettyJson } from "@/lib/external-api";
+import {
+  HTTP_METHODS,
+  parseJsonObject,
+  parseJsonObjectOrArray,
+  prettyJson,
+} from "@/lib/external-api";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 

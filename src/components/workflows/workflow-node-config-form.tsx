@@ -32,15 +32,7 @@ function num(v: unknown, fallback: number): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
-function Field({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  children: ReactNode;
-}) {
+function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
     <div className="space-y-1">
       <Label className="text-[10px] text-muted-foreground">{label}</Label>
@@ -255,10 +247,7 @@ export function WorkflowNodeConfigForm({ nodeType, config, onChange }: Props) {
     return (
       <div className="space-y-2.5">
         <Field label="Acción">
-          <Select
-            value={actionName}
-            onValueChange={(v) => patch({ action_name: v, action: v })}
-          >
+          <Select value={actionName} onValueChange={(v) => patch({ action_name: v, action: v })}>
             <SelectTrigger className="h-8 text-xs">
               <SelectValue />
             </SelectTrigger>
@@ -341,10 +330,7 @@ export function WorkflowNodeConfigForm({ nodeType, config, onChange }: Props) {
       <div className="space-y-2.5">
         <div className="grid grid-cols-[88px_1fr] gap-2">
           <Field label="Método">
-            <Select
-              value={str(config.method, "GET")}
-              onValueChange={(v) => patch({ method: v })}
-            >
+            <Select value={str(config.method, "GET")} onValueChange={(v) => patch({ method: v })}>
               <SelectTrigger className="h-8 text-xs">
                 <SelectValue />
               </SelectTrigger>
@@ -394,9 +380,7 @@ export function WorkflowNodeConfigForm({ nodeType, config, onChange }: Props) {
         <Field label="App externa">
           <Select
             value={selectedApiId || undefined}
-            onValueChange={(v) =>
-              patch({ external_api_id: v, api_id: v, endpoint_key: "" })
-            }
+            onValueChange={(v) => patch({ external_api_id: v, api_id: v, endpoint_key: "" })}
           >
             <SelectTrigger className="h-8 text-xs">
               <SelectValue placeholder="Elige una app" />
@@ -429,10 +413,7 @@ export function WorkflowNodeConfigForm({ nodeType, config, onChange }: Props) {
           </Select>
         </Field>
         <Field label="Método">
-          <Select
-            value={str(config.method, "GET")}
-            onValueChange={(v) => patch({ method: v })}
-          >
+          <Select value={str(config.method, "GET")} onValueChange={(v) => patch({ method: v })}>
             <SelectTrigger className="h-8 text-xs">
               <SelectValue />
             </SelectTrigger>
@@ -454,10 +435,7 @@ export function WorkflowNodeConfigForm({ nodeType, config, onChange }: Props) {
       <div className="space-y-2.5">
         <div className="grid grid-cols-[88px_1fr] gap-2">
           <Field label="Método">
-            <Select
-              value={str(config.method, "POST")}
-              onValueChange={(v) => patch({ method: v })}
-            >
+            <Select value={str(config.method, "POST")} onValueChange={(v) => patch({ method: v })}>
               <SelectTrigger className="h-8 text-xs">
                 <SelectValue />
               </SelectTrigger>

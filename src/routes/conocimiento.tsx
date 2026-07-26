@@ -2,11 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   CheckCircle2,
+  Eye,
   FileSpreadsheet,
   Loader2,
   MoreHorizontal,
   Pencil,
   Plus,
+  RefreshCw,
   RotateCcw,
   Search,
   Trash2,
@@ -48,8 +50,6 @@ import {
   type AgentKnowledge,
 } from "@/api/hooks/useKnowledge";
 import { useAgents } from "@/api/hooks/useAgents";
-import { KnowledgeContentViewer } from "@/components/agents/knowledge-content-viewer";
-import { KnowledgeCreateDialog } from "@/components/knowledge/knowledge-create-dialog";
 import { knowledgeCardPreview, knowledgeTypeLabel, knowledgeTypeMeta } from "@/lib/knowledge-types";
 import { toast } from "sonner";
 import { apiErrorMessage } from "@/lib/apiError";
@@ -75,17 +75,47 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { cronLabel, mappingLabel } from "@/components/knowledge/knowledge-api-refresh-section";
 
 const ALL_CATEGORIES = "__all__";
+
+function AutoRefreshBadge({ doc }: { doc: AgentKnowledge }) {
+  const cfg = doc.api_refresh_config;
+  if (!cfg) return null;
+  return (
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Badge
+            variant="outline"
+            className="text-[10px] gap-1 font-normal border-primary/35 text-primary"
+          >
+            <RefreshCw className="h-3 w-3" />
+            Auto
+          </Badge>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-[260px]">
+          <p className="font-medium">Auto-refresh desde API</p>
+          <p className="text-[11px] opacity-90">
+            {cfg.endpoint || "—"} · {cronLabel(cfg.cron) || cfg.cron}
+          </p>
+          {cfg.content_mapping?.type ? (
+            <p className="text-[11px] opacity-75">
+              Mapping: {mappingLabel(cfg.content_mapping.type)}
+            </p>
+          ) : null}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
 
 type PendingAction =
   | { type: "deactivate"; doc: AgentKnowledge }
   | { type: "hard"; doc: AgentKnowledge };
 
-type CategoryDialog =
-  | { type: "rename"; name: string }
-  | { type: "delete"; name: string }
-  | null;
+type CategoryDialog = { type: "rename"; name: string } | { type: "delete"; name: string } | null;
 
 function KnowledgeCard({
   doc,
@@ -173,6 +203,7 @@ function KnowledgeCard({
                 Indexado
               </Badge>
             )}
+            <AutoRefreshBadge doc={doc} />
           </div>
         </div>
       </div>
@@ -182,13 +213,12 @@ function KnowledgeCard({
       </p>
 
       <div className="mt-4 flex flex-wrap items-center gap-1 border-t border-border/60 pt-3">
-        <KnowledgeContentViewer
-          knowledgeId={String(doc.id)}
-          title={doc.title}
-          knowledgeType={doc.knowledge_type}
-          context="catalog"
-          branchId={doc.branch}
-        />
+        <Button variant="ghost" size="sm" className="h-8 gap-1.5" asChild>
+          <Link to={`/conocimiento/${doc.id}`}>
+            <Eye className="h-3.5 w-3.5" />
+            Ver
+          </Link>
+        </Button>
         <div className="ml-auto flex flex-wrap items-center justify-end gap-1">
           {inactive && canRestore && (
             <Button
@@ -259,7 +289,6 @@ export default function Conocimiento() {
 
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
-  const [creating, setCreating] = useState(false);
   const [pending, setPending] = useState<PendingAction | null>(null);
   const [restoringId, setRestoringId] = useState<string | null>(null);
   const [categoryDialog, setCategoryDialog] = useState<CategoryDialog>(null);
@@ -398,8 +427,10 @@ export default function Conocimiento() {
               <FileSpreadsheet className="h-4 w-4 mr-1.5" /> Datos
             </Link>
           </Button>
-          <Button size="sm" onClick={() => setCreating(true)}>
-            <Plus className="h-4 w-4 mr-1.5" /> Nuevo
+          <Button size="sm" asChild>
+            <Link to="/conocimiento/nuevo">
+              <Plus className="h-4 w-4 mr-1.5" /> Nuevo
+            </Link>
           </Button>
         </div>
       </div>
@@ -463,7 +494,8 @@ export default function Conocimiento() {
 
       {debouncedQ.length >= 2 && (searchPayload?.results?.length ?? 0) > 0 ? (
         <p className="text-[11px] text-muted-foreground -mt-1">
-          Ordenado por relevancia del índice ({searchPayload?.count ?? filtered.length} coincidencias).
+          Ordenado por relevancia del índice ({searchPayload?.count ?? filtered.length}{" "}
+          coincidencias).
         </p>
       ) : null}
 
@@ -479,8 +511,10 @@ export default function Conocimiento() {
           }
           action={
             !q.trim() ? (
-              <Button size="sm" onClick={() => setCreating(true)}>
-                <Plus className="h-4 w-4 mr-1.5" /> Nuevo
+              <Button size="sm" asChild>
+                <Link to="/conocimiento/nuevo">
+                  <Plus className="h-4 w-4 mr-1.5" /> Nuevo
+                </Link>
               </Button>
             ) : undefined
           }
@@ -683,12 +717,6 @@ export default function Conocimiento() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      <KnowledgeCreateDialog
-        open={creating}
-        onOpenChange={setCreating}
-        onCreated={() => refetch()}
-      />
     </AdminPageMotion>
   );
 }

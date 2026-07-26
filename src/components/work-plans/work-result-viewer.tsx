@@ -4,12 +4,7 @@ import { toast } from "sonner";
 import { ChatMarkdown } from "@/components/chat/chat-markdown";
 import { ChatCopyButton } from "@/components/chat/chat-copy-button";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -85,15 +80,9 @@ export function WorkResultViewer({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
 
-  const artifacts = useMemo(
-    () => extractResultArtifacts(rawResult, text),
-    [rawResult, text],
-  );
+  const artifacts = useMemo(() => extractResultArtifacts(rawResult, text), [rawResult, text]);
 
-  const structuredRows = useMemo(
-    () => structuredResultRows(rawResult, text),
-    [rawResult, text],
-  );
+  const structuredRows = useMemo(() => structuredResultRows(rawResult, text), [rawResult, text]);
 
   const textIsJson = Boolean(tryParseJsonValue(text));
   const showProse = isPlainProse(text) && !structuredRows.length;
@@ -175,8 +164,7 @@ export function WorkResultViewer({
     };
   }, [previewUrl]);
 
-  const empty =
-    !showProse && !showStructured && artifacts.length === 0 && !text.trim();
+  const empty = !showProse && !showStructured && artifacts.length === 0 && !text.trim();
 
   return (
     <div className={cn("space-y-2.5", className)}>
@@ -259,10 +247,18 @@ export function WorkResultViewer({
             ) : previewError ? (
               <p className="p-4 text-xs text-destructive">{previewError}</p>
             ) : previewArt && artifactPreviewKind(previewArt) === "pdf" && previewUrl ? (
-              <iframe title={previewArt.name} src={previewUrl} className="flex-1 w-full h-full min-h-[20rem] bg-background" />
+              <iframe
+                title={previewArt.name}
+                src={previewUrl}
+                className="flex-1 w-full h-full min-h-[20rem] bg-background"
+              />
             ) : previewArt && artifactPreviewKind(previewArt) === "image" && previewUrl ? (
               <div className="flex-1 overflow-auto p-3 flex items-center justify-center">
-                <img src={previewUrl} alt={previewArt.name} className="max-w-full max-h-full object-contain" />
+                <img
+                  src={previewUrl}
+                  alt={previewArt.name}
+                  className="max-w-full max-h-full object-contain"
+                />
               </div>
             ) : previewArt &&
               (artifactPreviewKind(previewArt) === "text" || previewArt.kind === "text") ? (

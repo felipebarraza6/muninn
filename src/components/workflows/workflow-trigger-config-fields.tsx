@@ -1,9 +1,6 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  triggerConfigNeedsFields,
-  type TriggerConfigDraft,
-} from "@/lib/workflowTriggerConfig";
+import { triggerConfigNeedsFields, type TriggerConfigDraft } from "@/lib/workflowTriggerConfig";
 
 type Props = {
   triggerType: string;

@@ -26,10 +26,7 @@ export type WorkPlanTemplate = {
   }) => CreateWorkPlanPayload | null;
 };
 
-function agentPk(
-  map: Record<string, number | string>,
-  slug: string,
-): number | string | null {
+function agentPk(map: Record<string, number | string>, slug: string): number | string | null {
   const v = map[slug];
   return v != null ? v : null;
 }
@@ -38,8 +35,7 @@ export const WORK_PLAN_TEMPLATES: WorkPlanTemplate[] = [
   {
     id: "wm-dentidesk",
     label: "Agenda Clínica WM (Dentidesk)",
-    description:
-      "Demo segura: nota + horas disponibles + próxima hora. No crea citas reales.",
+    description: "Demo segura: nota + horas disponibles + próxima hora. No crea citas reales.",
     requiresHint: "Necesitas el agente agendamiento-clinica-wm en esta sucursal.",
     agentSlugs: ["agendamiento-clinica-wm"],
     build: ({ agentIdBySlug }) => {
@@ -85,10 +81,8 @@ export const WORK_PLAN_TEMPLATES: WorkPlanTemplate[] = [
   {
     id: "sh-dga-soporte",
     label: "Ops SmartHydro: DGA + soporte",
-    description:
-      "Checklist normativa DGA + triage de soporte. Evita Nubox e IoT ensure.",
-    requiresHint:
-      "Necesitas experto-dga-smarthydro y/o soporte-smarthydro en esta sucursal.",
+    description: "Checklist normativa DGA + triage de soporte. Evita Nubox e IoT ensure.",
+    requiresHint: "Necesitas experto-dga-smarthydro y/o soporte-smarthydro en esta sucursal.",
     agentSlugs: ["experto-dga-smarthydro", "soporte-smarthydro"],
     workflowNameIncludes: "Checklist normativa DGA",
     build: ({ agentIdBySlug, workflowIdByName }) => {

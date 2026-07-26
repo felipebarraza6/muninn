@@ -677,8 +677,8 @@ export default function FuncionesNuevoPage() {
               <TabsContent value="configuracion" className="mt-0 space-y-3">
                 {appField}
                 <p className="text-xs text-muted-foreground">
-                  En el workspace defines variables, armas la expresión y pruebas la función antes de
-                  crear.
+                  En el workspace defines variables, armas la expresión y pruebas la función antes
+                  de crear.
                 </p>
               </TabsContent>
               <TabsContent value="trabajar" className="mt-0">

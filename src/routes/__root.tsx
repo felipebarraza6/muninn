@@ -14,10 +14,7 @@ import {
 import { logout } from "@/api/hooks/useAuth";
 import { BranchSwitcher } from "@/components/branch/BranchSwitcher";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
-import {
-  CommandPaletteProvider,
-  CommandPaletteTrigger,
-} from "@/components/command-palette";
+import { CommandPaletteProvider, CommandPaletteTrigger } from "@/components/command-palette";
 import { useBranchTheme } from "@/api/hooks/useBranchTheme";
 import { getStoredBranches, getStoredUser } from "@/lib/authSession";
 import {
@@ -71,6 +68,24 @@ function getPageMeta(pathname: string, search = ""): PageMeta {
           { label: "Resumen", to: "/" },
           { label: "Conocimiento", to: "/conocimiento" },
           { label: "Datos" },
+        ],
+      };
+    }
+    if (pathname === "/conocimiento/nuevo") {
+      return {
+        breadcrumb: [
+          { label: "Resumen", to: "/" },
+          { label: "Conocimiento", to: "/conocimiento" },
+          { label: "Nuevo" },
+        ],
+      };
+    }
+    if (pathname !== "/conocimiento") {
+      return {
+        breadcrumb: [
+          { label: "Resumen", to: "/" },
+          { label: "Conocimiento", to: "/conocimiento" },
+          { label: "Detalle" },
         ],
       };
     }

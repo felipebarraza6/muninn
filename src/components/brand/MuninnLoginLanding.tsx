@@ -82,11 +82,9 @@ function SectionChrome({
 
 function ChapterRule({ label }: { label: string }) {
   return (
-    <div className="login-pixel-chapter-rule" aria-hidden>
-      <span className="pixel-font text-[7px] uppercase tracking-[0.16em] text-primary/70">
-        {label}
-      </span>
-      <span className="login-pixel-chapter-rule__line" />
+    <div className="space-y-2" aria-hidden>
+      <div className="pixel-jules-divider" />
+      <p className="pixel-font text-[7px] uppercase tracking-[0.16em] text-primary/70">{label}</p>
     </div>
   );
 }
@@ -185,7 +183,7 @@ function LandingNav({ active, progress }: { active: string; progress: number }) 
       aria-label="Secciones Muninn"
       className="login-pixel-nav sticky top-3 z-20 mb-8 hidden lg:block"
     >
-      <div className="login-pixel-nav__rail border-2 border-border/60 bg-card p-1.5 shadow-[3px_3px_0_0_color-mix(in_oklab,var(--foreground)_14%,transparent)]">
+      <div className="login-pixel-nav__rail border-2 border-border/60 bg-card p-1.5 shadow-[3px_3px_0_0_color-mix(in_oklab,var(--foreground)_14%,transparent)] pixel-jules-sm">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <ul className="relative flex flex-wrap gap-1.5">
             {sectionItems.map((item) => {
@@ -195,7 +193,7 @@ function LandingNav({ active, progress }: { active: string; progress: number }) 
                   <NavLink
                     href={item.href}
                     className={cn(
-                      "pixel-font relative inline-flex min-h-8 items-center px-2.5 text-[8px] uppercase transition-colors",
+                      "pixel-font relative inline-flex min-h-8 items-center px-2.5 text-[8px] uppercase transition-colors pixel-jules-sm",
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
                       on
                         ? "border-2 border-primary/70 bg-primary/15 text-primary"
@@ -219,7 +217,7 @@ function LandingNav({ active, progress }: { active: string; progress: number }) 
           {authItem ? (
             <NavLink
               href={authItem.href}
-              className="pixel-font inline-flex min-h-8 items-center border-2 border-primary bg-primary px-3 text-[8px] uppercase text-primary-foreground hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="pixel-font inline-flex min-h-8 items-center border-2 border-primary bg-primary px-3 text-[8px] uppercase text-primary-foreground hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary pixel-jules-sm"
             >
               {authItem.label}
             </NavLink>
@@ -251,7 +249,7 @@ function MobileSectionJump({ active, progress }: { active: string; progress: num
               key={item.id}
               href={item.href}
               className={cn(
-                "pixel-font shrink-0 border-2 px-2.5 py-1.5 text-[8px] uppercase",
+                "pixel-font shrink-0 border-2 px-2.5 py-1.5 text-[8px] uppercase pixel-jules-sm",
                 isAuth
                   ? "border-primary bg-primary text-primary-foreground"
                   : on
@@ -291,7 +289,7 @@ function AtomJumpStrip({
             type="button"
             onClick={() => onSelect(a.id)}
             className={cn(
-              "pixel-font inline-flex items-center gap-1.5 border-2 px-2.5 py-1.5 text-[8px] uppercase",
+              "pixel-font inline-flex items-center gap-1.5 border-2 px-2.5 py-1.5 text-[8px] uppercase pixel-jules-sm",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
               on
                 ? "border-primary bg-primary/20 text-primary"
@@ -381,7 +379,7 @@ function AtomSections({
                 <article
                   id={`atom-${atom.id}`}
                   className={cn(
-                    "login-pixel-atom scroll-mt-28 border-2 p-3 sm:p-4",
+                    "login-pixel-atom scroll-mt-28 border-2 p-3 sm:p-4 pixel-jules-sm",
                     on
                       ? "border-primary bg-primary/10 shadow-[4px_4px_0_0_color-mix(in_oklab,var(--primary)_30%,transparent)]"
                       : "border-border/55 bg-card/80",
@@ -396,7 +394,7 @@ function AtomSections({
                   >
                     <div className="space-y-2.5">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="pixel-font inline-flex items-center gap-1.5 border-2 border-primary/50 bg-primary/15 px-2 py-1 text-[8px] uppercase text-primary">
+                        <span className="pixel-jules-badge border-primary/50 bg-primary/15 text-primary">
                           <PixelIcon icon={ATOM_ICON[atom.id]} className="h-3.5 w-3.5" />
                           {atom.role}
                         </span>
@@ -453,7 +451,7 @@ function AtomSections({
               type="button"
               onClick={() => jump(m.id)}
               className={cn(
-                "pixel-font border-2 px-2 py-1 text-[8px] uppercase",
+                "pixel-font border-2 px-2 py-1 text-[8px] uppercase pixel-jules-sm",
                 m.id === focused
                   ? "border-primary bg-primary text-primary-foreground"
                   : "border-border/50 text-muted-foreground hover:text-foreground",
@@ -501,14 +499,16 @@ function FlowSteps() {
                 type="button"
                 onClick={() => setStep(i)}
                 className={cn(
-                  "h-full w-full border-2 px-3 py-2.5 text-left transition-colors",
+                  "h-full w-full border-2 px-3 py-2.5 text-left transition-colors pixel-jules-sm",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
                   on
                     ? "border-primary bg-primary/15 shadow-[3px_3px_0_0_color-mix(in_oklab,var(--primary)_35%,transparent)]"
                     : "border-border/55 bg-card hover:border-primary/40",
                 )}
               >
-                <p className="pixel-font text-[8px] text-primary">{s.n}</p>
+                <span className="pixel-jules-step bg-primary text-primary-foreground mb-1.5">
+                  {s.n}
+                </span>
                 <p className="pixel-display text-[14px] font-semibold text-foreground">{s.title}</p>
                 <p className="pixel-display mt-1 text-[12px] leading-snug text-muted-foreground">
                   {s.line}
@@ -526,7 +526,7 @@ function FlowSteps() {
           animate={{ opacity: 1, y: 0 }}
           exit={reduceMotion ? undefined : { opacity: 0, y: -4 }}
           transition={{ duration: 0.2, ease: "linear" }}
-          className="login-pixel-readout !p-3"
+          className="login-pixel-readout !p-3 pixel-jules-sm"
         >
           <p className="pixel-font text-[8px] uppercase text-primary">Paso {current.n}</p>
           <p className="pixel-display mt-1 text-[14px] font-semibold text-foreground">
@@ -635,6 +635,96 @@ export function MuninnLoginLanding({ className, liveNonce = 0 }: Props) {
       <LandingNav active={activeSection} progress={scrollProgress} />
       <MobileSectionJump active={activeSection} progress={scrollProgress} />
 
+      {/* Code editor viewport — estilo Jules */}
+      <div className="pixel-jules-editor mb-8 overflow-hidden pixel-jules-lg hidden sm:block">
+        <div className="flex items-center gap-2 border-b-2 border-primary/20 px-3 py-1.5">
+          <span className="h-2.5 w-2.5" style={{ background: "var(--gotham-rose)" }} />
+          <span className="h-2.5 w-2.5" style={{ background: "var(--gotham-amber)" }} />
+          <span className="h-2.5 w-2.5 bg-primary" />
+          <span className="pixel-font ml-2 text-[7px] uppercase text-muted-foreground">
+            muninn.config.ts
+          </span>
+        </div>
+        <div className="flex font-mono text-[11px] leading-5">
+          <div className="pixel-jules-editor__gutter shrink-0 border-r-2 border-primary/15 py-2">
+            {["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"].map((n) => (
+              <div key={n} className="px-2">
+                {n}
+              </div>
+            ))}
+          </div>
+          <div className="flex-1 overflow-x-auto px-3 py-2">
+            <div>
+              <span className="text-primary/50">import</span>{" "}
+              <span className="text-[var(--gotham-cyan)]">{"{ Muninn }"}</span>{" "}
+              <span className="text-primary/50">from</span>{" "}
+              <span className="text-[var(--gotham-amber)]">"@muninn/harness"</span>
+            </div>
+            <div>&nbsp;</div>
+            <div className="pixel-jules-editor__line-add">
+              <span className="text-primary/40">+</span>{" "}
+              <span className="text-primary/60">const</span>{" "}
+              <span className="text-foreground">agente</span>{" "}
+              <span className="text-primary/50">=</span>{" "}
+              <span className="text-primary">Muninn</span>
+              <span className="text-foreground">.create({"{"}</span>
+            </div>
+            <div className="pixel-jules-editor__line-add">
+              <span className="text-primary/40">+</span>{" "}
+              <span className="text-[var(--gotham-cyan)]">soul</span>
+              <span className="text-foreground">: </span>
+              <span className="text-[var(--gotham-amber)]">"Asistente de operaciones"</span>
+              <span className="text-foreground">,</span>
+            </div>
+            <div className="pixel-jules-editor__line-add">
+              <span className="text-primary/40">+</span>{" "}
+              <span className="text-[var(--gotham-cyan)]">rules</span>
+              <span className="text-foreground">: [</span>
+              <span className="text-[var(--gotham-amber)]">"respetar horarios"</span>
+              <span className="text-foreground">, </span>
+              <span className="text-[var(--gotham-amber)]">"formato Chile"</span>
+              <span className="text-foreground">],</span>
+            </div>
+            <div className="pixel-jules-editor__line-add">
+              <span className="text-primary/40">+</span>{" "}
+              <span className="text-[var(--gotham-cyan)]">helpers</span>
+              <span className="text-foreground">: [</span>
+              <span className="text-[var(--gotham-amber)]">"crm"</span>
+              <span className="text-foreground">, </span>
+              <span className="text-[var(--gotham-amber)]">"email"</span>
+              <span className="text-foreground">, </span>
+              <span className="text-[var(--gotham-amber)]">"calendar"</span>
+              <span className="text-foreground">],</span>
+            </div>
+            <div className="pixel-jules-editor__line-add">
+              <span className="text-primary/40">+</span>{" "}
+              <span className="text-[var(--gotham-cyan)]">rag</span>
+              <span className="text-foreground">: </span>
+              <span className="text-[var(--gotham-amber)]">"./docs"</span>
+              <span className="text-foreground">,</span>
+            </div>
+            <div className="pixel-jules-editor__line-add">
+              <span className="text-primary/40">+</span>{" "}
+              <span className="text-[var(--gotham-cyan)]">cron</span>
+              <span className="text-foreground">: </span>
+              <span className="text-[var(--gotham-amber)]">"*/15 * * * *"</span>
+              <span className="text-foreground">,</span>
+            </div>
+            <div className="pixel-jules-editor__line-add">
+              <span className="text-primary/40">+</span>{" "}
+              <span className="text-foreground">{"}"})</span>
+            </div>
+            <div>&nbsp;</div>
+            <div>
+              <span className="text-primary/50">export default</span>{" "}
+              <span className="text-foreground">agente</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="pixel-jules-divider mb-10" />
+
       <div className="flex flex-col gap-20 lg:gap-28">
         {/* Hero — compañero primero */}
         <section
@@ -651,7 +741,7 @@ export function MuninnLoginLanding({ className, liveNonce = 0 }: Props) {
             <div className="flex flex-wrap items-center justify-center gap-3">
               <Link
                 to="/entrar"
-                className="pixel-font inline-flex items-center gap-1.5 border-2 border-primary bg-primary px-4 py-2.5 text-[9px] uppercase text-primary-foreground hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                className="pixel-font inline-flex items-center gap-1.5 border-4 border-primary bg-primary px-5 py-2.5 text-[9px] uppercase text-primary-foreground hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary pixel-jules-sm"
               >
                 {LOGIN_LANDING_CTA}
                 <span aria-hidden>→</span>
@@ -665,7 +755,7 @@ export function MuninnLoginLanding({ className, liveNonce = 0 }: Props) {
                     block: "start",
                   });
                 }}
-                className="pixel-font inline-flex items-center gap-1.5 border-2 border-border/70 bg-card/90 px-3 py-2.5 text-[9px] uppercase text-foreground hover:border-primary/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                className="pixel-font inline-flex items-center gap-1.5 border-4 border-primary/60 bg-transparent px-4 py-2.5 text-[9px] uppercase text-primary hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary pixel-jules-sm"
               >
                 {LOGIN_LANDING_SEE_LIVE}
               </button>
@@ -678,6 +768,8 @@ export function MuninnLoginLanding({ className, liveNonce = 0 }: Props) {
             </div>
           </Reveal>
         </section>
+
+        <div className="pixel-jules-divider" />
 
         {/* Contigo — presencia diaria */}
         <section
@@ -698,8 +790,10 @@ export function MuninnLoginLanding({ className, liveNonce = 0 }: Props) {
             {LOGIN_COMPANION_BEATS.map((b, i) => (
               <li key={b.id}>
                 <Reveal delayMs={i * 60}>
-                  <div className="login-pixel-readout space-y-1.5 !p-3">
-                    <p className="pixel-font text-[8px] uppercase text-primary">0{i + 1}</p>
+                  <div className="login-pixel-readout space-y-1.5 !p-3 pixel-jules-sm">
+                    <p className="pixel-jules-badge border-primary bg-primary/15 text-primary w-fit">
+                      0{i + 1}
+                    </p>
                     <p className="pixel-display text-[14px] font-semibold text-foreground">
                       {b.title}
                     </p>
@@ -712,6 +806,8 @@ export function MuninnLoginLanding({ className, liveNonce = 0 }: Props) {
             ))}
           </ul>
         </section>
+
+        <div className="pixel-jules-divider" />
 
         {/* Flujo */}
         <section
@@ -733,6 +829,8 @@ export function MuninnLoginLanding({ className, liveNonce = 0 }: Props) {
           </Reveal>
         </section>
 
+        <div className="pixel-jules-divider" />
+
         {/* Átomos — harness técnico */}
         <section
           id="atomos"
@@ -750,6 +848,8 @@ export function MuninnLoginLanding({ className, liveNonce = 0 }: Props) {
           </Reveal>
           <AtomSections focused={focusedAtom} onFocus={setFocusedAtom} />
         </section>
+
+        <div className="pixel-jules-divider" />
 
         {/* Live */}
         <section
@@ -771,6 +871,8 @@ export function MuninnLoginLanding({ className, liveNonce = 0 }: Props) {
           </Reveal>
         </section>
 
+        <div className="pixel-jules-divider" />
+
         {/* Docs + plataforma */}
         <section
           id="docs"
@@ -779,7 +881,7 @@ export function MuninnLoginLanding({ className, liveNonce = 0 }: Props) {
         >
           <ChapterRule label="Cap. 05" />
           <Reveal>
-            <div className="login-pixel-readout space-y-4 !p-4">
+            <div className="login-pixel-readout space-y-4 !p-4 pixel-jules-sm">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <SectionChrome
                   kicker="Capítulo 05"
@@ -799,8 +901,13 @@ export function MuninnLoginLanding({ className, liveNonce = 0 }: Props) {
 
               <ul className="grid gap-2 sm:grid-cols-3">
                 {LOGIN_VALUE_BLOCKS.map((b) => (
-                  <li key={b.id} className="border-2 border-border/45 bg-background/70 p-2.5">
-                    <p className="pixel-font text-[8px] uppercase text-primary">{b.title}</p>
+                  <li
+                    key={b.id}
+                    className="border-2 border-border/45 bg-background/70 p-2.5 pixel-jules-sm"
+                  >
+                    <p className="pixel-jules-badge border-primary bg-primary/15 text-primary w-fit">
+                      {b.title}
+                    </p>
                     <p className="pixel-display mt-1 text-[11px] leading-relaxed text-muted-foreground">
                       {b.line}
                     </p>
@@ -808,7 +915,7 @@ export function MuninnLoginLanding({ className, liveNonce = 0 }: Props) {
                 ))}
               </ul>
 
-              <div className="overflow-x-auto border-2 border-border/50 bg-background/80 p-3">
+              <div className="overflow-x-auto border-2 border-border/50 bg-background/80 p-3 pixel-jules-sm">
                 <p className="pixel-font mb-2 text-[8px] uppercase text-muted-foreground">
                   Mapa del harness
                 </p>
@@ -822,7 +929,7 @@ export function MuninnLoginLanding({ className, liveNonce = 0 }: Props) {
                       )}
                       <a
                         href={`#atom-${m.id}`}
-                        className="pixel-font border-2 border-primary/40 bg-primary/10 px-2 py-1 text-[8px] uppercase text-primary hover:bg-primary/20"
+                        className="pixel-jules-badge border-primary bg-primary/10 text-primary hover:bg-primary/20"
                       >
                         {m.title}
                       </a>
@@ -845,7 +952,7 @@ export function MuninnLoginLanding({ className, liveNonce = 0 }: Props) {
           <div className="pb-10">
             <Link
               to="/entrar"
-              className="pixel-font inline-flex items-center gap-1.5 border-2 border-primary bg-primary px-4 py-2.5 text-[9px] uppercase text-primary-foreground hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              className="pixel-font inline-flex items-center gap-1.5 border-4 border-primary bg-primary px-5 py-2.5 text-[9px] uppercase text-primary-foreground hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background pixel-jules-sm"
             >
               {LOGIN_LANDING_CTA}
               <span aria-hidden>→</span>

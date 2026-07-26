@@ -115,7 +115,9 @@ function SortableStep({
           "bg-background/55 backdrop-blur-sm",
           "hover:-translate-y-0.5 hover:shadow-md hover:shadow-black/20",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
-          selected ? cn(meta.selectedBg) : "border-border/40 hover:border-border/80 hover:bg-background/80",
+          selected
+            ? cn(meta.selectedBg)
+            : "border-border/40 hover:border-border/80 hover:bg-background/80",
           isDragging && "shadow-lg shadow-black/30 border-primary/40",
         )}
       >
