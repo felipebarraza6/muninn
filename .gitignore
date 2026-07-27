@@ -33,3 +33,5 @@ src/api/generated/schema.ts
 *.njsproj
 *.sln
 *.sw?
+.omo/run-continuation/
+.omo/drafts/
