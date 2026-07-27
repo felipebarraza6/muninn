@@ -41,15 +41,15 @@ export default function Configuracion() {
         </CardHeader>
         <CardContent className="text-sm">
           <p className="text-muted-foreground">Sistema de gestión conectado</p>
-          {integrations && Array.isArray(integrations) && integrations.length > 0 && (
+          {integrations && Array.isArray(integrations) && (integrations as Array<{ id?: string; name?: string }>).length > 0 ? (
             <ul className="mt-2 space-y-1">
-              {integrations.map((integration: { id?: string; name?: string }) => (
+              {(integrations as Array<{ id?: string; name?: string }>).map((integration) => (
                 <li key={integration.id ?? integration.name} className="font-medium">
                   {integration.name ?? integration.id}
                 </li>
               ))}
             </ul>
-          )}
+          ) : null}
         </CardContent>
       </Card>
     </div>

@@ -479,7 +479,7 @@ export function UsagePanel({
             {assigned.map((agent) => (
               <li key={String(agent.id)}>
                 <Link
-                  to={`/agentes/${agent.id}`}
+                  to={`/app/agentes/${agent.id}`}
                   className="flex items-center gap-2.5 rounded-lg border border-border/70 bg-background/60 px-3 py-2.5 transition-colors hover:border-primary/40 hover:bg-primary-soft/10"
                 >
                   <div className="h-8 w-8 rounded-lg bg-primary-soft text-primary flex items-center justify-center shrink-0">

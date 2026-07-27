@@ -77,12 +77,12 @@ export function OpsHealthCard() {
 
         <div className="flex flex-wrap gap-2 pt-1">
           <Button asChild size="sm" variant="outline" className="h-8">
-            <Link to="/agentes">
+            <Link to="/app/agentes">
               Agentes <ArrowRight className="h-3.5 w-3.5 ml-1" />
             </Link>
           </Button>
           <Button asChild size="sm" variant="ghost" className="h-8">
-            <Link to="/canales">Canales</Link>
+            <Link to="/app/canales">Canales</Link>
           </Button>
         </div>
       </CardContent>

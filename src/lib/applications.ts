@@ -1,7 +1,7 @@
 /** Identidad visual de “Aplicaciones” (store) — solo UI. */
 
 export const APP_STORE_LABEL = "Aplicaciones";
-export const APP_STORE_PATH = "/aplicaciones";
+export const APP_STORE_PATH = "/app/aplicaciones";
 
 const APP_ICON_PALETTES = [
   {

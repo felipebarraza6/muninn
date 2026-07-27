@@ -338,7 +338,7 @@ export function WorkPlansInbox() {
         <div className="ml-auto flex items-center gap-2">
           {showBranchFilter ? <StudioBranchFilter /> : null}
           <Button size="sm" variant="ghost" className="h-8 hidden md:inline-flex" asChild>
-            <Link to="/workflows">Workflows</Link>
+            <Link to="/app/workflows">Workflows</Link>
           </Button>
           <Button
             size="sm"

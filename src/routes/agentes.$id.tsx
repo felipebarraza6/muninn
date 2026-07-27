@@ -202,7 +202,7 @@ export default function AgentDetailPage() {
     <AdminPageMotion>
       <header className="flex flex-col sm:flex-row sm:items-center gap-3">
         <Button variant="outline" size="sm" asChild className="self-start">
-          <Link to="/agentes">
+          <Link to="/app/agentes">
             <ArrowLeft className="h-4 w-4 mr-1.5" /> Volver
           </Link>
         </Button>
@@ -302,7 +302,7 @@ export default function AgentDetailPage() {
                         {
                           onSuccess: () => {
                             toast.success("Agente desactivado");
-                            navigate("/agentes");
+                            navigate("/app/agentes");
                           },
                           onError: (e) =>
                             toast.error(apiErrorMessage(e, "No se pudo desactivar el agente")),
@@ -351,7 +351,7 @@ export default function AgentDetailPage() {
                         {
                           onSuccess: () => {
                             toast.success("Agente eliminado");
-                            navigate("/agentes");
+                            navigate("/app/agentes");
                           },
                           onError: (e) =>
                             toast.error(apiErrorMessage(e, "No se pudo eliminar el agente")),

@@ -3,11 +3,11 @@
  * para maximizar inmersión (chat Studio, bandeja, chat legacy de agente).
  */
 export function isImmersiveWorkspacePath(pathname: string): boolean {
-  if (pathname === "/chat" || pathname.startsWith("/chat/")) return true;
-  if (pathname === "/conversaciones" || pathname.startsWith("/conversaciones/")) return true;
-  if (pathname === "/planes" || pathname.startsWith("/planes/")) return true;
-  if (pathname === "/workflows" || pathname.startsWith("/workflows/")) return true;
-  // /agentes/:id/chat
-  if (/^\/agentes\/[^/]+\/chat\/?$/.test(pathname)) return true;
+  const p = pathname.replace(/^\/app\/?/, "/") || "/";
+  if (p === "/chat" || p.startsWith("/chat/")) return true;
+  if (p === "/conversaciones" || p.startsWith("/conversaciones/")) return true;
+  if (p === "/planes" || p.startsWith("/planes/")) return true;
+  if (p === "/workflows" || p.startsWith("/workflows/")) return true;
+  if (/^\/agentes\/[^/]+\/chat\/?$/.test(p)) return true;
   return false;
 }

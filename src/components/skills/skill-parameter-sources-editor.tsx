@@ -235,7 +235,7 @@ export function SkillParameterSourcesEditor({
                             Este agente no tiene documentos DATA asignados.{" "}
                             {agentId ? (
                               <Link
-                                to={`/agentes/${agentId}`}
+                                to={`/app/agentes/${agentId}`}
                                 className="text-primary underline-offset-2 hover:underline"
                               >
                                 Asigna conocimiento al agente
@@ -248,7 +248,7 @@ export function SkillParameterSourcesEditor({
                           <>
                             No hay documentos tipo DATA en esta sucursal.{" "}
                             <Link
-                              to="/conocimiento"
+                              to="/app/conocimiento"
                               className="text-primary underline-offset-2 hover:underline"
                             >
                               Crea uno en Conocimiento

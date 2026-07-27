@@ -189,7 +189,7 @@ export function OrgLoginLanding({
       />
 
       {/* safe center: centra si hay poco contenido; si desborda, alinea arriba sin cortar */}
-      <div className="relative z-[1] flex min-h-dvh flex-col justify-safe-center">
+      <div className="relative z-[1] flex min-h-dvh flex-col justify-center">
         <div className="mx-auto flex w-full max-w-[90rem] flex-col gap-8 px-4 py-8 sm:px-6 sm:py-10 lg:gap-10 lg:px-8 lg:py-12 xl:px-10">
           <header className="grid items-start gap-8 lg:grid-cols-[minmax(0,1.25fr)_minmax(22rem,28rem)] lg:gap-12 xl:gap-16">
             <motion.div

@@ -502,7 +502,7 @@ export default function FunctionDetailPage() {
     <div className="px-4 md:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto space-y-6">
       <header className="flex flex-col sm:flex-row sm:items-start gap-3">
         <Button variant="outline" size="sm" asChild className="self-start">
-          <Link to="/skills">
+          <Link to="/app/skills">
             <ArrowLeft className="h-4 w-4 mr-1.5" /> Skills
           </Link>
         </Button>
@@ -648,7 +648,7 @@ export default function FunctionDetailPage() {
                             if (r.action === "deleted") {
                               toast.success(r.message || "Skill eliminada definitivamente");
                               setDeleteOpen(false);
-                              navigate("/skills");
+                              navigate("/app/skills");
                               return;
                             }
                             toast.success(r.message || "Skill desactivada");
@@ -765,7 +765,7 @@ export default function FunctionDetailPage() {
                   instalación en{" "}
                   {fn.external_api ? (
                     <Link
-                      to={`/aplicaciones/${fn.external_api}?tab=instalacion`}
+                      to={`/app/aplicaciones/${fn.external_api}?tab=instalacion`}
                       className="text-primary underline-offset-2 hover:underline"
                     >
                       Instalación

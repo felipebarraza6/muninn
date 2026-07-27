@@ -29,11 +29,11 @@ import {
 } from "@/lib/authGuards";
 
 const QUICK_LINKS = [
-  { href: "/admin/organizaciones", labelKey: "org", icon: Building2 },
-  { href: "/admin/sucursales", label: "Sucursales", icon: Store },
-  { href: "/admin/usuarios", label: "Usuarios", icon: Users },
-  { href: "/aplicaciones", label: "Aplicaciones", icon: LayoutGrid },
-  { href: "/conversaciones", label: "Conversaciones", icon: MessageSquare },
+  { href: "/app/admin/organizaciones", labelKey: "org", icon: Building2 },
+  { href: "/app/admin/sucursales", label: "Sucursales", icon: Store },
+  { href: "/app/admin/usuarios", label: "Usuarios", icon: Users },
+  { href: "/app/aplicaciones", label: "Aplicaciones", icon: LayoutGrid },
+  { href: "/app/conversaciones", label: "Conversaciones", icon: MessageSquare },
 ] as const;
 
 /** Resumen de holding — organizador. Sin contacto ni conversaciones. */
@@ -76,7 +76,7 @@ export function OrganizationHome() {
       label: "Sucursales del holding",
       count: holdingBranches.filter((b) => b.is_active !== false).length,
       icon: Store,
-      href: "/admin/sucursales",
+      href: "/app/admin/sucursales",
       tone: "primary",
     },
     {
@@ -84,7 +84,7 @@ export function OrganizationHome() {
       label: "Usuarios",
       count: users.length,
       icon: Users,
-      href: "/admin/usuarios",
+      href: "/app/admin/usuarios",
       tone: "info",
     },
     {
@@ -92,7 +92,7 @@ export function OrganizationHome() {
       label: "Aplicaciones visibles",
       count: apis.filter((a) => a.is_active).length,
       icon: LayoutGrid,
-      href: "/aplicaciones",
+      href: "/app/aplicaciones",
       tone: "success",
     },
     {
@@ -100,7 +100,7 @@ export function OrganizationHome() {
       label: "Agentes activos",
       count: agents.filter((a) => a.is_active).length,
       icon: Bot,
-      href: "/agentes",
+      href: "/app/agentes",
       tone: "warning",
     },
     {
@@ -108,7 +108,7 @@ export function OrganizationHome() {
       label: "Canales activos",
       count: channels.filter((c) => c.is_active).length,
       icon: Share2,
-      href: "/canales",
+      href: "/app/canales",
       tone: "info",
     },
   ];
@@ -184,7 +184,7 @@ export function OrganizationHome() {
                     </p>
                   </div>
                   <Button asChild size="sm" variant="ghost">
-                    <Link to="/admin/organizaciones">Abrir</Link>
+                    <Link to="/app/admin/organizaciones">Abrir</Link>
                   </Button>
                 </div>
               ))}

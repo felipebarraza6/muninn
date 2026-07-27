@@ -15,6 +15,7 @@ import {
   Users,
   ClipboardList,
   GitBranch,
+  SquareArrowOutUpRight,
 } from "lucide-react";
 import {
   Sidebar,
@@ -55,20 +56,25 @@ type MenuItem = {
   url: string;
   icon: IconComponent;
   exact?: boolean;
+  newTab?: boolean;
+  badge?: string;
 };
+
+const APP = "/app";
 
 const resumenItem: MenuItem = {
   title: "Resumen",
-  url: "/",
+  url: APP,
   icon: LayoutDashboard,
   exact: true,
 };
 
-const canalesItem: MenuItem = { title: "Canales", url: "/canales", icon: Share2 };
+const canalesItem: MenuItem = { title: "Canales", url: `${APP}/canales`, icon: Share2 };
 const conversacionesItem: MenuItem = {
   title: "Conversaciones",
-  url: "/conversaciones",
+  url: `${APP}/conversaciones`,
   icon: MessageCircle,
+  newTab: true,
 };
 
 function buildComunicacionItems(): MenuItem[] {
@@ -79,66 +85,64 @@ function buildComunicacionItems(): MenuItem[] {
 }
 
 const baseStudioItems: MenuItem[] = [
-  { title: "Chat", url: "/chat", icon: MessageSquarePlus },
-  { title: "Agentes", url: "/agentes", icon: Bot },
-  { title: "Aplicaciones", url: "/aplicaciones", icon: LayoutGrid },
+  { title: "Chat", url: `${APP}/chat`, icon: MessageSquarePlus, newTab: true },
+  { title: "Agentes", url: `${APP}/agentes`, icon: Bot },
+  { title: "Aplicaciones", url: `${APP}/aplicaciones`, icon: LayoutGrid },
 ];
 
 function buildStudioItems(): MenuItem[] {
   const items = [...baseStudioItems];
-  // Orden: Chat → Agentes → Conocimiento → Skills → Aplicaciones
-  const agentesIdx = items.findIndex((i) => i.url === "/agentes");
+  const agentesIdx = items.findIndex((i) => i.url === `${APP}/agentes`);
   if (canAccessKnowledgeCatalog()) {
     items.splice(agentesIdx + 1, 0, {
       title: "Conocimiento",
-      url: "/conocimiento",
+      url: `${APP}/conocimiento`,
       icon: BookOpen,
     });
   }
   if (canAccessSkills()) {
-    const appsIdx = items.findIndex((i) => i.url === "/aplicaciones");
+    const appsIdx = items.findIndex((i) => i.url === `${APP}/aplicaciones`);
     items.splice(appsIdx >= 0 ? appsIdx : items.length, 0, {
       title: "Skills",
-      url: "/skills",
+      url: `${APP}/skills`,
       icon: Sparkles,
     });
   }
   return items;
 }
 
-/** OPS-agents: orquestación operativa (distinto de Studio). */
 function buildOpsItems(): MenuItem[] {
   if (!isSuperAdmin()) return [];
   return [
-    { title: "Planes", url: "/planes", icon: ClipboardList },
-    { title: "Workflows", url: "/workflows", icon: GitBranch },
+    { title: "Planes", url: `${APP}/planes`, icon: ClipboardList, newTab: true, badge: "Beta" },
+    { title: "Workflows", url: `${APP}/workflows`, icon: GitBranch, newTab: true, badge: "Beta" },
   ];
 }
 
 const adminItems: MenuItem[] = [
-  { title: "Organizaciones", url: "/admin/organizaciones", icon: Network },
-  { title: "Sucursales", url: "/admin/sucursales", icon: Building2 },
-  { title: "Usuarios", url: "/admin/usuarios", icon: Users },
-  { title: "LLM", url: "/admin/llm", icon: Cpu },
+  { title: "Organizaciones", url: `${APP}/admin/organizaciones`, icon: Network },
+  { title: "Sucursales", url: `${APP}/admin/sucursales`, icon: Building2 },
+  { title: "Usuarios", url: `${APP}/admin/usuarios`, icon: Users },
+  { title: "LLM", url: `${APP}/admin/llm`, icon: Cpu },
 ];
 
-const usersOnlyItems: MenuItem[] = [{ title: "Usuarios", url: "/admin/usuarios", icon: Users }];
+const usersOnlyItems: MenuItem[] = [{ title: "Usuarios", url: `${APP}/admin/usuarios`, icon: Users }];
 
-const llmOnlyItems: MenuItem[] = [{ title: "LLM", url: "/admin/llm", icon: Cpu }];
+const llmOnlyItems: MenuItem[] = [{ title: "LLM", url: `${APP}/admin/llm`, icon: Cpu }];
 
 function buildOrgGestionItems(): MenuItem[] {
   return [
     {
       title: getOrganizationsAdminNavLabel(),
-      url: "/admin/organizaciones",
+      url: `${APP}/admin/organizaciones`,
       icon: Network,
     },
     {
       title: getBranchesAdminNavLabel(),
-      url: "/admin/sucursales",
+      url: `${APP}/admin/sucursales`,
       icon: Building2,
     },
-    { title: "Usuarios", url: "/admin/usuarios", icon: Users },
+    { title: "Usuarios", url: `${APP}/admin/usuarios`, icon: Users },
   ];
 }
 
@@ -147,7 +151,7 @@ function buildRoleGestionItems(): MenuItem[] {
   if (canAccessBranchesAdmin()) {
     items.push({
       title: getBranchesAdminNavLabel(),
-      url: "/admin/sucursales",
+      url: `${APP}/admin/sucursales`,
       icon: Building2,
     });
   }
@@ -244,13 +248,44 @@ export function AppSidebar() {
               tooltip={item.title}
               className="relative z-[1] data-[active=true]:bg-transparent data-[active=true]:text-primary data-[active=true]:font-medium hover:bg-muted rounded-md"
             >
-              <Link to={item.url} className="flex items-center gap-2.5" onClick={handleNavClick}>
-                <item.icon
-                  className={`h-4 w-4 ${active ? "text-primary" : ""}`}
-                  strokeWidth={1.75}
-                />
-                <span className="flex-1">{item.title}</span>
-              </Link>
+              {item.newTab ? (
+                <a
+                  href={item.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2.5"
+                  title={`Abrir ${item.title} en nueva pestaña`}
+                >
+                  <item.icon
+                    className={`h-4 w-4 ${active ? "text-primary" : ""}`}
+                    strokeWidth={1.75}
+                  />
+                  <span className="flex-1">{item.title}</span>
+                  {item.badge && (
+                    <span className="rounded bg-muted-foreground/15 px-1.5 py-0.5 text-[9px] font-medium uppercase leading-none tracking-wider text-muted-foreground/80">
+                      {item.badge}
+                    </span>
+                  )}
+                  <SquareArrowOutUpRight
+                    className="h-3.5 w-3.5 text-muted-foreground/70"
+                    strokeWidth={1.75}
+                    aria-label={`Abrir ${item.title} en nueva pestaña`}
+                  />
+                </a>
+              ) : (
+                <Link to={item.url} className="flex items-center gap-2.5" onClick={handleNavClick}>
+                  <item.icon
+                    className={`h-4 w-4 ${active ? "text-primary" : ""}`}
+                    strokeWidth={1.75}
+                  />
+                  <span className="flex-1">{item.title}</span>
+                  {item.badge && (
+                    <span className="rounded bg-muted-foreground/15 px-1.5 py-0.5 text-[9px] font-medium uppercase leading-none tracking-wider text-muted-foreground/80">
+                      {item.badge}
+                    </span>
+                  )}
+                </Link>
+              )}
             </SidebarMenuButton>
           </motion.div>
         </SidebarMenuItem>

@@ -282,8 +282,8 @@ export default function FuncionesNuevoPage() {
         {
           onSuccess: (created) => {
             toast.success("Skill API creada");
-            if (created?.id) navigate(`/skills/${created.id}`);
-            else navigate("/skills");
+            if (created?.id) navigate(`/app/skills/${created.id}`);
+            else navigate("/app/skills");
           },
           onError: (err) => {
             toast.error(
@@ -324,8 +324,8 @@ export default function FuncionesNuevoPage() {
           onSuccess: (created) => {
             clearFormulaDraft();
             toast.success("Skill Matemática creada");
-            if (created?.id) navigate(`/skills/${created.id}`);
-            else navigate("/skills");
+            if (created?.id) navigate(`/app/skills/${created.id}`);
+            else navigate("/app/skills");
           },
           onError: (err) => {
             toast.error(
@@ -357,8 +357,8 @@ export default function FuncionesNuevoPage() {
       {
         onSuccess: (created) => {
           toast.success("Skill Python creada");
-          if (created?.id) navigate(`/skills/${created.id}`);
-          else navigate("/skills");
+          if (created?.id) navigate(`/app/skills/${created.id}`);
+          else navigate("/app/skills");
         },
         onError: (err) => {
           toast.error((err as { friendlyMessage?: string })?.friendlyMessage || "No se pudo crear");
@@ -488,7 +488,7 @@ export default function FuncionesNuevoPage() {
   );
 
   if (!canManage) {
-    return <Navigate to="/skills" replace />;
+    return <Navigate to="/app/skills" replace />;
   }
 
   return (
@@ -503,7 +503,7 @@ export default function FuncionesNuevoPage() {
                 className="h-6 w-6 rounded-md hover:bg-primary/10"
                 asChild
               >
-                <Link to="/skills">
+                <Link to="/app/skills">
                   <ArrowLeft className="h-4 w-4" />
                 </Link>
               </Button>
@@ -627,7 +627,7 @@ export default function FuncionesNuevoPage() {
                   <p className="text-[11px] text-muted-foreground">
                     No hay aplicaciones.{" "}
                     <Link
-                      to="/aplicaciones"
+                      to="/app/aplicaciones"
                       className="text-primary underline-offset-2 hover:underline"
                     >
                       Instalá una primero
@@ -710,7 +710,7 @@ export default function FuncionesNuevoPage() {
           )}
 
           <div className="flex flex-wrap justify-end gap-2 border-t border-border/50 pt-4">
-            <Button type="button" variant="outline" onClick={() => navigate("/skills")}>
+            <Button type="button" variant="outline" onClick={() => navigate("/app/skills")}>
               Cancelar
             </Button>
             <Button type="submit" disabled={create.isPending} className="font-semibold px-5">

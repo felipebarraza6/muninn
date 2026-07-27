@@ -1,4 +1,5 @@
 import { startTransition, useDeferredValue, useEffect, useMemo, useState } from "react";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import {
   Loader2,
   Plus,
@@ -809,12 +810,23 @@ export default function AdminLlmPage() {
     }
   };
 
-  if (isLoading) {
-    return <AdminPageLoader variant="split" />;
-  }
+  const reduceMotion = useReducedMotion();
 
   return (
-    <AdminPageMotion>
+    <AnimatePresence mode="wait">
+      {isLoading ? (
+        <motion.div
+          key="skeleton"
+          initial={reduceMotion ? false : { opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          className="px-4 md:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto"
+        >
+          <AdminPageLoader variant="split" />
+        </motion.div>
+      ) : (
+        <AdminPageMotion key="content">
       {isError && (
         <AdminMotionItem>
           <ErrorBanner message="No se pudieron cargar los LLMs." onRetry={() => void refetch()} />
@@ -2213,5 +2225,7 @@ export default function AdminLlmPage() {
         </DialogContent>
       </Dialog>
     </AdminPageMotion>
+      )}
+    </AnimatePresence>
   );
 }

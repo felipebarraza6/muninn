@@ -1,5 +1,6 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import {
   ExternalLink,
   Globe2,
@@ -1056,13 +1057,23 @@ export default function AdminSucursalesPage() {
   const saving = createBranch.isPending || updateBranch.isPending || updateThemeConfig.isPending;
   const showOrgColumn = isGlobalAdmin || isOrgOwner;
   const formReadOnly = Boolean(editing) && !canEditCurrent;
-
-  if (isLoading) {
-    return <AdminPageLoader variant="table" />;
-  }
+  const reduceMotion = useReducedMotion();
 
   return (
-    <AdminPageMotion className={panelOpen || singleStoreMode ? "pt-3 pb-6 space-y-4" : undefined}>
+    <AnimatePresence mode="wait">
+      {isLoading ? (
+        <motion.div
+          key="skeleton"
+          initial={reduceMotion ? false : { opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          className="px-4 md:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto"
+        >
+          <AdminPageLoader variant="table" />
+        </motion.div>
+      ) : (
+        <AdminPageMotion key="content" className={panelOpen || singleStoreMode ? "pt-3 pb-6 space-y-4" : undefined}>
       {isError && (
         <AdminMotionItem>
           <ErrorBanner
@@ -2068,5 +2079,7 @@ export default function AdminSucursalesPage() {
         ]}
       />
     </AdminPageMotion>
+      )}
+    </AnimatePresence>
   );
 }

@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowUpRight, CheckCircle2, Loader2, Plus, Play, Radio, Bot } from "lucide-react";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -24,6 +25,7 @@ export function ChannelList() {
   const [q, setQ] = useState("");
   const [ready, setReady] = useState(false);
   const canManage = canManageChannels();
+  const reduceMotion = useReducedMotion();
   useEffect(() => {
     if (!isPending) setReady(true);
   }, [isPending]);
@@ -112,41 +114,80 @@ export function ChannelList() {
         <StudioBranchFilter />
       </div>
 
-      {isPending && !ready ? (
-        <PageSkeleton variant="cards" padded={false} />
-      ) : filtered.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border/70 bg-muted/20 px-6 py-16 text-center">
-          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <Radio className="h-6 w-6" />
-          </div>
-          <p className="text-sm text-muted-foreground">
-            {q.trim()
-              ? "Sin canales para esa búsqueda."
-              : "No hay canales aún. Crea el primero para conectar un agente."}
-          </p>
-          {!q.trim() && canManage && (
-            <Button size="sm" className="mt-4" onClick={() => setCreating(true)}>
-              <Plus className="h-4 w-4 mr-1.5" /> Crear canal
-            </Button>
-          )}
-        </div>
-      ) : (
-        <div
-          className={cn(
-            "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 transition-opacity duration-200",
-            (isFetching || isPlaceholderData) && "opacity-70",
-          )}
-        >
-          {filtered.map((channel) => (
-            <ChannelCard
-              key={channel.id}
-              channel={channel}
-              testing={testingId === channel.id}
-              onTest={(e) => handleTest(e, channel)}
-            />
-          ))}
-        </div>
-      )}
+      <AnimatePresence mode="wait">
+        {isPending && !ready ? (
+          <motion.div
+            key="skeleton"
+            initial={reduceMotion ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <PageSkeleton variant="cards" padded={false} />
+          </motion.div>
+        ) : filtered.length === 0 ? (
+          <motion.div
+            key="empty"
+            initial={reduceMotion ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="rounded-2xl border border-dashed border-border/70 bg-muted/20 px-6 py-16 text-center"
+          >
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <Radio className="h-6 w-6" />
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {q.trim()
+                ? "Sin canales para esa búsqueda."
+                : "No hay canales aún. Crea el primero para conectar un agente."}
+            </p>
+            {!q.trim() && canManage && (
+              <Button size="sm" className="mt-4" onClick={() => setCreating(true)}>
+                <Plus className="h-4 w-4 mr-1.5" /> Crear canal
+              </Button>
+            )}
+          </motion.div>
+        ) : (
+          <motion.div
+            key="content"
+            variants={
+              reduceMotion
+                ? undefined
+                : {
+                    hidden: {},
+                    show: { transition: { staggerChildren: 0.04 } },
+                  }
+            }
+            initial={reduceMotion ? false : "hidden"}
+            animate="show"
+            className={cn(
+              "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4",
+              (isFetching || isPlaceholderData) && "opacity-70",
+            )}
+          >
+            {filtered.map((channel) => (
+              <motion.div
+                key={channel.id}
+                variants={
+                  reduceMotion
+                    ? undefined
+                    : {
+                        hidden: { opacity: 0, y: 10 },
+                        show: { opacity: 1, y: 0, transition: { duration: 0.28 } },
+                      }
+                }
+              >
+                <ChannelCard
+                  channel={channel}
+                  testing={testingId === channel.id}
+                  onTest={(e) => handleTest(e, channel)}
+                />
+              </motion.div>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {canManage && (
         <Dialog open={creating} onOpenChange={setCreating}>
@@ -160,7 +201,7 @@ export function ChannelList() {
               onSaved={(created) => {
                 setCreating(false);
                 refetch();
-                if (created?.id) navigate(`/canales/${created.id}`);
+                if (created?.id) navigate(`/app/canales/${created.id}`);
               }}
             />
           </DialogContent>
@@ -200,7 +241,7 @@ function ChannelCard({
       {!isInactive && <div className={cn("h-1 w-full bg-gradient-to-r", accent.bar)} />}
 
       <Link
-        to={`/canales/${channel.id}`}
+        to={`/app/canales/${channel.id}`}
         className="flex flex-1 flex-col gap-4 p-4 sm:p-5 pb-3 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset cursor-pointer"
       >
         <div className="flex items-start gap-3">
@@ -289,7 +330,7 @@ function ChannelCard({
           Probar
         </Button>
         <Button variant="ghost" size="sm" className="h-8 px-2.5 text-xs" asChild>
-          <Link to={`/canales/${channel.id}`}>Abrir</Link>
+          <Link to={`/app/canales/${channel.id}`}>Abrir</Link>
         </Button>
       </div>
     </div>

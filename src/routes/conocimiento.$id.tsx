@@ -188,7 +188,7 @@ export default function ConocimientoDetail() {
           title="No se pudo cargar el conocimiento"
           description="Puede haberse eliminado o no tienes acceso desde esta sucursal."
           action={
-            <Button size="sm" variant="outline" onClick={() => navigate("/conocimiento")}>
+            <Button size="sm" variant="outline" onClick={() => navigate("/app/conocimiento")}>
               <ArrowLeft className="h-4 w-4 mr-1.5" /> Volver al catálogo
             </Button>
           }
@@ -203,7 +203,7 @@ export default function ConocimientoDetail() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 space-y-1.5">
           <Button variant="ghost" size="sm" className="h-7 -ml-2 text-muted-foreground" asChild>
-            <Link to="/conocimiento">
+            <Link to="/app/conocimiento">
               <ArrowLeft className="h-3.5 w-3.5 mr-1" /> Conocimiento
             </Link>
           </Button>

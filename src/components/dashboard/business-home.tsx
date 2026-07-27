@@ -151,7 +151,7 @@ export function BusinessHome() {
                   <CardDescription>Últimas conversaciones que requieren atención.</CardDescription>
                 </div>
                 <Button asChild variant="ghost" size="sm" className="h-8 self-start">
-                  <Link to="/conversaciones">
+                  <Link to="/app/conversaciones">
                     Ver todas <ArrowRight className="h-3.5 w-3.5 ml-1" />
                   </Link>
                 </Button>
@@ -211,7 +211,7 @@ export function BusinessHome() {
                   </p>
                   <div className="pt-2">
                     <Button asChild size="sm">
-                      <Link to="/conversaciones">Ver conversaciones</Link>
+                      <Link to="/app/conversaciones">Ver conversaciones</Link>
                     </Button>
                   </div>
                 </div>

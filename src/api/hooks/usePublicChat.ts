@@ -1,5 +1,5 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { apiClient } from "../client";
+import { GET, POST } from "../client";
 
 const QUERY_KEY = ["ai-agents", "public-chat"];
 
@@ -46,15 +46,13 @@ export function getOrCreateEmbedUserId(channelId: string): string {
 }
 
 export function usePublicChannelConfig(channelId: string | undefined) {
-  return useQuery({
+  return useQuery<PublicChannelConfig>({
     queryKey: [...QUERY_KEY, "config", channelId],
     queryFn: () =>
-      apiClient
-        .get<PublicChannelConfig>(`/ai-agents/public/channels/${channelId}/config/`, {
-          skipAuth: true,
-          skipBranchHeader: true,
-        })
-        .then((r) => r.data),
+      GET<PublicChannelConfig>(`/ai-agents/public/channels/${channelId}/config/`, {
+        skipAuth: true,
+        skipBranchHeader: true,
+      }),
     enabled: !!channelId,
     staleTime: 5 * 60 * 1000,
     retry: 1,
@@ -65,25 +63,23 @@ export function useSendPublicMessage(channelId: string | undefined) {
   return useMutation({
     mutationFn: (payload: { message: string; user_name?: string; email?: string }) => {
       const userId = channelId ? getOrCreateEmbedUserId(channelId) : "anonymous";
-      return apiClient
-        .post<{
-          reply?: string;
-          message?: string;
-          response?: string;
-          session_id?: string;
-          conversation_id?: string | number;
-          success?: boolean;
-        }>(
-          `/ai-agents/public/channels/${channelId}/message/`,
-          {
-            user_id: userId,
-            user_name: payload.user_name || "Visitante",
-            message: payload.message,
-            ...(payload.email ? { email: payload.email } : {}),
-          },
-          { skipAuth: true, skipBranchHeader: true },
-        )
-        .then((r) => r.data);
+      return POST<{
+        reply?: string;
+        message?: string;
+        response?: string;
+        session_id?: string;
+        conversation_id?: string | number;
+        success?: boolean;
+      }>(
+        `/ai-agents/public/channels/${channelId}/message/`,
+        {
+          user_id: userId,
+          user_name: payload.user_name || "Visitante",
+          message: payload.message,
+          ...(payload.email ? { email: payload.email } : {}),
+        },
+        { skipAuth: true, skipBranchHeader: true },
+      );
     },
   });
 }

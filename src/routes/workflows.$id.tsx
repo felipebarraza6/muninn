@@ -211,7 +211,7 @@ export default function WorkflowCanvasPage() {
         }
         const t = e.target as HTMLElement | null;
         if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
-        navigate("/workflows");
+        navigate("/app/workflows");
         return;
       }
       if (e.key === "Delete" || e.key === "Backspace") {
@@ -455,7 +455,7 @@ export default function WorkflowCanvasPage() {
           message={apiErrorMessage(error, "No se pudo cargar el workflow")}
         />
         <Button asChild variant="outline">
-          <Link to="/workflows">Volver</Link>
+          <Link to="/app/workflows">Volver</Link>
         </Button>
       </div>
     );
@@ -465,7 +465,7 @@ export default function WorkflowCanvasPage() {
     <div className="h-dvh flex flex-col bg-background overflow-hidden">
       <div className="shrink-0 border-b bg-card/80 backdrop-blur px-3 py-2 flex items-center gap-2">
         <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2" asChild>
-          <Link to="/workflows">
+          <Link to="/app/workflows">
             <ArrowLeft className="h-4 w-4" />
             <span className="text-xs font-medium">OPS-agents</span>
           </Link>

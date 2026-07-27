@@ -63,7 +63,7 @@ export default function ForgotPasswordPage() {
       {
         email,
         login_slug: flat?.login_slug || slug || null,
-        branch_id: flat?.branch_id ?? null,
+        branch_id: flat?.branch_id != null ? Number(flat.branch_id) : null,
       },
       {
         onSuccess: (data) => {

@@ -32,171 +32,172 @@ type PageMeta = {
 };
 
 function getPageMeta(pathname: string, search = ""): PageMeta {
-  if (pathname === "/") {
+  const p = pathname.replace(/^\/app\/?/, "/") || "/";
+  if (p === "/") {
     return { breadcrumb: [{ label: "Resumen" }] };
   }
-  if (pathname.startsWith("/agentes")) {
-    if (pathname === "/agentes/nuevo") {
+  if (p.startsWith("/agentes")) {
+    if (p === "/agentes/nuevo") {
       return {
         breadcrumb: [
-          { label: "Resumen", to: "/" },
-          { label: "Agentes", to: "/agentes" },
+          { label: "Resumen", to: "/app" },
+          { label: "Agentes", to: "/app/agentes" },
           { label: "Nuevo" },
         ],
       };
     }
-    if (pathname !== "/agentes") {
+    if (p !== "/agentes") {
       return {
         breadcrumb: [
-          { label: "Resumen", to: "/" },
-          { label: "Agentes", to: "/agentes" },
+          { label: "Resumen", to: "/app" },
+          { label: "Agentes", to: "/app/agentes" },
         ],
       };
     }
-    return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Agentes" }] };
+    return { breadcrumb: [{ label: "Resumen", to: "/app" }, { label: "Agentes" }] };
   }
-  if (pathname.startsWith("/conversaciones")) {
-    return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Conversaciones" }] };
+  if (p.startsWith("/conversaciones")) {
+    return { breadcrumb: [{ label: "Resumen", to: "/app" }, { label: "Conversaciones" }] };
   }
-  if (pathname.startsWith("/canales")) {
-    return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Canales" }] };
+  if (p.startsWith("/canales")) {
+    return { breadcrumb: [{ label: "Resumen", to: "/app" }, { label: "Canales" }] };
   }
-  if (pathname.startsWith("/conocimiento")) {
-    if (pathname === "/conocimiento/datos") {
+  if (p.startsWith("/conocimiento")) {
+    if (p === "/conocimiento/datos") {
       return {
         breadcrumb: [
-          { label: "Resumen", to: "/" },
-          { label: "Conocimiento", to: "/conocimiento" },
+          { label: "Resumen", to: "/app" },
+          { label: "Conocimiento", to: "/app/conocimiento" },
           { label: "Datos" },
         ],
       };
     }
-    if (pathname === "/conocimiento/nuevo") {
+    if (p === "/conocimiento/nuevo") {
       return {
         breadcrumb: [
-          { label: "Resumen", to: "/" },
-          { label: "Conocimiento", to: "/conocimiento" },
+          { label: "Resumen", to: "/app" },
+          { label: "Conocimiento", to: "/app/conocimiento" },
           { label: "Nuevo" },
         ],
       };
     }
-    if (pathname !== "/conocimiento") {
+    if (p !== "/conocimiento") {
       return {
         breadcrumb: [
-          { label: "Resumen", to: "/" },
-          { label: "Conocimiento", to: "/conocimiento" },
+          { label: "Resumen", to: "/app" },
+          { label: "Conocimiento", to: "/app/conocimiento" },
           { label: "Detalle" },
         ],
       };
     }
-    return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Conocimiento" }] };
+    return { breadcrumb: [{ label: "Resumen", to: "/app" }, { label: "Conocimiento" }] };
   }
-  if (pathname.startsWith("/aplicaciones") || pathname.startsWith("/apis")) {
-    if (pathname !== "/aplicaciones" && pathname !== "/apis") {
+  if (p.startsWith("/aplicaciones") || p.startsWith("/apis")) {
+    if (p !== "/aplicaciones" && p !== "/apis") {
       return {
         breadcrumb: [
-          { label: "Resumen", to: "/" },
-          { label: "Aplicaciones", to: "/aplicaciones" },
+          { label: "Resumen", to: "/app" },
+          { label: "Aplicaciones", to: "/app/aplicaciones" },
         ],
       };
     }
-    return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Aplicaciones" }] };
+    return { breadcrumb: [{ label: "Resumen", to: "/app" }, { label: "Aplicaciones" }] };
   }
-  if (pathname.startsWith("/skills") || pathname.startsWith("/funciones")) {
-    if (pathname === "/skills/nuevo" || pathname === "/funciones/nuevo") {
+  if (p.startsWith("/skills") || p.startsWith("/funciones")) {
+    if (p === "/skills/nuevo" || p === "/funciones/nuevo") {
       return {
         breadcrumb: [
-          { label: "Resumen", to: "/" },
-          { label: "Skills", to: "/skills" },
+          { label: "Resumen", to: "/app" },
+          { label: "Skills", to: "/app/skills" },
           { label: "Nueva" },
         ],
       };
     }
-    if (pathname !== "/skills" && pathname !== "/funciones") {
+    if (p !== "/skills" && p !== "/funciones") {
       return {
         breadcrumb: [
-          { label: "Resumen", to: "/" },
-          { label: "Skills", to: "/skills" },
+          { label: "Resumen", to: "/app" },
+          { label: "Skills", to: "/app/skills" },
         ],
       };
     }
-    return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Skills" }] };
+    return { breadcrumb: [{ label: "Resumen", to: "/app" }, { label: "Skills" }] };
   }
-  if (pathname.startsWith("/chat")) {
+  if (p.startsWith("/chat")) {
     return {
-      breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Studio" }, { label: "Chat" }],
+      breadcrumb: [{ label: "Resumen", to: "/app" }, { label: "Studio" }, { label: "Chat" }],
     };
   }
-  if (pathname.startsWith("/planes")) {
+  if (p.startsWith("/planes")) {
     return {
-      breadcrumb: [{ label: "Resumen", to: "/" }, { label: "OPS-agents" }, { label: "Planes" }],
+      breadcrumb: [{ label: "Resumen", to: "/app" }, { label: "OPS-agents" }, { label: "Planes" }],
     };
   }
-  if (pathname.startsWith("/workflows")) {
-    if (pathname !== "/workflows") {
+  if (p.startsWith("/workflows")) {
+    if (p !== "/workflows") {
       return {
         breadcrumb: [
-          { label: "Resumen", to: "/" },
-          { label: "OPS-agents", to: "/planes" },
-          { label: "Workflows", to: "/workflows" },
+          { label: "Resumen", to: "/app" },
+          { label: "OPS-agents", to: "/app/planes" },
+          { label: "Workflows", to: "/app/workflows" },
           { label: "Canvas" },
         ],
       };
     }
     return {
       breadcrumb: [
-        { label: "Resumen", to: "/" },
-        { label: "OPS-agents", to: "/planes" },
+        { label: "Resumen", to: "/app" },
+        { label: "OPS-agents", to: "/app/planes" },
         { label: "Workflows" },
       ],
     };
   }
-  if (pathname.startsWith("/admin/organizaciones")) {
+  if (p.startsWith("/admin/organizaciones")) {
     const view = new URLSearchParams(search).get("view");
     const label = getOrganizationsAdminNavLabel();
     const crumbs: PageMeta["breadcrumb"] = [
-      { label: "Resumen", to: "/" },
+      { label: "Resumen", to: "/app" },
       { label: "Admin" },
-      { label, to: view ? "/admin/organizaciones" : undefined },
+      { label, to: view ? "/app/admin/organizaciones" : undefined },
     ];
     if (view === "nuevo") crumbs.push({ label: "Nueva organización" });
     else if (view === "editar") crumbs.push({ label: "Editar organización" });
     return { breadcrumb: crumbs };
   }
-  if (pathname.startsWith("/admin/llm")) {
+  if (p.startsWith("/admin/llm")) {
     return {
-      breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Admin" }, { label: "LLM" }],
+      breadcrumb: [{ label: "Resumen", to: "/app" }, { label: "Admin" }, { label: "LLM" }],
     };
   }
-  if (pathname.startsWith("/admin/sucursales")) {
+  if (p.startsWith("/admin/sucursales")) {
     const view = new URLSearchParams(search).get("view");
     const label = getBranchesAdminNavLabel();
     const crumbs: PageMeta["breadcrumb"] = [
-      { label: "Resumen", to: "/" },
+      { label: "Resumen", to: "/app" },
       { label: "Admin" },
-      { label, to: view ? "/admin/sucursales" : undefined },
+      { label, to: view ? "/app/admin/sucursales" : undefined },
     ];
     if (view === "nuevo") crumbs.push({ label: "Nueva sucursal" });
     else if (view === "editar") crumbs.push({ label: "Editar sucursal" });
     return { breadcrumb: crumbs };
   }
-  if (pathname.startsWith("/admin/usuarios")) {
+  if (p.startsWith("/admin/usuarios")) {
     const view = new URLSearchParams(search).get("view");
     const crumbs: PageMeta["breadcrumb"] = [
-      { label: "Resumen", to: "/" },
+      { label: "Resumen", to: "/app" },
       { label: "Admin" },
-      { label: "Usuarios", to: view ? "/admin/usuarios" : undefined },
+      { label: "Usuarios", to: view ? "/app/admin/usuarios" : undefined },
     ];
     if (view === "nuevo") crumbs.push({ label: "Nuevo usuario" });
     else if (view === "asignar") crumbs.push({ label: "Asignar a sucursal" });
     else if (view === "editar") crumbs.push({ label: "Editar usuario" });
     return { breadcrumb: crumbs };
   }
-  if (pathname.startsWith("/configuracion")) {
-    return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Configuración" }] };
+  if (p.startsWith("/configuracion")) {
+    return { breadcrumb: [{ label: "Resumen", to: "/app" }, { label: "Configuración" }] };
   }
-  if (pathname.startsWith("/perfil")) {
-    return { breadcrumb: [{ label: "Resumen", to: "/" }, { label: "Mi perfil" }] };
+  if (p.startsWith("/perfil")) {
+    return { breadcrumb: [{ label: "Resumen", to: "/app" }, { label: "Mi perfil" }] };
   }
   return { breadcrumb: [] };
 }
@@ -307,7 +308,7 @@ function PageHeader() {
               </div>
             )}
             <DropdownMenuItem asChild>
-              <Link to="/perfil">
+              <Link to="/app/perfil">
                 <User className="h-3.5 w-3.5 mr-2" /> Mi perfil
               </Link>
             </DropdownMenuItem>

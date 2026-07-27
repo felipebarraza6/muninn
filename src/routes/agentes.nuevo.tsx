@@ -11,15 +11,15 @@ export default function AgentesNuevoPage() {
     <AdminPageMotion>
       <div className="px-4 md:px-6 lg:px-8 py-6 max-w-[900px] mx-auto space-y-4">
         <Button variant="outline" size="sm" asChild>
-          <Link to="/agentes">
+          <Link to="/app/agentes">
             <ArrowLeft className="h-4 w-4 mr-1.5" /> Volver a agentes
           </Link>
         </Button>
         <AgentForm
-          onCancel={() => navigate("/agentes")}
+          onCancel={() => navigate("/app/agentes")}
           onSaved={(saved) => {
-            if (saved?.id) navigate(`/agentes/${saved.id}`);
-            else navigate("/agentes");
+            if (saved?.id) navigate(`/app/agentes/${saved.id}`);
+            else navigate("/app/agentes");
           }}
         />
       </div>

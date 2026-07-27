@@ -123,12 +123,12 @@ function AnimatedOutlet() {
   const location = useLocation();
   // Chat / bandeja: sin fade de ruta (evita “doble animación” y se siente página propia).
   const skipRouteFade =
-    location.pathname === "/chat" ||
-    location.pathname.startsWith("/chat/") ||
-    location.pathname.startsWith("/conversaciones") ||
-    location.pathname.startsWith("/planes") ||
-    location.pathname.startsWith("/workflows") ||
-    /^\/agentes\/[^/]+\/chat\/?$/.test(location.pathname);
+    location.pathname === "/app/chat" ||
+    location.pathname.startsWith("/app/chat/") ||
+    location.pathname.startsWith("/app/conversaciones") ||
+    location.pathname.startsWith("/app/planes") ||
+    location.pathname.startsWith("/app/workflows") ||
+    /^\/app\/agentes\/[^/]+\/chat\/?$/.test(location.pathname);
 
   const routeTree = (
     <Suspense fallback={<RouteFallback />}>
@@ -226,10 +226,10 @@ function AnimatedOutlet() {
               </RequireSkills>
             }
           />
-          <Route path="/funciones" element={<Navigate to="/skills" replace />} />
-          <Route path="/funciones/nuevo" element={<Navigate to="/skills/nuevo" replace />} />
+          <Route path="/funciones" element={<Navigate to="/app/skills" replace />} />
+          <Route path="/funciones/nuevo" element={<Navigate to="/app/skills/nuevo" replace />} />
           <Route path="/funciones/:id" element={<FunctionDetailRedirect />} />
-          <Route path="/configuracion" element={<Navigate to="/perfil" replace />} />
+          <Route path="/configuracion" element={<Navigate to="/app/perfil" replace />} />
           <Route path="/perfil" element={<PerfilPage />} />
           <Route
             path="/admin/organizaciones"

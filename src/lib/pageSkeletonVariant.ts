@@ -20,7 +20,7 @@ export type PageSkeletonVariant =
  * Evita mostrar "barras neutras" o inbox en chat/planes/canvas.
  */
 export function resolvePageSkeletonVariant(pathname: string): PageSkeletonVariant {
-  const p = pathname.replace(/\/+$/, "") || "/";
+  const p = pathname.replace(/^\/app(?=\/|$)/, "").replace(/\/+$/, "") || "/";
 
   if (p === "/chat" || /^\/agentes\/[^/]+\/chat$/.test(p) || /^\/embed\/chat\//.test(p)) {
     return "chat";
@@ -34,7 +34,7 @@ export function resolvePageSkeletonVariant(pathname: string): PageSkeletonVarian
     return "cards";
   }
   if (p.startsWith("/apis")) return "cards";
-  if (p.startsWith("/conocimiento")) return "list";
+  if (p.startsWith("/conocimiento")) return "cards";
   if (p === "/perfil") return "profile";
   if (p.startsWith("/admin/llm")) return "split";
   if (p.startsWith("/admin/usuarios")) return "tableFilters";

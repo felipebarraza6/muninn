@@ -10,6 +10,7 @@ import {
   RotateCcw,
   Sparkles,
 } from "lucide-react";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -28,8 +29,6 @@ import {
   type ImplementationType,
 } from "@/api/hooks/useAgentFunctions";
 import {
-  AdminMotionItem,
-  AdminMotionList,
   AdminPageMotion,
 } from "@/components/admin/AdminPageMotion";
 import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
@@ -146,7 +145,7 @@ function SkillCard({
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-1.5 border-t border-border/50 pt-3">
         <Button size="sm" className="h-8" asChild>
-          <Link to={`/skills/${fn.id}`}>
+          <Link to={`/app/skills/${fn.id}`}>
             Abrir
             <ArrowUpRight className="h-3.5 w-3.5 ml-1" />
           </Link>
@@ -283,7 +282,7 @@ export default function Funciones() {
           )}
           {canManage && (
             <Button size="sm" asChild>
-              <Link to="/skills/nuevo">
+              <Link to="/app/skills/nuevo">
                 <Plus className="h-4 w-4 mr-1.5" />
                 Nueva skill
               </Link>
@@ -354,16 +353,7 @@ export default function Funciones() {
     </div>
   );
 
-  if (isLoading) {
-    return (
-      <AdminPageMotion className="space-y-5">
-        {storeHeader}
-        {filters}
-        <PageSkeleton variant="cards" padded={false} />
-      </AdminPageMotion>
-    );
-  }
-
+  const reduceMotion = useReducedMotion();
   const hasActiveFilters =
     Boolean(search.trim()) || scopeFilter !== "all" || typeFilter !== "all" || appFilter !== "all";
 
@@ -372,38 +362,80 @@ export default function Funciones() {
       {storeHeader}
       {filters}
 
-      {filtered.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border/80 py-16 text-center space-y-3 bg-card/30">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20">
-            <Sparkles className="h-7 w-7" strokeWidth={1.5} />
-          </div>
-          <div className="space-y-1">
-            <p className="text-sm font-medium">
-              {hasActiveFilters ? "Sin resultados" : "No hay skills"}
-            </p>
-            <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-              {hasActiveFilters
-                ? "Prueba otro filtro o búsqueda."
-                : "Crea la primera skill para que tus agentes puedan ejecutar acciones."}
-            </p>
-          </div>
-          {!hasActiveFilters && canManage && (
-            <Button size="sm" variant="outline" asChild>
-              <Link to="/skills/nuevo">
-                <Plus className="h-4 w-4 mr-1.5" /> Nueva skill
-              </Link>
-            </Button>
-          )}
-        </div>
-      ) : (
-        <AdminMotionList className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5">
-          {filtered.map((fn) => (
-            <AdminMotionItem key={fn.id}>
-              <SkillCard fn={fn} onRestore={handleRestore} restoring={restoringId === fn.id} />
-            </AdminMotionItem>
-          ))}
-        </AdminMotionList>
-      )}
+      <AnimatePresence mode="wait">
+        {isLoading ? (
+          <motion.div
+            key="skeleton"
+            initial={reduceMotion ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <PageSkeleton variant="cards" padded={false} />
+          </motion.div>
+        ) : filtered.length === 0 ? (
+          <motion.div
+            key="empty"
+            initial={reduceMotion ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="rounded-2xl border border-dashed border-border/80 py-16 text-center space-y-3 bg-card/30"
+          >
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20">
+              <Sparkles className="h-7 w-7" strokeWidth={1.5} />
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm font-medium">
+                {hasActiveFilters ? "Sin resultados" : "No hay skills"}
+              </p>
+              <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+                {hasActiveFilters
+                  ? "Prueba otro filtro o búsqueda."
+                  : "Crea la primera skill para que tus agentes puedan ejecutar acciones."}
+              </p>
+            </div>
+            {!hasActiveFilters && canManage && (
+              <Button size="sm" variant="outline" asChild>
+                <Link to="/app/skills/nuevo">
+                  <Plus className="h-4 w-4 mr-1.5" /> Nueva skill
+                </Link>
+              </Button>
+            )}
+          </motion.div>
+        ) : (
+          <motion.div
+            key="content"
+            variants={
+              reduceMotion
+                ? undefined
+                : {
+                    hidden: {},
+                    show: { transition: { staggerChildren: 0.04 } },
+                  }
+            }
+            initial={reduceMotion ? false : "hidden"}
+            animate="show"
+            className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5"
+          >
+            {filtered.map((fn) => (
+              <motion.div
+                key={fn.id}
+                variants={
+                  reduceMotion
+                    ? undefined
+                    : {
+                        hidden: { opacity: 0, y: 10 },
+                        show: { opacity: 1, y: 0, transition: { duration: 0.28 } },
+                      }
+                }
+              >
+                <SkillCard fn={fn} onRestore={handleRestore} restoring={restoringId === fn.id} />
+              </motion.div>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </AdminPageMotion>
   );
 }

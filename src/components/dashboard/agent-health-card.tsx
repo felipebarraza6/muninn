@@ -69,7 +69,7 @@ export function AgentHealthCard({
             </div>
           </div>
           <Link
-            to="/conversaciones"
+            to="/app/conversaciones"
             className="text-xs text-primary hover:underline inline-flex items-center"
           >
             Ver bandeja <ArrowUpRight className="h-3 w-3 ml-0.5" />

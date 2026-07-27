@@ -12,7 +12,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { motion, useReducedMotion } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -103,7 +103,7 @@ export function AgentList() {
             </Button>
           )}
           <Button size="sm" asChild className="cursor-pointer">
-            <Link to="/agentes/nuevo">
+            <Link to="/app/agentes/nuevo">
               <Plus className="h-4 w-4 mr-1.5" /> Nuevo
             </Link>
           </Button>
@@ -120,42 +120,61 @@ export function AgentList() {
         <StudioBranchFilter />
       </div>
 
-      {isLoading ? (
-        <PageSkeleton variant="cards" padded={false} />
-      ) : filtered.length === 0 ? (
-        <EmptyState
-          title={q.trim() ? "Sin agentes para esa búsqueda" : "No hay agentes aún"}
-          description={q.trim() ? undefined : "Crea el primero para empezar a configurar y probar."}
-          icon={<Bot className="h-5 w-5" />}
-          action={
-            !q.trim() ? (
-              <Button size="sm" asChild className="cursor-pointer">
-                <Link to="/agentes/nuevo">
-                  <Plus className="h-4 w-4 mr-1.5" /> Crear agente
-                </Link>
-              </Button>
-            ) : undefined
-          }
-        />
-      ) : (
-        <motion.div
-          className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4"
-          variants={
-            reduceMotion
-              ? undefined
-              : {
-                  hidden: {},
-                  show: { transition: { staggerChildren: 0.045 } },
-                }
-          }
-          initial={reduceMotion ? false : "hidden"}
-          animate="show"
-        >
-          {filtered.map((agent) => (
-            <AgentCard key={agent.id} agent={agent} reduceMotion={!!reduceMotion} />
-          ))}
-        </motion.div>
-      )}
+      <AnimatePresence mode="wait">
+        {isLoading ? (
+          <motion.div
+            key="skeleton"
+            initial={reduceMotion ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <PageSkeleton variant="cards" padded={false} />
+          </motion.div>
+        ) : filtered.length === 0 ? (
+          <motion.div
+            key="empty"
+            initial={reduceMotion ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <EmptyState
+              title={q.trim() ? "Sin agentes para esa búsqueda" : "No hay agentes aún"}
+              description={q.trim() ? undefined : "Crea el primero para empezar a configurar y probar."}
+              icon={<Bot className="h-5 w-5" />}
+              action={
+                !q.trim() ? (
+                  <Button size="sm" asChild className="cursor-pointer">
+                    <Link to="/app/agentes/nuevo">
+                      <Plus className="h-4 w-4 mr-1.5" /> Crear agente
+                    </Link>
+                  </Button>
+                ) : undefined
+              }
+            />
+          </motion.div>
+        ) : (
+          <motion.div
+            key="content"
+            className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4"
+            variants={
+              reduceMotion
+                ? undefined
+                : {
+                    hidden: {},
+                    show: { transition: { staggerChildren: 0.045 } },
+                  }
+            }
+            initial={reduceMotion ? false : "hidden"}
+            animate="show"
+          >
+            {filtered.map((agent) => (
+              <AgentCard key={agent.id} agent={agent} reduceMotion={!!reduceMotion} />
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -195,7 +214,7 @@ function AgentCard({ agent, reduceMotion }: { agent: Agent; reduceMotion: boolea
       )}
 
       <Link
-        to={`/agentes/${agent.id}`}
+        to={`/app/agentes/${agent.id}`}
         className="flex flex-1 flex-col gap-3.5 p-4 sm:p-5 pb-3 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset cursor-pointer"
       >
         <div className="flex items-start gap-3">
@@ -313,7 +332,7 @@ function AgentCard({ agent, reduceMotion }: { agent: Agent; reduceMotion: boolea
           {agent.slug ? `/${agent.slug}` : `#${agent.id}`}
         </span>
         <Link
-          to={`/chat?agent=${agent.id}`}
+          to={`/app/chat?agent=${agent.id}`}
           className={cn(
             "inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors cursor-pointer",
             isInactive

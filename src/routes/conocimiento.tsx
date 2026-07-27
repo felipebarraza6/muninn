@@ -52,6 +52,7 @@ import {
 import { useAgents } from "@/api/hooks/useAgents";
 import { knowledgeCardPreview, knowledgeTypeLabel, knowledgeTypeMeta } from "@/lib/knowledge-types";
 import { toast } from "sonner";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { apiErrorMessage } from "@/lib/apiError";
 import { AdminPageMotion } from "@/components/admin/AdminPageMotion";
 import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
@@ -214,7 +215,7 @@ function KnowledgeCard({
 
       <div className="mt-4 flex flex-wrap items-center gap-1 border-t border-border/60 pt-3">
         <Button variant="ghost" size="sm" className="h-8 gap-1.5" asChild>
-          <Link to={`/conocimiento/${doc.id}`}>
+          <Link to={`/app/conocimiento/${doc.id}`}>
             <Eye className="h-3.5 w-3.5" />
             Ver
           </Link>
@@ -293,6 +294,7 @@ export default function Conocimiento() {
   const [restoringId, setRestoringId] = useState<string | null>(null);
   const [categoryDialog, setCategoryDialog] = useState<CategoryDialog>(null);
   const [renameValue, setRenameValue] = useState("");
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedQ(q.trim()), 280);
@@ -423,12 +425,12 @@ export default function Conocimiento() {
         </p>
         <div className="flex gap-2 items-center flex-wrap justify-end shrink-0">
           <Button variant="outline" size="sm" asChild>
-            <Link to="/conocimiento/datos">
+            <Link to="/app/conocimiento/datos">
               <FileSpreadsheet className="h-4 w-4 mr-1.5" /> Datos
             </Link>
           </Button>
           <Button size="sm" asChild>
-            <Link to="/conocimiento/nuevo">
+            <Link to="/app/conocimiento/nuevo">
               <Plus className="h-4 w-4 mr-1.5" /> Nuevo
             </Link>
           </Button>
@@ -499,66 +501,108 @@ export default function Conocimiento() {
         </p>
       ) : null}
 
-      {isLoading ? (
-        <PageSkeleton variant="list" padded={false} />
-      ) : filtered.length === 0 ? (
-        <EmptyState
-          title={q.trim() ? "Sin resultados" : "Biblioteca vacía"}
-          description={
-            q.trim()
-              ? "Prueba otro término o limpia el filtro de categoría."
-              : "Crea el primer documento para usarlo en agentes con RAG."
-          }
-          action={
-            !q.trim() ? (
-              <Button size="sm" asChild>
-                <Link to="/conocimiento/nuevo">
-                  <Plus className="h-4 w-4 mr-1.5" /> Nuevo
-                </Link>
-              </Button>
-            ) : undefined
-          }
-        />
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-          {filtered.map((doc) => {
-            const canManage = canManageKnowledge(doc.branch);
-            const canHardDelete = canHardDeleteKnowledge(doc.branch);
-            return (
-              <KnowledgeCard
-                key={doc.id}
-                doc={doc}
-                agentCount={agentCountByDoc.get(String(doc.id)) ?? 0}
-                indexed={isKnowledgeIndexed(doc)}
-                canManage={canManage}
-                canRestore={canRestoreKnowledge(doc.branch)}
-                canHardDelete={canHardDelete}
-                restoring={restoringId === String(doc.id)}
-                onDeactivate={() => setPending({ type: "deactivate", doc })}
-                onHardDelete={() => setPending({ type: "hard", doc })}
-                onRestore={() => {
-                  const id = String(doc.id);
-                  setRestoringId(id);
-                  update.mutate(
-                    { id, data: { is_active: true }, branch: doc.branch },
-                    {
-                      onSuccess: () => {
-                        toast.success("Conocimiento reactivado");
-                        setRestoringId(null);
-                        void refetch();
-                      },
-                      onError: (e) => {
-                        toast.error(apiErrorMessage(e, "No se pudo reactivar"));
-                        setRestoringId(null);
-                      },
-                    },
-                  );
-                }}
-              />
-            );
-          })}
-        </div>
-      )}
+      <AnimatePresence mode="wait">
+        {isLoading ? (
+          <motion.div
+            key="skeleton"
+            initial={reduceMotion ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <PageSkeleton variant="cards" padded={false} />
+          </motion.div>
+        ) : filtered.length === 0 ? (
+          <motion.div
+            key="empty"
+            initial={reduceMotion ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <EmptyState
+              title={q.trim() ? "Sin resultados" : "Biblioteca vacía"}
+              description={
+                q.trim()
+                  ? "Prueba otro término o limpia el filtro de categoría."
+                  : "Crea el primer documento para usarlo en agentes con RAG."
+              }
+              action={
+                !q.trim() ? (
+                  <Button size="sm" asChild>
+                    <Link to="/app/conocimiento/nuevo">
+                      <Plus className="h-4 w-4 mr-1.5" /> Nuevo
+                    </Link>
+                  </Button>
+                ) : undefined
+              }
+            />
+          </motion.div>
+        ) : (
+          <motion.div
+            key="content"
+            variants={
+              reduceMotion
+                ? undefined
+                : {
+                    hidden: {},
+                    show: { transition: { staggerChildren: 0.04 } },
+                  }
+            }
+            initial={reduceMotion ? false : "hidden"}
+            animate="show"
+            className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3"
+          >
+            {filtered.map((doc) => {
+              const canManage = canManageKnowledge(doc.branch);
+              const canHardDelete = canHardDeleteKnowledge(doc.branch);
+              return (
+                <motion.div
+                  key={doc.id}
+                  variants={
+                    reduceMotion
+                      ? undefined
+                      : {
+                          hidden: { opacity: 0, y: 10 },
+                          show: { opacity: 1, y: 0, transition: { duration: 0.28 } },
+                        }
+                  }
+                >
+                  <KnowledgeCard
+                    doc={doc}
+                    agentCount={agentCountByDoc.get(String(doc.id)) ?? 0}
+                    indexed={isKnowledgeIndexed(doc)}
+                    canManage={canManage}
+                    canRestore={canRestoreKnowledge(doc.branch)}
+                    canHardDelete={canHardDelete}
+                    restoring={restoringId === String(doc.id)}
+                    onDeactivate={() => setPending({ type: "deactivate", doc })}
+                    onHardDelete={() => setPending({ type: "hard", doc })}
+                    onRestore={() => {
+                      const id = String(doc.id);
+                      setRestoringId(id);
+                      update.mutate(
+                        { id, data: { is_active: true }, branch: doc.branch },
+                        {
+                          onSuccess: () => {
+                            toast.success("Conocimiento reactivado");
+                            setRestoringId(null);
+                            void refetch();
+                          },
+                          onError: (e) => {
+                            toast.error(apiErrorMessage(e, "No se pudo reactivar"));
+                            setRestoringId(null);
+                          },
+                        },
+                      );
+                    }}
+                  />
+                </motion.div>
+              );
+            })}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <Dialog
         open={categoryDialog?.type === "rename"}

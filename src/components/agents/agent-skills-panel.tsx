@@ -237,7 +237,7 @@ export function AgentSkillsPanel({ agentId }: AgentSkillsPanelProps) {
         {apps.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border/70 px-4 py-6 text-center text-sm text-muted-foreground">
             No hay apps en esta sucursal.{" "}
-            <Link to="/apis" className="text-primary underline-offset-2 hover:underline">
+            <Link to="/app/apis" className="text-primary underline-offset-2 hover:underline">
               Crear una en APIs
             </Link>
           </div>
@@ -301,7 +301,7 @@ export function AgentSkillsPanel({ agentId }: AgentSkillsPanelProps) {
               <Plus className="h-4 w-4 mr-1.5" /> Asignar skill
             </Button>
             <Button size="sm" variant="outline" asChild>
-              <Link to="/skills">
+              <Link to="/app/skills">
                 <Sparkles className="h-4 w-4 mr-1.5" /> Catálogo
               </Link>
             </Button>
@@ -389,7 +389,7 @@ export function AgentSkillsPanel({ agentId }: AgentSkillsPanelProps) {
                     <Settings2 className="h-4 w-4" />
                   </Button>
                   <Button size="sm" variant="ghost" className="h-8" asChild title="Ver en catálogo">
-                    <Link to={`/skills/${id}`}>
+                    <Link to={`/app/skills/${id}`}>
                       <Eye className="h-4 w-4" />
                     </Link>
                   </Button>
@@ -479,7 +479,7 @@ export function AgentSkillsPanel({ agentId }: AgentSkillsPanelProps) {
                         : "Todas las skills disponibles ya están asignadas."}
                 </p>
                 <Button size="sm" variant="outline" asChild>
-                  <Link to="/skills">Ir al catálogo</Link>
+                  <Link to="/app/skills">Ir al catálogo</Link>
                 </Button>
               </div>
             ) : (

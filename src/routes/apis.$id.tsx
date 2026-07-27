@@ -1203,7 +1203,7 @@ export default function APIDetailPage() {
                       Generar desde endpoints
                     </Button>
                     <Button size="sm" variant="outline" asChild>
-                      <Link to="/funciones/nuevo">
+                      <Link to="/app/skills/nuevo">
                         Nueva skill
                         <ArrowUpRight className="h-3.5 w-3.5 ml-1" />
                       </Link>
@@ -1238,7 +1238,7 @@ export default function APIDetailPage() {
                     return (
                       <li key={fn.id}>
                         <Link
-                          to={`/funciones/${fn.id}`}
+                          to={`/app/skills/${fn.id}`}
                           className="flex items-start gap-3 py-3 -mx-1 px-1 rounded-md hover:bg-muted/35 transition-colors group"
                         >
                           <div className="min-w-0 flex-1 space-y-0.5">

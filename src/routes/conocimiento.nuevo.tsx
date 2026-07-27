@@ -110,7 +110,7 @@ export default function ConocimientoNuevo() {
               ? "Documento creado con auto-refresh. El primer refresco llega en el próximo ciclo (cada 1 h)."
               : "Documento creado. Se indexará al asignarlo a un agente.",
           );
-          navigate(doc?.id ? `/conocimiento/${doc.id}` : "/conocimiento");
+          navigate(doc?.id ? `/app/conocimiento/${doc.id}` : "/app/conocimiento");
         },
         onError: (e) => toast.error(apiErrorMessage(e, "No se pudo crear el documento")),
       },
@@ -124,14 +124,14 @@ export default function ConocimientoNuevo() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0 space-y-1.5">
             <Button variant="ghost" size="sm" className="h-7 -ml-2 text-muted-foreground" asChild>
-              <Link to="/conocimiento">
+              <Link to="/app/conocimiento">
                 <ArrowLeft className="h-3.5 w-3.5 mr-1" /> Conocimiento
               </Link>
             </Button>
             <h1 className="text-xl font-semibold leading-tight">Nuevo conocimiento</h1>
             <p className="text-sm text-muted-foreground max-w-2xl">
               Elige el tipo: el formulario se adapta. Las tablas de datos también se cargan desde{" "}
-              <Link to="/conocimiento/datos" className="font-medium text-primary hover:underline">
+              <Link to="/app/conocimiento/datos" className="font-medium text-primary hover:underline">
                 Datos
               </Link>
               .
@@ -146,7 +146,7 @@ export default function ConocimientoNuevo() {
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             <Button type="button" variant="outline" size="sm" asChild>
-              <Link to="/conocimiento">Cancelar</Link>
+              <Link to="/app/conocimiento">Cancelar</Link>
             </Button>
             <Button type="submit" size="sm" disabled={create.isPending}>
               {create.isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}

@@ -78,7 +78,7 @@ export function PlanHeader({
               <>
                 {" · "}
                 <Link
-                  to={`/workflows/${plan.workflow}`}
+                  to={`/app/workflows/${plan.workflow}`}
                   className="text-primary hover:underline inline-flex items-center gap-1"
                 >
                   <Workflow className="h-3 w-3" />

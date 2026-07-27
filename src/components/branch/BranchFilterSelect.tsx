@@ -27,7 +27,7 @@ type BranchFilterSelectProps = {
   includeAll?: boolean;
   allValue?: string;
   allLabel?: string;
-  label?: string;
+  label?: string | null;
   className?: string;
   triggerClassName?: string;
   disabled?: boolean;

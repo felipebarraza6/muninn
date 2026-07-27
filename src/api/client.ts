@@ -191,11 +191,11 @@ export interface PaginatedResponse<T> {
 }
 
 export function normalizeListResponse<T>(
-  data: T[] | PaginatedResponse<T> | { count: number; results: T[] },
+  data: T[] | PaginatedResponse<T> | { count?: number; results?: T[] } | { results?: T[] },
 ): T[] {
   if (Array.isArray(data)) return data;
-  if (data && typeof data === "object" && Array.isArray((data as { results: T[] }).results)) {
-    return (data as { results: T[] }).results;
+  if (data && typeof data === "object" && Array.isArray((data as { results?: T[] }).results)) {
+    return (data as { results?: T[] }).results!;
   }
   return [];
 }

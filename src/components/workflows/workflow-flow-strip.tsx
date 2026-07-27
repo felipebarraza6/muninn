@@ -103,7 +103,7 @@ function WorkflowFlowStripInner({ workflowId, nodes, edges, isLoading }: Props) 
         description="Abrí el canvas para armar el grafo."
         action={
           <Button size="sm" asChild>
-            <Link to={`/workflows/${workflowId}`}>Abrir canvas</Link>
+            <Link to={`/app/workflows/${workflowId}`}>Abrir canvas</Link>
           </Button>
         }
       />
@@ -137,7 +137,7 @@ function WorkflowFlowStripInner({ workflowId, nodes, edges, isLoading }: Props) 
           className="h-7 text-[11px] gap-1 relative z-[1]"
           asChild
         >
-          <Link to={`/workflows/${workflowId}`}>
+          <Link to={`/app/workflows/${workflowId}`}>
             Abrir canvas
             <ArrowRight className="h-3 w-3" />
           </Link>

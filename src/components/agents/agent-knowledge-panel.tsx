@@ -412,7 +412,7 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
                   <Plus className="h-4 w-4 mr-1.5" /> Asignar conocimiento
                 </Button>
                 <Button size="sm" variant="outline" asChild>
-                  <Link to="/conocimiento">
+                  <Link to="/app/conocimiento">
                     <BookOpen className="h-4 w-4 mr-1.5" /> Catálogo
                   </Link>
                 </Button>
@@ -624,7 +624,7 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
                 </p>
                 {catalog.length === 0 && (
                   <Button size="sm" variant="outline" asChild>
-                    <Link to="/conocimiento">Ir a Conocimiento</Link>
+                    <Link to="/app/conocimiento">Ir a Conocimiento</Link>
                   </Button>
                 )}
               </div>

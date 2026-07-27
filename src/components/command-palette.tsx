@@ -79,24 +79,24 @@ function buildPaletteGroups(): PaletteGroup[] {
     {
       id: "home",
       label: "Resumen",
-      to: "/",
+      to: "/app",
       icon: LayoutDashboard,
       keywords: "home inicio dashboard",
     },
     {
       id: "chat",
       label: "Chat Studio",
-      to: "/chat",
+      to: "/app/chat",
       icon: MessageSquarePlus,
       keywords: "probar agente",
     },
-    { id: "agentes", label: "Agentes", to: "/agentes", icon: Bot, keywords: "ai bots" },
+    { id: "agentes", label: "Agentes", to: "/app/agentes", icon: Bot, keywords: "ai bots" },
   ];
   if (canAccessKnowledgeCatalog()) {
     studio.push({
       id: "conocimiento",
       label: "Conocimiento",
-      to: "/conocimiento",
+      to: "/app/conocimiento",
       icon: BookOpen,
       keywords: "rag docs biblioteca",
     });
@@ -105,7 +105,7 @@ function buildPaletteGroups(): PaletteGroup[] {
     studio.push({
       id: "skills",
       label: "Skills",
-      to: "/skills",
+      to: "/app/skills",
       icon: Sparkles,
       keywords: "funciones tools",
     });
@@ -113,7 +113,7 @@ function buildPaletteGroups(): PaletteGroup[] {
   studio.push({
     id: "apps",
     label: "Aplicaciones",
-    to: "/aplicaciones",
+    to: "/app/aplicaciones",
     icon: LayoutGrid,
     keywords: "apis integraciones",
   });
@@ -123,7 +123,7 @@ function buildPaletteGroups(): PaletteGroup[] {
     comunicacion.push({
       id: "conversaciones",
       label: "Conversaciones",
-      to: "/conversaciones",
+      to: "/app/conversaciones",
       icon: MessageCircle,
       keywords: "inbox bandeja",
     });
@@ -131,7 +131,7 @@ function buildPaletteGroups(): PaletteGroup[] {
   comunicacion.push({
     id: "canales",
     label: "Canales",
-    to: "/canales",
+    to: "/app/canales",
     icon: Share2,
     keywords: "whatsapp telegram",
   });
@@ -148,16 +148,16 @@ function buildPaletteGroups(): PaletteGroup[] {
         {
           id: "planes",
           label: "Planes",
-          to: "/planes",
+          to: "/app/planes",
           icon: ClipboardList,
-          keywords: "ops work plans",
+          keywords: "ops work plans beta",
         },
         {
           id: "workflows",
           label: "Workflows",
-          to: "/workflows",
+          to: "/app/workflows",
           icon: GitBranch,
-          keywords: "flujos canvas",
+          keywords: "flujos canvas beta",
         },
       ],
     });
@@ -167,17 +167,17 @@ function buildPaletteGroups(): PaletteGroup[] {
         {
           id: "admin-orgs",
           label: "Organizaciones",
-          to: "/admin/organizaciones",
+          to: "/app/admin/organizaciones",
           icon: Network,
         },
         {
           id: "admin-branches",
           label: "Sucursales",
-          to: "/admin/sucursales",
+          to: "/app/admin/sucursales",
           icon: Building2,
         },
-        { id: "admin-users", label: "Usuarios", to: "/admin/usuarios", icon: Users },
-        { id: "admin-llm", label: "LLM", to: "/admin/llm", icon: Cpu, keywords: "modelos" },
+        { id: "admin-users", label: "Usuarios", to: "/app/admin/usuarios", icon: Users },
+        { id: "admin-llm", label: "LLM", to: "/app/admin/llm", icon: Cpu, keywords: "modelos" },
       ],
     });
   } else if (isOrgOwner) {
@@ -187,16 +187,16 @@ function buildPaletteGroups(): PaletteGroup[] {
         {
           id: "org-orgs",
           label: getOrganizationsAdminNavLabel(),
-          to: "/admin/organizaciones",
+          to: "/app/admin/organizaciones",
           icon: Network,
         },
         {
           id: "org-branches",
           label: getBranchesAdminNavLabel(),
-          to: "/admin/sucursales",
+          to: "/app/admin/sucursales",
           icon: Building2,
         },
-        { id: "org-users", label: "Usuarios", to: "/admin/usuarios", icon: Users },
+        { id: "org-users", label: "Usuarios", to: "/app/admin/usuarios", icon: Users },
       ],
     });
   } else {
@@ -205,7 +205,7 @@ function buildPaletteGroups(): PaletteGroup[] {
       gestion.push({
         id: "role-branches",
         label: getBranchesAdminNavLabel(),
-        to: "/admin/sucursales",
+        to: "/app/admin/sucursales",
         icon: Building2,
       });
     }
@@ -213,12 +213,12 @@ function buildPaletteGroups(): PaletteGroup[] {
       gestion.push({
         id: "role-users",
         label: "Usuarios",
-        to: "/admin/usuarios",
+        to: "/app/admin/usuarios",
         icon: Users,
       });
     }
     if (canAccessLlmAdmin()) {
-      gestion.push({ id: "role-llm", label: "LLM", to: "/admin/llm", icon: Cpu });
+      gestion.push({ id: "role-llm", label: "LLM", to: "/app/admin/llm", icon: Cpu });
     }
     if (gestion.length) groups.push({ heading: "Gestión", items: gestion });
   }
@@ -226,7 +226,7 @@ function buildPaletteGroups(): PaletteGroup[] {
   groups.push({
     heading: "Cuenta",
     items: [
-      { id: "perfil", label: "Mi perfil", to: "/perfil", icon: User },
+      { id: "perfil", label: "Mi perfil", to: "/app/perfil", icon: User },
       {
         id: "logout",
         label: "Cerrar sesión",

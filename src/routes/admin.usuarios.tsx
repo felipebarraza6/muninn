@@ -1,5 +1,6 @@
 import { useSearchParams } from "react-router-dom";
 import { startTransition, useDeferredValue, useEffect, useMemo, useState } from "react";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import {
   ChevronLeft,
   ChevronRight,
@@ -881,12 +882,23 @@ export default function AdminUsuariosPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- open* leen estado fresco al montar/URL
   }, [searchParams, usersLoading, users, panelOpen, canMutate]);
 
-  if (usersLoading) {
-    return <AdminPageLoader variant="tableFilters" />;
-  }
+  const reduceMotion = useReducedMotion();
 
   return (
-    <AdminPageMotion className={panelOpen ? "pt-3 pb-6 space-y-4" : undefined}>
+    <AnimatePresence mode="wait">
+      {usersLoading ? (
+        <motion.div
+          key="skeleton"
+          initial={reduceMotion ? false : { opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          className="px-4 md:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto"
+        >
+          <AdminPageLoader variant="tableFilters" />
+        </motion.div>
+      ) : (
+        <AdminPageMotion key="content" className={panelOpen ? "pt-3 pb-6 space-y-4" : undefined}>
       {usersError && (
         <AdminMotionItem>
           <ErrorBanner message="No se pudieron cargar los usuarios." onRetry={handleRefresh} />
@@ -907,11 +919,15 @@ export default function AdminUsuariosPage() {
                 />
               </div>
               {showBranchFilter && (
-                <BranchFilterSelect
-                  value={branchFilter}
-                  onValueChange={(v) => startTransition(() => setBranchFilter(v))}
-                  options={branchOptions.map((b) => ({ id: b.id, label: b.label }))}
-                />
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Sucursal</Label>
+                  <BranchFilterSelect
+                    value={branchFilter}
+                    onValueChange={(v) => startTransition(() => setBranchFilter(v))}
+                    options={branchOptions.map((b) => ({ id: b.id, label: b.label }))}
+                    label={null}
+                  />
+                </div>
               )}
               {isGlobalAdmin && organizations.length > 0 && (
                 <div className="space-y-1.5">
@@ -1733,5 +1749,7 @@ export default function AdminUsuariosPage() {
         ]}
       />
     </AdminPageMotion>
+      )}
+    </AnimatePresence>
   );
 }

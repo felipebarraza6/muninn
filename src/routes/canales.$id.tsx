@@ -293,7 +293,7 @@ export default function ChannelDetailPage() {
     <div className="px-4 md:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto space-y-6">
       <header className="flex flex-wrap items-start gap-4">
         <Button variant="outline" size="sm" asChild className="mt-1">
-          <Link to="/canales">
+          <Link to="/app/canales">
             <ArrowLeft className="h-4 w-4 mr-1.5" /> Volver
           </Link>
         </Button>
@@ -408,7 +408,7 @@ export default function ChannelDetailPage() {
                         {
                           onSuccess: () => {
                             toast.success("Canal desactivado");
-                            navigate("/canales");
+                            navigate("/app/canales");
                           },
                           onError: (e) => toast.error(errMsg(e, "No se pudo desactivar el canal")),
                         },
@@ -455,7 +455,7 @@ export default function ChannelDetailPage() {
                         {
                           onSuccess: () => {
                             toast.success("Canal eliminado");
-                            navigate("/canales");
+                            navigate("/app/canales");
                           },
                           onError: (e) => toast.error(errMsg(e, "No se pudo eliminar el canal")),
                         },

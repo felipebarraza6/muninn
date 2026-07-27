@@ -175,7 +175,7 @@ export default function WorkflowsPage() {
         <div className="ml-auto flex items-center gap-2">
           {showBranchFilter ? <StudioBranchFilter /> : null}
           <Button size="sm" variant="ghost" className="h-8 hidden md:inline-flex" asChild>
-            <Link to="/planes">Planes</Link>
+            <Link to="/app/planes">Planes</Link>
           </Button>
           <Button
             size="sm"
@@ -283,7 +283,7 @@ export default function WorkflowsPage() {
                 </div>
                 <div className="flex gap-1.5 shrink-0">
                   <Button size="sm" variant="outline" className="h-8" asChild>
-                    <Link to={`/workflows/${selected.id}`}>Abrir canvas</Link>
+                    <Link to={`/app/workflows/${selected.id}`}>Abrir canvas</Link>
                   </Button>
                   <Button
                     size="sm"
@@ -454,7 +454,7 @@ export default function WorkflowsPage() {
                                         setStatus("draft");
                                         setSelectedId(wf.id);
                                         setSearchParams({ id: wf.id }, { replace: true });
-                                        navigate(`/workflows/${wf.id}`);
+                                        navigate(`/app/workflows/${wf.id}`);
                                       },
                                     },
                                   );
@@ -578,7 +578,7 @@ function WorkflowPreview({
       onSuccess: () => {
         toast.success("Workflow eliminado");
         setConfirmDelete(false);
-        navigate("/workflows", { replace: true });
+        navigate("/app/workflows", { replace: true });
       },
       onError: (e) =>
         toast.error(

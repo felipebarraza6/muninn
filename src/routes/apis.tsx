@@ -474,59 +474,88 @@ export default function APIs() {
     </div>
   );
 
-  if (isLoading || !designationReady) {
-    return (
-      <AdminPageMotion className="space-y-5">
-        {storeHeader}
-        {filterBar}
-        <PageSkeleton variant="cards" padded={false} />
-      </AdminPageMotion>
-    );
-  }
+  const reduceMotionLocal = reduceMotion;
 
   return (
     <AdminPageMotion className="space-y-5">
       {storeHeader}
       {filterBar}
 
-      {filtered.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border/80 py-16 text-center space-y-3 bg-card/30">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20">
-            <LayoutGrid className="h-7 w-7" strokeWidth={1.5} />
-          </div>
-          <div className="space-y-1">
-            <p className="text-sm font-medium">
-              {hasActiveFilter ? "Sin resultados" : "Tu store está vacío"}
-            </p>
-            <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-              {filteringByBranch
-                ? "No hay apps activas en esta sucursal."
-                : hasActiveFilter
-                  ? "Prueba otra búsqueda o limpia los filtros."
-                  : canManage
-                    ? "Añade la primera aplicación al catálogo y habilítala en las sucursales que correspondan."
-                    : "No hay aplicaciones en el store."}
-            </p>
-          </div>
-          {canManage && !hasActiveFilter && (
-            <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
-              <Plus className="h-4 w-4 mr-1.5" /> Añadir aplicación
-            </Button>
-          )}
-        </div>
-      ) : (
-        <motion.div layout className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5">
-          <AnimatePresence mode="popLayout">
-            {filtered.map((api) => (
-              <motion.div
-                key={api.id}
-                layout={!reduceMotion}
-                initial={reduceMotion ? false : { opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={reduceMotion ? undefined : { opacity: 0, scale: 0.98 }}
-                transition={{ duration: 0.2, ease: "easeOut" }}
-              >
-                <AppStoreCard
+      <AnimatePresence mode="wait">
+        {isLoading || !designationReady ? (
+          <motion.div
+            key="skeleton"
+            initial={reduceMotionLocal ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <PageSkeleton variant="cards" padded={false} />
+          </motion.div>
+        ) : filtered.length === 0 ? (
+          <motion.div
+            key="empty"
+            initial={reduceMotionLocal ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="rounded-2xl border border-dashed border-border/80 py-16 text-center space-y-3 bg-card/30"
+          >
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20">
+              <LayoutGrid className="h-7 w-7" strokeWidth={1.5} />
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm font-medium">
+                {hasActiveFilter ? "Sin resultados" : "Tu store está vacío"}
+              </p>
+              <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+                {filteringByBranch
+                  ? "No hay apps activas en esta sucursal."
+                  : hasActiveFilter
+                    ? "Prueba otra búsqueda o limpia los filtros."
+                    : canManage
+                      ? "Añade la primera aplicación al catálogo y habilítala en las sucursales que correspondan."
+                      : "No hay aplicaciones en el store."}
+              </p>
+            </div>
+            {canManage && !hasActiveFilter && (
+              <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
+                <Plus className="h-4 w-4 mr-1.5" /> Añadir aplicación
+              </Button>
+            )}
+          </motion.div>
+        ) : (
+          <motion.div
+            key="content"
+            layout
+            variants={
+              reduceMotion
+                ? undefined
+                : {
+                    hidden: {},
+                    show: { transition: { staggerChildren: 0.04 } },
+                  }
+            }
+            initial={reduceMotion ? false : "hidden"}
+            animate="show"
+            className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5"
+          >
+            <AnimatePresence mode="popLayout">
+              {filtered.map((api) => (
+                <motion.div
+                  key={api.id}
+                  layout={!reduceMotion}
+                  variants={
+                    reduceMotion
+                      ? undefined
+                      : {
+                          hidden: { opacity: 0, y: 10 },
+                          show: { opacity: 1, y: 0, transition: { duration: 0.28 } },
+                        }
+                  }
+                  exit={reduceMotion ? undefined : { opacity: 0, scale: 0.98 }}
+                >
+                  <AppStoreCard
                   api={api}
                   canManage={canManage}
                   showEndpointCount={showEndpointMeta}
@@ -559,6 +588,7 @@ export default function APIs() {
           </AnimatePresence>
         </motion.div>
       )}
+      </AnimatePresence>
 
       <Dialog
         open={open}

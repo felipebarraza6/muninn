@@ -702,7 +702,7 @@ export default function ConocimientoDatos() {
         onSuccess: (res) => {
           const n = res.count ?? res.created?.length ?? items.length;
           toast.success(`${n} documento(s) importado(s)`);
-          navigate("/conocimiento");
+          navigate("/app/conocimiento");
         },
         onError: (err) => {
           toast.error(
@@ -723,7 +723,7 @@ export default function ConocimientoDatos() {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => navigate("/conocimiento")}
+          onClick={() => navigate("/app/conocimiento")}
           className="self-start"
         >
           <ArrowLeft className="h-4 w-4 mr-1.5" /> Volver

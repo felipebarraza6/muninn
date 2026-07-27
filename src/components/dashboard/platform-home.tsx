@@ -21,14 +21,13 @@ import { useChannels } from "@/api/hooks/useChannels";
 import { useExternalAPIs } from "@/api/hooks/useExternalAPIs";
 import { useAgentFunctions } from "@/api/hooks/useAgentFunctions";
 import { AdminMotionItem, AdminPageMotion } from "@/components/admin/AdminPageMotion";
-import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
 import { SummaryKpiGrid, type SummaryKpi } from "@/components/dashboard/summary-kpi-grid";
 
 const QUICK_LINKS = [
-  { href: "/admin/organizaciones", label: "Organizaciones", icon: Building2 },
-  { href: "/admin/sucursales", label: "Sucursales", icon: Store },
-  { href: "/admin/usuarios", label: "Usuarios", icon: Users },
-  { href: "/admin/llm", label: "LLM", icon: Cpu },
+  { href: "/app/admin/organizaciones", label: "Organizaciones", icon: Building2 },
+  { href: "/app/admin/sucursales", label: "Sucursales", icon: Store },
+  { href: "/app/admin/usuarios", label: "Usuarios", icon: Users },
+  { href: "/app/admin/llm", label: "LLM", icon: Cpu },
 ] as const;
 
 /** Resumen de plataforma — superadmin. Sin contacto ni conversaciones. */
@@ -59,7 +58,7 @@ export function PlatformHome() {
       label: "Organizaciones",
       count: orgs.filter((o) => o.is_active !== false).length,
       icon: Building2,
-      href: "/admin/organizaciones",
+      href: "/app/admin/organizaciones",
       tone: "primary",
     },
     {
@@ -67,7 +66,7 @@ export function PlatformHome() {
       label: "Sucursales",
       count: branches.filter((b) => b.is_active !== false).length,
       icon: Store,
-      href: "/admin/sucursales",
+      href: "/app/admin/sucursales",
       tone: "success",
     },
     {
@@ -75,7 +74,7 @@ export function PlatformHome() {
       label: "Usuarios",
       count: users.length,
       icon: Users,
-      href: "/admin/usuarios",
+      href: "/app/admin/usuarios",
       tone: "info",
     },
   ];
@@ -86,7 +85,7 @@ export function PlatformHome() {
       label: "Agentes activos",
       count: agents.filter((a) => a.is_active).length,
       icon: Bot,
-      href: "/agentes",
+      href: "/app/agentes",
       tone: "primary",
     },
     {
@@ -94,7 +93,7 @@ export function PlatformHome() {
       label: "Canales activos",
       count: channels.filter((c) => c.is_active).length,
       icon: Share2,
-      href: "/canales",
+      href: "/app/canales",
       tone: "success",
     },
     {
@@ -102,7 +101,7 @@ export function PlatformHome() {
       label: "Aplicaciones",
       count: apis.filter((a) => a.is_active).length,
       icon: LayoutGrid,
-      href: "/aplicaciones",
+      href: "/app/aplicaciones",
       tone: "info",
     },
     {
@@ -110,7 +109,7 @@ export function PlatformHome() {
       label: "Skills",
       count: skills.filter((f) => f.is_active).length,
       icon: Sparkles,
-      href: "/skills",
+      href: "/app/skills",
       tone: "warning",
     },
   ];
@@ -124,7 +123,6 @@ export function PlatformHome() {
       <AdminMotionItem>
         <PageHeader
           description="Vista global de tenants, infraestructura y catálogo Studio. Sin operación de clientes."
-          actions={<StudioBranchFilter />}
           className="mb-3"
         />
       </AdminMotionItem>
@@ -180,7 +178,7 @@ export function PlatformHome() {
           </CardHeader>
           <CardContent>
             <Button asChild size="sm" variant="outline">
-              <Link to="/conversaciones">
+              <Link to="/app/conversaciones">
                 Abrir conversaciones <ArrowRight className="h-3.5 w-3.5 ml-1" />
               </Link>
             </Button>
