@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useLogin } from "@/api/hooks/useAuth";
 import { useResolvePublicLoginTheme } from "@/api/hooks/useBranchTheme";
@@ -8,8 +8,10 @@ import { resolveMediaUrl } from "@/lib/mediaUrl";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { MuninnBrand } from "@/components/brand/MuninnBrand";
 import { LoginSocialLinks } from "@/components/brand/LoginSocialLinks";
+import { cn } from "@/lib/utils";
 import { LoginAtmosphere } from "@/components/brand/LoginAtmosphere";
 import { MuninnLoginLanding } from "@/components/brand/MuninnLoginLanding";
+import { PixelBoot } from "@/components/brand/LoginPixelBoot";
 import { MUNINN_LIVE_DEMO_EVENT } from "@/lib/muninnLiveDemo";
 import { OrgLoginLanding } from "@/components/brand/OrgLoginLanding";
 import { LoginForm } from "@/components/auth/LoginForm";
@@ -33,6 +35,7 @@ export default function Login() {
   const { flat, scope, isAppDefault, isLoading: themeLoading } = useResolvePublicLoginTheme(slug);
   const [pixelReady, setPixelReady] = useState(() => Boolean(reduceMotion));
   const [liveNonce, setLiveNonce] = useState(0);
+  const [nordicZone, setNordicZone] = useState<string>("fjord");
 
   useEffect(() => {
     if (!isAppDefault) {
@@ -53,6 +56,16 @@ export default function Login() {
     const onEgg = () => setLiveNonce((n) => n + 1);
     window.addEventListener(MUNINN_LIVE_DEMO_EVENT, onEgg);
     return () => window.removeEventListener(MUNINN_LIVE_DEMO_EVENT, onEgg);
+  }, [isAppDefault]);
+
+  useEffect(() => {
+    if (!isAppDefault) return;
+    const onZoneChange = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.zone) setNordicZone(detail.zone);
+    };
+    window.addEventListener("muninn-zone-change", onZoneChange);
+    return () => window.removeEventListener("muninn-zone-change", onZoneChange);
   }, [isAppDefault]);
 
   const [email, setEmail] = useState("");
@@ -173,23 +186,37 @@ export default function Login() {
         <LoginAtmosphere
           intensity="full"
           variant="pixel"
-          mood="gotham"
+          mood="nordic"
+          zone={nordicZone as any}
           parallax
           className="pointer-events-none fixed inset-0 z-0"
         />
-        <div className="fixed top-3 right-3 z-30 sm:top-4 sm:right-4">
+        <div className="fixed top-3 right-3 z-30 flex items-center gap-2 sm:top-4 sm:right-4">
+          <a
+            href="mailto:felipe.barraza.vega@gmail.com"
+            className="pixel-font pixel-jules-sm inline-flex items-center gap-1 border-2 border-primary/50 bg-card px-2.5 py-1 text-[8px] uppercase text-primary hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:px-3 sm:text-[9px]"
+          >
+            Cotizar
+          </a>
+          <Link
+            to="/entrar"
+            className="pixel-font pixel-jules-sm inline-flex items-center gap-1 border-2 border-primary bg-primary px-2.5 py-1 text-[8px] uppercase text-primary-foreground hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:px-3 sm:text-[9px]"
+          >
+            Ingresar
+          </Link>
           <ThemeToggle className="login-pixel-theme-toggle border-2 border-border/60 bg-card text-foreground shadow-[2px_2px_0_0_color-mix(in_oklab,var(--foreground)_18%,transparent)] hover:bg-card" />
         </div>
 
         {/* Contenido centrado; ciudad full-bleed detrás. Desktop más ancho para no “flotar” en el vacío */}
-        <div className="relative z-10 mx-auto w-full max-w-[56rem] xl:max-w-[68rem] [text-shadow:0_1px_0_color-mix(in_oklab,var(--gotham-sky-0,#010204)_60%,transparent)]">
-          {pixelReady ? (
-            <MuninnLoginLanding liveNonce={liveNonce} />
-          ) : (
-            <div className="flex min-h-dvh items-center justify-center px-8 py-16">
-              <span className="sr-only">Cargando</span>
-            </div>
+        <div
+          className={cn(
+            "relative z-10 mx-auto w-full",
+            pixelReady
+              ? "max-w-[56rem] xl:max-w-[68rem]"
+              : "flex min-h-dvh items-center justify-center",
           )}
+        >
+          {pixelReady ? <MuninnLoginLanding liveNonce={liveNonce} /> : <PixelBoot centered />}
         </div>
       </div>
     );

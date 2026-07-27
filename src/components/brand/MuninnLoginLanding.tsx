@@ -1,29 +1,53 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { HarnessPeek, PitchSwap } from "@/components/brand/LoginLandingPanel";
+import { HarnessPeek } from "@/components/brand/LoginLandingPanel";
 import { LoginProductDemo } from "@/components/brand/LoginProductDemo";
-import { PixelBoot } from "@/components/brand/LoginPixelBoot";
 import { PixelIcon, type PixelIconName } from "@/components/brand/pixel-icons";
+import { PixelRaven } from "@/components/brand/PixelRaven";
 import {
   LOGIN_ATOMS,
-  LOGIN_COMPANION_BEATS,
+  LOGIN_AGENT_BEATS,
   LOGIN_HARNESS_REF,
   LOGIN_LANDING_CTA,
+  LOGIN_LANDING_LEAD,
   LOGIN_LANDING_MODULES,
-  LOGIN_LANDING_NAV,
   LOGIN_LANDING_SEE_LIVE,
   LOGIN_OPERATE_STEPS,
   LOGIN_PLATFORM_BLURB,
   LOGIN_VALUE_BLOCKS,
   type LoginLandingModuleId,
 } from "@/lib/loginLanding";
-import { dispatchMuninnLiveDemo } from "@/lib/muninnLiveDemo";
 import { cn } from "@/lib/utils";
 
-const SECTION_NAV = LOGIN_LANDING_NAV.filter((n) => n.href.startsWith("#"));
+type SectionId = "hero" | "agente" | "tecnico" | "live" | "docs";
 
-const BOOT_MS = 900;
+const SECTION_ORDER: SectionId[] = ["hero", "agente", "tecnico", "live", "docs"];
+
+/** Mapping de sección → zona del background scene (LoginAtmosphere). */
+const SECTION_ZONE: Record<SectionId, string> = {
+  hero: "fjord",
+  agente: "forest",
+  tecnico: "mountains",
+  live: "shore",
+  docs: "moon",
+};
+
+const SECTION_LABEL: Record<SectionId, string> = {
+  hero: "Muninn",
+  agente: "Qué es",
+  tecnico: "Agente",
+  live: "Flujo",
+  docs: "Docs",
+};
+
+const RAIL_ICON: Record<SectionId, PixelIconName> = {
+  hero: "soul",
+  agente: "hand",
+  tecnico: "hammer",
+  live: "play",
+  docs: "book",
+};
 
 const ATOM_ICON: Record<LoginLandingModuleId, PixelIconName> = {
   soul: "soul",
@@ -40,17 +64,6 @@ type Props = {
   liveNonce?: number;
 };
 
-function parseAtomHash(raw: string): LoginLandingModuleId | null {
-  const cleaned = raw.replace(/^#/, "");
-  const m =
-    cleaned.match(/^atomos[=-](\w+)$/) ||
-    cleaned.match(/^atom-(\w+)$/) ||
-    cleaned.match(/^atomos\/(\w+)$/);
-  if (!m) return null;
-  const id = m[1] as LoginLandingModuleId;
-  return LOGIN_ATOMS.some((a) => a.id === id) ? id : null;
-}
-
 function SectionChrome({
   kicker,
   title,
@@ -64,28 +77,19 @@ function SectionChrome({
 }) {
   return (
     <header className="space-y-2">
-      <p className="pixel-font text-[8px] uppercase tracking-[0.14em] text-primary/80">{kicker}</p>
+      <p className="pixel-font text-[10px] uppercase tracking-[0.14em] text-primary/80">{kicker}</p>
       <h2
         id={id}
-        className="pixel-font text-[12px] uppercase leading-relaxed text-foreground sm:text-[13px]"
+        className="pixel-font text-[15px] uppercase leading-relaxed text-foreground sm:text-[16px]"
       >
         {title}
       </h2>
       {lead ? (
-        <p className="pixel-display max-w-xl text-[13px] leading-relaxed text-muted-foreground">
+        <p className="pixel-display max-w-xl text-[14px] leading-relaxed text-muted-foreground">
           {lead}
         </p>
       ) : null}
     </header>
-  );
-}
-
-function ChapterRule({ label }: { label: string }) {
-  return (
-    <div className="space-y-2" aria-hidden>
-      <div className="pixel-jules-divider" />
-      <p className="pixel-font text-[7px] uppercase tracking-[0.16em] text-primary/70">{label}</p>
-    </div>
   );
 }
 
@@ -102,31 +106,8 @@ function Reveal({
   tone?: "pop" | "fade" | "none";
 }) {
   const reduceMotion = useReducedMotion();
-  const ref = useRef<HTMLDivElement>(null);
-  const [on, setOn] = useState(() => Boolean(reduceMotion) || tone === "none");
-
-  useEffect(() => {
-    if (reduceMotion || tone === "none") {
-      setOn(true);
-      return;
-    }
-    const el = ref.current;
-    if (!el) return;
-    const obs = new IntersectionObserver(
-      ([entry]) => {
-        if (entry?.isIntersecting) {
-          setOn(true);
-          obs.disconnect();
-        }
-      },
-      { rootMargin: "0px 0px -8% 0px", threshold: 0.12 },
-    );
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, [reduceMotion, tone]);
-
   const animClass =
-    on && !reduceMotion && tone !== "none"
+    !reduceMotion && tone !== "none"
       ? tone === "pop"
         ? "pixel-enter-pop"
         : "pixel-enter-fade"
@@ -134,10 +115,9 @@ function Reveal({
 
   return (
     <div
-      ref={ref}
       className={cn(animClass, className)}
       style={
-        on && !reduceMotion && tone !== "none"
+        !reduceMotion && tone !== "none"
           ? ({ "--pixel-delay": `${delayMs}ms` } as CSSProperties)
           : undefined
       }
@@ -147,128 +127,51 @@ function Reveal({
   );
 }
 
-function NavLink({
-  href,
-  className,
-  children,
+function NavigationRail({
+  active,
+  onSelect,
 }: {
-  href: string;
-  className?: string;
-  children: ReactNode;
+  active: SectionId;
+  onSelect: (id: SectionId) => void;
 }) {
-  if (href.startsWith("/")) {
-    return (
-      <Link to={href} className={className}>
-        {children}
-      </Link>
-    );
-  }
-  return (
-    <a href={href} className={className}>
-      {children}
-    </a>
-  );
-}
-
-function LandingNav({ active, progress }: { active: string; progress: number }) {
-  const sectionItems = LOGIN_LANDING_NAV.filter((n) => !n.href.startsWith("/"));
-  const authItem = LOGIN_LANDING_NAV.find((n) => n.href.startsWith("/"));
-  const activeIdx = Math.max(
-    0,
-    sectionItems.findIndex((n) => n.id === active),
-  );
-
   return (
     <nav
       aria-label="Secciones Muninn"
-      className="login-pixel-nav sticky top-3 z-20 mb-8 hidden lg:block"
+      className="fixed left-3 top-1/2 z-30 flex -translate-y-1/2 flex-col gap-3"
     >
-      <div className="login-pixel-nav__rail border-2 border-border/60 bg-card p-1.5 shadow-[3px_3px_0_0_color-mix(in_oklab,var(--foreground)_14%,transparent)] pixel-jules-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <ul className="relative flex flex-wrap gap-1.5">
-            {sectionItems.map((item) => {
-              const on = active === item.id;
-              return (
-                <li key={item.id}>
-                  <NavLink
-                    href={item.href}
-                    className={cn(
-                      "pixel-font relative inline-flex min-h-8 items-center px-2.5 text-[8px] uppercase transition-colors pixel-jules-sm",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-                      on
-                        ? "border-2 border-primary/70 bg-primary/15 text-primary"
-                        : "border-2 border-transparent text-muted-foreground hover:border-primary/40 hover:text-primary",
-                    )}
-                  >
-                    {item.label}
-                  </NavLink>
-                </li>
-              );
-            })}
-            <li
-              className="login-pixel-nav__thumb pointer-events-none absolute bottom-0 left-0 h-0.5 bg-primary transition-transform duration-300 ease-out"
-              style={{
-                width: `${100 / Math.max(sectionItems.length, 1)}%`,
-                transform: `translateX(${activeIdx * 100}%)`,
-              }}
-              aria-hidden
-            />
-          </ul>
-          {authItem ? (
-            <NavLink
-              href={authItem.href}
-              className="pixel-font inline-flex min-h-8 items-center border-2 border-primary bg-primary px-3 text-[8px] uppercase text-primary-foreground hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary pixel-jules-sm"
-            >
-              {authItem.label}
-            </NavLink>
-          ) : null}
-        </div>
-        <div
-          className="login-pixel-nav__progress mt-1.5 h-1.5 border-2 border-border/40 bg-background"
-          role="presentation"
-        >
-          <span
-            className="block h-full bg-primary transition-[width] duration-300 ease-out"
-            style={{ width: `${Math.round(progress * 100)}%` }}
-          />
-        </div>
-      </div>
-    </nav>
-  );
-}
-
-function MobileSectionJump({ active, progress }: { active: string; progress: number }) {
-  return (
-    <div className="mb-5 lg:hidden">
-      <div className="flex gap-1.5 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {LOGIN_LANDING_NAV.filter((n) => n.id !== "hero").map((item) => {
-          const on = active === item.id;
-          const isAuth = item.href.startsWith("/");
-          return (
-            <NavLink
-              key={item.id}
-              href={item.href}
+      {SECTION_ORDER.map((id) => {
+        const on = active === id;
+        return (
+          <div key={id} className="group flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onSelect(id)}
+              aria-label={SECTION_LABEL[id]}
+              aria-pressed={on}
+              title={SECTION_LABEL[id]}
               className={cn(
-                "pixel-font shrink-0 border-2 px-2.5 py-1.5 text-[8px] uppercase pixel-jules-sm",
-                isAuth
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : on
-                    ? "border-primary/70 bg-primary/15 text-primary"
-                    : "border-border/60 bg-card text-muted-foreground",
+                "pixel-jules-sm flex h-10 w-10 shrink-0 items-center justify-center border-2 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                on
+                  ? "border-primary bg-primary/20 text-primary"
+                  : "border-border/50 bg-card/80 text-muted-foreground hover:border-primary/50 hover:text-primary",
               )}
             >
-              {item.label}
-            </NavLink>
-          );
-        })}
-      </div>
-      <div className="mt-1.5 h-1 border-2 border-border/40 bg-background" role="presentation">
-        <span
-          className="block h-full bg-primary transition-[width] duration-300 ease-out"
-          style={{ width: `${Math.round(progress * 100)}%` }}
-        />
-      </div>
-    </div>
+              <PixelIcon icon={RAIL_ICON[id]} className="h-5 w-5" />
+            </button>
+            <span
+              className={cn(
+                "pixel-font whitespace-nowrap text-[10px] uppercase tracking-[0.12em] transition-all duration-200 max-sm:hidden",
+                on
+                  ? "translate-x-0 text-primary/90 opacity-100"
+                  : "-translate-x-1 text-transparent opacity-0 group-hover:translate-x-0 group-hover:text-muted-foreground/60 group-hover:opacity-100",
+              )}
+            >
+              {SECTION_LABEL[id]}
+            </span>
+          </div>
+        );
+      })}
+    </nav>
   );
 }
 
@@ -289,7 +192,7 @@ function AtomJumpStrip({
             type="button"
             onClick={() => onSelect(a.id)}
             className={cn(
-              "pixel-font inline-flex items-center gap-1.5 border-2 px-2.5 py-1.5 text-[8px] uppercase pixel-jules-sm",
+              "pixel-font pixel-jules-sm inline-flex items-center gap-1.5 border-2 px-2.5 py-1.5 text-[10px] uppercase",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
               on
                 ? "border-primary bg-primary/20 text-primary"
@@ -313,56 +216,12 @@ function AtomSections({
   focused: LoginLandingModuleId | null;
   onFocus: (id: LoginLandingModuleId) => void;
 }) {
-  const reduceMotion = useReducedMotion();
-
-  useEffect(() => {
-    const applyHash = () => {
-      const id = parseAtomHash(window.location.hash);
-      if (!id) return;
-      onFocus(id);
-      window.requestAnimationFrame(() => {
-        document.getElementById(`atom-${id}`)?.scrollIntoView({
-          behavior: reduceMotion ? "auto" : "smooth",
-          block: "start",
-        });
-      });
-    };
-    applyHash();
-    window.addEventListener("hashchange", applyHash);
-    return () => window.removeEventListener("hashchange", applyHash);
-  }, [onFocus, reduceMotion]);
-
-  useEffect(() => {
-    const nodes = LOGIN_ATOMS.map((a) => document.getElementById(`atom-${a.id}`)).filter(
-      (n): n is HTMLElement => Boolean(n),
-    );
-    if (!nodes.length) return;
-    const obs = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
-        const top = visible[0]?.target.id?.replace(/^atom-/, "") as
-          | LoginLandingModuleId
-          | undefined;
-        if (top && LOGIN_ATOMS.some((a) => a.id === top)) onFocus(top);
-      },
-      { rootMargin: "-25% 0px -50% 0px", threshold: [0.2, 0.45] },
-    );
-    for (const n of nodes) obs.observe(n);
-    return () => obs.disconnect();
-  }, [onFocus]);
-
   const jump = (id: LoginLandingModuleId) => {
     onFocus(id);
     const url = `#atom-${id}`;
     if (window.location.hash !== url) {
       history.replaceState(null, "", url);
     }
-    document.getElementById(`atom-${id}`)?.scrollIntoView({
-      behavior: reduceMotion ? "auto" : "smooth",
-      block: "start",
-    });
   };
 
   return (
@@ -379,7 +238,7 @@ function AtomSections({
                 <article
                   id={`atom-${atom.id}`}
                   className={cn(
-                    "login-pixel-atom scroll-mt-28 border-2 p-3 sm:p-4 pixel-jules-sm",
+                    "login-pixel-atom border-2 p-4 sm:p-5 pixel-jules-sm",
                     on
                       ? "border-primary bg-primary/10 shadow-[4px_4px_0_0_color-mix(in_oklab,var(--primary)_30%,transparent)]"
                       : "border-border/55 bg-card/80",
@@ -398,35 +257,35 @@ function AtomSections({
                           <PixelIcon icon={ATOM_ICON[atom.id]} className="h-3.5 w-3.5" />
                           {atom.role}
                         </span>
-                        <span className="pixel-font text-[8px] uppercase text-muted-foreground">
+                        <span className="pixel-font text-[10px] uppercase text-muted-foreground">
                           0{i + 1} / 0{LOGIN_ATOMS.length}
                         </span>
                       </div>
-                      <h3 className="pixel-display text-[1.2rem] font-semibold text-foreground">
+                      <h3 className="pixel-display text-[1.3rem] font-semibold text-foreground">
                         {atom.title}
                       </h3>
-                      <p className="pixel-display text-[13px] leading-relaxed text-muted-foreground">
+                      <p className="pixel-display text-[14px] leading-relaxed text-muted-foreground">
                         {atom.line}
                       </p>
-                      <p className="pixel-display text-[13px] leading-relaxed text-foreground/90">
+                      <p className="pixel-display text-[14px] leading-relaxed text-foreground/90">
                         {atom.why}
                       </p>
                     </div>
 
-                    <div className="space-y-2.5 border-2 border-primary/30 bg-background/70 p-3">
+                    <div className="space-y-2.5 border-2 border-primary/30 bg-background/70 p-4">
                       <div>
-                        <p className="pixel-font mb-1 text-[7px] uppercase text-primary/80">
+                        <p className="pixel-font mb-1 text-[9px] uppercase text-primary/80">
                           Ejemplo
                         </p>
-                        <p className="pixel-display text-[12px] leading-relaxed text-foreground">
+                        <p className="pixel-display text-[14px] leading-relaxed text-foreground">
                           {atom.example}
                         </p>
                       </div>
                       <div className="border-t-2 border-primary/20 pt-2">
-                        <p className="pixel-font mb-1 text-[7px] uppercase text-primary/80">
+                        <p className="pixel-font mb-1 text-[9px] uppercase text-primary/80">
                           Técnico
                         </p>
-                        <p className="pixel-display text-[12px] leading-relaxed text-muted-foreground">
+                        <p className="pixel-display text-[14px] leading-relaxed text-muted-foreground">
                           {atom.tech}
                         </p>
                       </div>
@@ -443,7 +302,7 @@ function AtomSections({
         {LOGIN_LANDING_MODULES.map((m, i) => (
           <li key={m.id} className="inline-flex items-center gap-1.5">
             {i > 0 && (
-              <span className="pixel-font text-[10px] text-primary/60" aria-hidden>
+              <span className="pixel-font text-[12px] text-primary/60" aria-hidden>
                 →
               </span>
             )}
@@ -451,7 +310,7 @@ function AtomSections({
               type="button"
               onClick={() => jump(m.id)}
               className={cn(
-                "pixel-font border-2 px-2 py-1 text-[8px] uppercase pixel-jules-sm",
+                "pixel-font pixel-jules-sm border-2 px-2.5 py-1 text-[10px] uppercase",
                 m.id === focused
                   ? "border-primary bg-primary text-primary-foreground"
                   : "border-border/50 text-muted-foreground hover:text-foreground",
@@ -499,7 +358,7 @@ function FlowSteps() {
                 type="button"
                 onClick={() => setStep(i)}
                 className={cn(
-                  "h-full w-full border-2 px-3 py-2.5 text-left transition-colors pixel-jules-sm",
+                  "pixel-jules-sm h-full w-full border-2 p-3 text-left transition-colors",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
                   on
                     ? "border-primary bg-primary/15 shadow-[3px_3px_0_0_color-mix(in_oklab,var(--primary)_35%,transparent)]"
@@ -509,8 +368,8 @@ function FlowSteps() {
                 <span className="pixel-jules-step bg-primary text-primary-foreground mb-1.5">
                   {s.n}
                 </span>
-                <p className="pixel-display text-[14px] font-semibold text-foreground">{s.title}</p>
-                <p className="pixel-display mt-1 text-[12px] leading-snug text-muted-foreground">
+                <p className="pixel-display text-[15px] font-semibold text-foreground">{s.title}</p>
+                <p className="pixel-display mt-1 text-[13px] leading-snug text-muted-foreground">
                   {s.line}
                 </p>
               </button>
@@ -526,13 +385,13 @@ function FlowSteps() {
           animate={{ opacity: 1, y: 0 }}
           exit={reduceMotion ? undefined : { opacity: 0, y: -4 }}
           transition={{ duration: 0.2, ease: "linear" }}
-          className="login-pixel-readout !p-3 pixel-jules-sm"
+          className="login-pixel-readout !p-4 pixel-jules-sm"
         >
-          <p className="pixel-font text-[8px] uppercase text-primary">Paso {current.n}</p>
-          <p className="pixel-display mt-1 text-[14px] font-semibold text-foreground">
+          <p className="pixel-font text-[10px] uppercase text-primary">Paso {current.n}</p>
+          <p className="pixel-display mt-1 text-[15px] font-semibold text-foreground">
             {current.title}
           </p>
-          <p className="pixel-display mt-1 text-[12px] leading-relaxed text-muted-foreground">
+          <p className="pixel-display mt-1 text-[14px] leading-relaxed text-muted-foreground">
             {current.line}
           </p>
         </motion.div>
@@ -554,411 +413,570 @@ function FlowSteps() {
 }
 
 /**
- * Landing comercial Muninn: nav + átomos + flujo + live + valor + docs.
+ * Landing comercial Muninn: rail izquierdo + secciones por estado (sin scroll-snap).
  */
 export function MuninnLoginLanding({ className, liveNonce = 0 }: Props) {
-  const reduceMotion = useReducedMotion();
-  const [booted, setBooted] = useState(() => Boolean(reduceMotion));
   const [liveFocus, setLiveFocus] = useState(0);
-  const [activeSection, setActiveSection] = useState("hero");
-  const [scrollProgress, setScrollProgress] = useState(0);
+  const [activeSection, setActiveSection] = useState<SectionId>(() => {
+    const hash = window.location.hash.replace("#", "");
+    if (
+      hash === "hero" ||
+      hash === "agente" ||
+      hash === "tecnico" ||
+      hash === "live" ||
+      hash === "docs"
+    )
+      return hash as SectionId;
+    return "hero";
+  });
   const [focusedAtom, setFocusedAtom] = useState<LoginLandingModuleId | null>("soul");
+  const [selectedAtom, setSelectedAtom] = useState<LoginLandingModuleId | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (reduceMotion) {
-      setBooted(true);
-      return;
-    }
-    const t = window.setTimeout(() => setBooted(true), BOOT_MS);
-    return () => window.clearTimeout(t);
-  }, [reduceMotion]);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (liveNonce > 0) setLiveFocus(liveNonce);
   }, [liveNonce]);
 
+  // Pasa la zona activa al background scene (LoginAtmosphere) vía evento desacoplado.
+  // También actualiza la URL hash para navegación real y recarga directa.
   useEffect(() => {
-    if (!booted) return;
-    const ids = SECTION_NAV.map((n) => n.id);
-    const nodes = ids
-      .map((id) => document.getElementById(id))
-      .filter((n): n is HTMLElement => Boolean(n));
-    if (!nodes.length) return;
-
-    const obs = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
-        const top = visible[0]?.target.id;
-        if (top) setActiveSection(top);
-      },
-      { rootMargin: "-18% 0px -52% 0px", threshold: [0.12, 0.3, 0.5] },
+    const zone = SECTION_ZONE[activeSection];
+    window.dispatchEvent(
+      new CustomEvent("muninn-zone-change", { detail: { zone, section: activeSection } }),
     );
-
-    for (const n of nodes) obs.observe(n);
-    return () => obs.disconnect();
-  }, [booted]);
-
-  useEffect(() => {
-    if (!booted) return;
-    const onScroll = () => {
-      const el = rootRef.current;
-      if (!el) return;
-      const rect = el.getBoundingClientRect();
-      const total = Math.max(el.scrollHeight - window.innerHeight, 1);
-      const traveled = Math.min(Math.max(-rect.top, 0), total);
-      setScrollProgress(traveled / total);
-    };
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, [booted]);
-
-  if (!booted) {
-    return (
-      <div className={cn("flex min-h-[50vh] items-center px-8 py-10", className)}>
-        <PixelBoot />
-      </div>
-    );
-  }
+    const hash = activeSection === "hero" ? "" : activeSection;
+    history.replaceState(null, "", hash ? `/#${hash}` : "/");
+    // Reset scroll al cambiar de sección
+    contentRef.current?.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
+  }, [activeSection]);
 
   return (
-    <div
-      ref={rootRef}
-      className={cn(
-        "relative z-[2] flex flex-col px-6 py-10 sm:px-8 lg:px-10 lg:py-12 xl:px-12",
-        className,
-      )}
-    >
-      <LandingNav active={activeSection} progress={scrollProgress} />
-      <MobileSectionJump active={activeSection} progress={scrollProgress} />
+    <div ref={rootRef} className={cn("relative z-[2] flex h-dvh overflow-hidden", className)}>
+      <NavigationRail active={activeSection} onSelect={setActiveSection} />
 
-      {/* Code editor viewport — estilo Jules */}
-      <div className="pixel-jules-editor mb-8 overflow-hidden pixel-jules-lg hidden sm:block">
-        <div className="flex items-center gap-2 border-b-2 border-primary/20 px-3 py-1.5">
-          <span className="h-2.5 w-2.5" style={{ background: "var(--gotham-rose)" }} />
-          <span className="h-2.5 w-2.5" style={{ background: "var(--gotham-amber)" }} />
-          <span className="h-2.5 w-2.5 bg-primary" />
-          <span className="pixel-font ml-2 text-[7px] uppercase text-muted-foreground">
-            muninn.config.ts
-          </span>
-        </div>
-        <div className="flex font-mono text-[11px] leading-5">
-          <div className="pixel-jules-editor__gutter shrink-0 border-r-2 border-primary/15 py-2">
-            {["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"].map((n) => (
-              <div key={n} className="px-2">
-                {n}
-              </div>
-            ))}
-          </div>
-          <div className="flex-1 overflow-x-auto px-3 py-2">
-            <div>
-              <span className="text-primary/50">import</span>{" "}
-              <span className="text-[var(--gotham-cyan)]">{"{ Muninn }"}</span>{" "}
-              <span className="text-primary/50">from</span>{" "}
-              <span className="text-[var(--gotham-amber)]">"@muninn/harness"</span>
-            </div>
-            <div>&nbsp;</div>
-            <div className="pixel-jules-editor__line-add">
-              <span className="text-primary/40">+</span>{" "}
-              <span className="text-primary/60">const</span>{" "}
-              <span className="text-foreground">agente</span>{" "}
-              <span className="text-primary/50">=</span>{" "}
-              <span className="text-primary">Muninn</span>
-              <span className="text-foreground">.create({"{"}</span>
-            </div>
-            <div className="pixel-jules-editor__line-add">
-              <span className="text-primary/40">+</span>{" "}
-              <span className="text-[var(--gotham-cyan)]">soul</span>
-              <span className="text-foreground">: </span>
-              <span className="text-[var(--gotham-amber)]">"Asistente de operaciones"</span>
-              <span className="text-foreground">,</span>
-            </div>
-            <div className="pixel-jules-editor__line-add">
-              <span className="text-primary/40">+</span>{" "}
-              <span className="text-[var(--gotham-cyan)]">rules</span>
-              <span className="text-foreground">: [</span>
-              <span className="text-[var(--gotham-amber)]">"respetar horarios"</span>
-              <span className="text-foreground">, </span>
-              <span className="text-[var(--gotham-amber)]">"formato Chile"</span>
-              <span className="text-foreground">],</span>
-            </div>
-            <div className="pixel-jules-editor__line-add">
-              <span className="text-primary/40">+</span>{" "}
-              <span className="text-[var(--gotham-cyan)]">helpers</span>
-              <span className="text-foreground">: [</span>
-              <span className="text-[var(--gotham-amber)]">"crm"</span>
-              <span className="text-foreground">, </span>
-              <span className="text-[var(--gotham-amber)]">"email"</span>
-              <span className="text-foreground">, </span>
-              <span className="text-[var(--gotham-amber)]">"calendar"</span>
-              <span className="text-foreground">],</span>
-            </div>
-            <div className="pixel-jules-editor__line-add">
-              <span className="text-primary/40">+</span>{" "}
-              <span className="text-[var(--gotham-cyan)]">rag</span>
-              <span className="text-foreground">: </span>
-              <span className="text-[var(--gotham-amber)]">"./docs"</span>
-              <span className="text-foreground">,</span>
-            </div>
-            <div className="pixel-jules-editor__line-add">
-              <span className="text-primary/40">+</span>{" "}
-              <span className="text-[var(--gotham-cyan)]">cron</span>
-              <span className="text-foreground">: </span>
-              <span className="text-[var(--gotham-amber)]">"*/15 * * * *"</span>
-              <span className="text-foreground">,</span>
-            </div>
-            <div className="pixel-jules-editor__line-add">
-              <span className="text-primary/40">+</span>{" "}
-              <span className="text-foreground">{"}"})</span>
-            </div>
-            <div>&nbsp;</div>
-            <div>
-              <span className="text-primary/50">export default</span>{" "}
-              <span className="text-foreground">agente</span>
-            </div>
-          </div>
-        </div>
-      </div>
+      <div
+        ref={contentRef}
+        className="ml-12 flex flex-1 flex-col overflow-y-auto px-4 pb-4 pt-16 sm:ml-16 sm:p-8"
+      >
+        <div className="flex min-h-0 flex-1 items-start justify-center">
+          <AnimatePresence mode="popLayout">
+            <motion.div
+              key={activeSection}
+              initial={{ opacity: 0, filter: "blur(8px)", y: 14 }}
+              animate={{ opacity: 1, filter: "blur(0px)", y: 0 }}
+              exit={{ opacity: 0, filter: "blur(6px)", y: -14 }}
+              transition={{ duration: 0.35, ease: [0.45, 0, 0.2, 1] }}
+              className="flex w-full max-w-3xl flex-col"
+            >
+              {activeSection === "hero" && (
+                <section
+                  id="hero"
+                  className="relative flex min-h-[70dvh] flex-col items-center justify-center gap-5 px-4 text-center sm:min-h-0"
+                  aria-label="Muninn"
+                >
+                  <Reveal tone="pop">
+                    <div className="flex flex-col items-center gap-4">
+                      <PixelRaven featured className="h-20 w-20 sm:h-28 sm:w-28" />
+                      <p className="pixel-font text-2xl uppercase tracking-[0.2em] text-foreground [text-shadow:0_2px_10px_var(--nordic-sky-0,#010204)] sm:text-3xl">
+                        MUNINN
+                      </p>
+                    </div>
+                  </Reveal>
 
-      <div className="pixel-jules-divider mb-10" />
+                  <Reveal tone="fade" delayMs={60}>
+                    <div className="mx-auto max-w-xl space-y-3 rounded-sm bg-background/25 px-4 py-3 backdrop-blur-md sm:bg-background/15 sm:px-6 sm:py-4 sm:backdrop-blur-sm">
+                      <p className="pixel-display text-[16px] leading-relaxed text-foreground/95 [text-shadow:0_2px_12px_var(--nordic-sky-0,#010204)] sm:text-[18px]">
+                        Crea, opera y supervisa tu agente de IA
+                        <br />
+                        con claridad total.{" "}
+                        <span className="text-primary [text-shadow:0_1px_8px_color-mix(in_oklab,var(--primary)_30%,transparent)]">
+                          Sin cajas negras.
+                        </span>
+                      </p>
+                    </div>
+                  </Reveal>
+                </section>
+              )}
 
-      <div className="flex flex-col gap-20 lg:gap-28">
-        {/* Hero — compañero primero */}
-        <section
-          id="hero"
-          className="scroll-mt-24 flex min-h-[88vh] flex-col items-center justify-end space-y-6 pb-8 pt-12 text-center sm:min-h-[92vh] lg:min-h-[100vh] lg:scroll-mt-28 lg:justify-center lg:pb-14"
-          aria-label="Muninn"
-        >
-          <Reveal tone="pop">
-            <div className="mx-auto max-w-2xl space-y-4">
-              <PitchSwap brand centered />
-            </div>
-          </Reveal>
-          <Reveal tone="pop" delayMs={80}>
-            <div className="flex flex-wrap items-center justify-center gap-3">
-              <Link
-                to="/entrar"
-                className="pixel-font inline-flex items-center gap-1.5 border-4 border-primary bg-primary px-5 py-2.5 text-[9px] uppercase text-primary-foreground hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary pixel-jules-sm"
-              >
-                {LOGIN_LANDING_CTA}
-                <span aria-hidden>→</span>
-              </Link>
-              <button
-                type="button"
-                onClick={() => {
-                  dispatchMuninnLiveDemo();
-                  document.getElementById("live")?.scrollIntoView({
-                    behavior: reduceMotion ? "auto" : "smooth",
-                    block: "start",
-                  });
-                }}
-                className="pixel-font inline-flex items-center gap-1.5 border-4 border-primary/60 bg-transparent px-4 py-2.5 text-[9px] uppercase text-primary hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary pixel-jules-sm"
-              >
-                {LOGIN_LANDING_SEE_LIVE}
-              </button>
-              <a
-                href="#contigo"
-                className="pixel-font inline-flex items-center gap-1.5 text-[9px] uppercase text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              >
-                Qué hace contigo
-              </a>
-            </div>
-          </Reveal>
-        </section>
+              {activeSection === "agente" && (
+                <section
+                  id="agente"
+                  className="flex flex-col items-center gap-6 text-center"
+                  aria-labelledby="muninn-with-you"
+                >
+                  <Reveal tone="pop">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="space-y-1">
+                        <p className="pixel-font text-[14px] uppercase tracking-[0.15em] text-primary sm:text-[15px]">
+                          ¿Qué es Muninn?
+                        </p>
+                        <p className="pixel-display text-[18px] font-semibold leading-snug text-foreground sm:text-[22px]">
+                          El agente que ves funcionar
+                        </p>
+                        <p className="pixel-display mx-auto max-w-lg text-[13px] text-muted-foreground sm:text-[14px]">
+                          Una plataforma completa para crear, operar y supervisar agentes de IA con
+                          total transparencia.
+                        </p>
+                      </div>
+                    </div>
+                  </Reveal>
+                  <ul className="grid w-full max-w-2xl gap-2 sm:grid-cols-3">
+                    {LOGIN_AGENT_BEATS.map((b, i) => (
+                      <li key={b.id}>
+                        <Reveal delayMs={i * 70}>
+                          <div className="border border-primary/20 bg-card/60 pixel-jules-sm p-3 text-left sm:p-4">
+                            <p className="pixel-font mb-1 text-[11px] uppercase text-primary/80">
+                              0{i + 1}
+                            </p>
+                            <p className="pixel-display mb-1 text-[14px] font-semibold text-foreground">
+                              {b.title}
+                            </p>
+                            <p className="pixel-display text-[12px] leading-relaxed text-muted-foreground">
+                              {b.line}
+                            </p>
+                          </div>
+                        </Reveal>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
 
-        <div className="pixel-jules-divider" />
+              {activeSection === "tecnico" && (
+                <>
+                  {/* DESKTOP: diagrama orbital + columna texto */}
+                  <section
+                    id="tecnico"
+                    className="hidden w-full max-w-3xl flex-row items-center justify-center gap-8 px-4 sm:flex"
+                    aria-labelledby="muninn-flow"
+                  >
+                    <Reveal tone="pop" className="flex-1">
+                      <div className="border border-primary/25 bg-card/80 pixel-jules-sm space-y-3 p-4">
+                        <div>
+                          <p className="pixel-font text-[14px] uppercase tracking-[0.15em] text-primary sm:text-[16px]">
+                            Componentes del agente
+                          </p>
+                          <p className="pixel-display mt-1 text-[12px] leading-relaxed text-muted-foreground sm:text-[13px]">
+                            Muninn no es magia: son piezas operables que trabajan juntas para darle
+                            vida a tu agente.
+                          </p>
+                        </div>
+                        <ul className="space-y-1.5">
+                          {LOGIN_ATOMS.map((a) => (
+                            <li key={a.id} className="flex items-start gap-2">
+                              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center border border-primary/40 bg-primary/10">
+                                <PixelIcon
+                                  icon={ATOM_ICON[a.id]}
+                                  className="h-3 w-3 text-primary"
+                                />
+                              </span>
+                              <div>
+                                <span className="pixel-font text-[10px] uppercase text-foreground sm:text-[11px]">
+                                  {a.title}
+                                </span>
+                                <p className="pixel-display text-[11px] leading-snug text-muted-foreground sm:text-[12px]">
+                                  {a.line}
+                                </p>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </Reveal>
+                    <Reveal delayMs={30} tone="none" className="flex items-center justify-center">
+                      <div className="relative h-[360px] w-[380px]">
+                        <svg
+                          className="pointer-events-none absolute inset-0 z-0 h-full w-full"
+                          viewBox="0 0 380 360"
+                          aria-hidden
+                        >
+                          <line
+                            x1="114"
+                            y1="52"
+                            x2="190"
+                            y2="180"
+                            stroke="var(--primary)"
+                            strokeOpacity="0.2"
+                            strokeWidth="1.5"
+                            strokeDasharray="3 3"
+                            className="pixel-energy-line"
+                          />
+                          <line
+                            x1="266"
+                            y1="52"
+                            x2="190"
+                            y2="180"
+                            stroke="var(--primary)"
+                            strokeOpacity="0.2"
+                            strokeWidth="1.5"
+                            strokeDasharray="3 3"
+                            className="pixel-energy-line"
+                          />
+                          <line
+                            x1="78"
+                            y1="170"
+                            x2="190"
+                            y2="180"
+                            stroke="var(--primary)"
+                            strokeOpacity="0.15"
+                            strokeWidth="1.5"
+                            strokeDasharray="3 3"
+                            className="pixel-energy-line pixel-energy-line--slow"
+                          />
+                          <line
+                            x1="302"
+                            y1="170"
+                            x2="190"
+                            y2="180"
+                            stroke="var(--primary)"
+                            strokeOpacity="0.15"
+                            strokeWidth="1.5"
+                            strokeDasharray="3 3"
+                            className="pixel-energy-line pixel-energy-line--slow"
+                          />
+                          <line
+                            x1="114"
+                            y1="308"
+                            x2="190"
+                            y2="180"
+                            stroke="var(--primary)"
+                            strokeOpacity="0.2"
+                            strokeWidth="1.5"
+                            strokeDasharray="3 3"
+                            className="pixel-energy-line"
+                          />
+                          <line
+                            x1="266"
+                            y1="308"
+                            x2="190"
+                            y2="180"
+                            stroke="var(--primary)"
+                            strokeOpacity="0.2"
+                            strokeWidth="1.5"
+                            strokeDasharray="3 3"
+                            className="pixel-energy-line"
+                          />
+                        </svg>
+                        {[
+                          { pos: "left-[36px] top-[8px]", i: 0 },
+                          { pos: "right-[36px] top-[8px]", i: 1 },
+                          { pos: "left-0 top-[148px]", i: 2 },
+                          { pos: "right-0 top-[148px]", i: 3 },
+                          { pos: "bottom-[8px] left-[36px]", i: 4 },
+                          { pos: "bottom-[8px] right-[36px]", i: 5 },
+                        ].map(({ pos, i }) => (
+                          <button
+                            key={LOGIN_ATOMS[i].id}
+                            type="button"
+                            onClick={() => setSelectedAtom(LOGIN_ATOMS[i].id)}
+                            className={`absolute ${pos} z-[2] flex w-[78px] cursor-pointer flex-col items-center gap-1 border border-primary/30 bg-card pixel-jules-sm px-1.5 py-2.5 transition-colors hover:border-primary/70 hover:bg-primary/10`}
+                          >
+                            <div
+                              className="pixel-node-pulse"
+                              style={{ animationDelay: `${i * 0.3}s` }}
+                            >
+                              <PixelIcon
+                                icon={ATOM_ICON[LOGIN_ATOMS[i].id]}
+                                className="h-5 w-5 text-primary/80"
+                              />
+                            </div>
+                            <span className="pixel-font text-[8px] uppercase text-primary/70">
+                              {LOGIN_ATOMS[i].title}
+                            </span>
+                          </button>
+                        ))}
+                        <div className="absolute left-1/2 top-1/2 z-[2] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-1 border-2 border-primary/60 bg-card px-4 py-3 pixel-agent-core">
+                          <svg
+                            viewBox="0 0 52 28"
+                            className="h-[32px] w-[60px]"
+                            shapeRendering="crispEdges"
+                            aria-hidden
+                          >
+                            <rect
+                              x="20"
+                              y="8"
+                              width="12"
+                              height="12"
+                              fill="color-mix(in oklab,var(--primary) 40%,transparent)"
+                            />
+                            <rect x="22" y="10" width="8" height="8" fill="var(--primary)" />
+                            <rect
+                              x="10"
+                              y="4"
+                              width="6"
+                              height="3"
+                              fill="color-mix(in oklab,var(--primary) 25%,transparent)"
+                            />
+                            <rect
+                              x="36"
+                              y="4"
+                              width="6"
+                              height="3"
+                              fill="color-mix(in oklab,var(--primary) 25%,transparent)"
+                            />
+                            <rect
+                              x="2"
+                              y="16"
+                              width="6"
+                              height="3"
+                              fill="color-mix(in oklab,var(--primary) 20%,transparent)"
+                            />
+                            <rect
+                              x="44"
+                              y="16"
+                              width="6"
+                              height="3"
+                              fill="color-mix(in oklab,var(--primary) 20%,transparent)"
+                            />
+                            <rect
+                              x="10"
+                              y="22"
+                              width="6"
+                              height="3"
+                              fill="color-mix(in oklab,var(--primary) 25%,transparent)"
+                            />
+                            <rect
+                              x="36"
+                              y="22"
+                              width="6"
+                              height="3"
+                              fill="color-mix(in oklab,var(--primary) 25%,transparent)"
+                            />
+                            <rect
+                              x="16"
+                              y="10"
+                              width="4"
+                              height="1"
+                              fill="color-mix(in oklab,var(--primary) 15%,transparent)"
+                            />
+                            <rect
+                              x="32"
+                              y="10"
+                              width="4"
+                              height="1"
+                              fill="color-mix(in oklab,var(--primary) 15%,transparent)"
+                            />
+                            <rect
+                              x="12"
+                              y="16"
+                              width="8"
+                              height="1"
+                              fill="color-mix(in oklab,var(--primary) 12%,transparent)"
+                            />
+                            <rect
+                              x="32"
+                              y="16"
+                              width="8"
+                              height="1"
+                              fill="color-mix(in oklab,var(--primary) 12%,transparent)"
+                            />
+                            <rect
+                              x="16"
+                              y="20"
+                              width="4"
+                              height="1"
+                              fill="color-mix(in oklab,var(--primary) 15%,transparent)"
+                            />
+                            <rect
+                              x="32"
+                              y="20"
+                              width="4"
+                              height="1"
+                              fill="color-mix(in oklab,var(--primary) 15%,transparent)"
+                            />
+                          </svg>
+                          <span className="pixel-font text-[8px] uppercase text-foreground/80 leading-tight">
+                            Agente
+                            <br />
+                            Muninn
+                          </span>
+                        </div>
+                      </div>
+                    </Reveal>
+                  </section>
 
-        {/* Contigo — presencia diaria */}
-        <section
-          id="contigo"
-          className="scroll-mt-24 space-y-5 lg:scroll-mt-28"
-          aria-labelledby="muninn-with-you"
-        >
-          <ChapterRule label="Cap. 01" />
-          <Reveal>
-            <SectionChrome
-              kicker="Capítulo 01"
-              title="Qué hace contigo"
-              id="muninn-with-you"
-              lead="Muninn no es un chatbot suelto: es un compañero operable que te acompaña en el trabajo diario."
-            />
-          </Reveal>
-          <ul className="grid gap-3 sm:grid-cols-3">
-            {LOGIN_COMPANION_BEATS.map((b, i) => (
-              <li key={b.id}>
-                <Reveal delayMs={i * 60}>
-                  <div className="login-pixel-readout space-y-1.5 !p-3 pixel-jules-sm">
-                    <p className="pixel-jules-badge border-primary bg-primary/15 text-primary w-fit">
-                      0{i + 1}
-                    </p>
-                    <p className="pixel-display text-[14px] font-semibold text-foreground">
-                      {b.title}
+                  {/* MOBILE: galería vertical de componentes + agente al final */}
+                  <section
+                    id="tecnico-mobile"
+                    className="flex w-full max-w-xs flex-col gap-3 px-4 sm:hidden"
+                    aria-labelledby="muninn-flow-mobile"
+                  >
+                    <p className="pixel-font text-[13px] uppercase tracking-[0.15em] text-primary">
+                      Componentes del agente
                     </p>
                     <p className="pixel-display text-[12px] leading-relaxed text-muted-foreground">
-                      {b.line}
+                      Muninn no es magia: son piezas operables que trabajan juntas.
                     </p>
-                  </div>
-                </Reveal>
-              </li>
-            ))}
-          </ul>
-        </section>
+                    <div className="flex flex-col gap-2">
+                      {LOGIN_ATOMS.map((a, i) => (
+                        <button
+                          key={a.id}
+                          type="button"
+                          onClick={() => setSelectedAtom(a.id)}
+                          className="flex w-full items-center gap-2.5 border border-primary/25 bg-card/80 pixel-jules-sm px-3 py-2.5 text-left transition-colors hover:border-primary/60 hover:bg-primary/5"
+                        >
+                          <span className="flex h-8 w-8 shrink-0 items-center justify-center border border-primary/40 bg-primary/10">
+                            <PixelIcon icon={ATOM_ICON[a.id]} className="h-4 w-4 text-primary" />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <span className="pixel-font block text-[10px] uppercase text-foreground">
+                              {a.title}
+                            </span>
+                            <span className="pixel-display block text-[11px] leading-snug text-muted-foreground">
+                              {a.line}
+                            </span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                </>
+              )}
 
-        <div className="pixel-jules-divider" />
-
-        {/* Flujo */}
-        <section
-          id="flujo"
-          className="scroll-mt-24 space-y-5 lg:scroll-mt-28"
-          aria-labelledby="muninn-flow"
-        >
-          <ChapterRule label="Cap. 02" />
-          <Reveal>
-            <SectionChrome
-              kicker="Capítulo 02"
-              title="Cómo se opera"
-              id="muninn-flow"
-              lead="De diseñar a programar: el mismo compañero sirve en chat o por cron."
-            />
-          </Reveal>
-          <Reveal delayMs={40} tone="none">
-            <FlowSteps />
-          </Reveal>
-        </section>
-
-        <div className="pixel-jules-divider" />
-
-        {/* Átomos — harness técnico */}
-        <section
-          id="atomos"
-          className="scroll-mt-24 space-y-5 lg:scroll-mt-28"
-          aria-labelledby="muninn-atoms"
-        >
-          <ChapterRule label="Cap. 03" />
-          <Reveal>
-            <SectionChrome
-              kicker="Capítulo 03"
-              title="Átomos del harness"
-              id="muninn-atoms"
-              lead="Detrás del compañero hay piezas operables: soul, rules, helpers, RAG, modelo y cron."
-            />
-          </Reveal>
-          <AtomSections focused={focusedAtom} onFocus={setFocusedAtom} />
-        </section>
-
-        <div className="pixel-jules-divider" />
-
-        {/* Live */}
-        <section
-          id="live"
-          className="scroll-mt-24 space-y-5 lg:scroll-mt-28"
-          aria-labelledby="muninn-live"
-        >
-          <ChapterRule label="Cap. 04" />
-          <Reveal>
-            <SectionChrome
-              kicker="Capítulo 04"
-              title="En vivo"
-              id="muninn-live"
-              lead="Tour guiado o sandbox scripted. Badge Simulación: no hay API detrás."
-            />
-          </Reveal>
-          <Reveal delayMs={40} tone="none">
-            <LoginProductDemo liveFocusToken={liveFocus} />
-          </Reveal>
-        </section>
-
-        <div className="pixel-jules-divider" />
-
-        {/* Docs + plataforma */}
-        <section
-          id="docs"
-          className="scroll-mt-24 space-y-5 lg:scroll-mt-28"
-          aria-labelledby="muninn-docs"
-        >
-          <ChapterRule label="Cap. 05" />
-          <Reveal>
-            <div className="login-pixel-readout space-y-4 !p-4 pixel-jules-sm">
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <SectionChrome
-                  kicker="Capítulo 05"
-                  title="La plataforma Muninn"
-                  id="muninn-docs"
-                  lead={LOGIN_PLATFORM_BLURB}
-                />
-                <a
-                  href={LOGIN_HARNESS_REF.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="pixel-font shrink-0 text-[8px] uppercase text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              {activeSection === "live" && (
+                <section
+                  id="live"
+                  className="flex w-full flex-col justify-center px-1 pb-20 pt-2 max-sm:self-start"
                 >
-                  Ref · harness
-                </a>
-              </div>
+                  <Reveal tone="none" className="w-full">
+                    <LoginProductDemo liveFocusToken={liveFocus} demoOnly />
+                  </Reveal>
+                </section>
+              )}
 
-              <ul className="grid gap-2 sm:grid-cols-3">
-                {LOGIN_VALUE_BLOCKS.map((b) => (
-                  <li
-                    key={b.id}
-                    className="border-2 border-border/45 bg-background/70 p-2.5 pixel-jules-sm"
-                  >
-                    <p className="pixel-jules-badge border-primary bg-primary/15 text-primary w-fit">
-                      {b.title}
-                    </p>
-                    <p className="pixel-display mt-1 text-[11px] leading-relaxed text-muted-foreground">
-                      {b.line}
-                    </p>
-                  </li>
-                ))}
-              </ul>
+              {activeSection === "docs" && (
+                <section
+                  id="docs"
+                  className="flex w-full max-w-3xl flex-col gap-3 px-2 py-4 sm:items-center sm:justify-center sm:gap-4 sm:px-4 sm:py-6 max-sm:self-start"
+                  aria-labelledby="muninn-docs"
+                >
+                  <Reveal tone="pop" className="w-full">
+                    <div className="text-center">
+                      <p className="pixel-font text-[14px] uppercase tracking-[0.15em] text-primary sm:text-[15px]">
+                        MUNINN PLATFORM REST
+                      </p>
+                      <p className="pixel-display mt-1 text-[13px] leading-relaxed text-muted-foreground max-w-lg mx-auto">
+                        {LOGIN_PLATFORM_BLURB}
+                      </p>
+                    </div>
+                  </Reveal>
 
-              <div className="overflow-x-auto border-2 border-border/50 bg-background/80 p-3 pixel-jules-sm">
-                <p className="pixel-font mb-2 text-[8px] uppercase text-muted-foreground">
-                  Mapa del harness
-                </p>
-                <ol className="flex min-w-[28rem] flex-wrap items-center gap-1.5 sm:min-w-0">
-                  {LOGIN_LANDING_MODULES.map((m, i) => (
-                    <li key={m.id} className="inline-flex items-center gap-1.5">
-                      {i > 0 && (
-                        <span className="pixel-font text-[10px] text-primary/70" aria-hidden>
-                          →
-                        </span>
-                      )}
+                  <Reveal delayMs={30} tone="fade" className="w-full">
+                    <ul className="grid grid-cols-2 gap-2">
+                      {LOGIN_VALUE_BLOCKS.map((b) => (
+                        <li
+                          key={b.id}
+                          className="pixel-jules-sm border border-border/40 bg-card/80 p-3"
+                        >
+                          <p className="pixel-jules-badge border-primary bg-primary/15 text-primary w-fit">
+                            {b.title}
+                          </p>
+                          <p className="pixel-display mt-1 text-[13px] leading-relaxed text-muted-foreground">
+                            {b.line}
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
+                  </Reveal>
+
+                  <Reveal delayMs={50} tone="fade" className="w-full space-y-3">
+                    <div className="space-y-1">
+                      <p className="pixel-font text-[11px] uppercase text-muted-foreground sm:text-[12px]">
+                        Harness
+                      </p>
+                      <p className="pixel-display text-[13px] leading-relaxed text-foreground/90">
+                        El harness es el motor que orquesta alma, reglas, herramientas,
+                        conocimiento, modelo y automatización. Todo lo que define a tu agente vive
+                        aquí, versionado y visible.
+                      </p>
                       <a
-                        href={`#atom-${m.id}`}
-                        className="pixel-jules-badge border-primary bg-primary/10 text-primary hover:bg-primary/20"
+                        href={LOGIN_HARNESS_REF.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="pixel-font inline-flex items-center gap-1 text-[9px] uppercase text-primary/70 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                       >
-                        {m.title}
+                        <PixelIcon icon="book" className="h-3 w-3" />
+                        {LOGIN_HARNESS_REF.label}
                       </a>
-                    </li>
-                  ))}
-                </ol>
-              </div>
+                    </div>
+                    <HarnessPeek />
+                  </Reveal>
+                </section>
+              )}
+            </motion.div>
+          </AnimatePresence>
+        </div>
 
-              <div className="border-t-2 border-border/40 pt-3">
-                <p className="pixel-font mb-2 text-[8px] uppercase text-muted-foreground">
-                  Piezas rápidas
-                </p>
-                <HarnessPeek />
-              </div>
-            </div>
-          </Reveal>
-        </section>
+        {/* Modal de detalle de elemento del agente */}
+        <AnimatePresence>
+          {selectedAtom &&
+            (() => {
+              const atom = LOGIN_ATOMS.find((a) => a.id === selectedAtom)!;
+              return (
+                <motion.div
+                  key="atom-modal"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="fixed inset-0 z-50 flex items-center justify-center bg-background/70 p-4 backdrop-blur-sm"
+                  onClick={() => setSelectedAtom(null)}
+                >
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                    transition={{ duration: 0.25, ease: "easeOut" }}
+                    className="relative w-full max-w-md border-2 border-primary/40 bg-card pixel-jules-sm p-5 shadow-[6px_6px_0_0_color-mix(in_oklab,var(--primary)_25%,transparent)]"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setSelectedAtom(null)}
+                      className="pixel-font absolute right-2 top-2 flex h-7 w-7 items-center justify-center border border-border/50 text-[11px] uppercase text-muted-foreground hover:border-primary/50 hover:text-primary"
+                      aria-label="Cerrar"
+                    >
+                      ✕
+                    </button>
 
-        <Reveal tone="pop">
-          <div className="pb-10">
-            <Link
-              to="/entrar"
-              className="pixel-font inline-flex items-center gap-1.5 border-4 border-primary bg-primary px-5 py-2.5 text-[9px] uppercase text-primary-foreground hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background pixel-jules-sm"
-            >
-              {LOGIN_LANDING_CTA}
-              <span aria-hidden>→</span>
-            </Link>
-          </div>
-        </Reveal>
+                    <div className="mb-3 flex items-center gap-2.5 border-b border-border/30 pb-3">
+                      <div className="flex h-9 w-9 items-center justify-center border-2 border-primary/40 bg-primary/10">
+                        <PixelIcon icon={ATOM_ICON[atom.id]} className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <p className="pixel-jules-badge border-primary/40 bg-primary/15 text-primary text-[9px]">
+                          {atom.role}
+                        </p>
+                        <p className="pixel-display text-[18px] font-semibold text-foreground">
+                          {atom.title}
+                        </p>
+                      </div>
+                    </div>
+
+                    <p className="pixel-display mb-3 text-[14px] leading-relaxed text-foreground/90">
+                      {atom.why}
+                    </p>
+
+                    <div className="mb-2 border-l-2 border-primary/30 bg-primary/5 px-3 py-2">
+                      <p className="pixel-font mb-0.5 text-[9px] uppercase text-primary/70">
+                        Ejemplo
+                      </p>
+                      <p className="pixel-display text-[13px] leading-relaxed text-foreground/85">
+                        {atom.example}
+                      </p>
+                    </div>
+
+                    <div className="border-t border-border/20 pt-2">
+                      <p className="pixel-font text-[8px] uppercase text-muted-foreground">
+                        {atom.tech}
+                      </p>
+                    </div>
+                  </motion.div>
+                </motion.div>
+              );
+            })()}
+        </AnimatePresence>
       </div>
     </div>
   );

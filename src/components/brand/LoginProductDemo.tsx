@@ -18,6 +18,8 @@ type Props = {
   className?: string;
   /** Incrementar para forzar modo live (easter egg / CTA). */
   liveFocusToken?: number;
+  /** True: solo interfaz demo sin encabezado ni badges. */
+  demoOnly?: boolean;
 };
 
 const NODE_ICON: Record<LoginDemoNodeKind, PixelIconName> = {
@@ -53,7 +55,7 @@ type ChatLine = LoginDemoMessage & { id: string };
  * Preview mock pixel + sandbox scripted “en vivo”.
  * Badge SIMULACIÓN — honestidad comercial (sin API).
  */
-export function LoginProductDemo({ className, liveFocusToken = 0 }: Props) {
+export function LoginProductDemo({ className, liveFocusToken = 0, demoOnly = false }: Props) {
   const reduceMotion = useReducedMotion();
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -172,71 +174,88 @@ export function LoginProductDemo({ className, liveFocusToken = 0 }: Props) {
     : step.messages.map((m, i) => ({ ...m, id: `demo-${stepIndex}-${i}` }));
 
   return (
-    <div
-      className={cn("w-full", className)}
-      onMouseEnter={() => {
-        if (!reduceMotion && !liveMode) setHoverPaused(true);
-      }}
-      onMouseLeave={() => setHoverPaused(false)}
-    >
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span className="pixel-font border-2 border-primary/50 bg-primary/15 px-2 py-0.5 text-[8px] uppercase text-primary">
-            Simulación
-          </span>
-          {!liveMode && (
-            <button
-              type="button"
-              onClick={enterLive}
-              className="pixel-font inline-flex items-center gap-1.5 border-2 border-border/60 bg-card px-2 py-1 text-[8px] uppercase text-foreground hover:border-primary/55 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            >
-              <PixelIcon icon="play" className="h-3 w-3" />
-              {LOGIN_LANDING_TRY_LIVE}
-            </button>
-          )}
-          {liveMode && (
-            <button
-              type="button"
-              onClick={() => setLiveMode(false)}
-              className="pixel-font text-[8px] uppercase text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            >
-              ← Tour guiado
-            </button>
+    <>
+      {!demoOnly && (
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="pixel-font border-2 border-primary/50 bg-primary/15 px-2 py-0.5 text-[8px] uppercase text-primary">
+              Simulación
+            </span>
+            {!liveMode && (
+              <button
+                type="button"
+                onClick={enterLive}
+                className="pixel-font inline-flex items-center gap-1.5 border-2 border-border/60 bg-card px-2 py-1 text-[8px] uppercase text-foreground hover:border-primary/55 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                <PixelIcon icon="play" className="h-3 w-3" />
+                {LOGIN_LANDING_TRY_LIVE}
+              </button>
+            )}
+            {liveMode && (
+              <button
+                type="button"
+                onClick={() => setLiveMode(false)}
+                className="pixel-font text-[8px] uppercase text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                ← Tour guiado
+              </button>
+            )}
+          </div>
+          {!reduceMotion && !liveMode && (
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={goPrev}
+                className="inline-flex h-9 w-9 items-center justify-center border-2 border-border/55 bg-background text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:h-7 sm:w-7"
+                aria-label="Paso anterior"
+              >
+                <PixelIcon icon="chevronLeft" className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setManualPaused((p) => !p)}
+                className="pixel-font inline-flex h-9 items-center gap-1.5 border-2 border-border/55 bg-background px-2.5 text-[8px] uppercase text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:h-7 sm:px-2"
+                aria-label={paused ? "Reanudar" : "Pausar"}
+              >
+                <PixelIcon icon={paused ? "play" : "pause"} className="h-3 w-3" />
+                {paused ? "Reanudar" : "Pausar"}
+              </button>
+            </div>
           )}
         </div>
-        {!reduceMotion && !liveMode && (
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={goPrev}
-              className="inline-flex h-9 w-9 items-center justify-center border-2 border-border/55 bg-background text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:h-7 sm:w-7"
-              aria-label="Paso anterior"
-            >
-              <PixelIcon icon="chevronLeft" className="h-3.5 w-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setManualPaused((p) => !p)}
-              className="pixel-font inline-flex h-9 items-center gap-1.5 border-2 border-border/55 bg-background px-2.5 text-[8px] uppercase text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:h-7 sm:px-2"
-              aria-label={manualPaused ? "Reanudar demo" : "Pausar demo"}
-            >
-              <PixelIcon icon={manualPaused ? "play" : "pause"} className="h-3 w-3" />
-              {manualPaused ? "Play" : "Pausa"}
-            </button>
-            <button
-              type="button"
-              onClick={goNext}
-              className="inline-flex h-9 w-9 items-center justify-center border-2 border-border/55 bg-background text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:h-7 sm:w-7"
-              aria-label="Paso siguiente"
-            >
-              <PixelIcon icon="chevronRight" className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        )}
-      </div>
+      )}
+      {!reduceMotion && !liveMode && (
+        <div className="flex items-center justify-center gap-1 py-2">
+          <button
+            type="button"
+            onClick={goPrev}
+            className="inline-flex h-8 w-8 items-center justify-center border border-border/55 bg-background text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            aria-label="Paso anterior"
+          >
+            <PixelIcon icon="chevronLeft" className="h-3 w-3" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setManualPaused((p) => !p)}
+            className="pixel-font inline-flex h-8 items-center gap-1 border border-border/55 bg-background px-2 text-[8px] uppercase text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            aria-label={manualPaused ? "Reanudar" : "Pausar"}
+          >
+            <PixelIcon icon={manualPaused ? "play" : "pause"} className="h-3 w-3" />
+            {manualPaused ? "Play" : "Pausa"}
+          </button>
+          <button
+            type="button"
+            onClick={goNext}
+            className="inline-flex h-8 w-8 items-center justify-center border border-border/55 bg-background text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            aria-label="Paso siguiente"
+          >
+            <PixelIcon icon="chevronRight" className="h-3 w-3" />
+          </button>
+        </div>
+      )}
 
       <div className="pixel-panel overflow-hidden border-2 border-border/55 bg-card">
-        <div className="space-y-2.5 border-b-2 border-border/60 px-3.5 py-2.5">
+        <div className="space-y-2 border-b-2 border-border/60 px-3 py-2 sm:space-y-2.5 sm:px-3.5 sm:py-2.5">
           <div className="flex items-center gap-2">
             <span className="h-2 w-2 bg-muted-foreground/40" />
             <span className="h-2 w-2 bg-muted-foreground/30" />
@@ -282,7 +301,8 @@ export function LoginProductDemo({ className, liveFocusToken = 0 }: Props) {
                         "border-transparent text-muted-foreground/45 hover:text-muted-foreground",
                     )}
                   >
-                    {label}
+                    <span className="sm:hidden">{label.charAt(0)}</span>
+                    <span className="hidden sm:inline">{label}</span>
                   </button>
                 </span>
               );
@@ -290,11 +310,11 @@ export function LoginProductDemo({ className, liveFocusToken = 0 }: Props) {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-0 sm:h-[22rem] sm:grid-cols-[1.05fr_0.95fr]">
+        <div className="grid grid-cols-1 gap-0 sm:h-[22rem] sm:grid-cols-[1.05fr_0.95fr] max-sm:max-h-[70vh] max-sm:overflow-y-auto">
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={`left-${stepIndex}-${liveMode ? "live" : "tour"}`}
-              className="flex min-h-[10rem] flex-col gap-3 overflow-hidden border-b-2 border-border/60 p-3.5 sm:border-b-0 sm:border-r-2"
+              className="flex min-h-[8rem] flex-col gap-2 overflow-hidden border-b-2 border-border/60 p-3 sm:border-b-0 sm:border-r-2"
               {...(reduceMotion ? {} : STEP_MOTION)}
             >
               <div className="space-y-1.5">
@@ -369,7 +389,7 @@ export function LoginProductDemo({ className, liveFocusToken = 0 }: Props) {
             </motion.div>
           </AnimatePresence>
 
-          <div className="flex min-h-[12rem] flex-col gap-2 overflow-hidden p-3.5">
+          <div className="flex min-h-[8rem] flex-col gap-2 overflow-hidden p-3 sm:min-h-[12rem]">
             <p className="pixel-font text-[8px] uppercase text-muted-foreground">Conversación</p>
             <div className="flex flex-1 flex-col gap-2 overflow-y-auto">
               <AnimatePresence mode="popLayout" initial={false}>
@@ -377,8 +397,10 @@ export function LoginProductDemo({ className, liveFocusToken = 0 }: Props) {
                   <motion.div
                     key={msg.id}
                     layout={!reduceMotion}
-                    initial={reduceMotion ? false : { opacity: 0 }}
-                    animate={{ opacity: 1 }}
+                    initial={reduceMotion ? false : { opacity: 0, y: 8, filter: "blur(2px)" }}
+                    animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                    exit={{ opacity: 0, y: -6, filter: "blur(2px)" }}
+                    transition={{ duration: 0.35, ease: [0.45, 0, 0.2, 1] }}
                     className={cn(
                       "pixel-display max-w-[98%] border-2 px-2.5 py-1.5 text-[13px] leading-snug",
                       msg.role === "user" &&
@@ -406,6 +428,6 @@ export function LoginProductDemo({ className, liveFocusToken = 0 }: Props) {
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }

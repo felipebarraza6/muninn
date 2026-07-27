@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useReducedMotion } from "framer-motion";
 import { PixelCityLayers } from "@/components/brand/PixelCityLayers";
-import { PixelNordicScene } from "@/components/brand/PixelNordicScene";
+import { PixelNordicScene, type NordicZone } from "@/components/brand/PixelNordicScene";
 import { GOTHAM_USE_STATIC_LAYERS } from "@/lib/gothamAssets";
 import { cn } from "@/lib/utils";
 
@@ -131,8 +131,10 @@ type Props = {
   variant?: "aurora" | "pixel";
   /** Parallax de capas al scroll (solo landing Gotham). */
   parallax?: boolean;
-  /** gotham = ciudad viva; batcave = umbral de entrada. */
-  mood?: "gotham" | "batcave";
+  /** gotham = ciudad viva; batcave = umbral de entrada; nordic = fiordo (alias de gotham). */
+  mood?: "gotham" | "batcave" | "nordic";
+  /** Variante de paisaje nórdico (solo variant="pixel"). */
+  zone?: NordicZone;
 };
 
 /**
@@ -144,11 +146,13 @@ export function LoginAtmosphere({
   intensity = "full",
   variant = "aurora",
   parallax = false,
-  mood = "gotham",
+  mood = "nordic",
+  zone = "fjord",
 }: Props) {
   const reduceMotion = useReducedMotion();
   const soft = intensity === "soft";
   const streaks = useMemo(() => buildStreaks(SWARM_NODES, soft ? 17 : 20, soft ? 1 : 2), [soft]);
+  const sceneMood = mood === "nordic" ? "gotham" : mood;
 
   if (variant === "pixel") {
     if (GOTHAM_USE_STATIC_LAYERS) {
@@ -156,7 +160,7 @@ export function LoginAtmosphere({
         <PixelCityLayers
           className={className ?? "absolute inset-0"}
           parallax={parallax}
-          mood={mood}
+          mood={sceneMood}
           rain
         />
       );
@@ -165,7 +169,8 @@ export function LoginAtmosphere({
       <PixelNordicScene
         className={className ?? "absolute inset-0"}
         parallax={parallax}
-        mood={mood}
+        mood={sceneMood}
+        zone={zone}
       />
     );
   }

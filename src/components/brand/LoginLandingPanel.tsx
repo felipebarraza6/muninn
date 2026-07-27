@@ -251,35 +251,9 @@ export function LoginModuleList({ className }: { className?: string }) {
  * Sin título largo ni grilla siempre visible.
  */
 export function HarnessPeek({ className }: { className?: string }) {
-  const [open, setOpen] = useState(false);
-
   return (
-    <div className={cn("space-y-3", className)}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className={cn(
-          "pixel-harness-tag pixel-font inline-flex items-center gap-2 border-2 px-2.5 py-1.5 text-[8px] uppercase",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-          open
-            ? "border-primary bg-primary/15 text-primary"
-            : "border-border/70 bg-card text-muted-foreground hover:border-primary/55 hover:text-primary",
-        )}
-        aria-expanded={open}
-      >
-        <PixelIcon icon="hammer" className="h-3.5 w-3.5" />
-        {open ? "Ocultar harness" : "Ver harness"}
-        <span aria-hidden className="text-primary">
-          {open ? "↑" : "→"}
-        </span>
-      </button>
-
-      {open && (
-        <div className="login-pixel-readout space-y-2 !p-2.5">
-          <p className="pixel-font text-[7px] uppercase text-muted-foreground">Piezas del agente</p>
-          <LoginModuleList />
-        </div>
-      )}
+    <div className={cn("", className)}>
+      <LoginModuleList />
     </div>
   );
 }

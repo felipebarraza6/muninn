@@ -35,9 +35,9 @@ export function PixelCityLayers({
     const apply = () => {
       raf = 0;
       const y = window.scrollY;
-      root.style.setProperty("--gotham-par-far", `${Math.min(y * 0.05, 24)}px`);
-      root.style.setProperty("--gotham-par-mid", `${Math.min(y * 0.12, 40)}px`);
-      root.style.setProperty("--gotham-par-near", `${Math.min(y * 0.22, 64)}px`);
+      root.style.setProperty("--nordic-par-far", `${Math.min(y * 0.05, 24)}px`);
+      root.style.setProperty("--nordic-par-mid", `${Math.min(y * 0.12, 40)}px`);
+      root.style.setProperty("--nordic-par-near", `${Math.min(y * 0.22, 64)}px`);
     };
 
     const onScroll = () => {

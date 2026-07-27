@@ -5,12 +5,12 @@
  */
 
 /** Subtítulo bajo el wordmark. */
-export const LOGIN_BRAND_SUBTITLE = "Tu agente compañero";
+export const LOGIN_BRAND_SUBTITLE = "Tu agente de IA, operable y transparente";
 
-export const LOGIN_LANDING_TAGLINE = "Muninn va contigo: opera agentes con claridad";
+export const LOGIN_LANDING_TAGLINE = "Diseña, opera y supervisa tu agente — con claridad total";
 
 export const LOGIN_LANDING_LEAD =
-  "Muninn es el agente que te acompaña todo el rato — y la app donde lo diseñas, orquestas y supervisas. Presencia primero; detrás, un harness operable.";
+  "Muninn es la plataforma donde creas y controlas tu agente de IA. Sin cajas negras: ves su alma, sus reglas, sus herramientas y cada decisión que toma.";
 
 /**
  * Qué es un harness — alineado con la definición de industria
@@ -22,33 +22,33 @@ export const LOGIN_HARNESS_BLURB =
 
 /** Plataforma Muninn (app Django) — aterrizaje técnico. */
 export const LOGIN_PLATFORM_BLURB =
-  "Muninn es la plataforma donde operas agentes de IA: soul, rules, skills, RAG sobre tu conocimiento, cronjobs y flujos — todo visible, versionable y con traza.";
+  "La plataforma donde diseñas tu agente: su personalidad, reglas, herramientas, conocimiento y automatizaciones. Todo versionado, todo visible.";
 
 export const LOGIN_HARNESS_REF = {
   label: "Databricks · What is an AI Agent Harness?",
   href: "https://www.databricks.com/blog/ai-harness",
 } as const;
 
-export const LOGIN_LANDING_CTA = "Entra a tu cuenta";
+export const LOGIN_LANDING_CTA = "Cotizar";
 
 export const LOGIN_LANDING_DEMO_LABEL = "Cómo se prepara un agente";
 
-/** Qué hace Muninn contigo en el día a día (antes de átomos). */
-export const LOGIN_COMPANION_BEATS = [
+/** Qué es Muninn — propuesta de valor central. */
+export const LOGIN_AGENT_BEATS = [
   {
-    id: "listen",
-    title: "Te escucha",
-    line: "Entiende tu contexto, tus docs y tu tono. No inventa políticas: pregunta o busca.",
+    id: "what",
+    title: "Una plataforma, no un chatbot",
+    line: "Muninn no es un chat más. Es un entorno donde diseñas, operas y supervisas un agente de IA con personalidad, reglas, herramientas y memoria propias.",
   },
   {
-    id: "act",
-    title: "Actúa con permiso",
-    line: "Propone skills reales (tickets, APIs, búsqueda) y pide confirmación cuando toca.",
+    id: "problem",
+    title: "El problema que resuelve",
+    line: "Hoy los agentes son cajas negras: no sabes por qué responden lo que responden. Muninn te da visibilidad total de cada decisión, cada fuente y cada acción.",
   },
   {
-    id: "trace",
-    title: "Deja traza",
-    line: "Ves qué hizo, con qué regla y qué fuente. El compañero no es caja negra.",
+    id: "resolve",
+    title: "Lo que puedes hacer hoy",
+    line: "Crea un agente que entienda tu negocio, actúe con criterio y deje traza de todo lo que hace. Todo desde una interfaz operable, sin misterios.",
   },
 ] as const;
 
@@ -167,9 +167,8 @@ export const LOGIN_ATOMS: LoginAtomDetail[] = [
 /** Nav de secciones de la landing Muninn. `route` = página aparte (auth). */
 export const LOGIN_LANDING_NAV = [
   { id: "hero", label: "Inicio", href: "#hero" },
-  { id: "contigo", label: "Contigo", href: "#contigo" },
-  { id: "flujo", label: "Flujo", href: "#flujo" },
-  { id: "atomos", label: "Átomos", href: "#atomos" },
+  { id: "agente", label: "Agente", href: "#agente" },
+  { id: "tecnico", label: "Técnico", href: "#tecnico" },
   { id: "live", label: "En vivo", href: "#live" },
   { id: "docs", label: "Docs", href: "#docs" },
   { id: "entrar", label: "Entrar", href: "/entrar" },
@@ -185,18 +184,23 @@ export const LOGIN_LANDING_TRY_LIVE = "Probar en vivo";
 export const LOGIN_VALUE_BLOCKS = [
   {
     id: "clarity",
-    title: "Claridad operativa",
-    line: "Ves soul, rules, skills y resultados. Nada de caja negra: cada paso del agente es legible.",
+    title: "Claridad total",
+    line: "Ves el alma, las reglas, las herramientas y cada decisión del agente. Cero caja negra.",
   },
   {
     id: "control",
     title: "Control real",
-    line: "Políticas, confirmaciones y límites. El modelo propone; el harness decide qué puede ejecutar.",
+    line: "El agente propone; tú apruebas. Políticas, confirmaciones y límites a tu medida.",
   },
   {
     id: "knowledge",
-    title: "Tu conocimiento + automatización",
-    line: "RAG sobre tus docs y cronjobs que corren solos. El agente trabaja con fundamento, no con inventos.",
+    title: "Tu conocimiento, automatizado",
+    line: "Conecta tus documentos y activa tareas recurrentes. El agente trabaja con tu información, no con inventos.",
+  },
+  {
+    id: "api",
+    title: "API — Próximamente",
+    line: "Pronto podrás gestionar tu agente vía API: crear, configurar y monitorear el servicio desde tu propio código.",
   },
 ] as const;
 
@@ -204,23 +208,23 @@ export const LOGIN_VALUE_BLOCKS = [
 export const LOGIN_OPERATE_STEPS = [
   {
     n: "01",
-    title: "Diseñar",
-    line: "Define soul y rules: quién es el agente y qué puede hacer.",
+    title: "Diseña el agente",
+    line: "Define su personalidad y reglas: quién es y qué puede hacer.",
   },
   {
     n: "02",
-    title: "Conectar conocimiento",
-    line: "Indexa documentos (RAG) y helpers (APIs, tickets, búsqueda).",
+    title: "Conecta conocimiento y herramientas",
+    line: "Sube documentos (RAG) y vincula APIs, tickets o búsqueda.",
   },
   {
     n: "03",
-    title: "Políticas",
-    line: "Ajusta flow policy: confirmaciones, orden de skills, límites.",
+    title: "Define las políticas",
+    line: "Configura confirmaciones, orden de acciones y límites.",
   },
   {
     n: "04",
-    title: "Programar",
-    line: "Chat humano o cron: el harness ejecuta con traza visible.",
+    title: "Opéralo",
+    line: "Chat humano o tareas programadas. Cada acción queda registrada.",
   },
 ] as const;
 
@@ -317,145 +321,152 @@ export type LoginDemoStep = {
 };
 
 /**
- * Ejemplo conversacional general (soporte interno).
- * Explica soul → rules → helpers → RAG → cron → impacto.
+ * Ejemplo real: «Revisar mis pendientes de hoy».
+ * Cada etapa muestra qué componente del agente participa y cómo.
  */
 export const LOGIN_DEMO_STEPS: LoginDemoStep[] = [
   {
     stage: "Soul",
-    title: "SOUL.md — quién es el agente",
-    detail: "Personalidad, tono y límites. Es el system prompt: cómo piensa y cómo responde.",
+    title: "① Soul — entiende el contexto",
+    detail:
+      "El agente lee su SOUL.md para saber quién es, cómo tratar al usuario y qué límites tiene.",
     nodes: [
-      { id: "a1", label: "Asistente interno", kind: "agent" },
+      { id: "a1", label: "Agente Muninn", kind: "agent" },
       { id: "soul", label: "SOUL.md", kind: "soul" },
     ],
     messages: [
-      { role: "system", text: "SOUL.md cargado" },
+      { role: "system", text: "SOUL.md cargado · «asistente amable, eficiente, español de Chile»" },
+      { role: "user", text: "Revisa mis pendientes de hoy" },
       {
         role: "think",
-        text: "«Eres claro, breve y en español de Chile. No inventes políticas: si no sabes, pregunta o busca con RAG.»",
+        text: "Soul: usuario pide pendientes → tono cordial pero directo. No inventar tareas si no hay datos.",
       },
       {
         role: "agent",
-        text: "Hola, soy el asistente interno. ¿En qué te ayudo?",
+        text: "¡Hola! Voy a revisar tus pendientes del día. Dame un momento mientras consulto tus sistemas.",
       },
     ],
   },
   {
     stage: "Rules",
-    title: "Rules — cuándo puede actuar",
-    detail: "Reglas del flujo (flow policy): qué datos pide, qué skills puede usar y en qué orden.",
+    title: "② Rules — ordena el flujo",
+    detail:
+      "Las reglas definen qué skills puede usar, en qué orden, y cuándo pedir confirmación al usuario.",
     nodes: [
-      { id: "a1", label: "Asistente interno", kind: "agent" },
+      { id: "a1", label: "Agente Muninn", kind: "agent" },
       { id: "soul", label: "SOUL.md", kind: "soul" },
-      { id: "rules", label: "Rules / flow policy", kind: "rules" },
+      { id: "rules", label: "Rules", kind: "rules" },
     ],
     messages: [
-      { role: "system", text: "Rules activas" },
+      {
+        role: "system",
+        text: "Rules · flow policy: consultar tickets → agrupar por vencimiento → presentar sin ejecutar cambios",
+      },
+      { role: "user", text: "Revisa mis pendientes de hoy" },
       {
         role: "think",
-        text: "Antes de una skill de escritura → pedir confirmación. Si falta el tema → preguntar.",
+        text: "Rules: no puede cerrar tickets sin confirmación. Flujo aprobado: solo lectura y resumen.",
       },
       {
         role: "agent",
-        text: "Si me pides cambiar algo sensible, te voy a pedir confirmación primero.",
+        text: "Voy a revisar tus tickets activos. Solo lectura, sin hacer cambios.",
       },
     ],
   },
   {
     stage: "Helpers",
-    title: "Helpers — skills disponibles",
-    detail: "Las skills son las herramientas reales: buscar, consultar APIs, crear tickets, etc.",
+    title: "③ Helpers — ejecuta las herramientas",
+    detail:
+      "Helpers son habilidades conectadas a APIs reales: consultar tickets, buscar documentos, etc.",
     nodes: [
-      { id: "a1", label: "Asistente interno", kind: "agent" },
-      { id: "s1", label: "rag.buscar", kind: "skill" },
-      { id: "s2", label: "ticket.crear", kind: "skill" },
-      { id: "s3", label: "calendario.consultar", kind: "skill" },
+      { id: "a1", label: "Agente Muninn", kind: "agent" },
+      { id: "soul", label: "SOUL.md", kind: "soul" },
+      { id: "rules", label: "Rules", kind: "rules" },
+      { id: "skill", label: "ticket.listar", kind: "skill" },
     ],
     messages: [
-      { role: "system", text: "3 helpers conectados" },
+      { role: "system", text: "Helper · ticket.listar · consultando API de tickets…" },
       {
         role: "think",
-        text: "Puedo: RAG sobre documentos · crear ticket · ver calendario. Elijo según la intención.",
+        text: "Helpers: llamando a ticket.listar con filtro «hoy». El modelo espera la respuesta de la API.",
       },
       {
         role: "agent",
-        text: "Tengo RAG sobre la base de conocimiento y puedo crear tickets si hace falta.",
+        text: "Encontré tus tickets abiertos. Ahora los reviso uno por uno para darte un resumen.",
       },
     ],
   },
   {
     stage: "RAG",
-    title: "RAG — conocimiento con fundamento",
+    title: "④ RAG — responde con conocimiento",
     detail:
-      "Tus documentos se indexan en chunks. El agente recupera los más relevantes y responde citando — no inventa.",
+      "RAG busca en documentos indexados para responder con datos reales, no con inventos del modelo.",
     nodes: [
-      { id: "a1", label: "Asistente interno", kind: "agent" },
-      { id: "k1", label: "Políticas RR.HH.", kind: "knowledge" },
-      { id: "k2", label: "Guía onboarding", kind: "knowledge" },
-      { id: "s1", label: "rag.buscar", kind: "skill" },
+      { id: "a1", label: "Agente Muninn", kind: "agent" },
+      { id: "soul", label: "SOUL.md", kind: "soul" },
+      { id: "rules", label: "Rules", kind: "rules" },
+      { id: "skill", label: "ticket.listar", kind: "skill" },
+      { id: "knowledge", label: "RAG", kind: "knowledge" },
     ],
     messages: [
-      { role: "user", text: "¿Cuántos días de vacaciones tengo al año?" },
+      { role: "system", text: "RAG · 2 tickets vencen hoy · fuente: API tickets" },
       {
         role: "think",
-        text: "Pregunta de política interna → RAG (recuperar chunks), no ticket ni calendario.",
+        text: "RAG: datos recuperados del sistema de tickets. 4 pendientes total, 2 urgentes.",
       },
-      { role: "system", text: "RAG · 2 chunks · similitud alta · Políticas RR.HH." },
       {
         role: "agent",
-        text: "Según la política vigente: 15 días hábiles al año, más 1 día extra desde el 5.º año.",
+        text: "Tienes 4 pendientes. 2 vencen hoy: ticket #1342 (soporte RR.HH.) y #1345 (revisión contrato). ¿Quieres que priorice alguno?",
       },
     ],
   },
   {
     stage: "Cron",
-    title: "Cronjobs — corre sin que nadie chatee",
+    title: "⑤ Cron — opera sin ti",
     detail:
-      "Workflows programados: resumen diario, sync, alertas. El harness dispara el flujo a la hora que defines.",
+      "El mismo agente se programa para ejecutarse en cron: resúmenes diarios, chequeos automáticos, sin esperar a que alguien chatee.",
     nodes: [
-      { id: "c1", label: "0 9 * * 1-5", kind: "cron" },
-      { id: "f1", label: "Resumen diario RR.HH.", kind: "skill" },
-      { id: "a1", label: "Asistente interno", kind: "agent" },
+      { id: "a1", label: "Agente Muninn", kind: "agent" },
+      { id: "soul", label: "SOUL.md", kind: "soul" },
+      { id: "rules", label: "Rules", kind: "rules" },
+      { id: "cron", label: "Cron 09:00", kind: "cron" },
+      { id: "result", label: "Resumen diario", kind: "result" },
     ],
     messages: [
-      { role: "system", text: "Cron · lun–vie 09:00 · workflow «Resumen diario»" },
+      { role: "system", text: "Cron · disparo lun–vie 09:00 · mismo harness, sin chat" },
       {
         role: "think",
-        text: "Sin mensaje de usuario. El trigger cron arma el contexto y ejecuta el flujo.",
+        text: "Cron: al llegar las 09:00 el agente ejecuta el mismo flujo sin intervención humana.",
       },
       {
         role: "agent",
-        text: "Resumen listo: 3 tickets abiertos, 1 política actualizada esta semana.",
+        text: "Resumen diario: 4 tickets pendientes, 2 vencen hoy. Sin acción urgente. Puedo dejar esto programado para cada mañana.",
       },
-      { role: "system", text: "Job ok · siguiente run mañana 09:00" },
     ],
   },
   {
     stage: "Impacto",
-    title: "Impacto operable",
+    title: "⑥ Flujo completo — todos los componentes",
     detail:
-      "En chat o por cron: confirma, ejecuta la skill correcta y deja traza. El humano siempre puede intervenir.",
+      "Soul da identidad, rules ordenan, helpers ejecutan, RAG fundamenta, cron automatiza. Juntos resuelven sin que tú hagas nada.",
     nodes: [
-      { id: "a1", label: "Asistente interno", kind: "agent" },
-      { id: "s2", label: "ticket.crear", kind: "skill" },
-      { id: "r1", label: "Ticket #4821", kind: "result" },
+      { id: "a1", label: "Agente Muninn", kind: "agent" },
+      { id: "soul", label: "SOUL.md", kind: "soul" },
+      { id: "rules", label: "Rules", kind: "rules" },
+      { id: "skill", label: "Helpers", kind: "skill" },
+      { id: "knowledge", label: "RAG", kind: "knowledge" },
+      { id: "cron", label: "Cron", kind: "cron" },
+      { id: "result", label: "Resuelto", kind: "result" },
     ],
     messages: [
       {
-        role: "user",
-        text: "Ok, ábreme un ticket formal para pedir las vacaciones.",
-      },
-      {
-        role: "think",
-        text: "Trámite de escritura → ticket.crear. Rule: pedir confirmación.",
+        role: "system",
+        text: "Muninn opera igual en chat que por cron — mismo harness, mismo agente.",
       },
       {
         role: "agent",
-        text: "Puedo abrir un ticket a RR.HH. con tu solicitud. ¿Lo creo?",
+        text: "Todo esto pasó por detrás: el alma definió mi tono, las reglas ordenaron el flujo, los helpers consultaron la API de tickets, RAG trajo los datos y cron lo programa para cada mañana. Ves cada paso, sin cajas negras.",
       },
-      { role: "user", text: "Sí, por favor." },
-      { role: "system", text: "ticket.crear → Ticket #4821 · listo, te avisan al revisarlo" },
     ],
   },
 ];

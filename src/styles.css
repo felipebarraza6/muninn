@@ -611,23 +611,23 @@
 
 .login-pixel {
   /* Night-city cyberpunk tokens (Muninn mint, no purple wash) */
-  --gotham-sky-0: #010204;
-  --gotham-sky-1: #061018;
-  --gotham-sky-2: #0c1e2a;
-  --gotham-sky-3: #143040;
-  --gotham-neon: #2dd4bf;
-  --gotham-neon-dim: color-mix(in oklab, #2dd4bf 45%, #0a1820);
-  --gotham-amber: #f0b45a;
-  --gotham-rose: #e87898;
-  --gotham-cyan: #5eead4;
-  --gotham-wet: #061018;
-  --gotham-facade: #121c26;
-  --gotham-facade-mid: #0c141c;
-  --gotham-facade-far: #060c12;
+  --nordic-sky-0: #010204;
+  --nordic-sky-1: #061018;
+  --nordic-sky-2: #0c1e2a;
+  --nordic-sky-3: #143040;
+  --nordic-neon: #2dd4bf;
+  --nordic-neon-dim: color-mix(in oklab, #2dd4bf 45%, #0a1820);
+  --nordic-amber: #f0b45a;
+  --nordic-rose: #e87898;
+  --nordic-cyan: #5eead4;
+  --nordic-wet: #061018;
+  --nordic-facade: #121c26;
+  --nordic-facade-mid: #0c141c;
+  --nordic-facade-far: #060c12;
   image-rendering: pixelated;
   font-family: var(--font-pixel-display) !important;
   scroll-behavior: smooth;
-  background: var(--gotham-sky-0);
+  background: var(--nordic-sky-0);
 }
 
 .login-pixel-nav__rail {
@@ -692,7 +692,7 @@ html[data-motion="off"] .pixel-city--parallax .pixel-city-mist-side {
 .pixel-font {
   font-family: var(--font-pixel) !important;
   letter-spacing: 0.04em !important;
-  line-height: 1.55;
+  line-height: 1.7;
 }
 
 .pixel-display {
@@ -845,11 +845,11 @@ html[data-motion="off"] .pixel-city--parallax .pixel-city-mist-side {
 .pixel-city-sky {
   background: linear-gradient(
     180deg,
-    var(--gotham-sky-0, #010204) 0%,
-    var(--gotham-sky-1, #061018) 22%,
-    var(--gotham-sky-2, #0c1e2a) 52%,
-    var(--gotham-sky-3, #143040) 78%,
-    color-mix(in oklab, var(--gotham-neon, #2dd4bf) 8%, #1a343c) 100%
+    var(--nordic-sky-0, #010204) 0%,
+    var(--nordic-sky-1, #061018) 22%,
+    var(--nordic-sky-2, #0c1e2a) 52%,
+    var(--nordic-sky-3, #143040) 78%,
+    color-mix(in oklab, var(--nordic-neon, #2dd4bf) 8%, #1a343c) 100%
   );
 }
 
@@ -860,8 +860,8 @@ html[data-motion="off"] .pixel-city--parallax .pixel-city-mist-side {
       0deg,
       transparent,
       transparent 2px,
-      color-mix(in oklab, var(--gotham-neon, var(--primary)) 10%, transparent) 2px,
-      color-mix(in oklab, var(--gotham-neon, var(--primary)) 10%, transparent) 3px
+      color-mix(in oklab, var(--nordic-neon, var(--primary)) 10%, transparent) 2px,
+      color-mix(in oklab, var(--nordic-neon, var(--primary)) 10%, transparent) 3px
     ),
     repeating-linear-gradient(
       90deg,
@@ -890,17 +890,17 @@ html[data-motion="off"] .pixel-city--parallax .pixel-city-mist-side {
   background:
     radial-gradient(
       ellipse 55% 28% at 50% 72%,
-      color-mix(in oklab, var(--gotham-neon, var(--primary)) 14%, transparent) 0%,
+      color-mix(in oklab, var(--nordic-neon, var(--primary)) 14%, transparent) 0%,
       transparent 70%
     ),
     radial-gradient(
       ellipse 40% 22% at 18% 55%,
-      color-mix(in oklab, var(--gotham-cyan, #5eead4) 8%, transparent) 0%,
+      color-mix(in oklab, var(--nordic-cyan, #5eead4) 8%, transparent) 0%,
       transparent 65%
     ),
     radial-gradient(
       ellipse 36% 20% at 84% 58%,
-      color-mix(in oklab, var(--gotham-amber, #f0b45a) 7%, transparent) 0%,
+      color-mix(in oklab, var(--nordic-amber, #f0b45a) 7%, transparent) 0%,
       transparent 65%
     );
   pointer-events: none;
@@ -912,9 +912,9 @@ html[data-motion="off"] .pixel-city--parallax .pixel-city-mist-side {
     180deg,
     transparent 0%,
     transparent 22%,
-    color-mix(in oklab, var(--gotham-neon, var(--primary)) 10%, transparent) 50%,
+    color-mix(in oklab, var(--nordic-neon, var(--primary)) 10%, transparent) 50%,
     color-mix(in oklab, #3a6a68 28%, transparent) 78%,
-    color-mix(in oklab, var(--gotham-wet, #061018) 70%, transparent) 100%
+    color-mix(in oklab, var(--nordic-wet, #061018) 70%, transparent) 100%
   );
   opacity: 0.95;
 }
@@ -1151,20 +1151,20 @@ html[data-motion="off"] .pixel-city--parallax .pixel-city-mist-side {
 }
 
 .pixel-city-far {
-  fill: var(--gotham-facade-far, #060c12);
+  fill: var(--nordic-facade-far, #060c12);
   opacity: 0.9;
 }
 
 .pixel-city-mid {
-  fill: var(--gotham-facade-mid, #0c141c);
+  fill: var(--nordic-facade-mid, #0c141c);
 }
 
 .pixel-city-near {
-  fill: var(--gotham-facade, #121c26);
+  fill: var(--nordic-facade, #121c26);
 }
 
 .pixel-city-fog-band {
-  fill: var(--gotham-wet, #0a141c);
+  fill: var(--nordic-wet, #0a141c);
   opacity: 0.62;
 }
 
@@ -1186,12 +1186,12 @@ html[data-motion="off"] .pixel-city--parallax .pixel-city-mist-side {
 }
 
 .pixel-city-window {
-  fill: color-mix(in oklab, #e0c878 65%, var(--gotham-neon, var(--primary)) 35%);
+  fill: color-mix(in oklab, #e0c878 65%, var(--nordic-neon, var(--primary)) 35%);
   opacity: calc(0.42 + var(--city-enter, 0) * 0.18);
 }
 
 .pixel-city-window--cyan {
-  fill: var(--gotham-cyan, #5eead4);
+  fill: var(--nordic-cyan, #5eead4);
   opacity: calc(0.28 + var(--city-enter, 0) * 0.2);
 }
 
@@ -1205,12 +1205,12 @@ html[data-motion="off"] .pixel-city--parallax .pixel-city-mist-side {
 }
 
 .pixel-city-lamp-glow {
-  fill: color-mix(in oklab, #ffe9a8 70%, var(--gotham-amber, #f0b45a) 30%);
+  fill: color-mix(in oklab, #ffe9a8 70%, var(--nordic-amber, #f0b45a) 30%);
   opacity: calc(0.32 + var(--city-enter, 0) * 0.22);
 }
 
 .pixel-city-sign {
-  fill: color-mix(in oklab, var(--gotham-neon, var(--primary)) 55%, #6a9088);
+  fill: color-mix(in oklab, var(--nordic-neon, var(--primary)) 55%, #6a9088);
   opacity: calc(0.42 + var(--city-enter, 0) * 0.25);
 }
 
@@ -1219,17 +1219,17 @@ html[data-motion="off"] .pixel-city--parallax .pixel-city-mist-side {
 }
 
 .pixel-city-sign--amber {
-  fill: var(--gotham-amber, #c09050);
+  fill: var(--nordic-amber, #c09050);
   opacity: calc(0.45 + var(--city-enter, 0) * 0.2);
 }
 
 .pixel-city-sign--rose {
-  fill: var(--gotham-rose, #e87898);
+  fill: var(--nordic-rose, #e87898);
   opacity: calc(0.4 + var(--city-enter, 0) * 0.22);
 }
 
 .pixel-city-street {
-  fill: var(--gotham-wet, #050a0e);
+  fill: var(--nordic-wet, #050a0e);
 }
 
 .pixel-city-road {
@@ -1237,17 +1237,17 @@ html[data-motion="off"] .pixel-city--parallax .pixel-city-mist-side {
 }
 
 .pixel-city-road-line {
-  fill: color-mix(in oklab, var(--gotham-neon, var(--primary)) 60%, #d9eee8);
+  fill: color-mix(in oklab, var(--nordic-neon, var(--primary)) 60%, #d9eee8);
   opacity: 0.48;
 }
 
 .pixel-city-reflect {
-  fill: color-mix(in oklab, var(--gotham-neon, var(--primary)) 45%, #4a7068);
+  fill: color-mix(in oklab, var(--nordic-neon, var(--primary)) 45%, #4a7068);
   opacity: calc(0.45 + var(--city-enter, 0) * 0.25);
 }
 
 .pixel-city-puddle {
-  fill: color-mix(in oklab, var(--gotham-neon, var(--primary)) 28%, #1a3840);
+  fill: color-mix(in oklab, var(--nordic-neon, var(--primary)) 28%, #1a3840);
   opacity: 0.72;
 }
 
@@ -1295,8 +1295,8 @@ html[data-motion="off"] .pixel-city--parallax .pixel-city-mist-side {
 .pixel-city-content-veil {
   background: radial-gradient(
     ellipse 62% 48% at 50% 36%,
-    color-mix(in oklab, var(--gotham-sky-0, var(--background)) 48%, transparent) 0%,
-    color-mix(in oklab, var(--gotham-sky-0, var(--background)) 22%, transparent) 40%,
+    color-mix(in oklab, var(--nordic-sky-0, var(--background)) 48%, transparent) 0%,
+    color-mix(in oklab, var(--nordic-sky-0, var(--background)) 22%, transparent) 40%,
     transparent 68%
   );
   pointer-events: none;
@@ -1306,8 +1306,8 @@ html[data-motion="off"] .pixel-city--parallax .pixel-city-mist-side {
   .pixel-city-content-veil {
     background: radial-gradient(
       ellipse 48% 42% at 50% 34%,
-      color-mix(in oklab, var(--gotham-sky-0, #010204) 42%, transparent) 0%,
-      color-mix(in oklab, var(--gotham-sky-0, #010204) 16%, transparent) 38%,
+      color-mix(in oklab, var(--nordic-sky-0, #010204) 42%, transparent) 0%,
+      color-mix(in oklab, var(--nordic-sky-0, #010204) 16%, transparent) 38%,
       transparent 64%
     );
   }
@@ -1369,9 +1369,9 @@ html[data-motion="off"] .pixel-city--parallax .pixel-city-mist-side {
 
 /* Capas PNG estáticas (Aseprite → public/brand/gotham/) */
 .gotham-layers {
-  --gotham-par-far: 0px;
-  --gotham-par-mid: 0px;
-  --gotham-par-near: 0px;
+  --nordic-par-far: 0px;
+  --nordic-par-mid: 0px;
+  --nordic-par-near: 0px;
   background: #0a1218;
 }
 
@@ -1414,17 +1414,17 @@ html[data-motion="off"] .pixel-city--parallax .pixel-city-mist-side {
 }
 
 .gotham-layers--parallax .gotham-layers__img--far {
-  transform: translate3d(0, var(--gotham-par-far), 0);
+  transform: translate3d(0, var(--nordic-par-far), 0);
   will-change: transform;
 }
 
 .gotham-layers--parallax .gotham-layers__img--mid {
-  transform: translate3d(0, var(--gotham-par-mid), 0);
+  transform: translate3d(0, var(--nordic-par-mid), 0);
   will-change: transform;
 }
 
 .gotham-layers--parallax .gotham-layers__img--near {
-  transform: translate3d(0, var(--gotham-par-near), 0);
+  transform: translate3d(0, var(--nordic-par-near), 0);
   will-change: transform;
 }
 
@@ -2095,7 +2095,7 @@ html[data-motion="off"] .pixel-raven-fly {
 .pixel-boot {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.65rem;
 }
 
@@ -2377,6 +2377,90 @@ html[data-motion="off"] .skeleton-bone,
   }
 }
 
+/* Estrellas brillo individual — destello asíncrono tipo pixel */
+.pixel-nordic-sparkle {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  background: #f4fbff;
+  border-radius: 0;
+  animation: pixel-sparkle var(--sparkle-dur, 3s) steps(3, end) infinite;
+  opacity: 0;
+}
+
+.pixel-nordic-sparkle--1 {
+  top: 8%;
+  left: 22%;
+  --sparkle-dur: 2.8s;
+  animation-delay: 0s;
+}
+.pixel-nordic-sparkle--2 {
+  top: 14%;
+  left: 68%;
+  --sparkle-dur: 3.6s;
+  animation-delay: 0.9s;
+}
+.pixel-nordic-sparkle--3 {
+  top: 6%;
+  left: 45%;
+  --sparkle-dur: 4.2s;
+  animation-delay: 1.6s;
+}
+.pixel-nordic-sparkle--4 {
+  top: 18%;
+  left: 12%;
+  --sparkle-dur: 3.2s;
+  animation-delay: 2.1s;
+}
+.pixel-nordic-sparkle--5 {
+  top: 10%;
+  left: 80%;
+  --sparkle-dur: 3.9s;
+  animation-delay: 0.5s;
+}
+.pixel-nordic-sparkle--6 {
+  top: 22%;
+  left: 34%;
+  --sparkle-dur: 4.5s;
+  animation-delay: 1.3s;
+}
+
+/* Brillo: aumenta tamaño + opacidad en destello */
+@keyframes pixel-sparkle {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+    box-shadow: 0 0 0px transparent;
+  }
+  25% {
+    opacity: 1;
+    transform: scale(1.5);
+    box-shadow: 0 0 6px 2px #f4fbff66;
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1);
+    box-shadow: 0 0 3px 1px #f4fbff44;
+  }
+  75% {
+    opacity: 0.8;
+    transform: scale(1.2);
+    box-shadow: 0 0 4px 1px #f4fbff55;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.5);
+    box-shadow: 0 0 0px transparent;
+  }
+}
+
+html[data-motion="off"] .pixel-nordic-sparkle,
+@media (prefers-reduced-motion: reduce) {
+  .pixel-nordic-sparkle {
+    display: none;
+  }
+}
+
 .pixel-nordic-dither {
   opacity: 0.14;
   background-image:
@@ -2550,7 +2634,7 @@ html[data-motion="off"] .skeleton-bone,
   position: absolute;
   image-rendering: pixelated;
   opacity: 0.9;
-  border-radius: 50%;
+  border-radius: 50% !important; /* preservar circular pese a .login-pixel * override */
   background:
     radial-gradient(circle at 30% 28%, rgba(255, 255, 255, 0.15) 0%, transparent 40%),
     radial-gradient(circle at 70% 65%, rgba(0, 0, 0, 0.12) 0%, transparent 35%),
@@ -2570,6 +2654,7 @@ html[data-motion="off"] .skeleton-bone,
 }
 
 .pixel-nordic-moon-crater {
+  border-radius: 50% !important; /* preservar circular pese a .login-pixel * override */
   background: radial-gradient(
     circle,
     rgba(0, 0, 0, 0.06) 0%,
@@ -2582,6 +2667,55 @@ html[data-motion="off"] .skeleton-bone,
 .pixel-nordic-moon--veiled {
   opacity: 0.4;
   filter: saturate(0.7);
+  animation: none;
+}
+
+/* Brillo pulsante de la luna */
+.pixel-nordic-moon {
+  animation: pixel-moon-glow 4s ease-in-out infinite alternate;
+}
+
+@keyframes pixel-moon-glow {
+  0% {
+    box-shadow:
+      0 0 20px color-mix(in oklab, #d8ecf4 22%, transparent),
+      0 0 48px color-mix(in oklab, var(--nordic-aurora-soft, #5eead4) 10%, transparent),
+      inset 0 0 12px rgba(0, 0, 0, 0.08);
+    opacity: 0.85;
+  }
+  100% {
+    box-shadow:
+      0 0 28px color-mix(in oklab, #d8ecf4 34%, transparent),
+      0 0 60px color-mix(in oklab, var(--nordic-aurora-soft, #5eead4) 18%, transparent),
+      inset 0 0 14px rgba(0, 0, 0, 0.06);
+    opacity: 1;
+  }
+}
+
+@keyframes pixel-raven-bob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  30% {
+    transform: translateY(-2px) rotate(1deg);
+  }
+  60% {
+    transform: translateY(0) rotate(-0.5deg);
+  }
+  80% {
+    transform: translateY(-1px) rotate(0.5deg);
+  }
+}
+
+html[data-motion="off"] .pixel-nordic-ripples,
+@media (prefers-reduced-motion: reduce) {
+  .pixel-nordic-moon {
+    animation: none;
+  }
+  .pixel-nordic-ripples {
+    animation: none;
+  }
 }
 
 /* Cuervo cruzando el cielo: trayectoria con pausas */
@@ -2608,6 +2742,40 @@ html[data-motion="off"] .skeleton-bone,
   }
 }
 
+/* Cuervo pequeño: dirección inversa, más veloz */
+.pixel-nordic-raven-flight--small {
+  animation: pixel-nordic-raven-flight--small 18s linear infinite;
+}
+
+@keyframes pixel-nordic-raven-flight--small {
+  0% {
+    transform: translate3d(110vw, 0, 0) scaleX(-1);
+  }
+  50% {
+    transform: translate3d(55vw, 2vh, 0) scaleX(-1);
+  }
+  100% {
+    transform: translate3d(-10vw, 0.5vh, 0) scaleX(-1);
+  }
+}
+
+/* Bandada de pájaros diminutos */
+.pixel-nordic-bird-flock {
+  animation: pixel-bird-flock 22s linear infinite;
+}
+
+@keyframes pixel-bird-flock {
+  0% {
+    transform: translate3d(-12vw, 0, 0);
+  }
+  45% {
+    transform: translate3d(50vw, 1.5vh, 0);
+  }
+  100% {
+    transform: translate3d(115vw, 0, 0);
+  }
+}
+
 /* Escena SVG */
 .pixel-nordic-scene {
   image-rendering: pixelated;
@@ -2615,7 +2783,7 @@ html[data-motion="off"] .skeleton-bone,
 
 .pixel-nordic-peak-far {
   fill: #1c2836;
-  opacity: 0.92;
+  opacity: 1;
 }
 
 .pixel-nordic-snow-far {
@@ -2627,6 +2795,32 @@ html[data-motion="off"] .skeleton-bone,
 .pixel-nordic-fog {
   fill: color-mix(in oklab, #c8dcea 18%, transparent);
   filter: blur(2px);
+  animation: pixel-fog-drift 20s linear infinite alternate;
+  will-change: transform;
+}
+
+.pixel-nordic-far .pixel-nordic-fog {
+  animation-duration: 22s;
+}
+.pixel-nordic-mid .pixel-nordic-fog {
+  animation-duration: 16s;
+}
+.pixel-nordic-near .pixel-nordic-fog {
+  animation-duration: 12s;
+}
+
+@keyframes pixel-fog-drift {
+  0% {
+    transform: translateX(-14px);
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateX(18px);
+    opacity: 0.65;
+  }
 }
 
 .pixel-nordic-peak-mid {
@@ -2639,48 +2833,241 @@ html[data-motion="off"] .skeleton-bone,
 }
 
 .pixel-nordic-pine--far {
-  fill: #101a24;
+  fill: #182838;
 }
 
 .pixel-nordic-pine--mid {
-  fill: #0c1620;
+  fill: #162a3a;
 }
 
 .pixel-nordic-pine--near {
-  fill: #060c12;
+  fill: #0e1a2a;
+}
+
+/* Textura sutil para pinos cercanos: destello en el lado izquierdo */
+.pixel-nordic-pine--near .pixel-nordic-pine-edge {
+  fill: #1c2e42;
+  opacity: 0.5;
 }
 
 .pixel-nordic-pine-snow {
-  fill: color-mix(in oklab, var(--nordic-snow, #dce8f0) 88%, transparent);
+  opacity: 0;
 }
 
 .pixel-nordic-water {
-  fill: var(--nordic-water, #081018);
+  fill: var(--nordic-water, #0c1a26);
+}
+
+.pixel-nordic-water--deep {
+  fill: #081018;
+}
+
+/* Brillo superficial del agua — línea horizontal que se mueve */
+.pixel-nordic-water-sheen {
+  fill: #1a3a4e;
+  opacity: 0.5;
+  animation: pixel-water-sheen 3.2s ease-in-out infinite alternate;
+}
+
+@keyframes pixel-water-sheen {
+  0% {
+    opacity: 0.3;
+    transform: translateX(0);
+  }
+  50% {
+    opacity: 0.7;
+    transform: translateX(4px);
+  }
+  100% {
+    opacity: 0.4;
+    transform: translateX(-3px);
+  }
 }
 
 .pixel-nordic-reflect-moon {
-  fill: #d8ecf4;
-  opacity: 0.5;
-  animation: pixel-nordic-shimmer 4.5s steps(3, end) infinite alternate;
+  fill: #ecf6fe;
+  opacity: 0.8;
+  animation: pixel-moon-glimmer 3.5s ease-in-out infinite alternate;
+}
+
+@keyframes pixel-moon-glimmer {
+  0% {
+    opacity: 0.5;
+  }
+  60% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0.6;
+  }
 }
 
 .pixel-nordic-reflect-aurora {
-  fill: color-mix(in oklab, var(--nordic-aurora, #2dd4bf) 62%, #1a4844);
+  fill: color-mix(in oklab, var(--nordic-aurora, #2dd4bf) 45%, #0a1a24);
   opacity: 0.4;
-  animation: pixel-nordic-shimmer 6.5s steps(4, end) infinite alternate-reverse;
+  animation: pixel-aurora-glimmer 5s ease-in-out infinite alternate-reverse;
+}
+
+@keyframes pixel-aurora-glimmer {
+  0% {
+    opacity: 0.25;
+  }
+  60% {
+    opacity: 0.6;
+  }
+  100% {
+    opacity: 0.35;
+  }
+}
+
+@keyframes pixel-moon-flow {
+  0% {
+    transform: translateX(0);
+    opacity: 0.5;
+  }
+  15% {
+    opacity: 0.9;
+  }
+  80% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateX(-320px);
+    opacity: 0.4;
+  }
+}
+
+.pixel-nordic-reflect-aurora {
+  fill: color-mix(in oklab, var(--nordic-aurora, #2dd4bf) 70%, #1a4844);
+  opacity: 0.5;
+  animation: pixel-aurora-flow 20s linear infinite;
+}
+
+@keyframes pixel-aurora-flow {
+  0% {
+    transform: translateX(0);
+    opacity: 0.25;
+  }
+  20% {
+    opacity: 0.6;
+  }
+  75% {
+    opacity: 0.5;
+  }
+  100% {
+    transform: translateX(-320px);
+    opacity: 0.2;
+  }
+}
+
+@keyframes pixel-moon-flow {
+  0% {
+    opacity: 0.5;
+    transform: translateX(-8px);
+  }
+  40% {
+    opacity: 0.9;
+  }
+  70% {
+    opacity: 0.85;
+    transform: translateX(6px);
+  }
+  100% {
+    opacity: 0.55;
+    transform: translateX(-4px);
+  }
+}
+
+@keyframes pixel-moon-flow {
+  0% {
+    opacity: 0.45;
+    transform: translateX(-4px);
+  }
+  50% {
+    opacity: 0.85;
+    transform: translateX(2px);
+  }
+  100% {
+    opacity: 0.55;
+    transform: translateX(-2px);
+  }
+}
+
+.pixel-nordic-reflect-aurora {
+  fill: color-mix(in oklab, var(--nordic-aurora, #2dd4bf) 70%, #1a4844);
+  opacity: 0.5;
+  animation: pixel-aurora-flow 5s ease-in-out infinite alternate-reverse;
+}
+
+@keyframes pixel-aurora-flow {
+  0% {
+    opacity: 0.25;
+    transform: translateX(-6px);
+  }
+  60% {
+    opacity: 0.65;
+    transform: translateX(4px);
+  }
+  100% {
+    opacity: 0.35;
+    transform: translateX(-2px);
+  }
 }
 
 .pixel-nordic-ripples {
-  fill: #22323e;
-  opacity: 0.6;
+  fill: #2a5068;
+  opacity: 0.85;
 }
 
-@keyframes pixel-nordic-shimmer {
-  from {
-    opacity: 0.28;
+@keyframes pixel-ripple-flow {
+  0% {
+    transform: translateX(0);
+    opacity: 0.3;
   }
-  to {
-    opacity: 0.52;
+  8% {
+    opacity: 0.75;
+  }
+  85% {
+    opacity: 0.6;
+  }
+  100% {
+    transform: translateX(-320px);
+    opacity: 0.25;
+  }
+}
+
+@keyframes pixel-ripple-flow {
+  0% {
+    transform: translateX(-4px);
+    opacity: 0.4;
+  }
+  30% {
+    opacity: 0.8;
+  }
+  70% {
+    opacity: 0.7;
+    transform: translateX(5px);
+  }
+  100% {
+    transform: translateX(-2px);
+    opacity: 0.5;
+  }
+}
+
+@keyframes pixel-ripple-flow {
+  0% {
+    transform: translateX(-30px);
+    opacity: 0.3;
+  }
+  10% {
+    opacity: 0.8;
+  }
+  80% {
+    opacity: 0.7;
+  }
+  100% {
+    transform: translateX(30px);
+    opacity: 0.2;
   }
 }
 
@@ -2726,12 +3113,13 @@ html[data-motion="off"] .skeleton-bone,
 }
 
 /* Velo de legibilidad: centro más limpio para el contenido */
+/* Velo oscuro sobre el fondo para legibilidad del texto hero */
 .pixel-nordic-content-veil {
   background: radial-gradient(
     ellipse 62% 48% at 50% 36%,
-    color-mix(in oklab, var(--nordic-sky-0, var(--background)) 48%, transparent) 0%,
-    color-mix(in oklab, var(--nordic-sky-0, var(--background)) 20%, transparent) 42%,
-    transparent 70%
+    color-mix(in oklab, var(--nordic-sky-0, var(--background)) 58%, transparent) 0%,
+    color-mix(in oklab, var(--nordic-sky-0, var(--background)) 28%, transparent) 42%,
+    transparent 72%
   );
   pointer-events: none;
 }
@@ -2740,8 +3128,8 @@ html[data-motion="off"] .skeleton-bone,
   .pixel-nordic-content-veil {
     background: radial-gradient(
       ellipse 48% 42% at 50% 34%,
-      color-mix(in oklab, var(--nordic-sky-0, #05080c) 42%, transparent) 0%,
-      color-mix(in oklab, var(--nordic-sky-0, #05080c) 14%, transparent) 40%,
+      color-mix(in oklab, var(--nordic-sky-0, #05080c) 52%, transparent) 0%,
+      color-mix(in oklab, var(--nordic-sky-0, #05080c) 20%, transparent) 40%,
       transparent 66%
     );
   }
@@ -2795,11 +3183,16 @@ html[data-motion="off"] .skeleton-bone,
   --nordic-par-far: 0px;
   --nordic-par-mid: 0px;
   --nordic-par-near: 0px;
+  /* Atmosfera por sección (sobreescrita por [data-nordic-section]) */
+  --nordic-aurora-boost: 1;
+  --nordic-moon-opacity: 0.9;
+  --nordic-mist-lift: 0px;
+  --nordic-mist-opacity-boost: 0;
 }
 
 .pixel-nordic--parallax .pixel-nordic-scene {
   transform-origin: 50% 60%;
-  transform: scale(calc(1 + var(--nordic-enter) * 0.22)) translateY(calc(var(--nordic-enter) * -4%));
+  transform: scale(calc(1 + var(--nordic-enter) * 0.45)) translateY(calc(var(--nordic-enter) * -8%));
   will-change: transform;
 }
 
@@ -2821,15 +3214,68 @@ html[data-motion="off"] .skeleton-bone,
 }
 
 .pixel-nordic--parallax .pixel-nordic-mist {
-  transform: translateY(calc(var(--nordic-par-near) * 0.5))
+  transform: translateY(calc(var(--nordic-par-near) * 0.5 + var(--nordic-mist-lift)))
     scale(calc(1 + var(--nordic-enter) * 0.08));
-  opacity: calc(0.95 + var(--nordic-enter) * 0.05);
+  opacity: calc(0.95 + var(--nordic-enter) * 0.05 + var(--nordic-mist-opacity-boost));
 }
 
 .pixel-nordic--parallax .pixel-nordic-aurora,
 .pixel-nordic--parallax .pixel-nordic-moon,
 .pixel-nordic--parallax .pixel-nordic-stars {
   transform: translateY(var(--nordic-par-sky));
+}
+
+.pixel-nordic--parallax .pixel-nordic-aurora {
+  filter: brightness(var(--nordic-aurora-boost));
+}
+
+.pixel-nordic--parallax .pixel-nordic-moon {
+  opacity: var(--nordic-moon-opacity);
+}
+
+/* Transiciones pixel (steps) para cambios de estado por sección.
+   Sólo atmosfera: aurora/moon/mist — NO el scene transform (scroll-driven). */
+.pixel-nordic--parallax .pixel-nordic-aurora,
+.pixel-nordic--parallax .pixel-nordic-moon,
+.pixel-nordic--parallax .pixel-nordic-mist {
+  transition:
+    filter 0.3s steps(4, end),
+    opacity 0.3s steps(4, end),
+    transform 0.3s steps(4, end);
+}
+
+/* ── Estados de atmosfera por sección de landing ──
+   data-nordic-section se setea desde PixelNordicScene según el progreso de scroll.
+   0=hero · 1=compañero · 2=técnico/flujo · 3=live demo · 4=docs/plataforma */
+
+/* Section 1: aurora empieza a intensificarse, luna comienza a velarse */
+.pixel-nordic--parallax[data-nordic-section="1"] {
+  --nordic-aurora-boost: 1.2;
+  --nordic-moon-opacity: 0.75;
+}
+
+/* Section 2: aurora brillante, niebla sube, luna más tenue */
+.pixel-nordic--parallax[data-nordic-section="2"] {
+  --nordic-aurora-boost: 1.5;
+  --nordic-moon-opacity: 0.6;
+  --nordic-mist-lift: -6px;
+  --nordic-mist-opacity-boost: 0.1;
+}
+
+/* Section 3: aurora al máximo, escena a zoom máximo, niebla densa */
+.pixel-nordic--parallax[data-nordic-section="3"] {
+  --nordic-aurora-boost: 2;
+  --nordic-moon-opacity: 0.5;
+  --nordic-mist-lift: -12px;
+  --nordic-mist-opacity-boost: 0.2;
+}
+
+/* Section 4: escena se asienta, aurora baja, niebla cubre el agua al máximo */
+.pixel-nordic--parallax[data-nordic-section="4"] {
+  --nordic-aurora-boost: 1.2;
+  --nordic-moon-opacity: 0.55;
+  --nordic-mist-lift: -18px;
+  --nordic-mist-opacity-boost: 0.25;
 }
 
 /* Batcave: umbral atenuado, foco al form */
@@ -2872,93 +3318,113 @@ html[data-motion="off"] .skeleton-bone,
   pointer-events: none;
 }
 
-/* Huevo de Muninn posado */
-.pixel-nordic-egg {
-  background: transparent;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  image-rendering: pixelated;
+/* Batcave: arco de cueva pixel (stalactitas) — no bloquea interacción */
+.pixel-nordic-cave-arch {
+  pointer-events: none;
 }
 
-.pixel-nordic-egg:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
+/* Batcave: glow de antorcha cálida desde el centro inferior */
+.pixel-nordic-torch-glow {
+  height: 33%;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    color-mix(in oklab, var(--nordic-amber, #f0b45a) 12%, transparent) 100%
+  );
+  pointer-events: none;
 }
 
-/* Modo claro: fiordo diurno frío (grises suaves, aurora apenas visible) */
+/* Modo claro: fiordo diurno frío — gris azulado, nublado, sin sol */
 :root:not(.dark) .pixel-nordic-sky {
   background: linear-gradient(
     180deg,
-    #5a7284 0%,
-    #6a8494 30%,
-    #7e98a4 58%,
-    #92abb2 82%,
-    #a2b8b8 100%
+    #8a9aaa 0%,
+    #9aacba 28%,
+    #aec0ca 56%,
+    #c2d0d4 80%,
+    #d0dad8 100%
   );
 }
 
-:root:not(.dark) .pixel-nordic-stars {
-  opacity: 0.12;
-  animation: none;
+:root:not(.dark) .pixel-nordic-stars,
+:root:not(.dark) .pixel-nordic-sparkle {
+  display: none;
 }
 
 :root:not(.dark) .pixel-nordic-aurora__band {
-  opacity: 0.14;
+  opacity: 0.06;
 }
 
 :root:not(.dark) .pixel-nordic-peak-far {
-  fill: #46606e;
+  fill: #708090;
 }
 
 :root:not(.dark) .pixel-nordic-snow-far {
-  fill: #e4eef4;
-  opacity: 0.9;
+  fill: #d8e2e8;
+  opacity: 0.85;
 }
 
 :root:not(.dark) .pixel-nordic-peak-mid {
-  fill: #38505e;
+  fill: #5a6a78;
 }
 
 :root:not(.dark) .pixel-nordic-snow-mid {
-  fill: #cfdde6;
+  fill: #c8d4dc;
 }
 
 :root:not(.dark) .pixel-nordic-pine--far {
-  fill: #2c4450;
+  fill: #4a606e;
 }
-
 :root:not(.dark) .pixel-nordic-pine--mid {
-  fill: #243c48;
+  fill: #3a5060;
 }
-
 :root:not(.dark) .pixel-nordic-pine--near {
-  fill: #16262e;
+  fill: #2a404e;
 }
 
 :root:not(.dark) .pixel-nordic-water {
-  fill: #3a5562;
+  fill: #5a7684;
 }
 
 :root:not(.dark) .pixel-nordic-shore {
-  fill: #2a404c;
+  fill: #4a6070;
 }
 
 :root:not(.dark) .pixel-nordic-shore-snow {
-  fill: #d5e2ea;
+  fill: #c8d6de;
 }
 
 :root:not(.dark) .pixel-nordic-rock {
-  fill: #243a44;
+  fill: #3a5462;
 }
 
 :root:not(.dark) .pixel-nordic-ripples {
-  fill: #55707c;
+  fill: #6a8694;
 }
 
 :root:not(.dark) .pixel-nordic-reflect-moon {
-  fill: #f0f6fa;
-  opacity: 0.5;
+  fill: #e4eef4;
+  opacity: 0.35;
+}
+
+/* Modo claro: la luna se vuelve un sol pálido de día nublado */
+:root:not(.dark) .pixel-nordic-moon {
+  background:
+    radial-gradient(circle at 35% 30%, rgba(255, 250, 235, 0.25) 0%, transparent 45%),
+    radial-gradient(circle at 50% 50%, #f8f4e8 0%, #ece4d6 30%, #dcd0c0 60%, #c8b8a8 100%);
+  box-shadow:
+    0 0 30px color-mix(in oklab, #f0e8d8 30%, transparent),
+    0 0 60px color-mix(in oklab, #e8dcc8 15%, transparent);
+  animation: none;
+  opacity: 0.7;
+}
+
+:root:not(.dark) .pixel-nordic-moon-crater {
+  opacity: 0;
+}
+
+:root:not(.dark) .pixel-nordic-moon--veiled {
+  opacity: 0.2;
 }
 
 :root:not(.dark) .pixel-nordic-reflect-aurora {
@@ -3044,7 +3510,9 @@ html[data-motion="off"] .pixel-nordic--parallax .pixel-nordic-stars {
 
 html[data-motion="off"] .pixel-nordic-stars,
 html[data-motion="off"] .pixel-nordic-aurora__band,
-html[data-motion="off"] .pixel-nordic-raven-flight {
+html[data-motion="off"] .pixel-nordic-raven-flight,
+html[data-motion="off"] .pixel-nordic-raven-flight--small,
+html[data-motion="off"] .pixel-nordic-bird-flock {
   animation: none !important;
 }
 
@@ -3093,6 +3561,19 @@ html[data-motion="off"] .pixel-nordic-raven-flight {
   image-rendering: pixelated;
 }
 
+/* Vertical scroll-snap panels for the Muninn landing.
+   The container is the scroll viewport; each child snaps to its top. */
+.snap-container {
+  scroll-snap-type: y mandatory;
+  height: 100dvh;
+  overflow-y: scroll;
+}
+.snap-section {
+  scroll-snap-align: start;
+  min-height: 100dvh;
+  overflow-y: auto;
+}
+
 /* Badge/chip with pixel bottom border */
 .pixel-jules-badge {
   display: inline-flex;
@@ -3108,7 +3589,7 @@ html[data-motion="off"] .pixel-nordic-raven-flight {
 
 /* Code editor viewport panel */
 .pixel-jules-editor {
-  background: color-mix(in oklab, var(--gotham-sky-0, #010204) 92%, var(--primary) 8%);
+  background: color-mix(in oklab, var(--nordic-sky-0, #010204) 92%, var(--primary) 8%);
   border: 3px solid color-mix(in oklab, var(--primary) 25%, transparent);
   font-family: var(--font-pixel-display) !important;
 }
@@ -3126,8 +3607,8 @@ html[data-motion="off"] .pixel-nordic-raven-flight {
 }
 
 .pixel-jules-editor__line-remove {
-  background: color-mix(in oklab, var(--gotham-rose, #e87898) 8%, transparent);
-  color: color-mix(in oklab, var(--gotham-rose, #e87898) 90%, white);
+  background: color-mix(in oklab, var(--nordic-rose, #e87898) 8%, transparent);
+  color: color-mix(in oklab, var(--nordic-rose, #e87898) 90%, white);
 }
 
 /* Numbered step badge */
@@ -3141,4 +3622,89 @@ html[data-motion="off"] .pixel-nordic-raven-flight {
   font-size: 0.875rem;
   line-height: 1;
   flex-shrink: 0;
+}
+
+/* Energía fluyendo hacia Muninn por las líneas conectoras */
+.pixel-energy-line {
+  animation: pixel-energy-flow 2.5s linear infinite;
+}
+
+.pixel-energy-line--slow {
+  animation-duration: 4s;
+}
+
+@keyframes pixel-energy-flow {
+  0% {
+    stroke-dashoffset: 0;
+    stroke-opacity: 0.1;
+  }
+  50% {
+    stroke-opacity: 0.35;
+  }
+  100% {
+    stroke-dashoffset: -14;
+    stroke-opacity: 0.08;
+  }
+}
+
+/* Núcleo Muninn: pulso al recibir energía */
+.pixel-agent-core {
+  animation: pixel-core-pulse 2.5s ease-in-out infinite;
+}
+
+@keyframes pixel-core-pulse {
+  0%,
+  100% {
+    border-color: color-mix(in oklab, var(--primary) 50%, transparent);
+    box-shadow: 0 0 4px color-mix(in oklab, var(--primary) 10%, transparent);
+  }
+  50% {
+    border-color: color-mix(in oklab, var(--primary) 70%, transparent);
+    box-shadow: 0 0 12px color-mix(in oklab, var(--primary) 25%, transparent);
+  }
+}
+
+/* Levitación sutil de cada nodo — elemento vivo que flota */
+.pixel-node-pulse {
+  animation: pixel-node-float 3s ease-in-out infinite;
+}
+
+@keyframes pixel-node-float {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  40% {
+    transform: translateY(-3px) scale(1.03);
+  }
+  60% {
+    transform: translateY(-1px) scale(1.01);
+  }
+}
+
+@keyframes pixel-node-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.8;
+  }
+  50% {
+    transform: translateY(-2px);
+    opacity: 1;
+  }
+}
+
+html[data-motion="off"] .pixel-energy-line,
+html[data-motion="off"] .pixel-agent-core,
+html[data-motion="off"] .pixel-node-pulse,
+@media (prefers-reduced-motion: reduce) {
+  .pixel-energy-line {
+    animation: none;
+  }
+  .pixel-agent-core {
+    animation: none;
+  }
+  .pixel-node-pulse {
+    animation: none;
+  }
 }
