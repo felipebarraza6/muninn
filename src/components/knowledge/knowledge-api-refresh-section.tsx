@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Select,
@@ -12,7 +13,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useExternalAPIs } from "@/api/hooks/useExternalAPIs";
-import type { ApiRefreshConfig, ApiRefreshMappingType } from "@/api/hooks/useKnowledge";
+import type {
+  ApiRefreshConfig,
+  ApiRefreshMappingType,
+  ApiRefreshPayloadVariables,
+  ApiRefreshIntegrationStrategy,
+  ApiRefreshIntegrationMode,
+} from "@/api/hooks/useKnowledge";
 import { cn } from "@/lib/utils";
 
 /** Frecuencias soportadas (metadata; el backend ejecuta cada 1h). */
@@ -21,6 +28,7 @@ const CRON_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "0 */6 * * *", label: "Cada 6 horas" },
   { value: "0 */12 * * *", label: "Cada 12 horas" },
   { value: "0 0 * * *", label: "Cada 24 horas" },
+  { value: "custom", label: "Personalizado" },
 ];
 
 const MAPPING_OPTIONS: Array<{ value: ApiRefreshMappingType; label: string; hint: string }> = [
@@ -46,6 +54,27 @@ export function cronLabel(cron?: string): string {
 
 export function mappingLabel(type?: ApiRefreshMappingType | string): string {
   return MAPPING_OPTIONS.find((o) => o.value === type)?.label ?? type ?? "";
+}
+
+/**
+ * Extrae todos los placeholders {{key}} de un endpoint config (path, query_params, headers, body, etc.).
+ */
+function extractPlaceholders(endpointConfig: Record<string, unknown> | undefined): string[] {
+  if (!endpointConfig) return [];
+  const placeholders = new Set<string>();
+  const regex = /\{\{(\w+)\}\}/g;
+  const scan = (value: unknown) => {
+    if (typeof value === "string") {
+      let m: RegExpExecArray | null;
+      while ((m = regex.exec(value)) !== null) {
+        placeholders.add(m[1]);
+      }
+    } else if (typeof value === "object" && value !== null) {
+      for (const v of Object.values(value)) scan(v);
+    }
+  };
+  scan(endpointConfig);
+  return Array.from(placeholders).sort();
 }
 
 interface KnowledgeApiRefreshSectionProps {
@@ -78,6 +107,40 @@ export function KnowledgeApiRefreshSection({
   );
   const endpointKeys = useMemo(() => Object.keys(selectedApi?.endpoints ?? {}), [selectedApi]);
 
+  const isCustomCron = enabled && !CRON_OPTIONS.some((o) => o.value === value.cron);
+
+  /** Endpoint config actual para extraer placeholders. */
+  const currentEndpointConfig = useMemo(
+    () =>
+      (selectedApi?.endpoints ?? {})[value?.endpoint ?? ""] as Record<string, unknown> | undefined,
+    [selectedApi, value?.endpoint],
+  );
+
+  /** Placeholders del endpoint (key, value). */
+  const endpointPlaceholders = useMemo(
+    () => extractPlaceholders(currentEndpointConfig),
+    [currentEndpointConfig],
+  );
+
+  /** Variables del sistema siempre disponibles. */
+  const systemVariables = ["today", "yesterday", "now"];
+
+  /** Auto-descubre placeholders cuando cambia el endpoint. */
+  useEffect(() => {
+    if (!value?.endpoint || !currentEndpointConfig) return;
+    const current = value.payload_variables || {};
+    const changed = endpointPlaceholders.some((k) => !(k in current));
+    if (changed) {
+      const next = { ...current };
+      for (const k of endpointPlaceholders) {
+        if (!(k in next)) next[k] = "";
+      }
+      onChange({ ...value, payload_variables: next });
+    }
+    // Solo cuando cambia el endpoint
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value?.endpoint]);
+
   const enable = () => {
     setOpen(true);
     onChange({
@@ -98,10 +161,33 @@ export function KnowledgeApiRefreshSection({
     onChange({ ...value, content_mapping: { ...value.content_mapping, ...p } });
   };
 
+  const patchIntegration = (p: Partial<ApiRefreshIntegrationStrategy>) => {
+    if (!value) return;
+    onChange({
+      ...value,
+      integration_strategy: { ...(value.integration_strategy || { mode: "replace" }), ...p },
+    });
+  };
+
+  const patchPayloadVariables = (vars: ApiRefreshPayloadVariables) => {
+    if (!value) return;
+    onChange({ ...value, payload_variables: vars });
+  };
+
   const mappingType = value?.content_mapping.type;
   const showPath = mappingType === "json_path" || mappingType === "json_to_table";
   const showColumns = mappingType === "json_to_table";
   const columns = value?.content_mapping.columns ?? [];
+  const strategyMode = value?.integration_strategy?.mode ?? "replace";
+  const strategyLabel =
+    (
+      {
+        replace: "Reemplazar",
+        append: "Acumular",
+        merge: "Combinar",
+        increment: "Incrementar",
+      } as Record<string, string>
+    )[strategyMode] ?? strategyMode;
 
   return (
     <Collapsible
@@ -234,22 +320,38 @@ export function KnowledgeApiRefreshSection({
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label className="text-xs">Cada cuánto</Label>
-                <Select
-                  value={value.cron}
-                  onValueChange={(v) => patch({ cron: v })}
-                  disabled={disabled}
-                >
-                  <SelectTrigger className="h-9">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CRON_OPTIONS.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>
-                        {o.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {isCustomCron ? (
+                  <Input
+                    value={value.cron}
+                    onChange={(e) => patch({ cron: e.target.value })}
+                    placeholder="0 */6 * * *"
+                    disabled={disabled}
+                    className="h-9 font-mono text-xs"
+                  />
+                ) : (
+                  <Select
+                    value={value.cron}
+                    onValueChange={(v) => {
+                      if (v === "custom") {
+                        patch({ cron: "*/15 * * * *" });
+                      } else {
+                        patch({ cron: v });
+                      }
+                    }}
+                    disabled={disabled}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CRON_OPTIONS.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>
+                          {o.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
 
               <div className="space-y-1.5">
@@ -353,11 +455,170 @@ export function KnowledgeApiRefreshSection({
               </div>
             )}
 
-            <p className="flex items-start gap-1.5 rounded-md border border-primary/25 bg-primary/5 px-2.5 py-2 text-[11px] text-muted-foreground">
-              <Loader2 className="mt-0.5 h-3 w-3 shrink-0 text-primary" />
-              El backend refresca cada 1 h (el selector es metadata). Si el contenido no cambió, no
-              se re-indexa. Con auto-refresh activo, evita editar el contenido a mano.
-            </p>
+            {/* Variables del endpoint (auto-descubiertas) */}
+            {endpointPlaceholders.length > 0 && (
+              <div className="space-y-2 border-t border-border/60 pt-3">
+                <Label className="text-xs font-medium">
+                  {endpointPlaceholders.length} variable(s) del endpoint
+                </Label>
+                <p className="text-[11px] text-muted-foreground">
+                  El endpoint <strong>{value?.endpoint}</strong> usa estos placeholders. Solo asigna
+                  valores:
+                </p>
+                <div className="space-y-1.5">
+                  {endpointPlaceholders.map((key) => (
+                    <div key={key} className="flex items-center gap-1.5">
+                      <code className="w-[140px] shrink-0 rounded bg-muted px-2 py-1 text-xs font-mono">
+                        {`{{${key}}}`}
+                      </code>
+                      <span className="text-muted-foreground">=</span>
+                      <Input
+                        value={(value?.payload_variables?.[key] ?? "") as string}
+                        onChange={(e) => {
+                          const next = { ...value?.payload_variables };
+                          next[key] = e.target.value;
+                          patchPayloadVariables(next);
+                        }}
+                        placeholder={`Valor (usa {{today}} o {{yesterday}})`}
+                        disabled={disabled}
+                        className="h-8 flex-1 font-mono text-xs"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Integration Strategy */}
+            <div className="space-y-1.5 border-t border-border/60 pt-3">
+              <Label className="text-xs font-medium">Estrategia de integración</Label>
+              <Select
+                value={strategyMode}
+                onValueChange={(v) => patchIntegration({ mode: v as ApiRefreshIntegrationMode })}
+                disabled={disabled}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="replace">Reemplazar (sobrescribir)</SelectItem>
+                  <SelectItem value="append">Acumular (agregar al final)</SelectItem>
+                  <SelectItem value="merge">Combinar (merge por ID)</SelectItem>
+                  <SelectItem value="increment">Incrementar (sumar)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                {strategyMode === "replace" &&
+                  "El contenido se reemplaza completamente en cada ciclo."}
+                {strategyMode === "append" &&
+                  "El nuevo contenido se agrega al final del existente."}
+                {strategyMode === "merge" &&
+                  "Combina datos nuevos y existentes usando un campo clave (ID)."}
+                {strategyMode === "increment" &&
+                  "Suma el valor del contenido nuevo al existente (números)."}
+              </p>
+
+              {strategyMode === "append" && (
+                <div className="grid gap-3 sm:grid-cols-2 pt-1">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Separador</Label>
+                    <Input
+                      value={value?.integration_strategy?.separator ?? "\n---\n"}
+                      onChange={(e) => patchIntegration({ separator: e.target.value })}
+                      disabled={disabled}
+                      className="h-8 font-mono text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Máx. entradas</Label>
+                    <Input
+                      value={value?.integration_strategy?.max_history ?? ""}
+                      onChange={(e) =>
+                        patchIntegration({
+                          max_history: e.target.value ? Number(e.target.value) : undefined,
+                        })
+                      }
+                      placeholder="Sin límite"
+                      disabled={disabled}
+                      type="number"
+                      min={1}
+                      className="h-8 font-mono text-xs"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {strategyMode === "merge" && (
+                <div className="space-y-1.5 pt-1">
+                  <Label className="text-xs">Campo clave (ID)</Label>
+                  <Input
+                    value={value?.integration_strategy?.key_field ?? ""}
+                    onChange={(e) => patchIntegration({ key_field: e.target.value })}
+                    placeholder="Ej: id, sku, code"
+                    disabled={disabled}
+                    className="h-8 font-mono text-xs"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Content Template */}
+            <div className="space-y-1.5 border-t border-border/60 pt-3">
+              <Label className="text-xs font-medium">
+                Template de contenido{" "}
+                <span className="text-muted-foreground font-normal">
+                  (opcional — vacío = usa el mapping directo)
+                </span>
+              </Label>
+              <Textarea
+                value={value?.content_template ?? ""}
+                onChange={(e) => patch({ content_template: e.target.value })}
+                placeholder={
+                  "# {{title}}\n\nActualizado: {{timestamp}}\n\n{{data_table}}\n\n---\n```json\n{{raw_json}}\n```"
+                }
+                disabled={disabled}
+                className="min-h-[80px] font-mono text-xs resize-y"
+              />
+              <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                <span>Variables del documento:</span>
+                <code className="text-[10px] bg-muted px-1 rounded">{`{{title}}`}</code>
+                <code className="text-[10px] bg-muted px-1 rounded">{`{{timestamp}}`}</code>
+                <span>Datos:</span>
+                <code className="text-[10px] bg-muted px-1 rounded">{`{{data_table}}`}</code>
+                <code className="text-[10px] bg-muted px-1 rounded">{`{{raw_json}}`}</code>
+                <span>Sistema:</span>
+                {systemVariables.map((v) => (
+                  <code key={v} className="text-[10px] bg-muted px-1 rounded">{`{{${v}}}`}</code>
+                ))}
+                {endpointPlaceholders.length > 0 && (
+                  <>
+                    <span>Endpoint:</span>
+                    {endpointPlaceholders.map((v) => (
+                      <code
+                        key={v}
+                        className="text-[10px] bg-muted px-1 rounded"
+                      >{`{{${v}}}`}</code>
+                    ))}
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-2 rounded-md border border-primary/25 bg-primary/5 px-3 py-2.5">
+              <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
+                <Loader2 className="mt-0.5 h-3 w-3 shrink-0 text-primary" />
+                El backend ejecuta este cron cada ciclo. Si el contenido nuevo es igual al actual,
+                no se re-indexa (ahorra tokens).
+              </p>
+              <ol className="list-decimal list-inside text-[11px] text-muted-foreground space-y-0.5">
+                <li>Se resuelven las variables del endpoint con tus valores</li>
+                <li>Se ejecuta el endpoint (GET/POST según config)</li>
+                <li>Se parsea la respuesta según mapping ({mappingLabel(mappingType)})</li>
+                <li>Se integra con contenido existente ({strategyLabel})</li>
+                <li>Se renderiza el template (si lo definiste)</li>
+                <li>Se actualiza el documento + re-indexa vectores</li>
+              </ol>
+            </div>
           </div>
         ) : (
           <div className="border-t border-border/60 px-3 pb-3 pt-3">

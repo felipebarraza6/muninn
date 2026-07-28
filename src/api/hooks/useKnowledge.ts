@@ -26,6 +26,22 @@ export interface ApiRefreshContentMapping {
   columns?: string[];
 }
 
+export interface ApiRefreshPayloadVariables {
+  [key: string]: string;
+}
+
+export type ApiRefreshIntegrationMode = "replace" | "append" | "merge" | "increment";
+
+export interface ApiRefreshIntegrationStrategy {
+  mode: ApiRefreshIntegrationMode;
+  /** Campo clave para merge (solo mode=merge). */
+  key_field?: string;
+  /** Separador para append (solo mode=append). */
+  separator?: string;
+  /** Maximo de entradas historicas para append (solo mode=append). */
+  max_history?: number;
+}
+
 export interface ApiRefreshConfig {
   external_api_id: string;
   /** Key del endpoint dentro de ExternalAPI.endpoints. Ej: "get_products". */
@@ -33,6 +49,12 @@ export interface ApiRefreshConfig {
   /** Metadata de frecuencia (backend ejecuta cada 1h). Ej: "0 *\/6 * * *". */
   cron: string;
   content_mapping: ApiRefreshContentMapping;
+  /** Variables para resolver placeholders {{key}} en el endpoint. */
+  payload_variables?: ApiRefreshPayloadVariables;
+  /** Estrategia de integracion con contenido existente. */
+  integration_strategy?: ApiRefreshIntegrationStrategy;
+  /** Template markdown con {{title}}, {{timestamp}}, {{data_table}}, {{raw_json}}. */
+  content_template?: string;
 }
 
 export interface AgentKnowledge {

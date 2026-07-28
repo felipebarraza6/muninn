@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Loader2, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,43 +13,73 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  useCreateKnowledge,
-  type ApiRefreshConfig,
-  type KnowledgeType,
-} from "@/api/hooks/useKnowledge";
+  BranchFilterSelect,
+  type BranchFilterOption,
+} from "@/components/branch/BranchFilterSelect";
+import { useCreateKnowledge, type KnowledgeType } from "@/api/hooks/useKnowledge";
+import { useAdminBranches, useMyBranchesSelect } from "@/api/hooks/useBranches";
 import {
   CREATE_KNOWLEDGE_TYPES,
   KNOWLEDGE_TYPE_DESCRIPTION,
+  KNOWLEDGE_TYPE_ICON,
   KNOWLEDGE_TYPE_LABEL,
   KNOWLEDGE_TYPE_PLACEHOLDER,
   serializeFaqPairs,
 } from "@/lib/knowledge-types";
-import { KnowledgeApiRefreshSection } from "@/components/knowledge/knowledge-api-refresh-section";
 import { AdminPageMotion } from "@/components/admin/AdminPageMotion";
 import { toast } from "sonner";
 import { apiErrorMessage } from "@/lib/apiError";
-import { useActiveBranchId } from "@/hooks/useActiveBranchId";
-import { getStoredBranches } from "@/lib/authSession";
-import { isMultiBranchUser } from "@/lib/authGuards";
+import { isSuperAdmin, isOrganizationOwner } from "@/lib/authGuards";
 
 /** Nuevo conocimiento a página completa (sin modal). */
 export default function ConocimientoNuevo() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const create = useCreateKnowledge();
-  const activeBranchId = useActiveBranchId();
 
-  const branchLabel = (() => {
-    if (!activeBranchId) return null;
-    const b = getStoredBranches().find((x) => String(x.branch_id) === String(activeBranchId));
-    return b?.branch_name || b?.business_name || `Sucursal ${activeBranchId}`;
-  })();
+  const isGlobalAdmin = isSuperAdmin();
+  const isOrgOwner = isOrganizationOwner();
+  const showSelector = isGlobalAdmin || isOrgOwner;
+
+  const { data: adminBranches = [], isLoading: adminLoading } = useAdminBranches({
+    enabled: showSelector,
+  });
+  const { data: myBranches = [], isLoading: myLoading } = useMyBranchesSelect();
+
+  const branchOptions = useMemo(() => {
+    const fromMy = myBranches.map((b) => ({
+      id: String(b.value),
+      label: b.label,
+    }));
+
+    if (showSelector) {
+      const fromAdmin = adminBranches.map((b) => ({
+        id: String(b.id),
+        label: b.fantasy_name?.trim() || b.business_name?.trim() || `Sucursal ${b.id}`,
+      }));
+      return Array.from(new Map([...fromAdmin, ...fromMy].map((o) => [o.id, o])).values()).sort(
+        (a, b) => a.label.localeCompare(b.label, "es", { sensitivity: "base" }),
+      );
+    }
+
+    return fromMy;
+  }, [adminBranches, myBranches, showSelector]);
+
+  const [selectedBranchId, setSelectedBranchId] = useState<string>(() => {
+    if (branchOptions.length === 1) return branchOptions[0].id;
+    return "";
+  });
 
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [category, setCategory] = useState("");
-  const [knowledgeType, setKnowledgeType] = useState<KnowledgeType>("DOCUMENT");
+  const [knowledgeType, setKnowledgeType] = useState<KnowledgeType>(() => {
+    const t = searchParams.get("type");
+    return t && (CREATE_KNOWLEDGE_TYPES as readonly string[]).includes(t)
+      ? (t as KnowledgeType)
+      : "DOCUMENT";
+  });
   const [faqPairs, setFaqPairs] = useState([{ question: "", answer: "" }]);
-  const [apiRefresh, setApiRefresh] = useState<ApiRefreshConfig | null>(null);
 
   const handleTypeChange = (next: KnowledgeType) => {
     if (knowledgeType === "FAQ" && next !== "FAQ") {
@@ -70,8 +100,7 @@ export default function ConocimientoNuevo() {
       toast.error("El título es obligatorio");
       return;
     }
-    // Con auto-refresh el contenido lo genera la API: puede partir vacío.
-    if (!body.trim() && !apiRefresh) {
+    if (!body.trim()) {
       toast.error(
         knowledgeType === "FAQ"
           ? "Agrega al menos una pregunta y respuesta"
@@ -79,18 +108,10 @@ export default function ConocimientoNuevo() {
       );
       return;
     }
-    if (apiRefresh) {
-      if (!apiRefresh.external_api_id) {
-        toast.error("Selecciona la External API para el auto-refresh");
-        return;
-      }
-      if (!apiRefresh.endpoint) {
-        toast.error("Selecciona el endpoint para el auto-refresh");
-        return;
-      }
-    }
-    if (!activeBranchId) {
-      toast.error("Selecciona una sucursal antes de crear conocimiento");
+    const targetBranch = selectedBranchId || branchOptions[0]?.id || "";
+    const canPickAll = isSuperAdmin() || isOrganizationOwner();
+    if (!targetBranch && !canPickAll) {
+      toast.error("Selecciona una sucursal");
       return;
     }
 
@@ -100,16 +121,12 @@ export default function ConocimientoNuevo() {
         content: body,
         knowledge_type: knowledgeType,
         category: category.trim() || null,
+        ...(targetBranch ? { branch: Number(targetBranch) } : {}),
         is_active: true,
-        ...(apiRefresh ? { api_refresh_config: apiRefresh } : {}),
       },
       {
         onSuccess: (doc) => {
-          toast.success(
-            apiRefresh
-              ? "Documento creado con auto-refresh. El primer refresco llega en el próximo ciclo (cada 1 h)."
-              : "Documento creado. Se indexará al asignarlo a un agente.",
-          );
+          toast.success("Documento creado. Se indexará al asignarlo a un agente.");
           navigate(doc?.id ? `/app/conocimiento/${doc.id}` : "/app/conocimiento");
         },
         onError: (e) => toast.error(apiErrorMessage(e, "No se pudo crear el documento")),
@@ -131,18 +148,35 @@ export default function ConocimientoNuevo() {
             <h1 className="text-xl font-semibold leading-tight">Nuevo conocimiento</h1>
             <p className="text-sm text-muted-foreground max-w-2xl">
               Elige el tipo: el formulario se adapta. Las tablas de datos también se cargan desde{" "}
-              <Link to="/app/conocimiento/datos" className="font-medium text-primary hover:underline">
+              <Link
+                to="/app/conocimiento/datos"
+                className="font-medium text-primary hover:underline"
+              >
                 Datos
               </Link>
               .
-              {isMultiBranchUser() && branchLabel ? (
+              {branchOptions.length === 1 ? (
                 <>
                   {" "}
-                  Se guarda en la sucursal activa:{" "}
-                  <span className="font-medium text-foreground">{branchLabel}</span>.
+                  Se guarda en{" "}
+                  <span className="font-medium text-foreground">{branchOptions[0].label}</span>.
                 </>
               ) : null}
             </p>
+            {branchOptions.length > 1 && (
+              <div className="flex items-center gap-2">
+                <Label className="text-xs shrink-0">Sucursal</Label>
+                <BranchFilterSelect
+                  value={selectedBranchId}
+                  onValueChange={setSelectedBranchId}
+                  options={branchOptions}
+                  includeAll
+                  allValue=""
+                  allLabel="Todas (organización)"
+                  label={null}
+                />
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             <Button type="button" variant="outline" size="sm" asChild>
@@ -155,11 +189,11 @@ export default function ConocimientoNuevo() {
           </div>
         </div>
 
-        <div className="grid flex-1 min-h-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)]">
-          {/* Columna principal */}
+        <div className="flex flex-col gap-4">
           <div className="space-y-4">
-            <div className="rounded-xl border border-border/70 bg-card/60 p-4 space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
+            {/* Título + Categoría + Tipo — en fila */}
+            <div className="rounded-xl border border-border/70 bg-card/60 p-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="knowledge-title">Título</Label>
                   <Input
@@ -180,37 +214,48 @@ export default function ConocimientoNuevo() {
                     maxLength={80}
                   />
                 </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Tipo</Label>
-                <Select
-                  value={knowledgeType}
-                  onValueChange={(v) => handleTypeChange(v as KnowledgeType)}
-                >
-                  <SelectTrigger className="sm:max-w-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CREATE_KNOWLEDGE_TYPES.map((t) => (
-                      <SelectItem key={t} value={t}>
-                        {KNOWLEDGE_TYPE_LABEL[t]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  {KNOWLEDGE_TYPE_DESCRIPTION[knowledgeType]}
-                </p>
+                <div className="space-y-2">
+                  <Label>Tipo</Label>
+                  <Select
+                    value={knowledgeType}
+                    onValueChange={(v) => handleTypeChange(v as KnowledgeType)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CREATE_KNOWLEDGE_TYPES.map((t) => (
+                        <SelectItem key={t} value={t}>
+                          {KNOWLEDGE_TYPE_LABEL[t]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {KNOWLEDGE_TYPE_DESCRIPTION[knowledgeType]}
+                  </p>
+                </div>
               </div>
             </div>
 
+            {/* Contenido — se adapta según el tipo */}
             <div className="rounded-xl border border-border/70 bg-card/60 p-4 space-y-3">
-              <Label className="text-xs text-muted-foreground">Contenido</Label>
+              {(() => {
+                const TypeIcon = KNOWLEDGE_TYPE_ICON[knowledgeType];
+                return (
+                  <div className="flex items-center gap-2 text-sm font-medium text-foreground/90 border-b border-border/60 pb-3 mb-1">
+                    {TypeIcon && <TypeIcon className="h-4 w-4 text-primary" />}
+                    <span>{KNOWLEDGE_TYPE_LABEL[knowledgeType]}</span>
+                  </div>
+                );
+              })()}
+
               {knowledgeType === "FAQ" ? (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <p className="text-xs text-muted-foreground">Preguntas y respuestas</p>
+                    <p className="text-xs text-muted-foreground">
+                      Agrega pares de pregunta y respuesta
+                    </p>
                     <Button
                       type="button"
                       variant="outline"
@@ -274,37 +319,70 @@ export default function ConocimientoNuevo() {
                     </div>
                   ))}
                 </div>
+              ) : knowledgeType === "POLICY" ? (
+                <div className="space-y-2">
+                  <Textarea
+                    id="knowledge-content"
+                    rows={12}
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    required
+                    placeholder="Describe la política: alcance, excepciones, vigencia…"
+                    className="font-mono text-sm min-h-[240px]"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Incluye el alcance, las excepciones y la vigencia. Se indexará al crear.
+                  </p>
+                </div>
+              ) : knowledgeType === "PROCEDURE" ? (
+                <div className="space-y-2">
+                  <Textarea
+                    id="knowledge-content"
+                    rows={12}
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    required
+                    placeholder="Paso 1: …&#10;Paso 2: …&#10;Paso 3: …"
+                    className="font-mono text-sm min-h-[240px]"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Escribe los pasos en orden numerado. Se indexará al crear.
+                  </p>
+                </div>
+              ) : knowledgeType === "API_DOC" ? (
+                <div className="space-y-2">
+                  <Textarea
+                    id="knowledge-content"
+                    rows={12}
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    required
+                    placeholder="Endpoint, método, parámetros y ejemplos de respuesta…"
+                    className="font-mono text-sm min-h-[240px]"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Describe los endpoints, métodos y contratos de integración.
+                  </p>
+                </div>
               ) : (
-                <>
+                <div className="space-y-2">
                   <Textarea
                     id="knowledge-content"
                     rows={16}
                     value={content}
                     onChange={(e) => setContent(e.target.value)}
-                    required={!apiRefresh}
+                    required
                     placeholder={
                       KNOWLEDGE_TYPE_PLACEHOLDER[knowledgeType] || "Escribe o pega el contenido…"
                     }
                     className="font-mono text-sm min-h-[320px]"
                   />
                   <p className="text-[11px] text-muted-foreground">
-                    {apiRefresh
-                      ? "Con auto-refresh puedes dejarlo vacío: la API lo llenará en el primer ciclo."
-                      : "Puedes pegar texto largo desde Word o el navegador. Se indexará al crear."}
+                    Puedes pegar texto largo desde Word o el navegador. Se indexará al crear.
                   </p>
-                </>
+                </div>
               )}
             </div>
-          </div>
-
-          {/* Columna lateral: auto-refresh */}
-          <div className="space-y-3">
-            <KnowledgeApiRefreshSection
-              value={apiRefresh}
-              onChange={setApiRefresh}
-              disabled={create.isPending}
-              branch={activeBranchId}
-            />
           </div>
         </div>
       </form>

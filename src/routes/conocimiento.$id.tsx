@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
   Boxes,
+  Clock,
   FileText,
   Loader2,
   Pencil,
@@ -24,7 +25,6 @@ import {
   useUpdateKnowledge,
   isKnowledgeIndexed,
   type AgentKnowledge,
-  type ApiRefreshConfig,
 } from "@/api/hooks/useKnowledge";
 import {
   AutoRefreshInfoPanel,
@@ -39,13 +39,13 @@ import {
   type GridRow,
   type QAPair,
 } from "@/components/agents/knowledge-content-viewer";
-import { KnowledgeApiRefreshSection } from "@/components/knowledge/knowledge-api-refresh-section";
+import { KnowledgeCronJobTab } from "@/components/knowledge/knowledge-cronjob-tab";
 import { KNOWLEDGE_TYPE_LABEL, parseFaqPairs, serializeFaqPairs } from "@/lib/knowledge-types";
 import { AdminPageMotion } from "@/components/admin/AdminPageMotion";
 import { toast } from "sonner";
 import { apiErrorMessage } from "@/lib/apiError";
 
-type TabId = "documento" | "vectores" | "uso";
+type TabId = "documento" | "vectores" | "uso" | "cronjob";
 
 /**
  * Detalle de conocimiento a página completa (sin modal).
@@ -64,7 +64,6 @@ export default function ConocimientoDetail() {
   const [faqPairs, setFaqPairs] = useState<QAPair[]>([{ question: "", answer: "" }]);
   const [dataColumns, setDataColumns] = useState<string[]>([]);
   const [dataRows, setDataRows] = useState<GridRow[]>([]);
-  const [editApiRefresh, setEditApiRefresh] = useState<ApiRefreshConfig | null>(null);
 
   const type = doc?.knowledge_type ?? "DOCUMENT";
   const isData = type === "DATA";
@@ -76,7 +75,6 @@ export default function ConocimientoDetail() {
     const docType = current.knowledge_type ?? "DOCUMENT";
     setEditTitle(current.title || "");
     setEditContent(current.content || "");
-    setEditApiRefresh(current.api_refresh_config ?? null);
     if (docType === "FAQ") {
       setFaqPairs(parseFaqPairs(current.content));
     }
@@ -111,7 +109,6 @@ export default function ConocimientoDetail() {
     if (isData) {
       const clean = dataRows.filter((row) => dataColumns.some((c) => (row[c] ?? "").trim()));
       if (clean.length === 0) {
-        if (editApiRefresh) return doc?.content ?? "";
         toast.error("La tabla no tiene filas con datos");
         return null;
       }
@@ -124,7 +121,6 @@ export default function ConocimientoDetail() {
       );
     }
     if (!editContent.trim()) {
-      if (editApiRefresh) return doc?.content ?? "";
       toast.error("El contenido es obligatorio");
       return null;
     }
@@ -137,33 +133,21 @@ export default function ConocimientoDetail() {
       toast.error("El título es obligatorio");
       return;
     }
-    if (editApiRefresh) {
-      if (!editApiRefresh.external_api_id) {
-        toast.error("Selecciona la External API para el auto-refresh");
-        return;
-      }
-      if (!editApiRefresh.endpoint) {
-        toast.error("Selecciona el endpoint para el auto-refresh");
-        return;
-      }
-    }
     const content = buildContent();
     if (content == null) return;
 
     update.mutate(
       {
         id: String(doc.id),
-        data: { title: editTitle.trim(), content, api_refresh_config: editApiRefresh },
+        data: { title: editTitle.trim(), content },
         branch: doc.branch,
       },
       {
         onSuccess: () => {
           toast.success(
-            editApiRefresh
-              ? "Guardado. El auto-refresh actualizará el contenido en el próximo ciclo."
-              : indexed
-                ? "Guardado. Reindexa desde el agente para actualizar los vectores."
-                : "Guardado. Se indexará al asignarlo a un agente.",
+            indexed
+              ? "Guardado. Reindexa desde el agente para actualizar los vectores."
+              : "Guardado. Se indexará al asignarlo a un agente.",
           );
           setEditing(false);
           void refetch();
@@ -293,22 +277,12 @@ export default function ConocimientoDetail() {
                 placeholder="Escribe o pega el contenido…"
               />
             )}
-            {editApiRefresh ? (
-              <p className="text-[11px] text-muted-foreground">
-                Con auto-refresh activo, el contenido se regenera desde la API: evita editarlo a
-                mano.
-              </p>
-            ) : null}
           </div>
 
-          {/* Config auto-refresh */}
-          <div className="space-y-3">
-            <KnowledgeApiRefreshSection
-              value={editApiRefresh}
-              onChange={setEditApiRefresh}
-              disabled={saving}
-              branch={doc.branch}
-            />
+          <div className="lg:w-[320px]">
+            <p className="text-[11px] text-muted-foreground">
+              Para configurar actualización automática, usa la pestaña CronJob.
+            </p>
           </div>
         </div>
       ) : (
@@ -330,6 +304,13 @@ export default function ConocimientoDetail() {
                   {doc.chunks_count}
                 </Badge>
               )}
+            </TabsTrigger>
+            <TabsTrigger value="cronjob" className="gap-1.5 flex-1 sm:flex-none">
+              <Clock className="h-3.5 w-3.5" />
+              CronJob
+              {doc.api_refresh_config ? (
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              ) : null}
             </TabsTrigger>
             <TabsTrigger value="uso" className="gap-1.5 flex-1 sm:flex-none">
               <Users className="h-3.5 w-3.5" />
@@ -363,6 +344,48 @@ export default function ConocimientoDetail() {
             </div>
           </TabsContent>
 
+          <TabsContent value="cronjob" className="flex-1 min-h-0 mt-3">
+            <div className="h-full min-h-[60vh] overflow-y-auto rounded-xl">
+              <KnowledgeCronJobTab
+                value={doc.api_refresh_config ?? null}
+                onChange={(next) => {
+                  if (!doc) return;
+                  const wasNull = !doc.api_refresh_config;
+                  const isNull = !next;
+
+                  const data: Partial<typeof doc> = {};
+                  if (next) data.api_refresh_config = next;
+                  else data.api_refresh_config = null;
+
+                  const showToast = wasNull || isNull;
+
+                  update.mutate(
+                    {
+                      id: String(doc.id),
+                      data,
+                      branch: doc.branch,
+                    },
+                    {
+                      onSuccess: () => {
+                        if (showToast) {
+                          toast.success(
+                            isNull
+                              ? "CronJob desactivado."
+                              : "CronJob activado — se actualizará automáticamente.",
+                          );
+                        }
+                        void refetch();
+                      },
+                      onError: (e) => toast.error(apiErrorMessage(e, "Error al guardar CronJob")),
+                    },
+                  );
+                }}
+                disabled={update.isPending}
+                branch={doc.branch}
+                knowledgeType={doc.knowledge_type}
+              />
+            </div>
+          </TabsContent>
           <TabsContent value="uso" className="flex-1 min-h-0 mt-3">
             <div className="h-full min-h-[60vh] overflow-y-auto rounded-xl border border-border/70 bg-card/60 p-4">
               <UsagePanel
