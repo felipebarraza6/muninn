@@ -459,7 +459,7 @@ export function MuninnLoginLanding({ className, liveNonce = 0 }: Props) {
         ref={contentRef}
         className="ml-12 flex flex-1 flex-col overflow-y-auto px-4 pb-4 pt-16 sm:ml-16 sm:p-8"
       >
-        <div className="flex min-h-0 flex-1 items-start justify-center">
+        <div className="flex min-h-0 flex-1 items-center justify-center">
           <AnimatePresence mode="popLayout">
             <motion.div
               key={activeSection}
@@ -502,7 +502,7 @@ export function MuninnLoginLanding({ className, liveNonce = 0 }: Props) {
               {activeSection === "agente" && (
                 <section
                   id="agente"
-                  className="flex flex-col items-center gap-6 text-center"
+                  className="flex w-full flex-col items-center justify-center gap-6 text-center"
                   aria-labelledby="muninn-with-you"
                 >
                   <Reveal tone="pop">
@@ -799,7 +799,7 @@ export function MuninnLoginLanding({ className, liveNonce = 0 }: Props) {
                   {/* MOBILE: galería vertical de componentes + agente al final */}
                   <section
                     id="tecnico-mobile"
-                    className="flex w-full max-w-xs flex-col gap-3 px-4 sm:hidden"
+                    className="flex w-full max-w-xs flex-col items-center gap-3 px-4 sm:hidden"
                     aria-labelledby="muninn-flow-mobile"
                   >
                     <p className="pixel-font text-[13px] uppercase tracking-[0.15em] text-primary">
@@ -848,7 +848,7 @@ export function MuninnLoginLanding({ className, liveNonce = 0 }: Props) {
               {activeSection === "docs" && (
                 <section
                   id="docs"
-                  className="flex w-full max-w-3xl flex-col gap-3 px-2 py-4 sm:items-center sm:justify-center sm:gap-4 sm:px-4 sm:py-6 max-sm:self-start"
+                  className="flex w-full max-w-3xl flex-col items-center gap-3 px-2 py-4 sm:justify-center sm:gap-4 sm:px-4 sm:py-6"
                   aria-labelledby="muninn-docs"
                 >
                   <Reveal tone="pop" className="w-full">
