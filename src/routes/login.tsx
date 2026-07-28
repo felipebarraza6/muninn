@@ -5,11 +5,11 @@ import { useLogin } from "@/api/hooks/useAuth";
 import { useResolvePublicLoginTheme } from "@/api/hooks/useBranchTheme";
 import { resolveThemeLogo } from "@/lib/applyBranchTheme";
 import { resolveMediaUrl } from "@/lib/mediaUrl";
-import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { MuninnBrand } from "@/components/brand/MuninnBrand";
 import { LoginSocialLinks } from "@/components/brand/LoginSocialLinks";
 import { cn } from "@/lib/utils";
 import { LoginAtmosphere } from "@/components/brand/LoginAtmosphere";
+import type { NordicZone } from "@/components/brand/PixelNordicScene";
 import { MuninnLoginLanding } from "@/components/brand/MuninnLoginLanding";
 import { PixelBoot } from "@/components/brand/LoginPixelBoot";
 import { MUNINN_LIVE_DEMO_EVENT } from "@/lib/muninnLiveDemo";
@@ -35,7 +35,7 @@ export default function Login() {
   const { flat, scope, isAppDefault, isLoading: themeLoading } = useResolvePublicLoginTheme(slug);
   const [pixelReady, setPixelReady] = useState(() => Boolean(reduceMotion));
   const [liveNonce, setLiveNonce] = useState(0);
-  const [nordicZone, setNordicZone] = useState<string>("fjord");
+  const [nordicZone, setNordicZone] = useState<NordicZone>("fjord");
 
   useEffect(() => {
     if (!isAppDefault) {
@@ -157,9 +157,6 @@ export default function Login() {
   if (isOrgPortal) {
     return (
       <div className="relative min-h-screen bg-background">
-        <div className="absolute top-4 right-4 z-20">
-          <ThemeToggle />
-        </div>
         <OrgLoginLanding
           loading={themeLoading}
           orgName={orgName}
@@ -187,7 +184,7 @@ export default function Login() {
           intensity="full"
           variant="pixel"
           mood="nordic"
-          zone={nordicZone as any}
+          zone={nordicZone}
           parallax
           className="pointer-events-none fixed inset-0 z-0"
         />
@@ -204,7 +201,6 @@ export default function Login() {
           >
             Ingresar
           </Link>
-          <ThemeToggle className="login-pixel-theme-toggle border-2 border-border/60 bg-card text-foreground shadow-[2px_2px_0_0_color-mix(in_oklab,var(--foreground)_18%,transparent)] hover:bg-card" />
         </div>
 
         {/* Contenido centrado; ciudad full-bleed detrás. Desktop más ancho para no “flotar” en el vacío */}
@@ -225,10 +221,6 @@ export default function Login() {
   return (
     <div className="relative min-h-dvh overflow-hidden bg-background">
       <LoginAtmosphere intensity="soft" variant="aurora" />
-      <div className="absolute top-3 right-3 z-20 sm:top-4 sm:right-4">
-        <ThemeToggle />
-      </div>
-
       <div className="relative z-[1] flex min-h-dvh items-center justify-center px-4 py-10 sm:px-8">
         <motion.div
           id="login"
