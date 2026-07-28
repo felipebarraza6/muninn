@@ -386,7 +386,7 @@ export default function App() {
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
           <ErrorBoundary title="Error en la aplicación">
-            <BrowserRouter>
+            <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/+$/, "")}>
               <RealtimeProvider>
                 <AppRoutes />
                 <Toaster position="top-right" />
