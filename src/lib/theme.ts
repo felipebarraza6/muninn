@@ -18,31 +18,21 @@ export function getSystemAppearance(): ResolvedAppearance {
 }
 
 export function getStoredThemePreference(): ThemePreference {
-  if (typeof window === "undefined") return "dark";
-  try {
-    const raw =
-      localStorage.getItem(THEME_STORAGE_KEY) ?? localStorage.getItem(LEGACY_THEME_STORAGE_KEY);
-    if (raw === "light" || raw === "dark" || raw === "system") return raw;
-  } catch {
-    // ignore
-  }
   return "dark";
 }
 
-export function resolveAppearance(preference: ThemePreference): ResolvedAppearance {
-  if (preference === "system") return getSystemAppearance();
-  return preference;
+export function resolveAppearance(_preference: ThemePreference): ResolvedAppearance {
+  return "dark";
 }
 
-/** Aplica `.dark` en <html> según preferencia. */
-export function applyAppearanceClass(preference: ThemePreference): ResolvedAppearance {
-  const resolved = resolveAppearance(preference);
+/** Aplica `.dark` en <html> — siempre oscuro. */
+export function applyAppearanceClass(_preference: ThemePreference): ResolvedAppearance {
   const root = document.documentElement;
-  root.classList.toggle("dark", resolved === "dark");
+  root.classList.add("dark");
   root.classList.remove("light");
-  root.dataset.theme = resolved;
-  root.style.colorScheme = resolved;
-  return resolved;
+  root.dataset.theme = "dark";
+  root.style.colorScheme = "dark";
+  return "dark";
 }
 
 export function persistThemePreference(preference: ThemePreference): void {

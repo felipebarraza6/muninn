@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
+  BookOpen,
   CheckCircle2,
   Eye,
   FileSpreadsheet,
@@ -50,7 +51,12 @@ import {
   type AgentKnowledge,
 } from "@/api/hooks/useKnowledge";
 import { useAgents } from "@/api/hooks/useAgents";
-import { knowledgeCardPreview, knowledgeTypeLabel, knowledgeTypeMeta } from "@/lib/knowledge-types";
+import {
+  CREATE_KNOWLEDGE_TYPES,
+  knowledgeCardPreview,
+  knowledgeTypeLabel,
+  knowledgeTypeMeta,
+} from "@/lib/knowledge-types";
 import { toast } from "sonner";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { apiErrorMessage } from "@/lib/apiError";
@@ -148,16 +154,18 @@ function KnowledgeCard({
   return (
     <article
       className={cn(
-        "group flex flex-col rounded-xl border bg-card/60 p-4 transition-[border-color,box-shadow,transform] duration-200",
-        "hover:-translate-y-0.5 hover:shadow-[var(--shadow-card)] hover:border-primary/25",
+        "group flex h-full flex-col rounded-2xl border bg-card/50 p-4 transition-all duration-200",
+        "hover:-translate-y-0.5 hover:border-primary/35 hover:bg-card hover:shadow-lg hover:shadow-primary/10",
         inactive ? "border-border/60 opacity-70 grayscale" : style.border,
       )}
     >
       <div className="flex items-start gap-3">
         <div
           className={cn(
-            "h-10 w-10 rounded-lg flex items-center justify-center shrink-0",
-            inactive ? "bg-muted text-muted-foreground" : style.soft,
+            "h-11 w-11 shrink-0 rounded-xl flex items-center justify-center ring-1",
+            inactive
+              ? "bg-muted text-muted-foreground ring-border/60"
+              : `${style.soft} ring-primary/25`,
           )}
         >
           <Icon className={cn("h-5 w-5", inactive ? "text-muted-foreground" : style.icon)} />
@@ -419,21 +427,61 @@ export default function Conocimiento() {
 
   return (
     <AdminPageMotion className="space-y-4 px-4 md:px-6 lg:px-8 py-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground max-w-xl">
-          Biblioteca de documentos. Se preparan para RAG al asignarlos a un agente.
-        </p>
-        <div className="flex gap-2 items-center flex-wrap justify-end shrink-0">
-          <Button variant="outline" size="sm" asChild>
-            <Link to="/app/conocimiento/datos">
-              <FileSpreadsheet className="h-4 w-4 mr-1.5" /> Datos
-            </Link>
-          </Button>
-          <Button size="sm" asChild>
-            <Link to="/app/conocimiento/nuevo">
-              <Plus className="h-4 w-4 mr-1.5" /> Nuevo
-            </Link>
-          </Button>
+      {/* Hero header — misma línea visual que Skills / Agentes */}
+      <div className="relative overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-br from-primary/10 via-card/80 to-card px-5 py-5 md:px-6 md:py-6">
+        <div
+          className="pointer-events-none absolute -right-8 -top-10 h-40 w-40 rounded-full bg-primary/15 blur-3xl"
+          aria-hidden
+        />
+        <div
+          className="pointer-events-none absolute -bottom-12 left-1/3 h-32 w-32 rounded-full bg-teal-500/10 blur-3xl"
+          aria-hidden
+        />
+        <div className="relative flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+          <div className="space-y-1.5 min-w-0">
+            <div className="flex items-center gap-2 text-primary">
+              <BookOpen className="h-4 w-4" strokeWidth={1.75} />
+              <span className="text-[11px] font-medium uppercase tracking-[0.14em]">
+                Biblioteca
+              </span>
+            </div>
+            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">Conocimiento</h1>
+            <p className="text-sm text-muted-foreground max-w-lg leading-relaxed">
+              Documentos preparados para RAG. Cada tipo tiene su propia experiencia de creación y
+              vista previa.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <Button variant="outline" size="sm" asChild>
+              <Link to="/app/conocimiento/datos">
+                <FileSpreadsheet className="h-4 w-4 mr-1.5" /> Datos
+              </Link>
+            </Button>
+            <Button size="sm" asChild>
+              <Link to="/app/conocimiento/nuevo">
+                <Plus className="h-4 w-4 mr-1.5" /> Nuevo
+              </Link>
+            </Button>
+          </div>
+        </div>
+        {/* Botones directos por tipo de documento */}
+        <div className="relative mt-4 flex flex-wrap gap-1.5">
+          {CREATE_KNOWLEDGE_TYPES.map((type) => {
+            const { label, Icon, style } = knowledgeTypeMeta(type);
+            return (
+              <Link
+                key={type}
+                to={`/app/conocimiento/nuevo?type=${type}`}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors hover:scale-105",
+                  style.chip,
+                )}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {label}
+              </Link>
+            );
+          })}
         </div>
       </div>
 
@@ -551,7 +599,7 @@ export default function Conocimiento() {
             }
             initial={reduceMotion ? false : "hidden"}
             animate="show"
-            className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3"
+            className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3.5"
           >
             {filtered.map((doc) => {
               const canManage = canManageKnowledge(doc.branch);

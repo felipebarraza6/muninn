@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useLogin } from "@/api/hooks/useAuth";
-import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { LoginAtmosphere } from "@/components/brand/LoginAtmosphere";
 import { PitchSwap } from "@/components/brand/LoginLandingPanel";
 import { LoginForm } from "@/components/auth/LoginForm";
@@ -60,10 +59,6 @@ export default function EntrarPage() {
         mood="batcave"
         className="pointer-events-none fixed inset-0 z-0"
       />
-      <div className="fixed top-3 right-3 z-30 sm:top-4 sm:right-4">
-        <ThemeToggle className="login-pixel-theme-toggle border-2 border-border/60 bg-card text-foreground shadow-[2px_2px_0_0_color-mix(in_oklab,var(--foreground)_18%,transparent)] hover:bg-card" />
-      </div>
-
       <div className="relative z-10 flex min-h-dvh items-center justify-center px-4 py-14 sm:px-6">
         {pixelReady ? (
           <motion.div

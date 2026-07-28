@@ -126,7 +126,9 @@ const adminItems: MenuItem[] = [
   { title: "LLM", url: `${APP}/admin/llm`, icon: Cpu },
 ];
 
-const usersOnlyItems: MenuItem[] = [{ title: "Usuarios", url: `${APP}/admin/usuarios`, icon: Users }];
+const usersOnlyItems: MenuItem[] = [
+  { title: "Usuarios", url: `${APP}/admin/usuarios`, icon: Users },
+];
 
 const llmOnlyItems: MenuItem[] = [{ title: "LLM", url: `${APP}/admin/llm`, icon: Cpu }];
 

@@ -51,7 +51,7 @@ El servidor Vite levanta por defecto en `http://localhost:3001`.
 ## Scripts
 
 | Comando          | Descripción                           |
-|------------------|---------------------------------------|
+| ---------------- | ------------------------------------- |
 | `bun run dev`    | Servidor de desarrollo con hot reload |
 | `bun run build`  | Build de producción en `dist/`        |
 | `bun run lint`   | Revisar código con ESLint             |

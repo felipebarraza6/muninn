@@ -39,7 +39,8 @@
           var key = "muninn-theme";
           var legacy = "huginn-theme";
           var stored = localStorage.getItem(key) || localStorage.getItem(legacy);
-          var preference = stored === "light" || stored === "dark" || stored === "system" ? stored : "dark";
+          var preference =
+            stored === "light" || stored === "dark" || stored === "system" ? stored : "dark";
           var dark =
             preference === "dark" ||
             (preference === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);

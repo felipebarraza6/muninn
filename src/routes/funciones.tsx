@@ -28,9 +28,7 @@ import {
   type AgentFunction,
   type ImplementationType,
 } from "@/api/hooks/useAgentFunctions";
-import {
-  AdminPageMotion,
-} from "@/components/admin/AdminPageMotion";
+import { AdminPageMotion } from "@/components/admin/AdminPageMotion";
 import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
 import {
   canEditOwnedSkill,

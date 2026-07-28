@@ -4,7 +4,6 @@ import { Loader2 } from "lucide-react";
 import { useResetPasswordConfirm } from "@/api/hooks/useAuth";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { LoginAtmosphere } from "@/components/brand/LoginAtmosphere";
 import { AuthFormShell } from "@/components/auth/AuthFormShell";
 import { AuthPasswordField } from "@/components/auth/AuthPasswordField";
@@ -54,9 +53,6 @@ export default function ResetPasswordPage() {
   return (
     <div className="login-pixel relative min-h-screen overflow-hidden bg-background">
       <LoginAtmosphere intensity="full" variant="pixel" />
-      <div className="absolute top-4 right-4 z-20">
-        <ThemeToggle />
-      </div>
       <div className="relative z-[1] flex min-h-screen items-center justify-center px-4 py-10">
         <div
           className={cn("w-full max-w-sm space-y-6", !reduceMotion && "pixel-enter")}

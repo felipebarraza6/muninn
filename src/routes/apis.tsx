@@ -556,38 +556,38 @@ export default function APIs() {
                   exit={reduceMotion ? undefined : { opacity: 0, scale: 0.98 }}
                 >
                   <AppStoreCard
-                  api={api}
-                  canManage={canManage}
-                  showEndpointCount={showEndpointMeta}
-                  showBranchCount={showBranchMeta}
-                  testPending={testingId === String(api.id) && test.isPending}
-                  onTest={() => {
-                    setTestingId(String(api.id));
-                    test.mutate(
-                      { id: String(api.id), body: {} },
-                      {
-                        onSuccess: (r) => {
-                          const msg = formatTestResultToast(r);
-                          if (msg.ok) toast.success(msg.message);
-                          else toast.error(msg.message);
-                          setTestingId(null);
+                    api={api}
+                    canManage={canManage}
+                    showEndpointCount={showEndpointMeta}
+                    showBranchCount={showBranchMeta}
+                    testPending={testingId === String(api.id) && test.isPending}
+                    onTest={() => {
+                      setTestingId(String(api.id));
+                      test.mutate(
+                        { id: String(api.id), body: {} },
+                        {
+                          onSuccess: (r) => {
+                            const msg = formatTestResultToast(r);
+                            if (msg.ok) toast.success(msg.message);
+                            else toast.error(msg.message);
+                            setTestingId(null);
+                          },
+                          onError: (err) => {
+                            toast.error(
+                              (err as { friendlyMessage?: string })?.friendlyMessage ||
+                                "Prueba falló",
+                            );
+                            setTestingId(null);
+                          },
                         },
-                        onError: (err) => {
-                          toast.error(
-                            (err as { friendlyMessage?: string })?.friendlyMessage ||
-                              "Prueba falló",
-                          );
-                          setTestingId(null);
-                        },
-                      },
-                    );
-                  }}
-                />
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </motion.div>
-      )}
+                      );
+                    }}
+                  />
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </motion.div>
+        )}
       </AnimatePresence>
 
       <Dialog

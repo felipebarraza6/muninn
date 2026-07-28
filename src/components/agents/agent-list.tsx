@@ -77,36 +77,52 @@ export function AgentList() {
   }, [agents]);
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
-        <div className="space-y-1 min-w-0">
-          <p className="text-sm text-muted-foreground">
-            Cada agente tiene su voz, modelo y conocimiento. Abrí uno para configurar o probar.
-          </p>
-          {!isLoading && agents.length > 0 && (
-            <p className="text-[11px] text-muted-foreground/80 tabular-nums">
-              {stats.active} activos
-              {includeInactive && stats.inactive > 0 ? ` · ${stats.inactive} inactivos` : ""}
-              {" · "}
-              {stats.withRag} con RAG · {stats.total} en total
+    <div className="space-y-5">
+      {/* Hero header — misma línea visual que Skills */}
+      <div className="relative overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-br from-primary/10 via-card/80 to-card px-5 py-5 md:px-6 md:py-6">
+        <div
+          className="pointer-events-none absolute -right-8 -top-10 h-40 w-40 rounded-full bg-primary/15 blur-3xl"
+          aria-hidden
+        />
+        <div
+          className="pointer-events-none absolute -bottom-12 left-1/3 h-32 w-32 rounded-full bg-teal-500/10 blur-3xl"
+          aria-hidden
+        />
+        <div className="relative flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+          <div className="space-y-1.5 min-w-0">
+            <div className="flex items-center gap-2 text-primary">
+              <Bot className="h-4 w-4" strokeWidth={1.75} />
+              <span className="text-[11px] font-medium uppercase tracking-[0.14em]">Studio</span>
+            </div>
+            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">Agentes</h1>
+            <p className="text-sm text-muted-foreground max-w-lg leading-relaxed">
+              Cada agente tiene su voz, modelo y conocimiento. Abrí uno para configurar o probar.
             </p>
-          )}
-        </div>
-        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto shrink-0">
-          {canSeeInactive && (
-            <Button
-              size="sm"
-              variant={includeInactive ? "secondary" : "outline"}
-              onClick={() => setIncludeInactive((v) => !v)}
-            >
-              {includeInactive ? "Ocultar inactivos" : "Ver inactivos"}
+            {!isLoading && agents.length > 0 && (
+              <p className="text-[11px] text-muted-foreground/80 tabular-nums">
+                {stats.active} activos
+                {includeInactive && stats.inactive > 0 ? ` · ${stats.inactive} inactivos` : ""}
+                {" · "}
+                {stats.withRag} con RAG · {stats.total} en total
+              </p>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {canSeeInactive && (
+              <Button
+                size="sm"
+                variant={includeInactive ? "secondary" : "outline"}
+                onClick={() => setIncludeInactive((v) => !v)}
+              >
+                {includeInactive ? "Ocultar inactivos" : "Ver inactivos"}
+              </Button>
+            )}
+            <Button size="sm" asChild className="cursor-pointer">
+              <Link to="/app/agentes/nuevo">
+                <Plus className="h-4 w-4 mr-1.5" /> Nuevo
+              </Link>
             </Button>
-          )}
-          <Button size="sm" asChild className="cursor-pointer">
-            <Link to="/app/agentes/nuevo">
-              <Plus className="h-4 w-4 mr-1.5" /> Nuevo
-            </Link>
-          </Button>
+          </div>
         </div>
       </div>
 
@@ -141,7 +157,9 @@ export function AgentList() {
           >
             <EmptyState
               title={q.trim() ? "Sin agentes para esa búsqueda" : "No hay agentes aún"}
-              description={q.trim() ? undefined : "Crea el primero para empezar a configurar y probar."}
+              description={
+                q.trim() ? undefined : "Crea el primero para empezar a configurar y probar."
+              }
               icon={<Bot className="h-5 w-5" />}
               action={
                 !q.trim() ? (
@@ -157,17 +175,22 @@ export function AgentList() {
         ) : (
           <motion.div
             key="content"
-            className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4"
+            className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3.5"
             variants={
               reduceMotion
                 ? undefined
                 : {
                     hidden: {},
-                    show: { transition: { staggerChildren: 0.045 } },
+                    show: { transition: { staggerChildren: 0.06 } },
+                    exit: {
+                      opacity: 0,
+                      transition: { duration: 0.12, staggerChildren: 0.03, staggerDirection: -1 },
+                    },
                   }
             }
             initial={reduceMotion ? false : "hidden"}
             animate="show"
+            exit="exit"
           >
             {filtered.map((agent) => (
               <AgentCard key={agent.id} agent={agent} reduceMotion={!!reduceMotion} />
@@ -200,6 +223,12 @@ function AgentCard({ agent, reduceMotion }: { agent: Agent; reduceMotion: boolea
           : {
               hidden: { opacity: 0, y: 10 },
               show: { opacity: 1, y: 0, transition: { duration: 0.28 } },
+              exit: {
+                opacity: 0,
+                y: -8,
+                scale: 0.98,
+                transition: { duration: 0.2, ease: "easeIn" },
+              },
             }
       }
       className={cn(
@@ -217,7 +246,7 @@ function AgentCard({ agent, reduceMotion }: { agent: Agent; reduceMotion: boolea
         to={`/app/agentes/${agent.id}`}
         className="flex flex-1 flex-col gap-3.5 p-4 sm:p-5 pb-3 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset cursor-pointer"
       >
-        <div className="flex items-start gap-3">
+        <div className="flex items-center gap-3">
           <div
             className={cn(
               "relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ring-1",

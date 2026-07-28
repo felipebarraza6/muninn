@@ -7,7 +7,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { MuninnBrand } from "@/components/brand/MuninnBrand";
 import { LoginAtmosphere } from "@/components/brand/LoginAtmosphere";
 import { AuthFormShell } from "@/components/auth/AuthFormShell";
@@ -88,9 +87,6 @@ export default function ForgotPasswordPage() {
       className={cn("relative min-h-screen overflow-hidden bg-background", pixel && "login-pixel")}
     >
       <LoginAtmosphere intensity={pixel ? "full" : "soft"} variant={pixel ? "pixel" : "aurora"} />
-      <div className="absolute top-4 right-4 z-20">
-        <ThemeToggle />
-      </div>
       <div className="relative z-[1] flex min-h-screen items-center justify-center px-4 py-10">
         <motion.div
           className={cn("w-full max-w-sm space-y-6", pixel && "pixel-enter")}

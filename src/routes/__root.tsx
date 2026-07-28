@@ -13,7 +13,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { logout } from "@/api/hooks/useAuth";
 import { BranchSwitcher } from "@/components/branch/BranchSwitcher";
-import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { CommandPaletteProvider, CommandPaletteTrigger } from "@/components/command-palette";
 import { useBranchTheme } from "@/api/hooks/useBranchTheme";
 import { getStoredBranches, getStoredUser } from "@/lib/authSession";
@@ -289,7 +288,6 @@ function PageHeader() {
         )}
 
         <CommandPaletteTrigger />
-        <ThemeToggle />
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

@@ -235,7 +235,9 @@ export default function PerfilPage() {
               <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-sm">
                 <Network className="h-4 w-4 text-primary" />
                 <div>
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Holding</p>
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Holding
+                  </p>
                   <p className="font-medium">{orgName}</p>
                 </div>
               </div>
@@ -316,7 +318,11 @@ export default function PerfilPage() {
                       />
                     </div>
                   </div>
-                  <Button variant="outline" onClick={savePassword} disabled={changePassword.isPending}>
+                  <Button
+                    variant="outline"
+                    onClick={savePassword}
+                    disabled={changePassword.isPending}
+                  >
                     {changePassword.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Actualizar contraseña
                   </Button>
