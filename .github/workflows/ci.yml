@@ -2,9 +2,12 @@ name: CI
 
 on:
   push:
-    branches: [dev, production]
+    branches: [main, production]
   pull_request:
-    branches: [dev, production]
+    branches: [main, production]
+
+env:
+  VITE_API_URL: https://api.agenciapatagoniachile.com/api
 
 jobs:
   validate:
@@ -26,5 +29,38 @@ jobs:
 
       - name: Build
         run: bun run build
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build
+        run: bun run build
         env:
-          VITE_API_URL: https://api.example.com/api
+          VITE_BASE_PATH: /muninn/
+
+      - name: Copy 404.html (SPA fallback)
+        run: cp dist/index.html dist/404.html
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          publish_branch: gh-pages
+          user_name: github-actions
+          user_email: github-actions@github.com

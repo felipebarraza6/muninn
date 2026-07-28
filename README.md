@@ -91,9 +91,9 @@ Ver `.env.example`.
 
 ## Ramas y CI
 
-- `dev`: trabajo diario
+- `main`: trabajo diario
 - `production`: releases tras CI en verde
-- GitHub Actions corre `lint` + `build` en pushes y PRs a esas ramas
+- GitHub Actions corre `lint` + `build` + `deploy` en pushes y PRs a esas ramas
 
 ## Deploy
 

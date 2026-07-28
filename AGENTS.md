@@ -49,5 +49,5 @@ src/
 
 ## Ramas
 
-- `dev`: trabajo diario
-- `production`: releases (merge desde `dev` con CI en verde)
+- `main`: trabajo diario
+- `production`: releases (merge desde `main` con CI en verde)

@@ -19,7 +19,10 @@ export default defineConfig(({ mode }) => {
     );
   }
 
-  return {
+  // Base path para deploy en subdirectorio (ej. GitHub Pages → /muninn/).
+  const basePath = env.VITE_BASE_PATH || "/";
+
+  return { base: basePath,
     plugins: [
       react({
         include: "**/*.{jsx,js,tsx,ts}",
