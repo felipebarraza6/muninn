@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
   Boxes,
+  Check,
   Clock,
   FileText,
   Loader2,
@@ -46,6 +47,85 @@ import { toast } from "sonner";
 import { apiErrorMessage } from "@/lib/apiError";
 
 type TabId = "documento" | "vectores" | "uso" | "cronjob";
+
+/** Estado de validación del cron job para el indicador visual. */
+function cronJobStatus(config: ReturnType<typeof useKnowledge>["data"]) {
+  if (!config) return "none"; // sin cron
+  if (config.tested_ok === true) return "validated"; // test exitoso
+  if (!config.external_api_id || !config.endpoint || !config.cron) return "incomplete";
+  return "configured"; // campos completos pero sin test
+}
+
+/** Panel de variables del CronJob validado (se muestra en la pestaña Documento). */
+function CronJobVariablesPanel({
+  doc,
+  onGoToCronJob,
+}: {
+  doc: AgentKnowledge;
+  onGoToCronJob: () => void;
+}) {
+  const cfg = doc.api_refresh_config;
+  if (!cfg || !cfg.external_api_id || !cfg.endpoint || !cfg.cron) return null;
+
+  const vars = cfg.payload_variables || {};
+  const varEntries = Object.entries(vars).filter(([, v]) => v.trim() !== "");
+  const tested = cfg.tested_ok === true;
+
+  return (
+    <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div
+            className={["h-2 w-2 rounded-full", tested ? "bg-emerald-500" : "bg-amber-500"].join(
+              " ",
+            )}
+          />
+          <span
+            className={["text-xs font-medium", tested ? "text-emerald-600" : "text-amber-600"].join(
+              " ",
+            )}
+          >
+            {tested ? "CronJob Validado" : "CronJob Configurado"}
+          </span>
+          {!tested && (
+            <span className="text-[9px] text-muted-foreground">ejecuta test para validar</span>
+          )}
+        </div>
+        <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={onGoToCronJob}>
+          Ver config
+        </Button>
+      </div>
+      {varEntries.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-[10px] text-muted-foreground">Variables configuradas:</p>
+          <div className="flex flex-wrap gap-1">
+            {varEntries.map(([key, val]) => (
+              <Badge
+                key={key}
+                variant="outline"
+                className="text-[10px] font-mono gap-1 px-1.5 py-0.5"
+              >
+                <span className="text-emerald-600">{`{{${key}}}`}</span>
+                <span className="text-muted-foreground">=</span>
+                <span>{val}</span>
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+      {doc.knowledge_type === "DATA" && cfg.content_mapping?.type === "json_to_table" && (
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-muted-foreground">Datos → Tabla</span>
+          {cfg.content_mapping.path && (
+            <code className="text-[10px] bg-muted px-1 rounded font-mono">
+              {cfg.content_mapping.path}
+            </code>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /**
  * Detalle de conocimiento a página completa (sin modal).
@@ -308,9 +388,16 @@ export default function ConocimientoDetail() {
             <TabsTrigger value="cronjob" className="gap-1.5 flex-1 sm:flex-none">
               <Clock className="h-3.5 w-3.5" />
               CronJob
-              {doc.api_refresh_config ? (
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              ) : null}
+              {(() => {
+                const status = cronJobStatus(doc.api_refresh_config);
+                if (status === "validated")
+                  return <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />;
+                if (status === "configured")
+                  return <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />;
+                if (status === "incomplete")
+                  return <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />;
+                return null;
+              })()}
             </TabsTrigger>
             <TabsTrigger value="uso" className="gap-1.5 flex-1 sm:flex-none">
               <Users className="h-3.5 w-3.5" />
@@ -321,12 +408,14 @@ export default function ConocimientoDetail() {
           <TabsContent value="documento" className="flex-1 min-h-0 mt-3">
             {isData ? (
               <div className="flex h-full min-h-[60vh] flex-col gap-3 rounded-xl border border-border/70 bg-card/60 p-4">
+                <CronJobVariablesPanel doc={doc} onGoToCronJob={() => setTab("cronjob")} />
                 {doc.api_refresh_config ? <AutoRefreshInfoPanel doc={doc} /> : null}
                 <DataViewer content={doc.content} />
               </div>
             ) : (
               <div className="h-full min-h-[60vh] overflow-y-auto rounded-xl border border-border/70 bg-card/60 p-5">
                 <div className="mx-auto max-w-3xl space-y-4">
+                  <CronJobVariablesPanel doc={doc} onGoToCronJob={() => setTab("cronjob")} />
                   {doc.api_refresh_config ? <AutoRefreshInfoPanel doc={doc} /> : null}
                   <ContentRenderer doc={doc} />
                 </div>
@@ -382,6 +471,7 @@ export default function ConocimientoDetail() {
                 }}
                 disabled={update.isPending}
                 branch={doc.branch}
+                knowledgeId={String(doc.id)}
                 knowledgeType={doc.knowledge_type}
               />
             </div>

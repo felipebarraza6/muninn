@@ -55,6 +55,8 @@ export interface ApiRefreshConfig {
   integration_strategy?: ApiRefreshIntegrationStrategy;
   /** Template markdown con {{title}}, {{timestamp}}, {{data_table}}, {{raw_json}}. */
   content_template?: string;
+  /** Flag de validación: true cuando el test del CronJob fue exitoso. */
+  tested_ok?: boolean;
 }
 
 export interface AgentKnowledge {
