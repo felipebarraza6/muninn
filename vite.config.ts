@@ -41,18 +41,18 @@ export default defineConfig(({ mode }) => {
           background_color: themeColor,
           display: "standalone",
           orientation: "any",
-          start_url: "/",
-          scope: "/",
+          start_url: basePath,
+          scope: basePath,
           lang: "es",
           icons: [
             {
-              src: "/favicon.png",
+              src: `${basePath}favicon.png`,
               sizes: "192x192",
               type: "image/png",
               purpose: "any",
             },
             {
-              src: "/favicon.png",
+              src: `${basePath}favicon.png`,
               sizes: "512x512",
               type: "image/png",
               purpose: "any maskable",
@@ -60,8 +60,8 @@ export default defineConfig(({ mode }) => {
           ],
         },
         workbox: {
-          navigateFallback: "/index.html",
-          navigateFallbackDenylist: [/^\/api\//, /^\/media\//],
+          navigateFallback: `${basePath}index.html`,
+          navigateFallbackDenylist: [/\/api\//, /\/media\//],
           runtimeCaching: [
             {
               urlPattern: ({ url }) => url.pathname.startsWith("/api/"),
