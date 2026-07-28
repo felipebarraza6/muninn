@@ -299,8 +299,9 @@ export function useResolvePublicLoginTheme(slug?: string | null) {
 
   const raw = query.data ?? null;
   const flat = useMemo(() => (raw ? flattenPublicLoginTheme(raw) : null), [raw]);
-  // Con slug: nunca pitch Muninn mientras carga (evita flash crow→org).
-  const isAppDefault = query.isLoading ? !slug : !raw || !hasUsablePublicBranding(raw);
+  // isAppDefault en false durante loading: by-host nunca debe mostrar Muninn
+  // ni siquiera como flash. LoginPage maneja su propio loading state.
+  const isAppDefault = query.isLoading ? false : !raw || !hasUsablePublicBranding(raw);
 
   const effectiveTheme = useMemo(() => {
     if (isAppDefault) {
