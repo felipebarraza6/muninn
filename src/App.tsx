@@ -325,6 +325,7 @@ function AppRoutes() {
         <Route element={<MuninnGateLayout />}>
           <Route path="/" element={<Login />} />
           <Route path="/entrar" element={<Entrar />} />
+          <Route path="/login" element={<Navigate to="/" replace />} />
         </Route>
         <Route
           path="/forgot-password"

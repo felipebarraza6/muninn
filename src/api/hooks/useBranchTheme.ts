@@ -334,7 +334,7 @@ export function useResolvePublicLoginTheme(slug?: string | null) {
     ...query,
     raw,
     flat,
-    scope: raw?.scope ?? (isAppDefault ? ("app" as const) : undefined),
+    scope: raw?.scope ?? "app",
     isAppDefault,
     data: effectiveTheme,
     stores: raw?.stores ?? [],

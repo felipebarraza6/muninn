@@ -116,6 +116,10 @@ export function hasUsablePublicBranding(
   theme: PublicLoginThemeResponse | null | undefined,
 ): boolean {
   if (!theme) return false;
+  // Tiene scope + ID de entidad real → login de sucursal/organización, aunque no tenga colores/logo.
+  if (theme.scope && (theme.branch_id != null || theme.organization_id != null)) {
+    return true;
+  }
   if (theme.branding) {
     const colors = theme.branding.colors;
     if (colors?.primary || theme.branding.logo_url) return true;

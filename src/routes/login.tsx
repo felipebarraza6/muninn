@@ -101,7 +101,7 @@ export default function Login() {
   const isOrgPortal = scope === "organization";
   const isBranchLogin = scope === "branch" && Boolean(flat?.branch_id);
   const showMuninnLanding = isAppDefault;
-  const isWaitingForByHost = themeLoading && !slug;
+
 
   const brandSubtitle = useMemo(() => {
     if (isAppDefault || isOrgPortal) return undefined;
@@ -155,8 +155,8 @@ export default function Login() {
     },
   };
 
-  // By-host sin slug: loading limpio, nunca mostrar Muninn ni flash.
-  if (isWaitingForByHost) {
+  // Loading: nunca mostrar Muninn ni flash mientras se resuelve el tema.
+  if (themeLoading) {
     return (
       <div className="min-h-dvh bg-background flex items-center justify-center">
         <div className="h-5 w-5 animate-spin rounded-full border-2 border-foreground/20 border-t-foreground/60" />
