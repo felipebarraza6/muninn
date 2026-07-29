@@ -358,17 +358,18 @@ export function KnowledgeCronJobTab({
   /* ---- Sin configuracion ---- */
   if (!enabled) {
     return (
-      <div className="flex h-full min-h-[60vh] flex-col items-center justify-center gap-4 rounded-xl border border-dashed p-8">
-        <div className="rounded-full bg-muted p-3">
-          <RefreshCw className="h-8 w-8 text-muted-foreground" />
+      <div className="flex h-full min-h-[60vh] flex-col items-center justify-center gap-5 rounded-xl border border-dashed border-primary/20 bg-primary/[0.02] p-8">
+        <div className="rounded-full bg-primary/10 p-3.5">
+          <RefreshCw className="h-7 w-7 text-primary" />
         </div>
-        <div className="text-center max-w-sm space-y-1">
-          <h3 className="text-sm font-medium">Sin CronJob</h3>
-          <p className="text-xs text-muted-foreground">
-            Un CronJob actualiza este conocimiento automaticamente consultando un endpoint externo.
+        <div className="text-center max-w-sm space-y-1.5">
+          <h3 className="text-sm font-semibold">Sin CronJob</h3>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Un CronJob actualiza este conocimiento automáticamente consultando una aplicación externa.
           </p>
         </div>
         <Button
+          className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm"
           onClick={() =>
             onChange({
               external_api_id: "",
@@ -478,7 +479,7 @@ export function KnowledgeCronJobTab({
                 "flex items-center gap-1.5 sm:gap-2 py-2 px-1.5 sm:px-3 rounded-lg transition-all duration-150",
                 "text-left min-w-0 w-full",
                 !canAccess ? "opacity-30 cursor-not-allowed" : "",
-                isActive ? "bg-primary/10 text-primary shadow-sm" : "",
+                isActive ? "bg-primary/10 text-primary shadow-sm ring-1 ring-primary/20" : "",
                 valid && !isActive && canAccess ? "text-emerald-600 hover:bg-muted/50" : "",
                 !valid && !isActive && canAccess
                   ? "text-muted-foreground/60 hover:bg-muted/30"
@@ -547,7 +548,7 @@ export function KnowledgeCronJobTab({
       </div>
       <div className="flex items-center gap-2">
         {step === 5 && canAccessStep(5) ? (
-          <Button type="button" size="sm" disabled={testing || !hasConfig} onClick={handleTest}>
+          <Button type="button" size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm" disabled={testing || !hasConfig} onClick={handleTest}>
             {testing ? (
               <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
             ) : (
@@ -559,6 +560,7 @@ export function KnowledgeCronJobTab({
           <Button
             type="button"
             size="sm"
+            className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm"
             disabled={!canAccessStep(step + 1)}
             onClick={() => {
               let next = step + 1;
@@ -580,28 +582,37 @@ export function KnowledgeCronJobTab({
         return (
           <div className="space-y-4">
             <div>
-              <h3 className="text-sm font-medium mb-1">Selecciona API y endpoint</h3>
+              <h3 className="text-sm font-medium mb-1">Aplicación y endpoint</h3>
               <p className="text-xs text-muted-foreground mb-4">
-                El CronJob consultara este endpoint periodicamente para obtener datos actualizados.
+                Selecciona qué aplicación consultar y el endpoint que devuelve los datos actualizados.
               </p>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label className="text-xs">External API</Label>
+                <Label className="text-xs">Aplicación</Label>
                 <Select
                   value={value.external_api_id || undefined}
                   onValueChange={(v) => patch({ external_api_id: v, endpoint: "" })}
                   disabled={disabled || apisLoading}
                 >
-                  <SelectTrigger className="h-9">
-                    <SelectValue placeholder={apisLoading ? "Cargando..." : "Selecciona API"} />
+                  <SelectTrigger className="h-9 border-primary/20 focus:ring-primary/30">
+                    <SelectValue placeholder={apisLoading ? "Cargando..." : "Elige una app..."} />
                   </SelectTrigger>
                   <SelectContent>
-                    {apis.map((a) => (
-                      <SelectItem key={a.id} value={String(a.id)}>
-                        {a.name}
-                      </SelectItem>
-                    ))}
+                    {apis.length === 0 && !apisLoading ? (
+                      <div className="px-2 py-3 text-center text-[10px] text-muted-foreground">
+                        No hay aplicaciones disponibles
+                      </div>
+                    ) : (
+                      apis.map((a) => (
+                        <SelectItem key={a.id} value={String(a.id)} className="gap-2">
+                          <div className="flex items-center gap-2">
+                            <Globe className="h-3 w-3 text-primary/60 shrink-0" />
+                            <span>{a.name}</span>
+                          </div>
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -612,23 +623,32 @@ export function KnowledgeCronJobTab({
                   onValueChange={(v) => patch({ endpoint: v })}
                   disabled={disabled || !selectedApi}
                 >
-                  <SelectTrigger className="h-9">
-                    <SelectValue placeholder={!selectedApi ? "Elige API primero" : "Selecciona"} />
+                  <SelectTrigger className="h-9 border-primary/20 focus:ring-primary/30">
+                    <SelectValue placeholder={!selectedApi ? "Elige app primero" : "Selecciona"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {endpointKeys.map((key) => {
-                      const ep = selectedApi?.endpoints?.[key];
-                      return (
-                        <SelectItem key={key} value={key}>
-                          {key}
-                          {ep?.method || ep?.path ? (
-                            <span className="ml-1.5 text-muted-foreground">
-                              {[ep?.method, ep?.path].filter(Boolean).join(" ")}
-                            </span>
-                          ) : null}
-                        </SelectItem>
-                      );
-                    })}
+                    {endpointKeys.length === 0 ? (
+                      <div className="px-2 py-3 text-center text-[10px] text-muted-foreground">
+                        Esta app no expone endpoints
+                      </div>
+                    ) : (
+                      endpointKeys.map((key) => {
+                        const ep = selectedApi?.endpoints?.[key];
+                        return (
+                          <SelectItem key={key} value={key}>
+                            <div className="flex items-center gap-2">
+                              <div className="h-1.5 w-1.5 rounded-full bg-primary/40 shrink-0" />
+                              <span>{key}</span>
+                              {ep?.method || ep?.path ? (
+                                <span className="ml-auto text-[9px] font-mono text-muted-foreground">
+                                  {ep?.method ?? "GET"}
+                                </span>
+                              ) : null}
+                            </div>
+                          </SelectItem>
+                        );
+                      })
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -636,12 +656,15 @@ export function KnowledgeCronJobTab({
 
             {/* Preview del endpoint seleccionado */}
             {selectedApi && value?.endpoint && currentEndpointConfig && (
-              <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-1.5">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Vista previa
-                </p>
-                <div className="flex items-center gap-2 text-sm">
-                  <code className="rounded bg-muted px-2 py-0.5 text-xs font-mono">
+              <div className="rounded-lg border border-primary/10 bg-primary/[0.02] p-3 space-y-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                  <p className="text-[10px] font-medium text-primary uppercase tracking-wider">
+                    Endpoint
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <code className="rounded bg-primary/10 px-2 py-0.5 text-xs font-mono text-primary font-medium">
                     {((currentEndpointConfig as Record<string, unknown>)?.method as string) ??
                       "GET"}
                   </code>
@@ -649,40 +672,11 @@ export function KnowledgeCronJobTab({
                     {((currentEndpointConfig as Record<string, unknown>)?.path as string) ?? "—"}
                   </code>
                 </div>
-                {endpointPlaceholders.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    <span className="text-[10px] text-muted-foreground">Placeholders:</span>
-                    {endpointPlaceholders.map((p) => (
-                      <code
-                        key={p}
-                        className="text-[10px] bg-muted px-1 rounded"
-                      >{`{{${p}}}`}</code>
-                    ))}
-                  </div>
+                {selectedApi?.name && (
+                  <p className="text-[10px] text-muted-foreground">
+                    vía <span className="font-medium text-foreground/80">{selectedApi.name}</span>
+                  </p>
                 )}
-                <div className="flex flex-wrap gap-1">
-                  <span className="text-[10px] text-muted-foreground">Responde con:</span>
-                  {endpointResponseMapping || apiResponseMapping ? (
-                    Object.keys(endpointResponseMapping || apiResponseMapping || {}).map((f) => (
-                      <code key={f} className="text-[10px] bg-muted px-1 rounded">
-                        {f}
-                      </code>
-                    ))
-                  ) : ((value?.content_mapping as Record<string, unknown>)
-                      ?.custom_fields as string) ? (
-                    ((value?.content_mapping as Record<string, unknown>)?.custom_fields as string)
-                      .split(",")
-                      .map((f) => (
-                        <code key={f.trim()} className="text-[10px] bg-muted px-1 rounded">
-                          {f.trim()}
-                        </code>
-                      ))
-                  ) : (
-                    <span className="text-[10px] text-muted-foreground italic">
-                      No definido — definelo en el paso 3
-                    </span>
-                  )}
-                </div>
               </div>
             )}
           </div>
@@ -1199,7 +1193,7 @@ export function KnowledgeCronJobTab({
                     className={[
                       "flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-all",
                       strategyMode === opt.value
-                        ? "border-primary/40 bg-primary/5"
+                        ? "border-primary/40 bg-primary/5 ring-1 ring-primary/20"
                         : "border-border/60 hover:border-border",
                     ].join(" ")}
                   >
@@ -1209,7 +1203,7 @@ export function KnowledgeCronJobTab({
                       value={opt.value}
                       checked={strategyMode === opt.value}
                       onChange={() => patchIntegration({ mode: opt.value })}
-                      className="mt-0.5"
+                      className="mt-0.5 accent-primary"
                       disabled={disabled}
                     />
                     <div>
