@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Loader2, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -80,6 +80,8 @@ export default function ConocimientoNuevo() {
       : "DOCUMENT";
   });
   const [faqPairs, setFaqPairs] = useState([{ question: "", answer: "" }]);
+  const [isCronJob, setIsCronJob] = useState(false);
+  const [indexOnCreate, setIndexOnCreate] = useState(true);
 
   const handleTypeChange = (next: KnowledgeType) => {
     if (knowledgeType === "FAQ" && next !== "FAQ") {
@@ -100,7 +102,7 @@ export default function ConocimientoNuevo() {
       toast.error("El título es obligatorio");
       return;
     }
-    if (!body.trim()) {
+    if (!isCronJob && !body.trim()) {
       toast.error(
         knowledgeType === "FAQ"
           ? "Agrega al menos una pregunta y respuesta"
@@ -123,10 +125,19 @@ export default function ConocimientoNuevo() {
         category: category.trim() || null,
         ...(targetBranch ? { branch: Number(targetBranch) } : {}),
         is_active: true,
+        is_indexed: indexOnCreate,
+        ...(isCronJob ? {
+          api_refresh_config: {
+            external_api_id: "",
+            endpoint: "",
+            cron: "",
+            content_mapping: { type: "raw_string" as const },
+          },
+        } : {}),
       },
       {
         onSuccess: (doc) => {
-          toast.success("Documento creado. Se indexará al asignarlo a un agente.");
+          toast.success(indexOnCreate ? "Documento creado e indexado." : "Documento creado (sin indexar).");
           navigate(doc?.id ? `/app/conocimiento/${doc.id}` : "/app/conocimiento");
         },
         onError: (e) => toast.error(apiErrorMessage(e, "No se pudo crear el documento")),
@@ -193,7 +204,7 @@ export default function ConocimientoNuevo() {
           <div className="space-y-4">
             {/* Título + Categoría + Tipo — en fila */}
             <div className="rounded-xl border border-border/70 bg-card/60 p-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className={`grid grid-cols-1 sm:grid-cols-2 ${knowledgeType === "CUSTOM" ? "lg:grid-cols-5" : "lg:grid-cols-4"} gap-4`}>
                 <div className="space-y-2">
                   <Label htmlFor="knowledge-title">Título</Label>
                   <Input
@@ -235,10 +246,53 @@ export default function ConocimientoNuevo() {
                     {KNOWLEDGE_TYPE_DESCRIPTION[knowledgeType]}
                   </p>
                 </div>
+                {knowledgeType === "CUSTOM" && (
+                  <div className="space-y-2">
+                    <Label>Auto-actualizar</Label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={isCronJob}
+                        onChange={(e) => {
+                          setIsCronJob(e.target.checked);
+                          setIndexOnCreate(!e.target.checked);
+                        }}
+                        className="h-4 w-4 rounded border-border accent-primary"
+                      />
+                      <span className="text-sm">CronJob</span>
+                    </label>
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <Label>Indexar</Label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={indexOnCreate}
+                      onChange={(e) => setIndexOnCreate(e.target.checked)}
+                      className="h-4 w-4 rounded border-border accent-primary"
+                    />
+                    <span className="text-sm">Indexar en RAG</span>
+                  </label>
+                  <p className="text-xs text-muted-foreground">
+                    Disponible para búsqueda semántica en agentes.
+                  </p>
+                </div>
               </div>
             </div>
 
             {/* Contenido — se adapta según el tipo */}
+            {isCronJob ? (
+              <div className="rounded-xl border border-primary/20 bg-primary/[0.03] p-6 text-center space-y-2">
+                <RefreshCw className="h-6 w-6 mx-auto text-primary/60" />
+                <p className="text-sm font-medium">Contenido automático</p>
+                <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                  El contenido será generado automáticamente por un CronJob.
+                  Tras crear el documento, ve a la pestaña <strong>CronJob</strong> para configurar
+                  la Aplicación, endpoint y mapeo.
+                </p>
+              </div>
+            ) : (
             <div className="rounded-xl border border-border/70 bg-card/60 p-4 space-y-3">
               {(() => {
                 const TypeIcon = KNOWLEDGE_TYPE_ICON[knowledgeType];
@@ -383,6 +437,7 @@ export default function ConocimientoNuevo() {
                 </div>
               )}
             </div>
+            )}
           </div>
         </div>
       </form>

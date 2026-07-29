@@ -144,6 +144,7 @@ export const ENDPOINTS = {
     indexingStatus: (id: string) => `/ai-agents/knowledge/${id}/indexing-status/`,
     unindex: (id: string) => `/ai-agents/knowledge/${id}/unindex/`,
     refresh: (id: string) => `/ai-agents/knowledge/${id}/refresh/`,
+    refreshLogs: (id: string) => `/ai-agents/knowledge/${id}/refresh-logs/`,
     chunks: (id: string) => `/ai-agents/knowledge/${id}/chunks/`,
     bulkIndex: "/ai-agents/knowledge/bulk_index/",
     bulkCreate: "/ai-agents/knowledge/bulk_create/",

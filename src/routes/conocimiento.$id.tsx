@@ -28,7 +28,6 @@ import {
   type AgentKnowledge,
 } from "@/api/hooks/useKnowledge";
 import {
-  AutoRefreshInfoPanel,
   ContentRenderer,
   DataEditor,
   DataViewer,
@@ -70,16 +69,13 @@ function CronJobVariablesPanel({
   const vars = cfg.payload_variables || {};
   const varEntries = Object.entries(vars).filter(([, v]) => v.trim() !== "");
   const tested = cfg.tested_ok === true;
+  const mapping = cfg.content_mapping;
 
   return (
     <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 space-y-2">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div
-            className={["h-2 w-2 rounded-full", tested ? "bg-emerald-500" : "bg-amber-500"].join(
-              " ",
-            )}
-          />
+          <RefreshCw className="h-3.5 w-3.5 text-emerald-600" />
           <span
             className={["text-xs font-medium", tested ? "text-emerald-600" : "text-amber-600"].join(
               " ",
@@ -87,6 +83,9 @@ function CronJobVariablesPanel({
           >
             {tested ? "CronJob Validado" : "CronJob Configurado"}
           </span>
+          <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-600">
+            {cfg.cron}
+          </Badge>
           {!tested && (
             <span className="text-[9px] text-muted-foreground">ejecuta test para validar</span>
           )}
@@ -95,32 +94,43 @@ function CronJobVariablesPanel({
           Ver config
         </Button>
       </div>
-      {varEntries.length > 0 && (
-        <div className="space-y-1">
-          <p className="text-[10px] text-muted-foreground">Variables configuradas:</p>
-          <div className="flex flex-wrap gap-1">
-            {varEntries.map(([key, val]) => (
-              <Badge
-                key={key}
-                variant="outline"
-                className="text-[10px] font-mono gap-1 px-1.5 py-0.5"
-              >
-                <span className="text-emerald-600">{`{{${key}}}`}</span>
-                <span className="text-muted-foreground">=</span>
-                <span>{val}</span>
-              </Badge>
-            ))}
-          </div>
+      <dl className="flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
+        <div className="flex gap-1.5">
+          <dt className="text-muted-foreground">Endpoint:</dt>
+          <dd className="font-mono truncate max-w-[200px]">{cfg.endpoint}</dd>
         </div>
-      )}
-      {doc.knowledge_type === "DATA" && cfg.content_mapping?.type === "json_to_table" && (
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] text-muted-foreground">Datos → Tabla</span>
-          {cfg.content_mapping.path && (
-            <code className="text-[10px] bg-muted px-1 rounded font-mono">
-              {cfg.content_mapping.path}
-            </code>
-          )}
+        {mapping?.type && (
+          <div className="flex gap-1.5">
+            <dt className="text-muted-foreground">Mapping:</dt>
+            <dd>{mapping.type}</dd>
+          </div>
+        )}
+        {mapping?.path && (
+          <div className="flex gap-1.5">
+            <dt className="text-muted-foreground">Path:</dt>
+            <dd className="font-mono truncate max-w-[160px]">{mapping.path}</dd>
+          </div>
+        )}
+        {mapping?.columns?.length ? (
+          <div className="flex gap-1.5">
+            <dt className="text-muted-foreground">Columnas:</dt>
+            <dd className="font-mono truncate max-w-[200px]">{mapping.columns.join(", ")}</dd>
+          </div>
+        ) : null}
+      </dl>
+      {varEntries.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {varEntries.map(([key, val]) => (
+            <Badge
+              key={key}
+              variant="outline"
+              className="text-[10px] font-mono gap-1 px-1.5 py-0.5"
+            >
+              <span className="text-emerald-600">{key}</span>
+              <span className="text-muted-foreground">=</span>
+              <span>{val}</span>
+            </Badge>
+          ))}
         </div>
       )}
     </div>
@@ -173,6 +183,11 @@ export default function ConocimientoDetail() {
 
   const startEdit = () => {
     if (!doc) return;
+    if (doc.api_refresh_config?.external_api_id && doc.api_refresh_config?.endpoint && doc.api_refresh_config?.cron) {
+      toast.warning("El contenido lo gestiona el CronJob. Ve a la pestaña CronJob para configurarlo.");
+      setTab("cronjob");
+      return;
+    }
     loadEditStateFromDoc(doc);
     setEditing(true);
   };
@@ -325,11 +340,24 @@ export default function ConocimientoDetail() {
                 Guardar
               </Button>
             </>
-          ) : (
-            <Button type="button" variant="outline" size="sm" onClick={startEdit}>
-              <Pencil className="h-3.5 w-3.5 mr-1" /> Editar
-            </Button>
-          )}
+          ) : (() => {
+            const hasCronJob = doc.api_refresh_config?.external_api_id && doc.api_refresh_config?.endpoint && doc.api_refresh_config?.cron;
+            return hasCronJob ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => { setTab("cronjob"); }}
+                className="border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
+              >
+                <RefreshCw className="h-3.5 w-3.5 mr-1" /> CronJob activo
+              </Button>
+            ) : (
+              <Button type="button" variant="outline" size="sm" onClick={startEdit}>
+                <Pencil className="h-3.5 w-3.5 mr-1" /> Editar
+              </Button>
+            );
+          })()}
         </div>
       </div>
 
@@ -409,14 +437,12 @@ export default function ConocimientoDetail() {
             {isData ? (
               <div className="flex h-full min-h-[60vh] flex-col gap-3 rounded-xl border border-border/70 bg-card/60 p-4">
                 <CronJobVariablesPanel doc={doc} onGoToCronJob={() => setTab("cronjob")} />
-                {doc.api_refresh_config ? <AutoRefreshInfoPanel doc={doc} /> : null}
                 <DataViewer content={doc.content} />
               </div>
             ) : (
               <div className="h-full min-h-[60vh] overflow-y-auto rounded-xl border border-border/70 bg-card/60 p-5">
                 <div className="mx-auto max-w-3xl space-y-4">
                   <CronJobVariablesPanel doc={doc} onGoToCronJob={() => setTab("cronjob")} />
-                  {doc.api_refresh_config ? <AutoRefreshInfoPanel doc={doc} /> : null}
                   <ContentRenderer doc={doc} />
                 </div>
               </div>
@@ -433,7 +459,7 @@ export default function ConocimientoDetail() {
             </div>
           </TabsContent>
 
-          <TabsContent value="cronjob" className="flex-1 min-h-0 mt-3">
+          <TabsContent value="cronjob" className="flex-1 min-h-0 mt-3 data-[state=inactive]:hidden" forceMount>
             <div className="h-full min-h-[60vh] overflow-y-auto rounded-xl">
               <KnowledgeCronJobTab
                 value={doc.api_refresh_config ?? null}
@@ -442,7 +468,10 @@ export default function ConocimientoDetail() {
                   const wasNull = !doc.api_refresh_config;
                   const isNull = !next;
 
-                  const data: Partial<typeof doc> = {};
+                  const data: Partial<typeof doc> = {
+                    title: doc.title,
+                    content: doc.content,
+                  };
                   if (next) data.api_refresh_config = next;
                   else data.api_refresh_config = null;
 

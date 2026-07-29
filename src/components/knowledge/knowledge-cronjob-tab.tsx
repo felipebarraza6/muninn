@@ -48,8 +48,9 @@ import type {
   ApiRefreshPayloadVariables,
   ApiRefreshIntegrationStrategy,
   ApiRefreshIntegrationMode,
+  AgentKnowledge,
 } from "@/api/hooks/useKnowledge";
-import { useKnowledge } from "@/api/hooks/useKnowledge";
+import { useKnowledge, useKnowledgeCatalog } from "@/api/hooks/useKnowledge";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 
@@ -132,6 +133,16 @@ const MAPPING_BY_KNOWLEDGE_TYPE: Record<string, ApiRefreshMappingType> = {
   CUSTOM: "raw_string",
 };
 
+/* ---- Cache global de discover (sobrevive remounts del componente) ---- */
+
+interface DiscoverCacheEntry {
+  fields: string[];
+  raw: Record<string, unknown> | null;
+  parsed: Record<string, unknown> | null;
+}
+
+const discoverCache = new Map<string, DiscoverCacheEntry>();
+
 /* ---- Props ---- */
 
 interface Props {
@@ -155,15 +166,41 @@ export function KnowledgeCronJobTab({
   knowledgeType = "DOCUMENT",
 }: Props) {
   const enabled = value != null;
+  const cached = knowledgeId ? discoverCache.get(knowledgeId) : undefined;
   const [step, setStep] = useState(1);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<Record<string, unknown> | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [discovering, setDiscovering] = useState(false);
-  const [discoveredFields, setDiscoveredFields] = useState<string[]>([]);
-  const [discoveredData, setDiscoveredData] = useState<Record<string, unknown> | null>(null);
-  const [parsedData, setParsedData] = useState<Record<string, unknown> | null>(null);
+  const [discoveredFields, setDiscoveredFields] = useState<string[]>(cached?.fields ?? []);
+  const [discoveredData, setDiscoveredData] = useState<Record<string, unknown> | null>(
+    cached?.raw ?? null,
+  );
+  const [parsedData, setParsedData] = useState<Record<string, unknown> | null>(
+    cached?.parsed ?? null,
+  );
+  const [jsonCollapsed, setJsonCollapsed] = useState(true);
+  const [pendingVars, setPendingVars] = useState<Record<string, string>>({});
+  const [pendingTemplate, setPendingTemplate] = useState<string | null>(null);
+  const [dataPickerOpen, setDataPickerOpen] = useState<string | null>(null);
+  const [dataPickerStep, setDataPickerStep] = useState<"list" | "table">("list");
+  const [dataPickerItem, setDataPickerItem] = useState<AgentKnowledge | null>(null);
   const { data: apis = [], isLoading: apisLoading } = useExternalAPIs({ branch });
+  const { data: catalog = [] } = useKnowledgeCatalog({ branch, page_size: 200 });
+  const dataKnowledge = useMemo(
+    () => catalog.filter((k: AgentKnowledge) => k.knowledge_type === "DATA"),
+    [catalog],
+  );
+  const parseDataItem = (item: AgentKnowledge) => {
+    try {
+      const raw = JSON.parse(item.content || "[]") as Record<string, string>[];
+      if (!Array.isArray(raw) || raw.length === 0) return { cols: [] as string[], rows: [] as Record<string, string>[] };
+      const cols = Object.keys(raw[0]);
+      return { cols, rows: raw };
+    } catch {
+      return { cols: [] as string[], rows: [] as Record<string, string>[] };
+    }
+  };
 
   const selectedApi = useMemo(
     () => apis.find((a) => String(a.id) === String(value?.external_api_id)),
@@ -284,7 +321,7 @@ export function KnowledgeCronJobTab({
         toast.error("No se pudo identificar el documento");
         return;
       }
-      const res = await POST(ENDPOINTS.knowledge.refresh(knowledgeId));
+      const res = await POST(ENDPOINTS.knowledge.refresh(knowledgeId) + "?preview=true");
       setTestResult(res as Record<string, unknown>);
       const ok = (res as Record<string, unknown>)?.success ?? false;
       toast.success(ok ? "CronJob ejecutado correctamente" : "El test reporto errores");
@@ -331,17 +368,19 @@ export function KnowledgeCronJobTab({
     setDiscoveredFields([]);
     setDiscoveredData(null);
     try {
-      const res = (await POST(ENDPOINTS.knowledge.refresh(knowledgeId))) as Record<string, unknown>;
+      const res = (await POST(ENDPOINTS.knowledge.refresh(knowledgeId) + "?preview=true")) as Record<string, unknown>;
       const raw =
         (res as Record<string, unknown>)?.raw_response_preview ??
         (res as Record<string, unknown>)?.data ??
         res;
+      const parsed = ((res as Record<string, unknown>)?.parsed_data as Record<string, unknown> | null) ?? null;
       setDiscoveredData(raw as Record<string, unknown>);
-      setParsedData(
-        ((res as Record<string, unknown>)?.parsed_data as Record<string, unknown> | null) ?? null,
-      );
+      setParsedData(parsed);
       const fields = extractResponseFields(raw);
       setDiscoveredFields(fields);
+      if (knowledgeId) {
+        discoverCache.set(knowledgeId, { fields, raw: raw as Record<string, unknown>, parsed });
+      }
       if (fields.length === 0) {
         toast.info("No se encontraron campos en la respuesta");
       } else {
@@ -397,13 +436,15 @@ export function KnowledgeCronJobTab({
         return !!(value.external_api_id && value.endpoint);
       case 2: {
         if (userPlaceholders.length === 0) return true;
-        return userPlaceholders.every((k) => (value.payload_variables?.[k] ?? "").trim() !== "");
+        const dateParam = value.content_mapping.date_range?.param_name;
+        return userPlaceholders.every(
+          (k) => k === dateParam || (value.payload_variables?.[k] ?? "").trim() !== "",
+        );
       }
       case 3: {
         const rm = endpointResponseMapping || apiResponseMapping;
         if (rm && typeof rm === "object" && Object.keys(rm).length > 0) return true;
-        const cf = (value.content_mapping as Record<string, unknown>)?.custom_fields as string;
-        if (cf && cf.trim() && cf.split(",").filter((f) => f.trim()).length > 0) return true;
+        if ((value.content_mapping.columns?.length ?? 0) > 0) return true;
         return false;
       }
       case 4:
@@ -438,24 +479,14 @@ export function KnowledgeCronJobTab({
     switch (id) {
       case 2: {
         if (userPlaceholders.length === 0) return "\u2014";
+        const dateParam = value.content_mapping.date_range?.param_name;
         const done = userPlaceholders.filter(
-          (k) => (value.payload_variables?.[k] ?? "").trim() !== "",
+          (k) => k === dateParam || (value.payload_variables?.[k] ?? "").trim() !== "",
         ).length;
         return `${done}/${userPlaceholders.length}`;
       }
-      case 3: {
-        const rm = endpointResponseMapping || apiResponseMapping;
-        if (rm && typeof rm === "object") {
-          const count = Object.keys(rm).length;
-          return `${count}/${count}`;
-        }
-        const cf = (value.content_mapping as Record<string, unknown>)?.custom_fields as string;
-        if (cf && cf.trim()) {
-          const count = cf.split(",").filter((f) => f.trim()).length;
-          return `${count}/${count}`;
-        }
-        return "0/0";
-      }
+      case 3:
+        return null;
       default:
         return null;
     }
@@ -688,8 +719,9 @@ export function KnowledgeCronJobTab({
         const credPlaceholders = endpointPlaceholders.filter((k) =>
           isCredentialPlaceholder(k, selectedApi),
         );
+        const dateParam_step2 = value?.content_mapping.date_range?.param_name;
         const done = userPlaceholders.filter(
-          (k) => (value?.payload_variables?.[k] ?? "").trim() !== "",
+          (k) => k === dateParam_step2 || (value?.payload_variables?.[k] ?? "").trim() !== "",
         ).length;
         return (
           <div className="space-y-3">
@@ -756,7 +788,9 @@ export function KnowledgeCronJobTab({
                   const isSysVar = SYS_VAR_OPTIONS.find(
                     (o) => o.value === currentVal && o.value !== "",
                   );
-                  const done = currentVal.trim() !== "";
+                  const dateRangeParam = value?.content_mapping.date_range?.param_name;
+                  const isAutoByDateRange = dateRangeParam && key === dateRangeParam;
+                  const done = currentVal.trim() !== "" || isAutoByDateRange;
                   return (
                     <div
                       key={key}
@@ -775,12 +809,20 @@ export function KnowledgeCronJobTab({
                           ].join(" ")}
                         />
                         <code className="text-[11px] font-mono font-semibold">{key}</code>
-                        {!done && (
+                        {!done && !isAutoByDateRange && (
                           <span className="text-[8px] text-amber-600 font-medium ml-0.5">
                             requerido
                           </span>
                         )}
-                        {done && (
+                        {isAutoByDateRange && (
+                          <Badge
+                            variant="outline"
+                            className="text-[8px] h-3.5 px-1 ml-auto text-primary border-primary/30"
+                          >
+                            date_range
+                          </Badge>
+                        )}
+                        {done && !isAutoByDateRange && (
                           <Badge
                             variant="outline"
                             className={[
@@ -824,22 +866,127 @@ export function KnowledgeCronJobTab({
                         })}
                       </div>
                       {!isSysVar || currentVal === "" ? (
+                        <>
                         <div className="flex items-center rounded border border-border/60 bg-muted/20 overflow-hidden text-[11px] font-mono">
                           <span className="shrink-0 px-1.5 py-1 text-[9px] text-muted-foreground border-r border-border/60 bg-muted/30">
                             {key}=
                           </span>
                           <input
-                            value={currentVal}
-                            onChange={(e) => {
-                              const n = { ...value?.payload_variables };
-                              n[key] = e.target.value;
-                              patchPayloadVariables(n);
+                            value={pendingVars[key] ?? currentVal}
+                            onChange={(e) =>
+                              setPendingVars((prev) => ({ ...prev, [key]: e.target.value }))
+                            }
+                            onBlur={() => {
+                              const pending = pendingVars[key];
+                              if (pending !== undefined && pending !== currentVal) {
+                                const n = { ...value?.payload_variables };
+                                n[key] = pending;
+                                patchPayloadVariables(n);
+                              }
+                              setPendingVars((prev) => {
+                                const next = { ...prev };
+                                delete next[key];
+                                return next;
+                              });
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                             }}
                             placeholder="valor..."
                             disabled={disabled}
                             className="flex-1 min-w-0 px-1.5 py-1 bg-transparent outline-none placeholder:text-muted-foreground/40"
                           />
+                          <button
+                            type="button"
+                            disabled={disabled}
+                            onClick={() => {
+                              setDataPickerOpen(dataPickerOpen === key ? null : key);
+                              setDataPickerStep("list");
+                              setDataPickerItem(null);
+                            }}
+                            className="shrink-0 px-1.5 text-[9px] text-muted-foreground/50 hover:text-primary transition-colors"
+                            title="Buscar en conocimiento"
+                          >
+                            Buscar
+                          </button>
                         </div>
+                        {dataPickerOpen === key && (
+                          <div className="rounded border border-border/60 bg-card shadow-lg p-2 space-y-1.5 max-h-[200px] overflow-auto">
+                            {dataPickerStep === "list" ? (
+                              dataKnowledge.length === 0 ? (
+                                <p className="text-[9px] text-muted-foreground text-center py-2">Sin conocimientos DATA</p>
+                              ) : (
+                                dataKnowledge.slice(0, 20).map((dk) => (
+                                  <button
+                                    key={dk.id}
+                                    type="button"
+                                    onClick={() => {
+                                      setDataPickerItem(dk);
+                                      setDataPickerStep("table");
+                                    }}
+                                    className="w-full text-left px-2 py-1 rounded text-[10px] hover:bg-muted transition-colors"
+                                  >
+                                    {dk.title || `#${dk.id}`}
+                                  </button>
+                                ))
+                              )
+                            ) : dataPickerItem ? (
+                              (() => {
+                                const { cols, rows } = parseDataItem(dataPickerItem);
+                                return (
+                                  <>
+                                    <div className="flex items-center gap-2 text-[9px]">
+                                      <button
+                                        type="button"
+                                        onClick={() => { setDataPickerStep("list"); setDataPickerItem(null); }}
+                                        className="text-muted-foreground hover:text-foreground"
+                                      >
+                                        ← volver
+                                      </button>
+                                      <span className="font-medium truncate">{dataPickerItem.title}</span>
+                                    </div>
+                                    <div className="overflow-auto max-h-[160px]">
+                                      <table className="w-full text-[9px] border-collapse">
+                                        <thead>
+                                          <tr className="bg-muted/40">
+                                            {cols.map((c) => (
+                                              <th key={c} className="text-left px-1.5 py-0.5 font-medium border-b">{c}</th>
+                                            ))}
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {rows.slice(0, 10).map((row, ri) => (
+                                            <tr key={ri} className="hover:bg-muted/30">
+                                              {cols.map((c) => (
+                                                <td key={c} className="px-1.5 py-0.5 border-b border-border/30">
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                      const val = row[c] ?? "";
+                                                      const n = { ...value?.payload_variables };
+                                                      n[key] = val;
+                                                      patchPayloadVariables(n);
+                                                      setDataPickerOpen(null);
+                                                    }}
+                                                    className="hover:text-primary hover:underline text-left"
+                                                    title={`Usar "${row[c]}"`}
+                                                  >
+                                                    {String(row[c] ?? "").slice(0, 30)}
+                                                  </button>
+                                                </td>
+                                              ))}
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  </>
+                                );
+                              })()
+                            ) : null}
+                          </div>
+                        )}
+                        </>
                       ) : (
                         <p className="text-[10px] text-muted-foreground">
                           = <span>{isSysVar.desc}</span>
@@ -898,248 +1045,324 @@ export function KnowledgeCronJobTab({
                   ))}
                 </div>
               ) : discovering ? (
-                <div className="rounded-lg border border-primary/20 bg-primary/[0.03] p-6 text-center">
-                  <Loader2 className="h-5 w-5 mx-auto animate-spin text-primary mb-2" />
-                  <p className="text-xs text-muted-foreground">
-                    Consultando endpoint y extrayendo campos...
-                  </p>
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-5 w-5 animate-spin text-primary mr-2" />
+                  <p className="text-xs text-muted-foreground">Consultando endpoint...</p>
                 </div>
-              ) : discoveredFields.length > 0 ? (
-                <div className="space-y-3">
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
-                    <div className="rounded-lg border border-border/60 bg-card/50 overflow-hidden">
-                      <div className="px-3 py-1.5 bg-muted/40 border-b text-[10px] font-medium text-muted-foreground">
-                        Respuesta del endpoint
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+                  {/* Panel 1: Respuesta cruda */}
+                  {discoveredFields.length > 0 ? (
+                    <div className="rounded-lg border border-border/60 bg-card/50 overflow-hidden flex flex-col min-h-[300px]">
+                      <div className="px-3 py-1.5 bg-muted/40 border-b text-[10px] font-medium text-muted-foreground shrink-0 flex items-center justify-between">
+                        <span>Respuesta del endpoint</span>
+                        <button
+                          type="button"
+                          onClick={() => setJsonCollapsed((p) => !p)}
+                          className="text-[9px] text-muted-foreground/60 hover:text-foreground"
+                        >
+                          {jsonCollapsed ? "expandir" : "contraer"}
+                        </button>
                       </div>
-                      <pre className="p-3 text-[10px] font-mono overflow-auto max-h-[280px] leading-relaxed whitespace-pre-wrap break-all">
+                      <pre className={["p-3 text-[10px] font-mono overflow-auto flex-1 leading-relaxed whitespace-pre-wrap break-all", jsonCollapsed ? "max-h-[120px]" : ""].join(" ")}>
                         {JSON.stringify(discoveredData, null, 2)}
                       </pre>
                     </div>
-                    <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/[0.02] overflow-hidden">
-                      <div className="px-3 py-1.5 bg-emerald-500/[0.06] border-b border-emerald-500/10 flex items-center justify-between">
-                        <span className="text-[10px] font-medium text-emerald-600">
-                          Resultado mapeado
-                        </span>
+                  ) : (
+                    <div className="rounded-lg border border-dashed border-border/60 bg-card/30 flex flex-col items-center justify-center min-h-[300px] text-center p-4 space-y-2">
+                      <Globe className="h-6 w-6 text-muted-foreground/40" />
+                      <p className="text-[10px] text-muted-foreground">Descubre para ver la respuesta del endpoint</p>
+                    </div>
+                  )}
+
+                  {/* Panel 2: Configuración del mapeo */}
+                  <div className="rounded-lg border border-primary/20 bg-card/60 p-3 space-y-3 flex flex-col min-h-[300px]">
+                    <div className="flex items-center justify-between shrink-0">
+                      <p className="text-[10px] font-medium text-primary/70 uppercase tracking-wider">
+                        Configurar mapeo
+                      </p>
+                      {discoveredFields.length === 0 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={disabled || discovering}
+                          onClick={handleDiscover}
+                          className="h-6 text-[9px]"
+                        >
+                          {discovering ? "..." : "Descubrir"}
+                        </Button>
+                      )}
+                    </div>
+                    <div className="rounded-lg border border-amber-500/20 bg-amber-500/[0.03] p-2.5 shrink-0">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-medium">Sincronización por fechas</span>
+                        {value?.content_mapping.date_range ? (
+                          <button
+                            type="button"
+                            onClick={() => patchMapping({ date_range: undefined })}
+                            className="text-[9px] text-muted-foreground/60 hover:text-destructive"
+                          >
+                            Quitar
+                          </button>
+                        ) : null}
+                      </div>
+                      {value?.content_mapping.date_range ? (
+                        <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                          <div className="flex items-center gap-1">
+                            <span className="text-[9px] text-muted-foreground">desde hoy</span>
+                            <Input
+                              type="number"
+                              value={value.content_mapping.date_range.start}
+                              onChange={(e) => patchMapping({ date_range: { ...value.content_mapping.date_range!, start: Number(e.target.value) } })}
+                              disabled={disabled}
+                              className="h-7 w-14 font-mono text-[10px] text-center"
+                            />
+                            <span className="text-[9px] text-muted-foreground">hasta +</span>
+                            <Input
+                              type="number"
+                              value={value.content_mapping.date_range.end}
+                              onChange={(e) => patchMapping({ date_range: { ...value.content_mapping.date_range!, end: Number(e.target.value) } })}
+                              disabled={disabled}
+                              className="h-7 w-14 font-mono text-[10px] text-center"
+                            />
+                            <span className="text-[9px] text-muted-foreground">días</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-[9px] text-muted-foreground">variable:</span>
+                            <Select
+                              value={value.content_mapping.date_range.param_name || undefined}
+                              onValueChange={(v) => patchMapping({ date_range: { ...value.content_mapping.date_range!, param_name: v } })}
+                              disabled={disabled}
+                            >
+                              <SelectTrigger className="h-7 w-28 text-[10px] font-mono">
+                                <SelectValue placeholder="Elige..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {userPlaceholders.map((k) => (
+                                  <SelectItem key={k} value={k} className="text-[10px] font-mono">
+                                    {k}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      ) : (
                         <button
                           type="button"
-                          onClick={() => {
-                            setDiscoveredFields([]);
-                            setDiscoveredData(null);
-                          }}
-                          className="text-[9px] text-muted-foreground/60"
+                          onClick={() => patchMapping({ date_range: { start: 0, end: 7, param_name: "" } })}
+                          disabled={disabled}
+                          className="mt-1.5 h-7 w-full rounded-md border border-dashed border-amber-500/30 bg-amber-500/[0.02] flex items-center justify-center gap-1 text-[9px] text-amber-600/70 hover:text-amber-600 hover:border-amber-500/50 transition-colors"
                         >
-                          ocultar
+                          <Calendar className="h-3 w-3" /> Activar por rango de fechas
                         </button>
-                      </div>
-                      <pre className="p-3 text-[10px] font-mono overflow-auto max-h-[280px] leading-relaxed whitespace-pre-wrap break-all">
-                        {JSON.stringify(parsedData ?? discoveredData, null, 2)}
-                      </pre>
+                      )}
                     </div>
-                  </div>
-                  <div className="rounded-lg border border-border/60 bg-card/60 p-3 space-y-3">
-                    <p className="text-[10px] font-medium text-foreground/70 uppercase tracking-wider">
-                      Configurar mapeo
-                    </p>
-
-                    {/* Path + Type */}
-                    <div className="flex flex-wrap gap-3">
-                      <div className="space-y-1 min-w-[160px] flex-1">
-                        <Label className="text-[10px]">Ruta (path)</Label>
+                    <div className="space-y-1 shrink-0">
+                      <Label className="text-[10px]">Ruta (path)</Label>
+                      {discoveredFields.length > 0 ? (
+                        <Select
+                        value={value?.content_mapping.path || undefined}
+                        onValueChange={(v) => {
+                          if (!value) return;
+                          onChange({
+                            ...value,
+                            content_mapping: { ...value.content_mapping, path: v },
+                          });
+                        }}
+                        disabled={disabled}
+                      >
+                        <SelectTrigger className="h-7 text-[10px] font-mono">
+                          <SelectValue placeholder="Elige una ruta..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(() => {
+                            const prefixes = new Set<string>();
+                            for (const f of discoveredFields) {
+                              const parts = f.split(".");
+                              for (let i = 1; i <= parts.length; i++) {
+                                const prefix = parts.slice(0, i).join(".");
+                                if (!prefix.includes("*")) prefixes.add(prefix);
+                              }
+                              for (let i = 0; i < parts.length; i++) {
+                                const part = parts[i];
+                                const looksDynamic = /^\d{4}-\d{2}-\d{2}/.test(part) ||
+                                  /^[0-9a-f]{8}-[0-9a-f]{4}/.test(part) ||
+                                  /^\d{10,}$/.test(part);
+                                if (looksDynamic) {
+                                  const wildcard = [...parts.slice(0, i), "*", ...parts.slice(i + 1)].join(".");
+                                  prefixes.add(wildcard);
+                                }
+                              }
+                            }
+                            return Array.from(prefixes).sort().map((p) => (
+                              <SelectItem key={p} value={p} className="text-[10px] font-mono">
+                                {p}
+                              </SelectItem>
+                            ));
+                          })()}
+                        </SelectContent>
+                      </Select>
+                      ) : (
+                        <div className="h-7 rounded-md border border-dashed border-border/60 bg-muted/20 flex items-center px-2">
+                          <span className="text-[9px] text-muted-foreground/60">Descubre primero...</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="space-y-1 shrink-0">
+                      <Label className="text-[10px]">Tipo</Label>
+                      <Select
+                        value={value?.content_mapping.type ?? "json_path"}
+                        onValueChange={(v) => {
+                          if (!value) return;
+                          onChange({
+                            ...value,
+                            content_mapping: {
+                              ...value.content_mapping,
+                              type: v as ApiRefreshMappingType,
+                            },
+                          });
+                        }}
+                        disabled={disabled}
+                      >
+                        <SelectTrigger className="h-7 text-[10px]">
+                          <SelectValue placeholder="Elige tipo...">
+                            {(() => {
+                              const t = value?.content_mapping.type;
+                              if (t === "json_to_table") return "Tabla";
+                              if (t === "json_path") return "JSON";
+                              if (t === "raw_string") return "Texto plano";
+                              if (t === "title_and_body") return "Título + Cuerpo";
+                              return null;
+                            })()}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="json_to_table" className="text-[10px]">
+                            <span className="flex flex-col text-left">
+                              <span>Tabla</span>
+                              <span className="text-[8px] text-muted-foreground font-normal">Array de objetos → tabla Markdown/JSON/CSV</span>
+                            </span>
+                          </SelectItem>
+                          <SelectItem value="json_path" className="text-[10px]">
+                            <span className="flex flex-col text-left">
+                              <span>JSON</span>
+                              <span className="text-[8px] text-muted-foreground font-normal">Guarda el fragmento JSON tal cual como texto</span>
+                            </span>
+                          </SelectItem>
+                          <SelectItem value="raw_string" className="text-[10px]">
+                            <span className="flex flex-col text-left">
+                              <span>Texto plano</span>
+                              <span className="text-[8px] text-muted-foreground font-normal">str(valor) — para strings, números, booleanos</span>
+                            </span>
+                          </SelectItem>
+                          <SelectItem value="title_and_body" className="text-[10px]">
+                            <span className="flex flex-col text-left">
+                              <span>Título + Cuerpo</span>
+                              <span className="text-[8px] text-muted-foreground font-normal"># título\n\ncuerpo desde 2 rutas JSON distintas</span>
+                            </span>
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {value?.content_mapping.type === "title_and_body" && (
+                      <div className="space-y-1 shrink-0">
+                        <Label className="text-[10px]">Ruta del título</Label>
                         <Input
-                          value={value?.content_mapping.path ?? ""}
-                          onChange={(e) => {
-                            if (!value) return;
-                            onChange({
-                              ...value,
-                              content_mapping: { ...value.content_mapping, path: e.target.value },
-                            });
-                          }}
-                          placeholder="data, data.items"
+                          value={value.content_mapping.title_path ?? ""}
+                          onChange={(e) => patchMapping({ title_path: e.target.value })}
+                          placeholder="Ej: title, name"
                           disabled={disabled}
                           className="h-7 font-mono text-[10px]"
                         />
                       </div>
-                      <div className="space-y-1 min-w-[140px]">
-                        <Label className="text-[10px]">Tipo</Label>
-                        <Select
-                          value={value?.content_mapping.type ?? "json_path"}
-                          onValueChange={(v) => {
-                            if (!value) return;
-                            onChange({
-                              ...value,
-                              content_mapping: {
-                                ...value.content_mapping,
-                                type: v as ApiRefreshMappingType,
-                              },
-                            });
-                          }}
+                    )}
+                    {value?.content_mapping.type === "title_and_body" && (
+                      <div className="space-y-1 shrink-0">
+                        <Label className="text-[10px]">Ruta del cuerpo</Label>
+                        <Input
+                          value={value.content_mapping.body_path ?? ""}
+                          onChange={(e) => patchMapping({ body_path: e.target.value })}
+                          placeholder="Ej: body, content"
                           disabled={disabled}
-                        >
-                          <SelectTrigger className="h-7 text-[10px]">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="json_path" className="text-[10px]">
-                              json_path
-                            </SelectItem>
-                            <SelectItem value="json_to_table" className="text-[10px]">
-                              json_to_table
-                            </SelectItem>
-                            <SelectItem value="raw_string" className="text-[10px]">
-                              raw_string
-                            </SelectItem>
-                            <SelectItem value="title_and_body" className="text-[10px]">
-                              title_and_body
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
+                          className="h-7 font-mono text-[10px]"
+                        />
                       </div>
+                    )}
+                    {value?.content_mapping.type === "json_to_table" && (
+                      <>
+                        <div className="flex gap-3 shrink-0">
+                          <div className="space-y-1 flex-1">
+                            <Label className="text-[10px]">Formato</Label>
+                            <Select
+                              value={value.content_mapping.format ?? "markdown"}
+                              onValueChange={(v) => patchMapping({ format: v as "markdown" | "json" | "csv" })}
+                              disabled={disabled}
+                            >
+                              <SelectTrigger className="h-7 text-[10px]">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="markdown" className="text-[10px]">Markdown (tabla)</SelectItem>
+                                <SelectItem value="json" className="text-[10px]">JSON (array)</SelectItem>
+                                <SelectItem value="csv" className="text-[10px]">CSV</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="flex items-end pb-0.5">
+                            <label className="flex items-center gap-1.5 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={value.content_mapping.unpack_keys ?? false}
+                                onChange={(e) => patchMapping({ unpack_keys: e.target.checked })}
+                                disabled={disabled}
+                                className="h-3.5 w-3.5 rounded border-border accent-primary"
+                              />
+                              <span className="text-[10px]">Dict → filas</span>
+                            </label>
+                          </div>
+                        </div>
+                      </>
+                    )}
                     </div>
 
-                    {/* Campos seleccionables */}
-                    <div className="space-y-1">
-                      <Label className="text-[10px]">Campos a incluir</Label>
-                      <div className="flex flex-wrap gap-1">
-                        {discoveredFields
-                          .filter((f) => !f.includes("."))
-                          .map((f) => {
-                            const selected = (
-                              (value?.content_mapping as Record<string, unknown>)
-                                ?.custom_fields as string
-                            )
-                              ?.split(",")
-                              .map((x) => x.trim())
-                              .includes(f);
-                            return (
-                              <button
-                                key={f}
-                                type="button"
-                                disabled={disabled}
-                                onClick={() => {
-                                  const list =
-                                    (
-                                      (value?.content_mapping as Record<string, unknown>)
-                                        ?.custom_fields as string
-                                    )
-                                      ?.split(",")
-                                      .map((x) => x.trim())
-                                      .filter(Boolean) || [];
-                                  onChange({
-                                    ...value!,
-                                    content_mapping: {
-                                      ...value!.content_mapping,
-                                      custom_fields: (selected
-                                        ? list.filter((x) => x !== f)
-                                        : [...list, f]
-                                      ).join(","),
-                                    },
-                                  });
-                                }}
-                                className={[
-                                  "px-2 py-0.5 rounded text-[9px] font-mono font-medium transition-all border",
-                                  selected
-                                    ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
-                                    : "bg-muted/40 text-muted-foreground border-transparent hover:border-border",
-                                ].join(" ")}
-                              >
-                                {selected && <Check className="h-2.5 w-2.5 inline mr-0.5" />}
-                                {f}
-                              </button>
-                            );
-                          })}
+                  {/* Panel 3: Resultado mapeado */}
+                  {discoveredFields.length > 0 ? (
+                    <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/[0.02] overflow-hidden flex flex-col min-h-[300px]">
+                      <div className="px-3 py-1.5 bg-emerald-500/[0.06] border-b border-emerald-500/10 flex items-center justify-between shrink-0">
+                        <span className="text-[10px] font-medium text-emerald-600">Resultado mapeado</span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setJsonCollapsed((p) => !p)}
+                            className="text-[9px] text-emerald-600/60 hover:text-emerald-600"
+                          >
+                            {jsonCollapsed ? "expandir" : "contraer"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDiscoveredFields([]);
+                              setDiscoveredData(null);
+                            }}
+                            className="text-[9px] text-muted-foreground/60 hover:text-muted-foreground"
+                          >
+                            ocultar
+                          </button>
+                        </div>
                       </div>
+                      <pre className={["p-3 text-[10px] font-mono overflow-auto flex-1 leading-relaxed whitespace-pre-wrap break-all", jsonCollapsed ? "max-h-[120px]" : ""].join(" ")}>
+                        {JSON.stringify(parsedData ?? discoveredData, null, 2)}
+                      </pre>
                     </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="rounded-xl border-2 border-dashed border-primary/20 bg-primary/[0.02] p-8 text-center space-y-2">
-                  <Globe className="h-6 w-6 mx-auto text-primary" />
-                  <p className="text-sm font-medium">Sin campos definidos</p>
-                  <p className="text-xs text-muted-foreground">
-                    Haz clic en "Descubrir" para consultar el endpoint.
-                  </p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={disabled}
-                    onClick={handleDiscover}
-                    className="h-8"
-                  >
-                    {discovering ? "Descubriendo..." : "Descubrir campos"}
-                  </Button>
+                  ) : (
+                    <div className="rounded-lg border border-dashed border-emerald-500/20 bg-emerald-500/[0.01] flex flex-col items-center justify-center min-h-[300px] text-center p-4 space-y-2">
+                      <Layers className="h-6 w-6 text-emerald-500/30" />
+                      <p className="text-[10px] text-muted-foreground">El resultado del mapeo aparecerá aquí</p>
+                    </div>
+                  )}
                 </div>
               )}
-
-              <div className="rounded-lg border border-border/60 bg-card/60 p-3 space-y-3">
-                <p className="text-[10px] font-medium text-foreground/70 uppercase tracking-wider">
-                  Configuracion de mapeo
-                </p>
-                <div className="flex flex-wrap gap-3">
-                  <div className="space-y-1 min-w-[160px] flex-1">
-                    <Label className="text-[10px]">Ruta JSON (path)</Label>
-                    <Input
-                      value={value?.content_mapping.path ?? ""}
-                      onChange={(e) => {
-                        if (!value) return;
-                        onChange({
-                          ...value,
-                          content_mapping: { ...value.content_mapping, path: e.target.value },
-                        });
-                      }}
-                      placeholder="data, data.items, etc"
-                      disabled={disabled}
-                      className="h-7 font-mono text-[10px]"
-                    />
-                  </div>
-                  <div className="space-y-1 min-w-[140px]">
-                    <Label className="text-[10px]">Tipo</Label>
-                    <Select
-                      value={value?.content_mapping.type ?? "json_path"}
-                      onValueChange={(v) => {
-                        if (!value) return;
-                        onChange({
-                          ...value,
-                          content_mapping: {
-                            ...value.content_mapping,
-                            type: v as ApiRefreshMappingType,
-                          },
-                        });
-                      }}
-                      disabled={disabled}
-                    >
-                      <SelectTrigger className="h-7 text-[10px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="json_path" className="text-[10px]">
-                          json_path
-                        </SelectItem>
-                        <SelectItem value="json_to_table" className="text-[10px]">
-                          json_to_table
-                        </SelectItem>
-                        <SelectItem value="raw_string" className="text-[10px]">
-                          raw_string
-                        </SelectItem>
-                        <SelectItem value="title_and_body" className="text-[10px]">
-                          title_and_body
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <p className="text-[10px] text-muted-foreground">
-                  {knowledgeType === "DATA" ? (
-                    "Los campos seleccionados seran las columnas de tu tabla."
-                  ) : (
-                    <>
-                      Usa{" "}
-                      <code className="bg-muted px-1 rounded text-[9px]">{`{{data_table}}`}</code> o{" "}
-                      <code className="bg-muted px-1 rounded text-[9px]">{`{{raw_json}}`}</code> en
-                      tu contenido.
-                    </>
-                  )}
-                </p>
-              </div>
             </div>
           );
         })();
@@ -1151,6 +1374,52 @@ export function KnowledgeCronJobTab({
               <p className="text-xs text-muted-foreground mb-4">
                 Como se combina el nuevo contenido con el existente y cada cuanto se ejecuta.
               </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Template de contenido</Label>
+              <textarea
+                value={pendingTemplate ?? value.content_template ?? ""}
+                onChange={(e) => setPendingTemplate(e.target.value)}
+                onBlur={() => {
+                  if (pendingTemplate !== null && pendingTemplate !== (value.content_template ?? "")) {
+                    patch({ content_template: pendingTemplate });
+                  }
+                  setPendingTemplate(null);
+                }}
+                placeholder={`Ej: {{json_to_table}}\n\nUltima actualizacion: {{now}}`}
+                disabled={disabled}
+                rows={4}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-muted-foreground/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50"
+              />
+              <div className="flex flex-wrap gap-1 pt-1">
+                {[
+                  "{{title}}",
+                  "{{data}}",
+                  "{{timestamp}}",
+                  "{{raw_json}}",
+                  ...(value.content_mapping.type === "json_to_table" ? ["{{json_to_table}}"] : []),
+                  ...columns.map((c) => `{{${c}}}`),
+                  "{{today}}",
+                  "{{now}}",
+                  "{{yesterday}}",
+                ].map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => {
+                      const base = pendingTemplate ?? value.content_template ?? "";
+                      const next = base + (base && !base.endsWith(" ") ? " " : "") + v;
+                      patch({ content_template: next });
+                      setPendingTemplate(null);
+                    }}
+                    className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-muted/60 hover:bg-primary/10 hover:text-primary transition-colors border border-transparent hover:border-primary/20"
+                    title={`Insertar ${v}`}
+                  >
+                    {v}
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="space-y-1.5 max-w-xs">
               <Label className="text-xs">Frecuencia (cron)</Label>
