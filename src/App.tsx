@@ -22,6 +22,7 @@ import { RequireLlmAdmin } from "./components/auth/RequireLlmAdmin";
 import { RequireKnowledgeCatalog } from "./components/auth/RequireKnowledgeCatalog";
 import { RequireConversations } from "./components/auth/RequireConversations";
 import { RequireSkills } from "./components/auth/RequireSkills";
+import { RequireAgents } from "./components/auth/RequireAgents";
 import { RequireSuperAdmin } from "./components/auth/RequireSuperAdmin";
 import { ThemeProvider } from "./components/theme/ThemeProvider";
 import { PageLoader } from "./components/ui/page-loader";
@@ -135,11 +136,46 @@ function AnimatedOutlet() {
       <ErrorBoundary title="Error en esta pantalla">
         <Routes location={location}>
           <Route path="/" element={<Dashboard />} />
-          <Route path="/agentes" element={<Agentes />} />
-          <Route path="/agentes/nuevo" element={<AgentesNuevo />} />
-          <Route path="/agentes/:id" element={<AgentesDetail />} />
-          <Route path="/agentes/:id/chat" element={<AgentesChat />} />
-          <Route path="/chat" element={<ChatPage />} />
+          <Route
+            path="/agentes"
+            element={
+              <RequireAgents>
+                <Agentes />
+              </RequireAgents>
+            }
+          />
+          <Route
+            path="/agentes/nuevo"
+            element={
+              <RequireAgents>
+                <AgentesNuevo />
+              </RequireAgents>
+            }
+          />
+          <Route
+            path="/agentes/:id"
+            element={
+              <RequireAgents>
+                <AgentesDetail />
+              </RequireAgents>
+            }
+          />
+          <Route
+            path="/agentes/:id/chat"
+            element={
+              <RequireAgents>
+                <AgentesChat />
+              </RequireAgents>
+            }
+          />
+          <Route
+            path="/chat"
+            element={
+              <RequireAgents>
+                <ChatPage />
+              </RequireAgents>
+            }
+          />
           <Route
             path="/planes"
             element={
@@ -325,6 +361,7 @@ function AppRoutes() {
         <Route element={<MuninnGateLayout />}>
           <Route path="/" element={<Login />} />
           <Route path="/entrar" element={<Entrar />} />
+          <Route path="/login" element={<Navigate to="/" replace />} />
         </Route>
         <Route
           path="/forgot-password"

@@ -275,6 +275,7 @@ export function useResetPasswordConfirm() {
 }
 
 export async function logout() {
+  const ctx = getLoginPortalContext();
   try {
     await apiClient.post(ENDPOINTS.auth.logout);
   } catch {
@@ -284,5 +285,6 @@ export async function logout() {
   clearLoginPortalContext();
   localStorage.removeItem("activeBranchId");
   sessionStorage.removeItem("activeBranchId");
-  window.location.href = "/login";
+  const slug = ctx?.slug?.trim();
+  window.location.href = slug ? `/${encodeURIComponent(slug)}` : "/";
 }

@@ -252,6 +252,28 @@ export interface AgentOpsHealth {
   }>;
 }
 
+export interface AgentOnboardingStatus {
+  ready_to_chat?: boolean;
+  has_provider?: boolean;
+  has_agent?: boolean;
+  has_api_key?: boolean;
+  missing?: string[];
+  next_steps?: Array<{ code?: string; message?: string; path?: string }>;
+}
+
+export function useAgentOnboardingStatus(options?: { enabled?: boolean }) {
+  const branchId = useActiveBranchId();
+  return useQuery({
+    queryKey: [...QUERY_KEY, "onboarding-status", branchId],
+    queryFn: () =>
+      GET<AgentOnboardingStatus>(ENDPOINTS.agents.onboardingStatus, {
+        params: branchId ? { branch: branchId } : undefined,
+      }),
+    enabled: options?.enabled !== false && !!branchId,
+    staleTime: 60_000,
+  });
+}
+
 export function useOpsHealth(options?: { enabled?: boolean }) {
   const branchId = useActiveBranchId();
   return useQuery({

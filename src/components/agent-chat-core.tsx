@@ -1191,19 +1191,6 @@ export function AgentChatCore({
         )}
         {chatPhase === "resolving_thread" || chatPhase === "loading_history" ? (
           <ChatThreadSkeleton className="min-h-[40vh] justify-start py-2" />
-        ) : !conversationId && !isCreating && !isDraftNew && !conversationsLoading ? (
-          <EmptyState
-            className="mt-8 border-0 bg-transparent"
-            icon={<MessageSquarePlus className="h-5 w-5" />}
-            title="Sin conversación"
-            description={`Inicia un chat nuevo con ${agent.name} para empezar a escribir.`}
-            action={
-              <Button onClick={handleNewConversation} disabled={isCreating}>
-                <MessageSquarePlus className="h-4 w-4 mr-1.5" />
-                Nueva conversación
-              </Button>
-            }
-          />
         ) : messages.length === 0 && !isBusy ? (
           <EmptyState
             icon={<Bot className="h-5 w-5" />}
@@ -1226,7 +1213,7 @@ export function AgentChatCore({
                         variant="outline"
                         size="sm"
                         className="text-xs"
-                        onClick={() => setInput(prompt)}
+                        onClick={() => void handleSend(undefined, { text: prompt })}
                       >
                         {prompt}
                       </Button>
@@ -1410,7 +1397,7 @@ export function AgentChatCore({
                           ? "Escribe para iniciar… (/ para skills)"
                           : "Escribe tu mensaje… (/ para skills)"
               }
-              disabled={isCreating || (!conversationId && !isDraftNew)}
+              disabled={isCreating}
               busy={isBusy}
               canStop={isStreaming}
               onStop={stopStreaming}

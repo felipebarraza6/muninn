@@ -119,6 +119,7 @@ export const ENDPOINTS = {
     testLLM: (id: string) => `/ai-agents/agents/${id}/test_llm/`,
     planLimits: "/ai-agents/agents/plan_limits/",
     opsHealth: "/ai-agents/agents/ops-health/",
+    onboardingStatus: "/ai-agents/agents/onboarding-status/",
     skillConfigs: (id: string) => `/ai-agents/agents/${id}/skill-configs/`,
     skillConfig: (id: string, skillId: string) =>
       `/ai-agents/agents/${id}/skill-config/${skillId}/`,
@@ -144,6 +145,7 @@ export const ENDPOINTS = {
     indexingStatus: (id: string) => `/ai-agents/knowledge/${id}/indexing-status/`,
     unindex: (id: string) => `/ai-agents/knowledge/${id}/unindex/`,
     refresh: (id: string) => `/ai-agents/knowledge/${id}/refresh/`,
+    refreshLogs: (id: string) => `/ai-agents/knowledge/${id}/refresh-logs/`,
     chunks: (id: string) => `/ai-agents/knowledge/${id}/chunks/`,
     bulkIndex: "/ai-agents/knowledge/bulk_index/",
     bulkCreate: "/ai-agents/knowledge/bulk_create/",
@@ -195,5 +197,14 @@ export const ENDPOINTS = {
   workflowExecutions: {
     list: "/ai-agents/workflow-executions/",
     detail: (id: string) => `/ai-agents/workflow-executions/${id}/`,
+  },
+  chatbotSessions: {
+    list: "/ai-agents/chatbot-sessions/",
+    detail: (id: string) => `/ai-agents/chatbot-sessions/${id}/`,
+    close: (id: string) => `/ai-agents/chatbot-sessions/${id}/close/`,
+  },
+  dataVolumes: {
+    list: "/ai-agents/data-volumes/",
+    detail: (id: string) => `/ai-agents/data-volumes/${id}/`,
   },
 } as const;

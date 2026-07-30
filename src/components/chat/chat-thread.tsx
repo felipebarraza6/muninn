@@ -32,8 +32,8 @@ export function ChatThread({
   footer,
 }: Props) {
   return (
-    <div className={cn("relative flex-1 min-h-0", className)}>
-      <ScrollArea className="h-full" viewportRef={viewportRef}>
+    <div className={cn("relative flex-1 min-h-0 overflow-hidden", className)}>
+      <ScrollArea className="h-full" viewportRef={viewportRef} showScrollbar>
         <div className={cn("px-4 py-4 space-y-3 max-w-3xl mx-auto", contentClassName)}>
           {children}
           {footer}

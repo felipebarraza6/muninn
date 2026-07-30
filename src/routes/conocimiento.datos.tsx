@@ -17,6 +17,7 @@ import {
   FileSpreadsheet,
   Loader2,
   Plus,
+  RefreshCw,
   Rows3,
   Trash2,
   Upload,
@@ -38,6 +39,7 @@ import {
   useParseSpreadsheet,
   useBulkCreateKnowledge,
   type SpreadsheetParseRow,
+  type ApiRefreshConfig,
 } from "@/api/hooks/useKnowledge";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -243,8 +245,9 @@ export default function ConocimientoDatos() {
     () => new Set(Array.from({ length: DEFAULT_ROW_COUNT }, (_, i) => i)),
   );
   const [indexOnCreate, setIndexOnCreate] = useState(true);
-  const [asDataBundle, setAsDataBundle] = useState(true);
+  const [isCronJob, setIsCronJob] = useState(false);
   const [bundleTitle, setBundleTitle] = useState("");
+  const [titleEditing, setTitleEditing] = useState(false);
   const [activeCell, setActiveCell] = useState<CellPos | null>({ r: 0, c: 0 });
   const [cellRange, setCellRange] = useState<CellRange | null>({
     r0: 0,
@@ -252,7 +255,7 @@ export default function ConocimientoDatos() {
     r1: 0,
     c1: 0,
   });
-  const [ctxTarget, setCtxTarget] = useState<CtxTarget>(null);
+  const ctxTargetRef = useRef<CtxTarget>(null);
   const isSelectingRef = useRef(false);
   const dragMovedRef = useRef(false);
   const selectionAnchorRef = useRef<CellPos>({ r: 0, c: 0 });
@@ -646,55 +649,56 @@ export default function ConocimientoDatos() {
   }, [cellRange, columns, rows]);
 
   const handleImport = () => {
-    const chosen = rows.filter(
-      (_, i) => selected.has(i) && columns.some((c) => (rows[i][c] ?? "").trim().length > 0),
-    );
-    if (chosen.length === 0) {
-      toast.error("Escribe o pega al menos una fila con datos");
-      return;
-    }
     if (columns.length === 0) {
       toast.error("Agrega al menos una columna");
       return;
     }
 
-    const cleanRows = chosen.map((row) => {
-      const obj: Record<string, string> = {};
-      for (const col of columns) obj[col] = row[col] ?? "";
-      return obj;
-    });
+    const hasAnyData = rows.some((row) => columns.some((c) => (row[c] ?? "").trim().length > 0));
 
-    let items: Partial<{
+    if (!hasAnyData && !isCronJob) {
+      toast.error("Escribe o pega al menos una fila con datos");
+      return;
+    }
+
+    const cleanRows = isCronJob
+      ? []
+      : rows
+          .filter(
+            (_, i) => selected.has(i) && columns.some((c) => (rows[i][c] ?? "").trim().length > 0),
+          )
+          .map((row) => {
+            const obj: Record<string, string> = {};
+            for (const col of columns) obj[col] = row[col] ?? "";
+            return obj;
+          });
+
+    const items: Partial<{
       title: string;
       content: string;
       knowledge_type: "DATA" | "DOCUMENT";
       tags: string[];
       is_active: boolean;
-    }>[];
-
-    if (asDataBundle) {
-      items = [
-        {
-          title: bundleTitle.trim() || fileName || "Tabla importada",
-          content: JSON.stringify(cleanRows),
-          knowledge_type: "DATA",
-          is_active: true,
-          tags: ["excel-import"],
-        },
-      ];
-    } else {
-      items = cleanRows.map((row, i) => {
-        const title =
-          row["título"] || row["title"] || row["nombre"] || row[columns[0]] || `Fila ${i + 1}`;
-        const content = columns.map((col) => `${col}: ${row[col] ?? ""}`).join("\n");
-        return {
-          title: String(title).slice(0, 200),
-          content,
-          knowledge_type: "DOCUMENT" as const,
-          is_active: true,
-        };
-      });
-    }
+      api_refresh_config?: ApiRefreshConfig;
+    }>[] = [
+      {
+        title: bundleTitle.trim() || fileName || "Datos",
+        content: JSON.stringify(cleanRows),
+        knowledge_type: "DATA",
+        is_active: true,
+        tags: ["excel-import"],
+        ...(isCronJob
+          ? {
+              api_refresh_config: {
+                external_api_id: "",
+                endpoint: "",
+                cron: "",
+                content_mapping: { type: "raw_string" as const },
+              },
+            }
+          : {}),
+      },
+    ];
 
     bulk.mutate(
       { items, index: indexOnCreate },
@@ -729,9 +733,27 @@ export default function ConocimientoDatos() {
           <ArrowLeft className="h-4 w-4 mr-1.5" /> Volver
         </Button>
         <div className="flex-1 min-w-0">
-          <h1 className="text-lg font-semibold tracking-tight flex items-center gap-2">
-            <FileSpreadsheet className="h-5 w-5 text-primary" />
-            Datos
+          <h1
+            className="text-lg font-semibold tracking-tight flex items-center gap-2 cursor-pointer group"
+            onClick={() => setTitleEditing(true)}
+            title="Haz clic para renombrar"
+          >
+            <FileSpreadsheet className="h-5 w-5 text-primary shrink-0" />
+            {titleEditing ? (
+              <Input
+                value={bundleTitle}
+                onChange={(e) => setBundleTitle(e.target.value)}
+                onBlur={() => setTitleEditing(false)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                }}
+                className="h-8 text-lg font-semibold px-1 max-w-xs"
+                autoFocus
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : (
+              <span className="truncate min-w-0">{bundleTitle || "Datos"}</span>
+            )}
           </h1>
           <p className="text-xs sm:text-sm text-muted-foreground">
             Pega con Ctrl+V · arrastra para seleccionar · Shift+flechas · clic derecho
@@ -763,11 +785,11 @@ export default function ConocimientoDatos() {
           </Button>
           <Button
             type="button"
-            disabled={!hasData || selected.size === 0 || bulk.isPending}
+            disabled={(!isCronJob && (!hasData || selected.size === 0)) || bulk.isPending}
             onClick={handleImport}
           >
             {bulk.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Guardar e indexar
+            Guardar
           </Button>
         </div>
       </div>
@@ -782,20 +804,17 @@ export default function ConocimientoDatos() {
             Indexar al crear
           </label>
           <label className="flex items-center gap-2 text-xs sm:text-sm">
-            <Checkbox checked={asDataBundle} onCheckedChange={(v) => setAsDataBundle(Boolean(v))} />
-            Una sola tabla
+            <input
+              type="checkbox"
+              checked={isCronJob}
+              onChange={(e) => {
+                setIsCronJob(e.target.checked);
+                if (e.target.checked) setIndexOnCreate(false);
+              }}
+              className="h-4 w-4 rounded border-border accent-primary"
+            />
+            <span className="text-xs sm:text-sm">CronJob</span>
           </label>
-          {asDataBundle && (
-            <div className="flex items-center gap-2 min-w-[140px] flex-1 max-w-xs">
-              <Label className="text-xs shrink-0">Título</Label>
-              <Input
-                value={bundleTitle}
-                onChange={(e) => setBundleTitle(e.target.value)}
-                className="h-8 text-xs"
-                placeholder="Nombre de la tabla"
-              />
-            </div>
-          )}
           <div className="flex items-center gap-1 ml-auto">
             <Button type="button" variant="outline" size="sm" onClick={() => addColumn()}>
               <Plus className="h-3.5 w-3.5 mr-1" />
@@ -820,235 +839,281 @@ export default function ConocimientoDatos() {
           </div>
         </div>
 
-        <ContextMenu>
-          <ContextMenuTrigger asChild>
-            <div
-              ref={gridScrollRef}
-              onPaste={handleGridPaste}
-              className="flex-1 min-h-0 overflow-auto rounded-md border border-border bg-background shadow-inner"
-            >
-              <table className="border-collapse text-xs w-max min-w-full">
-                <thead className="sticky top-0 z-20">
-                  <tr>
-                    <th className="sticky left-0 z-30 w-12 min-w-12 bg-muted border-b border-r border-border px-1 py-1.5 font-medium text-muted-foreground">
-                      #
-                    </th>
-                    {columns.map((col, cIdx) => (
-                      <th
-                        key={col}
-                        className="bg-muted border-b border-r border-border p-0 min-w-[140px] max-w-[240px]"
-                        onContextMenu={() => setCtxTarget({ kind: "header", c: cIdx })}
-                      >
-                        <div className="flex items-center gap-0.5 px-1 py-1">
-                          <Input
-                            defaultValue={col}
-                            key={`hdr-${col}`}
-                            className="h-7 border-0 bg-transparent shadow-none focus-visible:ring-1 text-xs font-semibold px-1"
-                            title="Renombrar columna"
-                            onBlur={(e) => {
-                              if (e.target.value.trim() !== col) {
-                                renameColumn(col, e.target.value);
-                              }
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                            }}
-                          />
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
-                            title="Eliminar columna"
-                            onClick={() => removeColumn(col)}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row, rIdx) => (
-                    <tr key={rIdx} className="hover:bg-muted/30">
-                      <td
-                        className="sticky left-0 z-10 w-12 min-w-12 bg-muted/80 border-b border-r border-border px-1 py-0 text-center align-middle"
-                        onContextMenu={() => setCtxTarget({ kind: "row", r: rIdx })}
-                      >
-                        <div className="flex items-center justify-center gap-1 py-1">
-                          <Checkbox
-                            checked={selected.has(rIdx)}
-                            onCheckedChange={() => toggleRow(rIdx)}
-                            className="h-3.5 w-3.5"
-                          />
-                          <span className="text-[10px] text-muted-foreground tabular-nums">
-                            {rIdx + 1}
-                          </span>
-                        </div>
-                      </td>
-                      {columns.map((col, cIdx) => {
-                        const isActive = activeCell?.r === rIdx && activeCell?.c === cIdx;
-                        const inSelection = isInRange(rIdx, cIdx, cellRange);
-                        return (
-                          <td
-                            key={col}
-                            className={cn(
-                              "border-b border-r border-border p-0 min-w-[140px] max-w-[240px] select-none",
-                              inSelection && "bg-primary/15",
-                              isActive && "ring-2 ring-inset ring-primary/70",
-                            )}
-                            onMouseDown={(e) => onCellMouseDown(e, rIdx, cIdx)}
-                            onMouseEnter={() => onCellMouseEnter(rIdx, cIdx)}
-                            onContextMenu={() => {
-                              setCtxTarget({ kind: "cell", r: rIdx, c: cIdx });
-                              if (!isInRange(rIdx, cIdx, cellRange)) {
-                                startCellSelect(rIdx, cIdx, false);
-                              }
-                            }}
-                            onDoubleClick={() => focusCell(rIdx, cIdx)}
-                          >
-                            <input
-                              id={cellId(rIdx, cIdx)}
-                              value={row[col] ?? ""}
-                              onChange={(e) => updateCell(rIdx, col, e.target.value)}
-                              onFocus={() => {
-                                setActiveCell({ r: rIdx, c: cIdx });
-                                if (!isSelectingRef.current) {
-                                  selectionAnchorRef.current = { r: rIdx, c: cIdx };
-                                  setCellRange({
-                                    r0: rIdx,
-                                    c0: cIdx,
-                                    r1: rIdx,
-                                    c1: cIdx,
-                                  });
-                                }
-                              }}
-                              onKeyDown={(e) => onCellKeyDown(e, rIdx, cIdx)}
-                              className={cn(
-                                "w-full h-8 bg-transparent px-2 text-xs outline-none caret-foreground",
-                                "focus:bg-primary/5",
-                              )}
-                            />
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        {isCronJob ? (
+          <div className="flex-1 flex items-center justify-center rounded-md border border-primary/20 bg-primary/[0.03] min-h-0">
+            <div className="text-center space-y-2 p-6">
+              <RefreshCw className="h-8 w-8 mx-auto text-primary/60" />
+              <p className="text-sm font-medium">Datos automáticos</p>
+              <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                El contenido será generado automáticamente por un CronJob. Tras crear el documento,
+                ve a la pestaña <strong>CronJob</strong> para configurar la Aplicación, endpoint y
+                mapeo.
+              </p>
             </div>
-          </ContextMenuTrigger>
-
-          <ContextMenuContent className="w-56 z-[100]">
-            {ctxTarget?.kind === "cell" && (
-              <>
-                <ContextMenuLabel className="text-xs">
-                  {rangeCellCount(cellRange) > 1
-                    ? `${rangeCellCount(cellRange)} celdas`
-                    : `Celda ${ctxTarget.r + 1}, ${columns[ctxTarget.c] || "…"}`}
-                </ContextMenuLabel>
-                <ContextMenuItem
-                  onClick={() =>
-                    void copyRange(
-                      cellRange && isInRange(ctxTarget.r, ctxTarget.c, cellRange)
-                        ? cellRange
-                        : {
-                            r0: ctxTarget.r,
-                            c0: ctxTarget.c,
-                            r1: ctxTarget.r,
-                            c1: ctxTarget.c,
-                          },
-                    )
-                  }
+          </div>
+        ) : (
+          <>
+            <ContextMenu>
+              <ContextMenuTrigger asChild>
+                <div
+                  ref={gridScrollRef}
+                  onPaste={handleGridPaste}
+                  className="flex-1 min-h-0 overflow-auto rounded-md border border-border bg-background shadow-inner"
                 >
-                  <Copy className="h-3.5 w-3.5 mr-2" />
-                  Copiar
-                  <ContextMenuShortcut>⌘C</ContextMenuShortcut>
-                </ContextMenuItem>
-                <ContextMenuItem onClick={() => pasteCell(ctxTarget.r, ctxTarget.c)}>
-                  <ClipboardPaste className="h-3.5 w-3.5 mr-2" />
-                  Pegar
-                </ContextMenuItem>
-                <ContextMenuItem
-                  onClick={() =>
-                    clearRange(
-                      cellRange && isInRange(ctxTarget.r, ctxTarget.c, cellRange)
-                        ? cellRange
-                        : {
-                            r0: ctxTarget.r,
-                            c0: ctxTarget.c,
-                            r1: ctxTarget.r,
-                            c1: ctxTarget.c,
-                          },
-                    )
-                  }
-                >
-                  Limpiar
-                </ContextMenuItem>
-                <ContextMenuSeparator />
-              </>
-            )}
+                  <table className="border-collapse text-xs w-max min-w-full">
+                    <thead className="sticky top-0 z-20">
+                      <tr>
+                        <th className="sticky left-0 z-30 w-12 min-w-12 bg-muted border-b border-r border-border px-1 py-1.5 font-medium text-muted-foreground">
+                          #
+                        </th>
+                        {columns.map((col, cIdx) => (
+                          <th
+                            key={col}
+                            className="group bg-muted border-b border-r border-border p-0 min-w-[140px] max-w-[240px]"
+                            onContextMenu={() => {
+                              ctxTargetRef.current = { kind: "header", c: cIdx };
+                            }}
+                          >
+                            <div className="flex items-center gap-0.5 px-1 py-1">
+                              <Input
+                                defaultValue={col}
+                                key={`hdr-${col}`}
+                                className="h-7 flex-1 min-w-0 border-0 bg-transparent shadow-none focus-visible:ring-1 text-xs font-semibold px-1 hover:bg-muted-foreground/10 rounded transition-colors"
+                                title="Renombrar columna — haz clic y escribe"
+                                onBlur={(e) => {
+                                  if (e.target.value.trim() !== col) {
+                                    renameColumn(col, e.target.value);
+                                  }
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                                }}
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 shrink-0 text-muted-foreground/50 hover:text-primary hover:bg-primary/10"
+                                title="Insertar columna a la derecha"
+                                onClick={() => addColumn(cIdx + 1)}
+                              >
+                                <Plus className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 shrink-0 text-muted-foreground/50 hover:text-destructive"
+                                title="Eliminar columna"
+                                onClick={() => removeColumn(col)}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((row, rIdx) => (
+                        <tr key={rIdx} className="hover:bg-muted/30">
+                          <td
+                            className="sticky left-0 z-10 w-12 min-w-12 bg-muted/80 border-b border-r border-border px-1 py-0 text-center align-middle"
+                            onContextMenu={() => {
+                              ctxTargetRef.current = { kind: "row", r: rIdx };
+                            }}
+                          >
+                            <div className="flex items-center justify-center gap-1 py-1">
+                              <Checkbox
+                                checked={selected.has(rIdx)}
+                                onCheckedChange={() => toggleRow(rIdx)}
+                                className="h-3.5 w-3.5"
+                              />
+                              <span className="text-[10px] text-muted-foreground tabular-nums">
+                                {rIdx + 1}
+                              </span>
+                            </div>
+                          </td>
+                          {columns.map((col, cIdx) => {
+                            const isActive = activeCell?.r === rIdx && activeCell?.c === cIdx;
+                            const inSelection = isInRange(rIdx, cIdx, cellRange);
+                            return (
+                              <td
+                                key={col}
+                                className={cn(
+                                  "border-b border-r border-border p-0 min-w-[140px] max-w-[240px] select-none",
+                                  inSelection && "bg-primary/15",
+                                  isActive && "ring-2 ring-inset ring-primary/70",
+                                )}
+                                onMouseDown={(e) => onCellMouseDown(e, rIdx, cIdx)}
+                                onMouseEnter={() => onCellMouseEnter(rIdx, cIdx)}
+                                onContextMenu={() => {
+                                  ctxTargetRef.current = { kind: "cell", r: rIdx, c: cIdx };
+                                  if (!isInRange(rIdx, cIdx, cellRange)) {
+                                    startCellSelect(rIdx, cIdx, false);
+                                  }
+                                }}
+                                onDoubleClick={() => focusCell(rIdx, cIdx)}
+                              >
+                                <input
+                                  id={cellId(rIdx, cIdx)}
+                                  value={row[col] ?? ""}
+                                  onChange={(e) => updateCell(rIdx, col, e.target.value)}
+                                  onFocus={() => {
+                                    setActiveCell({ r: rIdx, c: cIdx });
+                                    if (!isSelectingRef.current) {
+                                      selectionAnchorRef.current = { r: rIdx, c: cIdx };
+                                      setCellRange({
+                                        r0: rIdx,
+                                        c0: cIdx,
+                                        r1: rIdx,
+                                        c1: cIdx,
+                                      });
+                                    }
+                                  }}
+                                  onKeyDown={(e) => onCellKeyDown(e, rIdx, cIdx)}
+                                  className={cn(
+                                    "w-full h-8 bg-transparent px-2 text-xs outline-none caret-foreground",
+                                    "focus:bg-primary/5",
+                                  )}
+                                />
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </ContextMenuTrigger>
 
-            {(ctxTarget?.kind === "cell" || ctxTarget?.kind === "row") && (
-              <>
-                <ContextMenuLabel className="text-xs">Fila</ContextMenuLabel>
-                <ContextMenuItem onClick={() => insertRowRelative(ctxTarget.r, "above")}>
-                  <Rows3 className="h-3.5 w-3.5 mr-2" />
-                  Insertar fila arriba
-                </ContextMenuItem>
-                <ContextMenuItem onClick={() => insertRowRelative(ctxTarget.r, "below")}>
-                  <Rows3 className="h-3.5 w-3.5 mr-2" />
-                  Insertar fila abajo
-                </ContextMenuItem>
-                <ContextMenuItem
-                  className="text-destructive focus:text-destructive"
-                  onClick={() => deleteRow(ctxTarget.r)}
-                >
-                  <Trash2 className="h-3.5 w-3.5 mr-2" />
-                  Eliminar fila
-                </ContextMenuItem>
-                <ContextMenuSeparator />
-              </>
-            )}
+              <ContextMenuContent className="w-56 z-[100]">
+                {ctxTargetRef.current?.kind === "cell" && (
+                  <>
+                    <ContextMenuLabel className="text-xs">
+                      {rangeCellCount(cellRange) > 1
+                        ? `${rangeCellCount(cellRange)} celdas`
+                        : `Celda ${ctxTargetRef.current.r + 1}, ${columns[ctxTargetRef.current.c] || "…"}`}
+                    </ContextMenuLabel>
+                    <ContextMenuItem
+                      onClick={() =>
+                        void copyRange(
+                          cellRange &&
+                            isInRange(ctxTargetRef.current.r, ctxTargetRef.current.c, cellRange)
+                            ? cellRange
+                            : {
+                                r0: ctxTargetRef.current.r,
+                                c0: ctxTargetRef.current.c,
+                                r1: ctxTargetRef.current.r,
+                                c1: ctxTargetRef.current.c,
+                              },
+                        )
+                      }
+                    >
+                      <Copy className="h-3.5 w-3.5 mr-2" />
+                      Copiar
+                      <ContextMenuShortcut>⌘C</ContextMenuShortcut>
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                      onClick={() => pasteCell(ctxTargetRef.current.r, ctxTargetRef.current.c)}
+                    >
+                      <ClipboardPaste className="h-3.5 w-3.5 mr-2" />
+                      Pegar
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                      onClick={() =>
+                        clearRange(
+                          cellRange &&
+                            isInRange(ctxTargetRef.current.r, ctxTargetRef.current.c, cellRange)
+                            ? cellRange
+                            : {
+                                r0: ctxTargetRef.current.r,
+                                c0: ctxTargetRef.current.c,
+                                r1: ctxTargetRef.current.r,
+                                c1: ctxTargetRef.current.c,
+                              },
+                        )
+                      }
+                    >
+                      Limpiar
+                    </ContextMenuItem>
+                    <ContextMenuSeparator />
+                  </>
+                )}
 
-            {(ctxTarget?.kind === "cell" || ctxTarget?.kind === "header") && (
-              <>
-                <ContextMenuLabel className="text-xs">Columna</ContextMenuLabel>
-                <ContextMenuItem onClick={() => insertColumnRelative(ctxTarget.c, "left")}>
-                  <Columns3 className="h-3.5 w-3.5 mr-2" />
-                  Insertar columna a la izquierda
-                </ContextMenuItem>
-                <ContextMenuItem onClick={() => insertColumnRelative(ctxTarget.c, "right")}>
-                  <Columns3 className="h-3.5 w-3.5 mr-2" />
-                  Insertar columna a la derecha
-                </ContextMenuItem>
-                <ContextMenuItem
-                  className="text-destructive focus:text-destructive"
-                  onClick={() => removeColumnAt(ctxTarget.c)}
-                >
-                  <Trash2 className="h-3.5 w-3.5 mr-2" />
-                  Eliminar columna
-                </ContextMenuItem>
-              </>
-            )}
+                {(ctxTargetRef.current?.kind === "cell" ||
+                  ctxTargetRef.current?.kind === "row") && (
+                  <>
+                    <ContextMenuLabel className="text-xs">Fila</ContextMenuLabel>
+                    <ContextMenuItem
+                      onClick={() => insertRowRelative(ctxTargetRef.current.r, "above")}
+                    >
+                      <Rows3 className="h-3.5 w-3.5 mr-2" />
+                      Insertar fila arriba
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                      onClick={() => insertRowRelative(ctxTargetRef.current.r, "below")}
+                    >
+                      <Rows3 className="h-3.5 w-3.5 mr-2" />
+                      Insertar fila abajo
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                      className="text-destructive focus:text-destructive"
+                      onClick={() => deleteRow(ctxTargetRef.current.r)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5 mr-2" />
+                      Eliminar fila
+                    </ContextMenuItem>
+                    <ContextMenuSeparator />
+                  </>
+                )}
 
-            {ctxTarget?.kind === "row" && (
-              <ContextMenuItem onClick={() => toggleRow(ctxTarget.r)}>
-                {selected.has(ctxTarget.r) ? "Quitar de selección" : "Incluir en selección"}
-              </ContextMenuItem>
-            )}
-          </ContextMenuContent>
-        </ContextMenu>
+                {(ctxTargetRef.current?.kind === "cell" ||
+                  ctxTargetRef.current?.kind === "header") && (
+                  <>
+                    <ContextMenuLabel className="text-xs">Columna</ContextMenuLabel>
+                    <ContextMenuItem
+                      onClick={() => insertColumnRelative(ctxTargetRef.current.c, "left")}
+                    >
+                      <Columns3 className="h-3.5 w-3.5 mr-2" />
+                      Insertar columna a la izquierda
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                      onClick={() => insertColumnRelative(ctxTargetRef.current.c, "right")}
+                    >
+                      <Columns3 className="h-3.5 w-3.5 mr-2" />
+                      Insertar columna a la derecha
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                      className="text-destructive focus:text-destructive"
+                      onClick={() => removeColumnAt(ctxTargetRef.current.c)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5 mr-2" />
+                      Eliminar columna
+                    </ContextMenuItem>
+                  </>
+                )}
 
-        <p className="shrink-0 text-[11px] text-muted-foreground">
-          {selectedCount}/{rows.length} filas · {columns.length} columnas
-          {rangeCellCount(cellRange) > 1
-            ? ` · ${rangeCellCount(cellRange)} celdas seleccionadas`
-            : ""}
-          {" · "}
-          arrastra o Shift+flechas · Ctrl+C / Supr
-        </p>
+                {ctxTargetRef.current?.kind === "row" && (
+                  <ContextMenuItem onClick={() => toggleRow(ctxTargetRef.current.r)}>
+                    {selected.has(ctxTargetRef.current.r)
+                      ? "Quitar de selección"
+                      : "Incluir en selección"}
+                  </ContextMenuItem>
+                )}
+              </ContextMenuContent>
+            </ContextMenu>
+
+            <p className="shrink-0 text-[11px] text-muted-foreground">
+              {selectedCount}/{rows.length} filas · {columns.length} columnas
+              {rangeCellCount(cellRange) > 1
+                ? ` · ${rangeCellCount(cellRange)} celdas seleccionadas`
+                : ""}
+              {" · "}
+              arrastra o Shift+flechas · Ctrl+C / Supr
+            </p>
+          </>
+        )}
       </div>
     </div>
   );

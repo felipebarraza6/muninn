@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { GET, POST, PATCH, normalizeListResponse } from "../client";
+import { GET, POST, normalizeListResponse } from "../client";
 import { ENDPOINTS } from "../endpoints/index";
 import { getActiveBranchIdInt } from "@/lib/branchStorage";
 import { POLL } from "@/lib/pollInterval";
@@ -184,9 +184,13 @@ export function useArchiveConversation() {
 
 export function useUpdateConversationStatus() {
   const queryClient = useQueryClient();
+  const branchId = getActiveBranchIdInt();
   return useMutation({
     mutationFn: ({ id, status }: { id: string | number; status: string }) =>
-      PATCH(ENDPOINTS.conversations.detail(String(id)), { status }),
+      POST(ENDPOINTS.unifiedConversations.setStatus(String(id)), {
+        status,
+        branch: branchId,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["conversations"], refetchType: "all" });
       queryClient.invalidateQueries({ queryKey: ["unified-conversations"], refetchType: "all" });

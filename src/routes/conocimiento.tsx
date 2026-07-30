@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import {
   BookOpen,
   CheckCircle2,
+  Clock,
   Eye,
   FileSpreadsheet,
   Loader2,
@@ -160,15 +161,30 @@ function KnowledgeCard({
       )}
     >
       <div className="flex items-start gap-3">
-        <div
-          className={cn(
-            "h-11 w-11 shrink-0 rounded-xl flex items-center justify-center ring-1",
-            inactive
-              ? "bg-muted text-muted-foreground ring-border/60"
-              : `${style.soft} ring-primary/25`,
+        <div className="relative shrink-0">
+          <div
+            className={cn(
+              "h-11 w-11 rounded-xl flex items-center justify-center ring-1",
+              inactive
+                ? "bg-muted text-muted-foreground ring-border/60"
+                : `${style.soft} ring-primary/25`,
+            )}
+          >
+            <Icon className={cn("h-5 w-5", inactive ? "text-muted-foreground" : style.icon)} />
+          </div>
+          {doc.api_refresh_config && (
+            <div
+              className={cn(
+                "absolute -bottom-1 -right-1 h-4 w-4 rounded-full flex items-center justify-center ring-1 ring-background",
+                inactive
+                  ? "bg-muted-foreground/20 text-muted-foreground"
+                  : "bg-primary text-primary-foreground",
+              )}
+              title="Auto-refresh configurado"
+            >
+              <Clock className="h-2.5 w-2.5" />
+            </div>
           )}
-        >
-          <Icon className={cn("h-5 w-5", inactive ? "text-muted-foreground" : style.icon)} />
         </div>
         <div className="min-w-0 flex-1 space-y-1.5">
           <h3 className="font-medium text-sm leading-snug line-clamp-2">{doc.title}</h3>

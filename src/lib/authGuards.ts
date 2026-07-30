@@ -468,6 +468,19 @@ export function canRestoreKnowledge(branchId?: string | number | null): boolean 
   return canHardDeleteKnowledge(branchId);
 }
 
+/**
+ * Puede acceder a la sección Agentes (Studio).
+ * - Superadmin: sí
+ * - Organizador: sí
+ * - Cualquier usuario con al menos una sucursal activa: sí
+ */
+export function canAccessAgents(): boolean {
+  if (!getStoredUser()) return false;
+  if (isSuperAdmin()) return true;
+  if (isOrganizationOwner()) return true;
+  return getStoredBranches().some((b) => b.is_active !== false);
+}
+
 /** @deprecated Usar canViewInactiveStudioResources */
 export function canViewInactiveAgents(): boolean {
   return canViewInactiveStudioResources();

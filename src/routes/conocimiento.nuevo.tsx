@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Loader2, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -80,6 +80,8 @@ export default function ConocimientoNuevo() {
       : "DOCUMENT";
   });
   const [faqPairs, setFaqPairs] = useState([{ question: "", answer: "" }]);
+  const [isCronJob, setIsCronJob] = useState(false);
+  const [indexOnCreate, setIndexOnCreate] = useState(true);
 
   const handleTypeChange = (next: KnowledgeType) => {
     if (knowledgeType === "FAQ" && next !== "FAQ") {
@@ -100,7 +102,7 @@ export default function ConocimientoNuevo() {
       toast.error("El título es obligatorio");
       return;
     }
-    if (!body.trim()) {
+    if (!isCronJob && !body.trim()) {
       toast.error(
         knowledgeType === "FAQ"
           ? "Agrega al menos una pregunta y respuesta"
@@ -123,10 +125,23 @@ export default function ConocimientoNuevo() {
         category: category.trim() || null,
         ...(targetBranch ? { branch: Number(targetBranch) } : {}),
         is_active: true,
+        is_indexed: indexOnCreate,
+        ...(isCronJob
+          ? {
+              api_refresh_config: {
+                external_api_id: "",
+                endpoint: "",
+                cron: "",
+                content_mapping: { type: "raw_string" as const },
+              },
+            }
+          : {}),
       },
       {
         onSuccess: (doc) => {
-          toast.success("Documento creado. Se indexará al asignarlo a un agente.");
+          toast.success(
+            indexOnCreate ? "Documento creado e indexado." : "Documento creado (sin indexar).",
+          );
           navigate(doc?.id ? `/app/conocimiento/${doc.id}` : "/app/conocimiento");
         },
         onError: (e) => toast.error(apiErrorMessage(e, "No se pudo crear el documento")),
@@ -193,7 +208,9 @@ export default function ConocimientoNuevo() {
           <div className="space-y-4">
             {/* Título + Categoría + Tipo — en fila */}
             <div className="rounded-xl border border-border/70 bg-card/60 p-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div
+                className={`grid grid-cols-1 sm:grid-cols-2 ${knowledgeType === "CUSTOM" ? "lg:grid-cols-5" : "lg:grid-cols-4"} gap-4`}
+              >
                 <div className="space-y-2">
                   <Label htmlFor="knowledge-title">Título</Label>
                   <Input
@@ -235,154 +252,202 @@ export default function ConocimientoNuevo() {
                     {KNOWLEDGE_TYPE_DESCRIPTION[knowledgeType]}
                   </p>
                 </div>
+                {knowledgeType === "CUSTOM" && (
+                  <div className="space-y-2">
+                    <Label>Auto-actualizar</Label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={isCronJob}
+                        onChange={(e) => {
+                          setIsCronJob(e.target.checked);
+                          setIndexOnCreate(!e.target.checked);
+                        }}
+                        className="h-4 w-4 rounded border-border accent-primary"
+                      />
+                      <span className="text-sm">CronJob</span>
+                    </label>
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <Label>Indexar</Label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={indexOnCreate}
+                      onChange={(e) => setIndexOnCreate(e.target.checked)}
+                      className="h-4 w-4 rounded border-border accent-primary"
+                    />
+                    <span className="text-sm">Indexar en RAG</span>
+                  </label>
+                  <p className="text-xs text-muted-foreground">
+                    Disponible para búsqueda semántica en agentes.
+                  </p>
+                </div>
               </div>
             </div>
 
             {/* Contenido — se adapta según el tipo */}
-            <div className="rounded-xl border border-border/70 bg-card/60 p-4 space-y-3">
-              {(() => {
-                const TypeIcon = KNOWLEDGE_TYPE_ICON[knowledgeType];
-                return (
-                  <div className="flex items-center gap-2 text-sm font-medium text-foreground/90 border-b border-border/60 pb-3 mb-1">
-                    {TypeIcon && <TypeIcon className="h-4 w-4 text-primary" />}
-                    <span>{KNOWLEDGE_TYPE_LABEL[knowledgeType]}</span>
-                  </div>
-                );
-              })()}
-
-              {knowledgeType === "FAQ" ? (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs text-muted-foreground">
-                      Agrega pares de pregunta y respuesta
-                    </p>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setFaqPairs((prev) => [...prev, { question: "", answer: "" }])}
-                    >
-                      <Plus className="h-3.5 w-3.5 mr-1" />
-                      Añadir par
-                    </Button>
-                  </div>
-                  {faqPairs.map((pair, idx) => (
-                    <div
-                      key={idx}
-                      className="rounded-lg border border-border p-3 space-y-2 bg-muted/20"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-medium text-muted-foreground">
-                          Par {idx + 1}
-                        </span>
-                        {faqPairs.length > 1 && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-destructive"
-                            onClick={() => setFaqPairs((prev) => prev.filter((_, i) => i !== idx))}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Pregunta</Label>
-                        <Input
-                          value={pair.question}
-                          onChange={(e) =>
-                            setFaqPairs((prev) =>
-                              prev.map((p, i) =>
-                                i === idx ? { ...p, question: e.target.value } : p,
-                              ),
-                            )
-                          }
-                          placeholder="¿Cuál es el horario de atención?"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Respuesta</Label>
-                        <Textarea
-                          rows={3}
-                          value={pair.answer}
-                          onChange={(e) =>
-                            setFaqPairs((prev) =>
-                              prev.map((p, i) =>
-                                i === idx ? { ...p, answer: e.target.value } : p,
-                              ),
-                            )
-                          }
-                          placeholder="Atendemos de lunes a viernes de 9:00 a 18:00…"
-                        />
-                      </div>
+            {isCronJob ? (
+              <div className="rounded-xl border border-primary/20 bg-primary/[0.03] p-6 text-center space-y-2">
+                <RefreshCw className="h-6 w-6 mx-auto text-primary/60" />
+                <p className="text-sm font-medium">Contenido automático</p>
+                <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                  El contenido será generado automáticamente por un CronJob. Tras crear el
+                  documento, ve a la pestaña <strong>CronJob</strong> para configurar la Aplicación,
+                  endpoint y mapeo.
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-border/70 bg-card/60 p-4 space-y-3">
+                {(() => {
+                  const TypeIcon = KNOWLEDGE_TYPE_ICON[knowledgeType];
+                  return (
+                    <div className="flex items-center gap-2 text-sm font-medium text-foreground/90 border-b border-border/60 pb-3 mb-1">
+                      {TypeIcon && <TypeIcon className="h-4 w-4 text-primary" />}
+                      <span>{KNOWLEDGE_TYPE_LABEL[knowledgeType]}</span>
                     </div>
-                  ))}
-                </div>
-              ) : knowledgeType === "POLICY" ? (
-                <div className="space-y-2">
-                  <Textarea
-                    id="knowledge-content"
-                    rows={12}
-                    value={content}
-                    onChange={(e) => setContent(e.target.value)}
-                    required
-                    placeholder="Describe la política: alcance, excepciones, vigencia…"
-                    className="font-mono text-sm min-h-[240px]"
-                  />
-                  <p className="text-[11px] text-muted-foreground">
-                    Incluye el alcance, las excepciones y la vigencia. Se indexará al crear.
-                  </p>
-                </div>
-              ) : knowledgeType === "PROCEDURE" ? (
-                <div className="space-y-2">
-                  <Textarea
-                    id="knowledge-content"
-                    rows={12}
-                    value={content}
-                    onChange={(e) => setContent(e.target.value)}
-                    required
-                    placeholder="Paso 1: …&#10;Paso 2: …&#10;Paso 3: …"
-                    className="font-mono text-sm min-h-[240px]"
-                  />
-                  <p className="text-[11px] text-muted-foreground">
-                    Escribe los pasos en orden numerado. Se indexará al crear.
-                  </p>
-                </div>
-              ) : knowledgeType === "API_DOC" ? (
-                <div className="space-y-2">
-                  <Textarea
-                    id="knowledge-content"
-                    rows={12}
-                    value={content}
-                    onChange={(e) => setContent(e.target.value)}
-                    required
-                    placeholder="Endpoint, método, parámetros y ejemplos de respuesta…"
-                    className="font-mono text-sm min-h-[240px]"
-                  />
-                  <p className="text-[11px] text-muted-foreground">
-                    Describe los endpoints, métodos y contratos de integración.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <Textarea
-                    id="knowledge-content"
-                    rows={16}
-                    value={content}
-                    onChange={(e) => setContent(e.target.value)}
-                    required
-                    placeholder={
-                      KNOWLEDGE_TYPE_PLACEHOLDER[knowledgeType] || "Escribe o pega el contenido…"
-                    }
-                    className="font-mono text-sm min-h-[320px]"
-                  />
-                  <p className="text-[11px] text-muted-foreground">
-                    Puedes pegar texto largo desde Word o el navegador. Se indexará al crear.
-                  </p>
-                </div>
-              )}
-            </div>
+                  );
+                })()}
+
+                {knowledgeType === "FAQ" ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-muted-foreground">
+                        Agrega pares de pregunta y respuesta
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          setFaqPairs((prev) => [...prev, { question: "", answer: "" }])
+                        }
+                      >
+                        <Plus className="h-3.5 w-3.5 mr-1" />
+                        Añadir par
+                      </Button>
+                    </div>
+                    {faqPairs.map((pair, idx) => (
+                      <div
+                        key={idx}
+                        className="rounded-lg border border-border p-3 space-y-2 bg-muted/20"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-medium text-muted-foreground">
+                            Par {idx + 1}
+                          </span>
+                          {faqPairs.length > 1 && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-destructive"
+                              onClick={() =>
+                                setFaqPairs((prev) => prev.filter((_, i) => i !== idx))
+                              }
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">Pregunta</Label>
+                          <Input
+                            value={pair.question}
+                            onChange={(e) =>
+                              setFaqPairs((prev) =>
+                                prev.map((p, i) =>
+                                  i === idx ? { ...p, question: e.target.value } : p,
+                                ),
+                              )
+                            }
+                            placeholder="¿Cuál es el horario de atención?"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">Respuesta</Label>
+                          <Textarea
+                            rows={3}
+                            value={pair.answer}
+                            onChange={(e) =>
+                              setFaqPairs((prev) =>
+                                prev.map((p, i) =>
+                                  i === idx ? { ...p, answer: e.target.value } : p,
+                                ),
+                              )
+                            }
+                            placeholder="Atendemos de lunes a viernes de 9:00 a 18:00…"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : knowledgeType === "POLICY" ? (
+                  <div className="space-y-2">
+                    <Textarea
+                      id="knowledge-content"
+                      rows={12}
+                      value={content}
+                      onChange={(e) => setContent(e.target.value)}
+                      required
+                      placeholder="Describe la política: alcance, excepciones, vigencia…"
+                      className="font-mono text-sm min-h-[240px]"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Incluye el alcance, las excepciones y la vigencia. Se indexará al crear.
+                    </p>
+                  </div>
+                ) : knowledgeType === "PROCEDURE" ? (
+                  <div className="space-y-2">
+                    <Textarea
+                      id="knowledge-content"
+                      rows={12}
+                      value={content}
+                      onChange={(e) => setContent(e.target.value)}
+                      required
+                      placeholder="Paso 1: …&#10;Paso 2: …&#10;Paso 3: …"
+                      className="font-mono text-sm min-h-[240px]"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Escribe los pasos en orden numerado. Se indexará al crear.
+                    </p>
+                  </div>
+                ) : knowledgeType === "API_DOC" ? (
+                  <div className="space-y-2">
+                    <Textarea
+                      id="knowledge-content"
+                      rows={12}
+                      value={content}
+                      onChange={(e) => setContent(e.target.value)}
+                      required
+                      placeholder="Endpoint, método, parámetros y ejemplos de respuesta…"
+                      className="font-mono text-sm min-h-[240px]"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Describe los endpoints, métodos y contratos de integración.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Textarea
+                      id="knowledge-content"
+                      rows={16}
+                      value={content}
+                      onChange={(e) => setContent(e.target.value)}
+                      required
+                      placeholder={
+                        KNOWLEDGE_TYPE_PLACEHOLDER[knowledgeType] || "Escribe o pega el contenido…"
+                      }
+                      className="font-mono text-sm min-h-[320px]"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Puedes pegar texto largo desde Word o el navegador. Se indexará al crear.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </form>

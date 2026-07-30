@@ -24,6 +24,20 @@ export interface ApiRefreshContentMapping {
   path?: string;
   /** Columnas a mostrar (solo json_to_table). */
   columns?: string[];
+  /** Ruta JSON para título (solo title_and_body). */
+  title_path?: string;
+  /** Ruta JSON para cuerpo (solo title_and_body). */
+  body_path?: string;
+  /** Formato de salida (solo json_to_table). "markdown" | "json" | "csv". Default: "markdown" */
+  format?: "markdown" | "json" | "csv";
+  /** Si true y el path resuelve a un dict, cada key → fila (col1=key, col2=value). Solo json_to_table. */
+  unpack_keys?: boolean;
+  /** Itera un rango de fechas, llama al endpoint N veces y mergea resultados. */
+  date_range?: {
+    start: number;
+    end: number;
+    param_name: string;
+  };
 }
 
 export interface ApiRefreshPayloadVariables {
@@ -55,6 +69,8 @@ export interface ApiRefreshConfig {
   integration_strategy?: ApiRefreshIntegrationStrategy;
   /** Template markdown con {{title}}, {{timestamp}}, {{data_table}}, {{raw_json}}. */
   content_template?: string;
+  /** Flag de validación: true cuando el test del CronJob fue exitoso. */
+  tested_ok?: boolean;
 }
 
 export interface AgentKnowledge {
