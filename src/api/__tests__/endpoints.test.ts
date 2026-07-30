@@ -34,9 +34,7 @@ describe("API Endpoints", () => {
       expect(ENDPOINTS.conversations.closeConversation("1")).toBe(
         `${AGENT_BASE}/conversations/1/close-conversation/`,
       );
-      expect(ENDPOINTS.conversations.chat("1")).toBe(
-        `${AGENT_BASE}/conversations/1/chat/`,
-      );
+      expect(ENDPOINTS.conversations.chat("1")).toBe(`${AGENT_BASE}/conversations/1/chat/`);
     });
   });
 
@@ -52,9 +50,7 @@ describe("API Endpoints", () => {
   describe("functions / skills namespace", () => {
     it("skill endpoints start with /ai-agents/", () => {
       expect(ENDPOINTS.functions.list).toBe(`${AGENT_BASE}/agent-functions/`);
-      expect(ENDPOINTS.functions.execute("1")).toBe(
-        `${AGENT_BASE}/agent-functions/1/execute/`,
-      );
+      expect(ENDPOINTS.functions.execute("1")).toBe(`${AGENT_BASE}/agent-functions/1/execute/`);
     });
   });
 
@@ -75,12 +71,8 @@ describe("API Endpoints", () => {
   describe("chatbot sessions namespace", () => {
     it("chatbot session endpoints start with /ai-agents/", () => {
       expect(ENDPOINTS.chatbotSessions.list).toBe(`${AGENT_BASE}/chatbot-sessions/`);
-      expect(ENDPOINTS.chatbotSessions.detail("1")).toBe(
-        `${AGENT_BASE}/chatbot-sessions/1/`,
-      );
-      expect(ENDPOINTS.chatbotSessions.close("1")).toBe(
-        `${AGENT_BASE}/chatbot-sessions/1/close/`,
-      );
+      expect(ENDPOINTS.chatbotSessions.detail("1")).toBe(`${AGENT_BASE}/chatbot-sessions/1/`);
+      expect(ENDPOINTS.chatbotSessions.close("1")).toBe(`${AGENT_BASE}/chatbot-sessions/1/close/`);
     });
   });
 

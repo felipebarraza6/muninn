@@ -19,9 +19,8 @@ export function useDataVolumes() {
   return useQuery({
     queryKey: ["data-volumes", branchId],
     queryFn: () =>
-      GET<DataVolume[] | { count: number; results: DataVolume[] }>(
-        ENDPOINTS.dataVolumes.list,
-        { params: branchId ? { branch: branchId } : undefined },
-      ).then((data) => normalizeListResponse<DataVolume>(data)),
+      GET<DataVolume[] | { count: number; results: DataVolume[] }>(ENDPOINTS.dataVolumes.list, {
+        params: branchId ? { branch: branchId } : undefined,
+      }).then((data) => normalizeListResponse<DataVolume>(data)),
   });
 }
