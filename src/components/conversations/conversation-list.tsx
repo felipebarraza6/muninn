@@ -1,7 +1,8 @@
-import { Search, Bot, Sparkles, Inbox, Archive, MessageCircle, Globe } from "lucide-react";
+import { Search, Sparkles, Inbox, Archive, Bot } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { EmptyState } from "@/components/ui/empty-state";
 import {
   CONVERSATION_BUCKETS,
   CONVERSATION_SUBFILTERS,
@@ -10,10 +11,24 @@ import {
   matchesSubFilter,
   type Conversation,
   type ConversationBucket,
-} from "@/lib/mock-data";
+} from "@/lib/conversation-types";
+import { channelIcon, channelLabel } from "@/lib/channels";
+import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
+import { isOrganizationOwnerScope, isSuperAdmin } from "@/lib/authGuards";
 import { initials, avatarColor } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
+function formatWaitingSince(iso?: string): string | null {
+  if (!iso) return null;
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return null;
+  const mins = Math.max(0, Math.floor((Date.now() - t) / 60_000));
+  if (mins < 1) return "ahora";
+  if (mins < 60) return `${mins}m en cola`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h en cola`;
+  return `${Math.floor(hrs / 24)}d en cola`;
+}
 interface Props {
   conversations: Conversation[];
   selectedId: string;
@@ -31,22 +46,6 @@ const BUCKET_ICONS: Record<ConversationBucket, typeof Inbox> = {
   ai: Sparkles,
   archived: Archive,
 };
-
-function channelIcon(channelType?: string) {
-  const t = (channelType || "").toLowerCase();
-  if (t.includes("whatsapp")) return MessageCircle;
-  if (t.includes("web")) return Globe;
-  return Bot;
-}
-
-function channelLabel(channelType?: string, channelName?: string) {
-  if (channelName) return channelName;
-  const t = (channelType || "").toLowerCase();
-  if (t.includes("whatsapp")) return "WhatsApp";
-  if (t.includes("web_embed")) return "Widget web";
-  if (t.includes("web")) return "Web";
-  return t || "Canal";
-}
 
 export function ConversationList({
   conversations,
@@ -78,15 +77,25 @@ export function ConversationList({
 
   const subFilters = CONVERSATION_SUBFILTERS[bucket];
   const bucketMeta = CONVERSATION_BUCKETS.find((b) => b.id === bucket)!;
+  // Superadmin / organizador: mismo filtro Studio. OWNER multi-sucursal usa el switcher del header.
+  const showOrgBranchFilter = isSuperAdmin() || isOrganizationOwnerScope();
 
   return (
     <>
       <div className="border-b px-4 pt-4 pb-3 space-y-3 shrink-0">
-        <div className="flex items-baseline justify-between">
-          <h2 className="font-display text-base font-semibold">Bandeja</h2>
-          <span className="text-[11px] text-muted-foreground">
-            {filtered.length}/{inBucket.length}
-          </span>
+        <div className="flex items-center justify-between gap-2 min-w-0">
+          <div className="flex items-baseline gap-2 min-w-0">
+            <h2 className="font-display text-base font-semibold shrink-0">Bandeja</h2>
+            <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
+              {filtered.length}/{inBucket.length}
+            </span>
+          </div>
+          {showOrgBranchFilter ? (
+            <StudioBranchFilter
+              className="shrink-0"
+              triggerClassName="h-8 w-[10.5rem] sm:w-[11rem] text-xs"
+            />
+          ) : null}
         </div>
 
         {/* Segmento de bandejas */}
@@ -210,7 +219,9 @@ export function ConversationList({
                       )}
                       <span className="text-muted-foreground/60">·</span>
                       {c.isWaitingHuman ? (
-                        <span className="text-destructive font-medium">Esperando humano</span>
+                        <span className="text-destructive font-medium">
+                          {formatWaitingSince(c.waitingSince) ?? "Esperando humano"}
+                        </span>
                       ) : c.controlledBy === "ai" ? (
                         <span className="inline-flex items-center gap-1 text-info">
                           <Bot className="h-3 w-3" /> IA
@@ -221,7 +232,12 @@ export function ConversationList({
                       <span className="text-muted-foreground/60">·</span>
                       <span className="text-muted-foreground truncate">{statusLabel}</span>
                       {c.unread > 0 && (
-                        <span className="ml-auto h-2 w-2 rounded-full bg-destructive shrink-0" />
+                        <span
+                          className="ml-auto min-w-4 h-4 px-1 rounded-full bg-destructive text-[10px] text-destructive-foreground flex items-center justify-center tabular-nums shrink-0"
+                          title="Pendiente de humano"
+                        >
+                          {c.unread > 9 ? "9+" : c.unread}
+                        </span>
                       )}
                     </div>
                   </div>
@@ -230,10 +246,20 @@ export function ConversationList({
             );
           })}
           {filtered.length === 0 && (
-            <li className="p-8 text-center text-sm text-muted-foreground">
-              {bucket === "mine"
-                ? "Sin conversaciones pendientes. La IA las está gestionando 🎉"
-                : "Sin conversaciones para este filtro."}
+            <li className="p-4">
+              <EmptyState
+                className="py-8 border-0 bg-transparent"
+                title={
+                  bucket === "mine"
+                    ? "Sin pendientes humanos"
+                    : "Sin conversaciones para este filtro"
+                }
+                description={
+                  bucket === "mine"
+                    ? "La IA está gestionando el resto de la bandeja."
+                    : "Prueba otro bucket o limpia la búsqueda."
+                }
+              />
             </li>
           )}
         </ul>

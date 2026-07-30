@@ -1,6 +1,6 @@
-# Huginn
+# Muninn
 
-Frontend de agentes IA especializados con estilo dark premium. Inspirado en dashboards modernos, con acento mint y foco en claridad visual.
+Frontend de agentes especializados con estilo dark premium. Inspirado en dashboards modernos, con acento mint y foco en claridad visual.
 
 ## Demo
 
@@ -51,7 +51,7 @@ El servidor Vite levanta por defecto en `http://localhost:3001`.
 ## Scripts
 
 | Comando          | Descripción                           |
-|------------------|---------------------------------------|
+| ---------------- | ------------------------------------- |
 | `bun run dev`    | Servidor de desarrollo con hot reload |
 | `bun run build`  | Build de producción en `dist/`        |
 | `bun run lint`   | Revisar código con ESLint             |
@@ -67,7 +67,7 @@ src/
 ├── hooks/         # Hooks custom
 ├── lib/           # Utilidades y storage
 ├── routes/        # Rutas de React Router
-└── styles.css     # Variables de tema Huginn
+└── styles.css     # Variables de tema Muninn
 ```
 
 ## Sistema de diseño
@@ -91,9 +91,9 @@ Ver `.env.example`.
 
 ## Ramas y CI
 
-- `dev`: trabajo diario
+- `main`: trabajo diario
 - `production`: releases tras CI en verde
-- GitHub Actions corre `lint` + `build` en pushes y PRs a esas ramas
+- GitHub Actions corre `lint` + `build` + `deploy` en pushes y PRs a esas ramas
 
 ## Deploy
 

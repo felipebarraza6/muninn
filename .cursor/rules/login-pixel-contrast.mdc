@@ -1,0 +1,16 @@
+---
+description: Contraste login Gotham night-city — texto sobre atmósfera
+globs: src/routes/login.tsx,src/routes/entrar.tsx,src/components/brand/Login*.tsx,src/components/brand/PixelRainCity.tsx,src/components/auth/**,src/styles.css
+alwaysApply: false
+---
+
+# Login Gotham — contraste night-city
+
+Cuando edites el login Muninn (`.login-pixel` / `.pixel-city--gotham`):
+
+1. **Tokens**: usa `--gotham-*` (sky, neon mint, amber, rose, wet). No lavar con purple genérico.
+2. **Nunca** dejes copy o controles solo sobre cielo/luna/neón. Usa `.login-pixel-readout`, panel opaco o form con `background: var(--card)`.
+3. **Desktop**: ciudad full-bleed (`slice`); hero centrado al vanishing del cañón. Velo más estrecho para que se vean las paredes.
+4. **Inmersión**: `--city-enter` escala la escena al scroll; respetar `prefers-reduced-motion`.
+5. **Theme toggle**: `.login-pixel-theme-toggle` (fondo card + borde).
+6. Layout: `max-w-[56rem]` / `xl:max-w-[68rem]` centrado — no pegar a bordes ultrawide.

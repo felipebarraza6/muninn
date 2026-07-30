@@ -1,16 +1,22 @@
 import { Link, useLocation } from "react-router-dom";
+import { motion, useReducedMotion } from "framer-motion";
 import {
-  Home,
-  Sparkles,
-  MessageSquare,
+  LayoutDashboard,
   MessageCircle,
-  Megaphone,
+  MessageSquarePlus,
   Bot,
   Share2,
-  Globe,
-  FunctionSquare,
+  LayoutGrid,
+  Sparkles,
+  BookOpen,
+  Cpu,
+  Building2,
+  Network,
+  Users,
+  ClipboardList,
+  GitBranch,
+  SquareArrowOutUpRight,
 } from "lucide-react";
-import huginnMark from "@/assets/huginn-mark.png";
 import {
   Sidebar,
   SidebarContent,
@@ -24,31 +30,24 @@ import {
   SidebarFooter,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { Badge } from "@/components/ui/badge";
-import { useUnifiedConversations } from "@/api/hooks/useUnifiedConversations";
-
-function useConversationBadge(): { mine: number; ai: number } {
-  const { data = [] } = useUnifiedConversations();
-  let mine = 0;
-  let ai = 0;
-  for (const c of data) {
-    const status = (c.status || "").toLowerCase();
-    if (
-      status === "closed" ||
-      status === "inactive" ||
-      status === "spam" ||
-      c.source === "internal"
-    ) {
-      continue;
-    }
-    if (c.is_waiting_human || status === "waiting_human" || status === "requires_human") {
-      mine++;
-    } else {
-      ai++;
-    }
-  }
-  return { mine, ai };
-}
+import { useBranchTheme } from "@/api/hooks/useBranchTheme";
+import { useActiveBranch } from "@/api/hooks/useBranches";
+import { resolveThemeLogo } from "@/lib/applyBranchTheme";
+import { MuninnBrand } from "@/components/brand/MuninnBrand";
+import {
+  isSuperAdmin,
+  canAccessUsersAdmin,
+  canAccessLlmAdmin,
+  canAccessBranchesAdmin,
+  isOrganizationOwner,
+  isMultiBranchUser,
+  getPrimaryOrganizationName,
+  getBranchesAdminNavLabel,
+  getOrganizationsAdminNavLabel,
+  canAccessKnowledgeCatalog,
+  canAccessConversations,
+  canAccessSkills,
+} from "@/lib/authGuards";
 
 type IconComponent = React.ComponentType<{ className?: string; strokeWidth?: number }>;
 
@@ -57,36 +56,156 @@ type MenuItem = {
   url: string;
   icon: IconComponent;
   exact?: boolean;
-  comingSoon?: boolean;
+  newTab?: boolean;
   badge?: string;
 };
 
-const baseItems: MenuItem[] = [
-  { title: "Inicio", url: "/", icon: Home, exact: true },
-  { title: "Chat", url: "/chat", icon: MessageCircle },
-  { title: "Oportunidades", url: "/oportunidades", icon: Sparkles, comingSoon: true },
-  { title: "Conversaciones", url: "/conversaciones", icon: MessageSquare },
-  { title: "Campañas", url: "/campanas", icon: Megaphone, comingSoon: true },
-  { title: "Agentes", url: "/agentes", icon: Bot },
-  { title: "Canales", url: "/canales", icon: Share2 },
-  { title: "APIs externas", url: "/apis", icon: Globe },
-  { title: "Funciones", url: "/funciones", icon: FunctionSquare },
+const APP = "/app";
+
+const resumenItem: MenuItem = {
+  title: "Resumen",
+  url: APP,
+  icon: LayoutDashboard,
+  exact: true,
+};
+
+const canalesItem: MenuItem = { title: "Canales", url: `${APP}/canales`, icon: Share2 };
+const conversacionesItem: MenuItem = {
+  title: "Conversaciones",
+  url: `${APP}/conversaciones`,
+  icon: MessageCircle,
+  newTab: true,
+};
+
+function buildComunicacionItems(): MenuItem[] {
+  const items: MenuItem[] = [];
+  if (canAccessConversations()) items.push(conversacionesItem);
+  items.push(canalesItem);
+  return items;
+}
+
+const baseStudioItems: MenuItem[] = [
+  { title: "Chat", url: `${APP}/chat`, icon: MessageSquarePlus, newTab: true },
+  { title: "Agentes", url: `${APP}/agentes`, icon: Bot },
+  { title: "Aplicaciones", url: `${APP}/aplicaciones`, icon: LayoutGrid },
 ];
+
+function buildStudioItems(): MenuItem[] {
+  const items = [...baseStudioItems];
+  const agentesIdx = items.findIndex((i) => i.url === `${APP}/agentes`);
+  if (canAccessKnowledgeCatalog()) {
+    items.splice(agentesIdx + 1, 0, {
+      title: "Conocimiento",
+      url: `${APP}/conocimiento`,
+      icon: BookOpen,
+    });
+  }
+  if (canAccessSkills()) {
+    const appsIdx = items.findIndex((i) => i.url === `${APP}/aplicaciones`);
+    items.splice(appsIdx >= 0 ? appsIdx : items.length, 0, {
+      title: "Skills",
+      url: `${APP}/skills`,
+      icon: Sparkles,
+    });
+  }
+  return items;
+}
+
+function buildOpsItems(): MenuItem[] {
+  if (!isSuperAdmin()) return [];
+  return [
+    { title: "Planes", url: `${APP}/planes`, icon: ClipboardList, newTab: true, badge: "Beta" },
+    { title: "Workflows", url: `${APP}/workflows`, icon: GitBranch, newTab: true, badge: "Beta" },
+  ];
+}
+
+const adminItems: MenuItem[] = [
+  { title: "Organizaciones", url: `${APP}/admin/organizaciones`, icon: Network },
+  { title: "Sucursales", url: `${APP}/admin/sucursales`, icon: Building2 },
+  { title: "Usuarios", url: `${APP}/admin/usuarios`, icon: Users },
+  { title: "LLM", url: `${APP}/admin/llm`, icon: Cpu },
+];
+
+const usersOnlyItems: MenuItem[] = [
+  { title: "Usuarios", url: `${APP}/admin/usuarios`, icon: Users },
+];
+
+const llmOnlyItems: MenuItem[] = [{ title: "LLM", url: `${APP}/admin/llm`, icon: Cpu }];
+
+function buildOrgGestionItems(): MenuItem[] {
+  return [
+    {
+      title: getOrganizationsAdminNavLabel(),
+      url: `${APP}/admin/organizaciones`,
+      icon: Network,
+    },
+    {
+      title: getBranchesAdminNavLabel(),
+      url: `${APP}/admin/sucursales`,
+      icon: Building2,
+    },
+    { title: "Usuarios", url: `${APP}/admin/usuarios`, icon: Users },
+  ];
+}
+
+function buildRoleGestionItems(): MenuItem[] {
+  const items: MenuItem[] = [];
+  if (canAccessBranchesAdmin()) {
+    items.push({
+      title: getBranchesAdminNavLabel(),
+      url: `${APP}/admin/sucursales`,
+      icon: Building2,
+    });
+  }
+  if (canAccessUsersAdmin()) {
+    items.push(...usersOnlyItems);
+  }
+  if (canAccessLlmAdmin()) {
+    items.push(...llmOnlyItems);
+  }
+  return items;
+}
 
 export function AppSidebar() {
   const { pathname } = useLocation();
   const { isMobile, setOpenMobile } = useSidebar();
-  const { mine, ai } = useConversationBadge();
-
-  const items = baseItems
-    .filter((item) => !item.comingSoon)
-    .map((item) => {
-      if (item.title === "Conversaciones") {
-        const badge = mine > 0 ? String(mine) : ai > 0 ? String(ai) : undefined;
-        return { ...item, badge };
-      }
-      return item;
-    });
+  const { data: theme, rawTheme, brandPending } = useBranchTheme();
+  const { data: activeBranch } = useActiveBranch();
+  const showAdmin = isSuperAdmin();
+  const isOrgOwner = !showAdmin && isOrganizationOwner();
+  const branchLogo = showAdmin ? null : resolveThemeLogo(rawTheme ?? theme);
+  // Título: superadmin → Muninn | organizador → holding | resto → sucursal
+  const orgName = isOrgOwner
+    ? getPrimaryOrganizationName() || activeBranch?.organization_name?.trim() || null
+    : null;
+  const branchDisplayName =
+    activeBranch?.fantasy_name?.trim() || activeBranch?.business_name?.trim() || null;
+  const fantasyName = showAdmin
+    ? "Muninn"
+    : isOrgOwner
+      ? orgName || "Organización"
+      : branchDisplayName;
+  const appNameRaw = (rawTheme?.app_name || theme?.app_name || "").trim();
+  const themeAppName =
+    appNameRaw && appNameRaw.toLowerCase() !== "muninn" && appNameRaw.toLowerCase() !== "erp system"
+      ? appNameRaw
+      : null;
+  // Organizador: sin subtítulo de clínica — el foco es la organización.
+  // Multi-sucursal operativo: app_name del theme. Superadmin: Agentes.
+  const appName = showAdmin
+    ? "Agentes"
+    : isOrgOwner
+      ? null
+      : isMultiBranchUser()
+        ? themeAppName
+        : null;
+  const showOrgGestion = !showAdmin && isOrganizationOwner();
+  const roleGestionItems = !showAdmin && !showOrgGestion ? buildRoleGestionItems() : [];
+  const showRoleGestion = roleGestionItems.length > 0;
+  const studioItems = buildStudioItems();
+  const opsItems = buildOpsItems();
+  const comunicacionItems = buildComunicacionItems();
+  const reduceMotion = useReducedMotion();
 
   const isActive = (url: string, exact?: boolean) =>
     exact ? pathname === url : pathname === url || pathname.startsWith(url + "/");
@@ -95,67 +214,214 @@ export function AppSidebar() {
     if (isMobile) setOpenMobile(false);
   };
 
+  const listVariants = reduceMotion
+    ? undefined
+    : {
+        hidden: {},
+        show: { transition: { staggerChildren: 0.035, delayChildren: 0.04 } },
+      };
+
+  const itemVariants = reduceMotion
+    ? undefined
+    : {
+        hidden: { opacity: 0, x: -6 },
+        show: { opacity: 1, x: 0, transition: { duration: 0.2, ease: "easeOut" as const } },
+      };
+
+  const renderItems = (items: MenuItem[], groupKey: string) =>
+    items.map((item) => {
+      const active = isActive(item.url, item.exact);
+      return (
+        <SidebarMenuItem key={item.url}>
+          <motion.div className="relative w-full" variants={itemVariants}>
+            {active && !reduceMotion && (
+              <motion.span
+                layoutId={`nav-active-${groupKey}`}
+                className="absolute inset-0 rounded-md bg-sidebar-accent"
+                transition={{ type: "spring", stiffness: 380, damping: 32 }}
+              />
+            )}
+            {active && reduceMotion && (
+              <span className="absolute inset-0 rounded-md bg-sidebar-accent" />
+            )}
+            <SidebarMenuButton
+              asChild
+              isActive={active}
+              tooltip={item.title}
+              className="relative z-[1] data-[active=true]:bg-transparent data-[active=true]:text-primary data-[active=true]:font-medium hover:bg-muted rounded-md"
+            >
+              {item.newTab ? (
+                <a
+                  href={item.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2.5"
+                  title={`Abrir ${item.title} en nueva pestaña`}
+                >
+                  <item.icon
+                    className={`h-4 w-4 ${active ? "text-primary" : ""}`}
+                    strokeWidth={1.75}
+                  />
+                  <span className="flex-1">{item.title}</span>
+                  {item.badge && (
+                    <span className="rounded bg-muted-foreground/15 px-1.5 py-0.5 text-[9px] font-medium uppercase leading-none tracking-wider text-muted-foreground/80">
+                      {item.badge}
+                    </span>
+                  )}
+                  <SquareArrowOutUpRight
+                    className="h-3.5 w-3.5 text-muted-foreground/70"
+                    strokeWidth={1.75}
+                    aria-label={`Abrir ${item.title} en nueva pestaña`}
+                  />
+                </a>
+              ) : (
+                <Link to={item.url} className="flex items-center gap-2.5" onClick={handleNavClick}>
+                  <item.icon
+                    className={`h-4 w-4 ${active ? "text-primary" : ""}`}
+                    strokeWidth={1.75}
+                  />
+                  <span className="flex-1">{item.title}</span>
+                  {item.badge && (
+                    <span className="rounded bg-muted-foreground/15 px-1.5 py-0.5 text-[9px] font-medium uppercase leading-none tracking-wider text-muted-foreground/80">
+                      {item.badge}
+                    </span>
+                  )}
+                </Link>
+              )}
+            </SidebarMenuButton>
+          </motion.div>
+        </SidebarMenuItem>
+      );
+    });
+
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
-      <SidebarHeader className="border-b border-sidebar-border">
-        <Link to="/" className="flex items-center gap-2.5 px-2 py-2.5" onClick={handleNavClick}>
-          <img
-            src={huginnMark}
-            alt="Huginn"
-            className="h-8 w-8 shrink-0 object-contain rounded-md"
-          />
-          <div className="flex flex-col leading-tight group-data-[collapsible=icon]:hidden min-w-0">
-            <span className="text-[15px] font-semibold tracking-tight text-foreground">HUGINN</span>
-            <span className="text-[9.5px] text-muted-foreground mt-0.5 tracking-[0.12em] uppercase">
-              Agentes IA
-            </span>
-          </div>
-        </Link>
+      <SidebarHeader className="border-b border-sidebar-border group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:!px-0 group-data-[collapsible=icon]:!py-2">
+        <MuninnBrand
+          to="/app"
+          onClick={handleNavClick}
+          branchLabel={showAdmin ? null : fantasyName}
+          appName={showAdmin ? "Agentes" : appName}
+          branchLogoUrl={showAdmin ? null : branchLogo}
+          pending={!showAdmin && brandPending}
+          className="px-2 py-2.5 group-data-[collapsible=icon]:!px-0 group-data-[collapsible=icon]:!py-2"
+        />
       </SidebarHeader>
 
       <SidebarContent className="pt-2">
         <SidebarGroup>
-          <SidebarGroupLabel className="text-[10.5px] font-semibold tracking-wider uppercase text-muted-foreground/80">
-            Plataforma
-          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {items.map((item) => {
-                const active = isActive(item.url, item.exact);
-                return (
-                  <SidebarMenuItem key={item.url}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={active}
-                      tooltip={item.title}
-                      className="data-[active=true]:bg-sidebar-accent data-[active=true]:text-primary-deep data-[active=true]:font-medium hover:bg-muted/60 rounded-md"
-                    >
-                      <Link
-                        to={item.url}
-                        className="flex items-center gap-2.5"
-                        onClick={handleNavClick}
-                      >
-                        <item.icon
-                          className={`h-4 w-4 ${active ? "text-primary" : ""}`}
-                          strokeWidth={1.75}
-                        />
-                        <span className="flex-1">{item.title}</span>
-                        {item.badge && (
-                          <Badge
-                            variant="secondary"
-                            className="h-5 px-1.5 text-[10px] rounded-full bg-destructive/10 text-destructive border-0 group-data-[collapsible=icon]:hidden"
-                          >
-                            {item.badge}
-                          </Badge>
-                        )}
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
+              <motion.div
+                className="flex w-full min-w-0 flex-col gap-1"
+                variants={listVariants}
+                initial={reduceMotion ? false : "hidden"}
+                animate="show"
+              >
+                {renderItems([resumenItem], "resumen")}
+              </motion.div>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-[10.5px] font-semibold tracking-wider uppercase text-muted-foreground/80">
+            Comunicación
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <motion.div
+                className="flex w-full min-w-0 flex-col gap-1"
+                variants={listVariants}
+                initial={reduceMotion ? false : "hidden"}
+                animate="show"
+              >
+                {renderItems(comunicacionItems, "comunicacion")}
+              </motion.div>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-[10.5px] font-semibold tracking-wider uppercase text-muted-foreground/80">
+            Studio
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <motion.div
+                className="flex w-full min-w-0 flex-col gap-1"
+                variants={listVariants}
+                initial={reduceMotion ? false : "hidden"}
+                animate="show"
+              >
+                {renderItems(studioItems, "studio")}
+              </motion.div>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {opsItems.length > 0 && (
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-[10.5px] font-semibold tracking-wider uppercase text-muted-foreground/80">
+              OPS-agents
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <motion.div
+                  className="flex w-full min-w-0 flex-col gap-1"
+                  variants={listVariants}
+                  initial={reduceMotion ? false : "hidden"}
+                  animate="show"
+                >
+                  {renderItems(opsItems, "ops")}
+                </motion.div>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+        {showAdmin && (
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-[10.5px] font-semibold tracking-wider uppercase text-muted-foreground/80">
+              Admin
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <motion.div
+                  className="flex w-full min-w-0 flex-col gap-1"
+                  variants={listVariants}
+                  initial={reduceMotion ? false : "hidden"}
+                  animate="show"
+                >
+                  {renderItems(adminItems, "admin")}
+                </motion.div>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+        {(showOrgGestion || showRoleGestion) && (
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-[10.5px] font-semibold tracking-wider uppercase text-muted-foreground/80">
+              Gestión
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <motion.div
+                  className="flex w-full min-w-0 flex-col gap-1"
+                  variants={listVariants}
+                  initial={reduceMotion ? false : "hidden"}
+                  animate="show"
+                >
+                  {renderItems(
+                    showOrgGestion ? buildOrgGestionItems() : roleGestionItems,
+                    "gestion",
+                  )}
+                </motion.div>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
 
       <SidebarFooter />

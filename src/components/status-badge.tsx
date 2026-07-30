@@ -1,5 +1,5 @@
-import type { ConversationStatus } from "@/lib/mock-data";
-import { STATUS_LABEL, STATUS_TONE } from "@/lib/mock-data";
+import type { ConversationStatus } from "@/lib/conversation-types";
+import { STATUS_LABEL, STATUS_TONE } from "@/lib/conversation-types";
 import { cn } from "@/lib/utils";
 
 const TONE_CLASSES: Record<string, string> = {

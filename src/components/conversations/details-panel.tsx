@@ -1,53 +1,34 @@
-import {
-  Sparkles,
-  AlertTriangle,
-  Phone,
-  MapPin,
-  Bot,
-  MessageCircle,
-  Globe,
-  Clock,
-} from "lucide-react";
+import { Sparkles, AlertTriangle, Phone, MapPin, Clock, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { StatusBadge } from "@/components/status-badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ChevronDown } from "lucide-react";
-import type { Conversation } from "@/lib/mock-data";
+import type { Conversation } from "@/lib/conversation-types";
+import { channelIcon, channelLabel } from "@/lib/channels";
 import { initials, avatarColor } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 interface Props {
   conversation: Conversation;
   onTakeControl: () => void;
   onResolve: () => void;
-}
-
-function channelIcon(channelType?: string) {
-  const t = (channelType || "").toLowerCase();
-  if (t.includes("whatsapp")) return MessageCircle;
-  if (t.includes("web")) return Globe;
-  return Bot;
-}
-
-function channelLabel(channelType?: string, channelName?: string) {
-  if (channelName) return channelName;
-  const t = (channelType || "").toLowerCase();
-  if (t.includes("whatsapp")) return "WhatsApp";
-  if (t.includes("web_embed")) return "Widget web";
-  if (t.includes("web")) return "Web";
-  return t || "Canal";
+  onDerive?: () => void;
+  /** Superadmin: sin acciones operativas. */
+  analysisOnly?: boolean;
 }
 
 export function ConversationDetailsPanel({
   conversation,
   onTakeControl,
   onResolve,
-  onDerive,
+  analysisOnly = false,
 }: Props) {
   const isChannel = conversation.source === "channel";
   const ChannelIcon = channelIcon(conversation.channelType);
+  const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
 
   return (
     <div className="text-sm">
@@ -74,14 +55,16 @@ export function ConversationDetailsPanel({
           {conversation.controlledBy === "human" && !conversation.isWaitingHuman && (
             <span className="text-[11px] font-medium text-success">Tú controlas</span>
           )}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 ml-auto text-xs text-muted-foreground hover:text-foreground"
-            onClick={onResolve}
-          >
-            Cerrar
-          </Button>
+          {!analysisOnly && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 ml-auto text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => setConfirmCloseOpen(true)}
+            >
+              Cerrar
+            </Button>
+          )}
         </div>
       </div>
 
@@ -138,16 +121,40 @@ export function ConversationDetailsPanel({
       </CollapsibleSection>
 
       {/* Acciones */}
-      <div className="p-4 border-t space-y-2">
-        {isChannel && conversation.controlledBy === "ai" && (
-          <Button className="w-full" size="sm" onClick={onTakeControl}>
-            Tomar control
+      {!analysisOnly && (
+        <div className="p-4 border-t space-y-2">
+          {isChannel && conversation.controlledBy === "ai" && (
+            <Button className="w-full" size="sm" onClick={onTakeControl}>
+              Tomar control
+            </Button>
+          )}
+          <Button
+            className="w-full"
+            variant="outline"
+            size="sm"
+            onClick={() => setConfirmCloseOpen(true)}
+          >
+            Cerrar conversación
           </Button>
-        )}
-        <Button className="w-full" variant="outline" size="sm" onClick={onResolve}>
-          Cerrar conversación
-        </Button>
-      </div>
+        </div>
+      )}
+      <ConfirmDialog
+        open={confirmCloseOpen}
+        onOpenChange={setConfirmCloseOpen}
+        title="¿Cerrar esta conversación?"
+        description={`Se cerrará la conversación con ${conversation.patientName}. Podrás consultarla luego desde el filtro de cerradas.`}
+        confirmLabel="Cerrar conversación"
+        onConfirm={() => {
+          setConfirmCloseOpen(false);
+          onResolve();
+        }}
+      />
+      {analysisOnly && (
+        <div className="p-4 border-t text-xs text-muted-foreground leading-relaxed">
+          Modo análisis: sin intervención. Usa el inspector de mensajes en el chat para revisar RAG
+          y tools.
+        </div>
+      )}
     </div>
   );
 }

@@ -2,7 +2,8 @@ import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { GET, POST, normalizeListResponse } from "../client";
 import { ENDPOINTS } from "../endpoints/index";
-import { getActiveBranchIdInt } from "@/lib/branchStorage";
+import { useActiveBranchId } from "@/hooks/useActiveBranchId";
+import { isConversationLive, POLL } from "@/lib/pollInterval";
 
 export interface UnifiedConversation {
   id: string | number;
@@ -37,13 +38,16 @@ export interface UnifiedMessage {
   tool_calls?: unknown[];
   tool_results?: unknown[];
   rag_sources?: unknown[];
+  response_time_ms?: number | null;
 }
 
 const QUERY_KEY = "unified-conversations";
 
 function useBranchId(): number | undefined {
-  const id = getActiveBranchIdInt();
-  return id ?? undefined;
+  const id = useActiveBranchId();
+  if (id == null || id === "") return undefined;
+  const n = Number(id);
+  return Number.isFinite(n) ? n : undefined;
 }
 
 export function useUnifiedConversations(filters?: { status?: string }) {
@@ -56,7 +60,12 @@ export function useUnifiedConversations(filters?: { status?: string }) {
         ENDPOINTS.unifiedConversations.list,
         { params },
       ).then((data) => normalizeListResponse<UnifiedConversation>(data)),
-    refetchInterval: 10_000,
+    refetchInterval: (q) => {
+      const list = q.state.data ?? [];
+      const live = list.some((c) => isConversationLive(c));
+      return live ? POLL.live : POLL.idle;
+    },
+    refetchIntervalInBackground: false,
     staleTime: 5_000,
   });
 }
@@ -68,7 +77,8 @@ export function useUnifiedConversationMessages(id: string | undefined, source: s
     queryKey: [QUERY_KEY, id, "messages", params],
     queryFn: () => GET<UnifiedMessage[]>(ENDPOINTS.unifiedConversations.messages(id!), { params }),
     enabled: !!id && !!source,
-    refetchInterval: 5_000,
+    refetchInterval: POLL.messagesLive,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -94,6 +104,17 @@ export function useTakeControlUnifiedConversation() {
   return useMutation({
     mutationFn: (id: string) =>
       POST(ENDPOINTS.unifiedConversations.takeControl(id), { branch: branchId }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: [QUERY_KEY] }),
+  });
+}
+
+/** Devuelve el control al agente IA después de intervención humana. */
+export function useReleaseConversation() {
+  const queryClient = useQueryClient();
+  const branchId = useBranchId();
+  return useMutation({
+    mutationFn: (id: string) =>
+      POST(ENDPOINTS.unifiedConversations.release(id), { branch: branchId }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: [QUERY_KEY] }),
   });
 }
