@@ -167,7 +167,7 @@ export function ConversationsView() {
 
   const convos = useMemo(() => {
     if (!Array.isArray(apiConvos)) return [];
-    return apiConvos.filter((c) => c.source === "channel").map(mapApiConversation);
+    return apiConvos.map(mapApiConversation);
   }, [apiConvos]);
 
   const idFromUrl = searchParams.get("id");
@@ -201,12 +201,12 @@ export function ConversationsView() {
   }, [convos, selectedId]);
 
   const selected = useMemo(
-    () => convos.find((c) => c.id === selectedId) ?? convos[0],
+    () => convos.find((c) => c.id === selectedId) ?? null,
     [convos, selectedId],
   );
 
-  const selectedSource = useMemo<"channel" | "internal">(
-    () => (selected?.source as "channel" | "internal") ?? "channel",
+  const selectedSource = useMemo<"channel" | "internal" | undefined>(
+    () => (selected?.source as "channel" | "internal") ?? undefined,
     [selected?.source],
   );
 
@@ -235,14 +235,6 @@ export function ConversationsView() {
   }, [selected, messages]);
 
   const handleSelect = (id: string) => {
-    const conv = convos.find((c) => c.id === id);
-    if (conv) {
-      const b = getConversationBucket(conv);
-      if (b !== bucket) {
-        setBucket(b);
-        setSubFilter("all");
-      }
-    }
     setSelectedId(id);
     setMobileView("chat");
     setSearchParams({ id }, { replace: true });

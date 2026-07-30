@@ -183,8 +183,14 @@ export default function ConocimientoDetail() {
 
   const startEdit = () => {
     if (!doc) return;
-    if (doc.api_refresh_config?.external_api_id && doc.api_refresh_config?.endpoint && doc.api_refresh_config?.cron) {
-      toast.warning("El contenido lo gestiona el CronJob. Ve a la pestaña CronJob para configurarlo.");
+    if (
+      doc.api_refresh_config?.external_api_id &&
+      doc.api_refresh_config?.endpoint &&
+      doc.api_refresh_config?.cron
+    ) {
+      toast.warning(
+        "El contenido lo gestiona el CronJob. Ve a la pestaña CronJob para configurarlo.",
+      );
       setTab("cronjob");
       return;
     }
@@ -228,6 +234,32 @@ export default function ConocimientoDetail() {
       toast.error("El título es obligatorio");
       return;
     }
+
+    const hasCronJob =
+      doc.api_refresh_config?.external_api_id &&
+      doc.api_refresh_config?.endpoint &&
+      doc.api_refresh_config?.cron;
+
+    if (hasCronJob) {
+      // Con cron activo solo guardamos el titulo, el contenido lo gestiona el cron
+      update.mutate(
+        {
+          id: String(doc.id),
+          data: { title: editTitle.trim() },
+          branch: doc.branch,
+        },
+        {
+          onSuccess: () => {
+            toast.success("Título actualizado");
+            setEditing(false);
+            void refetch();
+          },
+          onError: (e) => toast.error(apiErrorMessage(e, "No se pudo guardar")),
+        },
+      );
+      return;
+    }
+
     const content = buildContent();
     if (content == null) return;
 
@@ -294,7 +326,33 @@ export default function ConocimientoDetail() {
               placeholder="Título del documento"
             />
           ) : (
-            <h1 className="text-xl font-semibold leading-tight truncate">{doc.title}</h1>
+            <h1
+              className="text-xl font-semibold leading-tight truncate group cursor-pointer"
+              onClick={() => {
+                const hasCronJob =
+                  doc?.api_refresh_config?.external_api_id &&
+                  doc?.api_refresh_config?.endpoint &&
+                  doc?.api_refresh_config?.cron;
+                if (hasCronJob) {
+                  setEditTitle(doc?.title || "");
+                  setEditing(true);
+                }
+              }}
+              title={(() => {
+                const hasCronJob =
+                  doc?.api_refresh_config?.external_api_id &&
+                  doc?.api_refresh_config?.endpoint &&
+                  doc?.api_refresh_config?.cron;
+                return hasCronJob ? "Haz clic para editar el titulo" : undefined;
+              })()}
+            >
+              {doc.title}
+              {doc?.api_refresh_config?.external_api_id &&
+                doc?.api_refresh_config?.endpoint &&
+                doc?.api_refresh_config?.cron && (
+                  <Pencil className="inline h-3.5 w-3.5 ml-1.5 text-muted-foreground/40 group-hover:text-primary/60 transition-colors" />
+                )}
+            </h1>
           )}
           <div className="flex flex-wrap items-center gap-1.5">
             <Badge variant="outline" className="text-[10px]">
@@ -340,59 +398,77 @@ export default function ConocimientoDetail() {
                 Guardar
               </Button>
             </>
-          ) : (() => {
-            const hasCronJob = doc.api_refresh_config?.external_api_id && doc.api_refresh_config?.endpoint && doc.api_refresh_config?.cron;
-            return hasCronJob ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => { setTab("cronjob"); }}
-                className="border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
-              >
-                <RefreshCw className="h-3.5 w-3.5 mr-1" /> CronJob activo
-              </Button>
-            ) : (
-              <Button type="button" variant="outline" size="sm" onClick={startEdit}>
-                <Pencil className="h-3.5 w-3.5 mr-1" /> Editar
-              </Button>
-            );
-          })()}
+          ) : (
+            (() => {
+              const hasCronJob =
+                doc.api_refresh_config?.external_api_id &&
+                doc.api_refresh_config?.endpoint &&
+                doc.api_refresh_config?.cron;
+              return hasCronJob ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setTab("cronjob");
+                  }}
+                  className="border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
+                >
+                  <RefreshCw className="h-3.5 w-3.5 mr-1" /> CronJob activo
+                </Button>
+              ) : (
+                <Button type="button" variant="outline" size="sm" onClick={startEdit}>
+                  <Pencil className="h-3.5 w-3.5 mr-1" /> Editar
+                </Button>
+              );
+            })()
+          )}
         </div>
       </div>
 
       {editing ? (
-        <div className="grid flex-1 min-h-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)]">
-          {/* Editor de contenido */}
-          <div className="flex min-h-[60vh] flex-col gap-2 rounded-xl border border-border/70 bg-card/60 p-4">
-            <Label className="text-xs text-muted-foreground">Contenido</Label>
-            {isFaq ? (
-              <div className="flex-1 min-h-0 overflow-y-auto pr-1">
-                <FaqEditor pairs={faqPairs} onChange={setFaqPairs} />
+        (() => {
+          const hasCronJob =
+            doc?.api_refresh_config?.external_api_id &&
+            doc?.api_refresh_config?.endpoint &&
+            doc?.api_refresh_config?.cron;
+          if (hasCronJob) {
+            return null;
+          }
+          return (
+            <div className="grid flex-1 min-h-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)]">
+              {/* Editor de contenido */}
+              <div className="flex min-h-[60vh] flex-col gap-2 rounded-xl border border-border/70 bg-card/60 p-4">
+                <Label className="text-xs text-muted-foreground">Contenido</Label>
+                {isFaq ? (
+                  <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+                    <FaqEditor pairs={faqPairs} onChange={setFaqPairs} />
+                  </div>
+                ) : isData ? (
+                  <DataEditor
+                    columns={dataColumns}
+                    rows={dataRows}
+                    onColumnsChange={setDataColumns}
+                    onRowsChange={setDataRows}
+                  />
+                ) : (
+                  <Textarea
+                    value={editContent}
+                    onChange={(e) => setEditContent(e.target.value)}
+                    className="flex-1 min-h-[320px] font-mono text-sm resize-none"
+                    placeholder="Escribe o pega el contenido…"
+                  />
+                )}
               </div>
-            ) : isData ? (
-              <DataEditor
-                columns={dataColumns}
-                rows={dataRows}
-                onColumnsChange={setDataColumns}
-                onRowsChange={setDataRows}
-              />
-            ) : (
-              <Textarea
-                value={editContent}
-                onChange={(e) => setEditContent(e.target.value)}
-                className="flex-1 min-h-[320px] font-mono text-sm resize-none"
-                placeholder="Escribe o pega el contenido…"
-              />
-            )}
-          </div>
 
-          <div className="lg:w-[320px]">
-            <p className="text-[11px] text-muted-foreground">
-              Para configurar actualización automática, usa la pestaña CronJob.
-            </p>
-          </div>
-        </div>
+              <div className="lg:w-[320px]">
+                <p className="text-[11px] text-muted-foreground">
+                  Para configurar actualización automática, usa la pestaña CronJob.
+                </p>
+              </div>
+            </div>
+          );
+        })()
       ) : (
         <Tabs
           value={tab}
@@ -436,14 +512,34 @@ export default function ConocimientoDetail() {
           <TabsContent value="documento" className="flex-1 min-h-0 mt-3">
             {isData ? (
               <div className="flex h-full min-h-[60vh] flex-col gap-3 rounded-xl border border-border/70 bg-card/60 p-4">
-                <CronJobVariablesPanel doc={doc} onGoToCronJob={() => setTab("cronjob")} />
-                <DataViewer content={doc.content} />
+                {doc.api_refresh_config ? (
+                  <CronJobVariablesPanel doc={doc} onGoToCronJob={() => setTab("cronjob")} />
+                ) : null}
+                <div className="relative flex-1 min-h-0">
+                  {doc.api_refresh_config && (
+                    <div className="absolute top-0 right-0 z-10 flex items-center gap-1 rounded-bl-lg bg-primary/10 px-2 py-0.5 text-[9px] font-medium text-primary">
+                      <RefreshCw className="h-3 w-3" />
+                      Sincronizado
+                    </div>
+                  )}
+                  <DataViewer content={doc.content} />
+                </div>
               </div>
             ) : (
               <div className="h-full min-h-[60vh] overflow-y-auto rounded-xl border border-border/70 bg-card/60 p-5">
                 <div className="mx-auto max-w-3xl space-y-4">
-                  <CronJobVariablesPanel doc={doc} onGoToCronJob={() => setTab("cronjob")} />
-                  <ContentRenderer doc={doc} />
+                  {doc.api_refresh_config ? (
+                    <CronJobVariablesPanel doc={doc} onGoToCronJob={() => setTab("cronjob")} />
+                  ) : null}
+                  <div className="relative">
+                    {doc.api_refresh_config && (
+                      <div className="absolute top-0 right-0 z-10 flex items-center gap-1 rounded-bl-lg bg-primary/10 px-2 py-0.5 text-[9px] font-medium text-primary">
+                        <RefreshCw className="h-3 w-3" />
+                        Sincronizado
+                      </div>
+                    )}
+                    <ContentRenderer doc={doc} />
+                  </div>
                 </div>
               </div>
             )}
@@ -459,7 +555,11 @@ export default function ConocimientoDetail() {
             </div>
           </TabsContent>
 
-          <TabsContent value="cronjob" className="flex-1 min-h-0 mt-3 data-[state=inactive]:hidden" forceMount>
+          <TabsContent
+            value="cronjob"
+            className="flex-1 min-h-0 mt-3 data-[state=inactive]:hidden"
+            forceMount
+          >
             <div className="h-full min-h-[60vh] overflow-y-auto rounded-xl">
               <KnowledgeCronJobTab
                 value={doc.api_refresh_config ?? null}
@@ -468,10 +568,9 @@ export default function ConocimientoDetail() {
                   const wasNull = !doc.api_refresh_config;
                   const isNull = !next;
 
-                  const data: Partial<typeof doc> = {
-                    title: doc.title,
-                    content: doc.content,
-                  };
+                  // Solo mandamos api_refresh_config, NO content ni title
+                  // porque el contenido lo gestiona el cron job (POST /refresh)
+                  const data: Partial<typeof doc> = {};
                   if (next) data.api_refresh_config = next;
                   else data.api_refresh_config = null;
 

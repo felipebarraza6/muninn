@@ -145,9 +145,12 @@ export function matchesSubFilter(
     if (sub === "other") return !channelType.includes("whatsapp") && !channelType.includes("web");
   }
   if (bucket === "archived") {
-    if (sub === "closed") return c.status === "closed";
+    if (sub === "closed") return c.status === "closed" || c.status === "recovered";
     if (sub === "inactive")
-      return c.status === "closed" && c.displayStatus?.toLowerCase() === "inactive";
+      return (
+        (c.status === "closed" || c.status === "recovered") &&
+        c.displayStatus?.toLowerCase() === "inactive"
+      );
   }
   return true;
 }

@@ -102,7 +102,6 @@ export default function Login() {
   const isBranchLogin = scope === "branch" && Boolean(flat?.branch_id);
   const showMuninnLanding = isAppDefault;
 
-
   const brandSubtitle = useMemo(() => {
     if (isAppDefault || isOrgPortal) return undefined;
     if (scope === "branch") {

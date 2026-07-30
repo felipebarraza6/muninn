@@ -9,7 +9,6 @@ import {
   Globe,
   Layers,
   Pencil,
-  Play,
   Plus,
   RefreshCw,
   Terminal,
@@ -74,9 +73,8 @@ const SYSTEM_VARS = ["today", "yesterday", "now"];
 const STEPS = [
   { id: 1, icon: Globe, label: "Aplicacion", desc: "App y endpoint" },
   { id: 2, icon: Variable, label: "Variables", desc: "Asignar valores" },
-  { id: 3, icon: Terminal, label: "Contenido", desc: "Campos disponibles" },
-  { id: 4, icon: Layers, label: "Configuracion", desc: "Frecuencia + estrategia" },
-  { id: 5, icon: FlaskConical, label: "Test", desc: "Probar y ver logs" },
+  { id: 3, icon: Terminal, label: "Contenido", desc: "Mapeo y serializacion" },
+  { id: 4, icon: Layers, label: "Configuracion", desc: "Fechas, frecuencia y estrategia" },
 ] as const;
 
 const SYS_VAR_OPTIONS = [
@@ -179,7 +177,7 @@ export function KnowledgeCronJobTab({
   const [parsedData, setParsedData] = useState<Record<string, unknown> | null>(
     cached?.parsed ?? null,
   );
-  const [jsonCollapsed, setJsonCollapsed] = useState(true);
+
   const [pendingVars, setPendingVars] = useState<Record<string, string>>({});
   const [pendingTemplate, setPendingTemplate] = useState<string | null>(null);
   const [dataPickerOpen, setDataPickerOpen] = useState<string | null>(null);
@@ -194,7 +192,8 @@ export function KnowledgeCronJobTab({
   const parseDataItem = (item: AgentKnowledge) => {
     try {
       const raw = JSON.parse(item.content || "[]") as Record<string, string>[];
-      if (!Array.isArray(raw) || raw.length === 0) return { cols: [] as string[], rows: [] as Record<string, string>[] };
+      if (!Array.isArray(raw) || raw.length === 0)
+        return { cols: [] as string[], rows: [] as Record<string, string>[] };
       const cols = Object.keys(raw[0]);
       return { cols, rows: raw };
     } catch {
@@ -368,30 +367,65 @@ export function KnowledgeCronJobTab({
     setDiscoveredFields([]);
     setDiscoveredData(null);
     try {
-      const res = (await POST(ENDPOINTS.knowledge.refresh(knowledgeId) + "?preview=true")) as Record<string, unknown>;
+      const res = (await POST(
+        ENDPOINTS.knowledge.refresh(knowledgeId) + "?preview=true",
+      )) as Record<string, unknown>;
       const raw =
         (res as Record<string, unknown>)?.raw_response_preview ??
         (res as Record<string, unknown>)?.data ??
         res;
-      const parsed = ((res as Record<string, unknown>)?.parsed_data as Record<string, unknown> | null) ?? null;
       setDiscoveredData(raw as Record<string, unknown>);
+      const parsed =
+        ((res as Record<string, unknown>)?.parsed_data as Record<string, unknown> | null) ??
+        ((res as Record<string, unknown>)?.parsed_content_preview as Record<
+          string,
+          unknown
+        > | null) ??
+        null;
       setParsedData(parsed);
       const fields = extractResponseFields(raw);
       setDiscoveredFields(fields);
       if (knowledgeId) {
         discoverCache.set(knowledgeId, { fields, raw: raw as Record<string, unknown>, parsed });
       }
-      if (fields.length === 0) {
-        toast.info("No se encontraron campos en la respuesta");
-      } else {
-        toast.success(`${fields.length} campo(s) descubierto(s)`);
-      }
+      toast.info(
+        fields.length > 0
+          ? `${fields.length} campo(s) descubierto(s)`
+          : "Respuesta recibida, pero no se extrajeron campos automaticamente. Configura path/tipo manualmente.",
+      );
     } catch (err) {
-      toast.error("Error al descubrir campos");
+      toast.error("Error al consultar el endpoint");
       setDiscoveredFields([]);
       setDiscoveredData(null);
     } finally {
       setDiscovering(false);
+    }
+  };
+
+  const [syncing, setSyncing] = useState(false);
+
+  const handleSyncSave = async () => {
+    if (!value || !hasConfig) {
+      toast.error("Selecciona aplicacion y endpoint primero");
+      return;
+    }
+    setSyncing(true);
+    try {
+      // Primero aseguramos que la config este guardada (tested_ok en false)
+      patch({ tested_ok: false });
+      // Luego ejecutamos el refresh SIN preview para que genere y guarde contenido
+      const res = (await POST(ENDPOINTS.knowledge.refresh(knowledgeId))) as Record<string, unknown>;
+      // El refresh ya guardo el contenido en backend, marcamos tested_ok
+      onChange({ ...value, tested_ok: true });
+      toast.success("Contenido generado correctamente");
+    } catch (err) {
+      const msg =
+        (err as { friendlyMessage?: string })?.friendlyMessage ||
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
+        "Error al sincronizar con el endpoint";
+      toast.error(msg);
+    } finally {
+      setSyncing(false);
     }
   };
   /* ---- Sin configuracion ---- */
@@ -404,7 +438,8 @@ export function KnowledgeCronJobTab({
         <div className="text-center max-w-sm space-y-1.5">
           <h3 className="text-sm font-semibold">Sin CronJob</h3>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            Un CronJob actualiza este conocimiento automáticamente consultando una aplicación externa.
+            Un CronJob actualiza este conocimiento automáticamente consultando una aplicación
+            externa.
           </p>
         </div>
         <Button
@@ -441,16 +476,10 @@ export function KnowledgeCronJobTab({
           (k) => k === dateParam || (value.payload_variables?.[k] ?? "").trim() !== "",
         );
       }
-      case 3: {
-        const rm = endpointResponseMapping || apiResponseMapping;
-        if (rm && typeof rm === "object" && Object.keys(rm).length > 0) return true;
-        if ((value.content_mapping.columns?.length ?? 0) > 0) return true;
-        return false;
-      }
+      case 3:
+        return stepValid(2) && !!value.content_mapping.type;
       case 4:
-        return !!(value.cron && value.cron.trim());
-      case 5:
-        return value.tested_ok === true;
+        return stepValid(3) && !!(value.cron && value.cron.trim());
       default:
         return false;
     }
@@ -467,8 +496,6 @@ export function KnowledgeCronJobTab({
         return stepValid(1) && stepValid(2);
       case 4:
         return stepValid(1) && stepValid(2) && stepValid(3);
-      case 5:
-        return stepValid(1) && stepValid(2) && stepValid(3) && stepValid(4);
       default:
         return false;
     }
@@ -485,8 +512,6 @@ export function KnowledgeCronJobTab({
         ).length;
         return `${done}/${userPlaceholders.length}`;
       }
-      case 3:
-        return null;
       default:
         return null;
     }
@@ -571,23 +596,14 @@ export function KnowledgeCronJobTab({
   const renderNav = () => (
     <div className="flex items-center justify-between pt-4 border-t">
       <div>
-        {stepValid(step) && step !== 5 && (
+        {stepValid(step) && step < 4 && (
           <Badge variant="outline" className="text-[10px] text-emerald-600 border-emerald-500/30">
             <Check className="h-3 w-3 mr-1" /> Completado
           </Badge>
         )}
       </div>
       <div className="flex items-center gap-2">
-        {step === 5 && canAccessStep(5) ? (
-          <Button type="button" size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm" disabled={testing || !hasConfig} onClick={handleTest}>
-            {testing ? (
-              <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-            ) : (
-              <Play className="h-4 w-4 mr-1.5" />
-            )}
-            Ejecutar test
-          </Button>
-        ) : (
+        {step < 4 && (
           <Button
             type="button"
             size="sm"
@@ -595,8 +611,8 @@ export function KnowledgeCronJobTab({
             disabled={!canAccessStep(step + 1)}
             onClick={() => {
               let next = step + 1;
-              while (next <= 5 && !canAccessStep(next)) next++;
-              if (next <= 5) setStep(next);
+              while (next <= 4 && !canAccessStep(next)) next++;
+              if (next <= 4) setStep(next);
             }}
           >
             Siguiente <ChevronRight className="h-4 w-4 ml-1" />
@@ -615,7 +631,8 @@ export function KnowledgeCronJobTab({
             <div>
               <h3 className="text-sm font-medium mb-1">Aplicación y endpoint</h3>
               <p className="text-xs text-muted-foreground mb-4">
-                Selecciona qué aplicación consultar y el endpoint que devuelve los datos actualizados.
+                Selecciona qué aplicación consultar y el endpoint que devuelve los datos
+                actualizados.
               </p>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -867,125 +884,140 @@ export function KnowledgeCronJobTab({
                       </div>
                       {!isSysVar || currentVal === "" ? (
                         <>
-                        <div className="flex items-center rounded border border-border/60 bg-muted/20 overflow-hidden text-[11px] font-mono">
-                          <span className="shrink-0 px-1.5 py-1 text-[9px] text-muted-foreground border-r border-border/60 bg-muted/30">
-                            {key}=
-                          </span>
-                          <input
-                            value={pendingVars[key] ?? currentVal}
-                            onChange={(e) =>
-                              setPendingVars((prev) => ({ ...prev, [key]: e.target.value }))
-                            }
-                            onBlur={() => {
-                              const pending = pendingVars[key];
-                              if (pending !== undefined && pending !== currentVal) {
-                                const n = { ...value?.payload_variables };
-                                n[key] = pending;
-                                patchPayloadVariables(n);
+                          <div className="flex items-center rounded border border-border/60 bg-muted/20 overflow-hidden text-[11px] font-mono">
+                            <span className="shrink-0 px-1.5 py-1 text-[9px] text-muted-foreground border-r border-border/60 bg-muted/30">
+                              {key}=
+                            </span>
+                            <input
+                              value={pendingVars[key] ?? currentVal}
+                              onChange={(e) =>
+                                setPendingVars((prev) => ({ ...prev, [key]: e.target.value }))
                               }
-                              setPendingVars((prev) => {
-                                const next = { ...prev };
-                                delete next[key];
-                                return next;
-                              });
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                            }}
-                            placeholder="valor..."
-                            disabled={disabled}
-                            className="flex-1 min-w-0 px-1.5 py-1 bg-transparent outline-none placeholder:text-muted-foreground/40"
-                          />
-                          <button
-                            type="button"
-                            disabled={disabled}
-                            onClick={() => {
-                              setDataPickerOpen(dataPickerOpen === key ? null : key);
-                              setDataPickerStep("list");
-                              setDataPickerItem(null);
-                            }}
-                            className="shrink-0 px-1.5 text-[9px] text-muted-foreground/50 hover:text-primary transition-colors"
-                            title="Buscar en conocimiento"
-                          >
-                            Buscar
-                          </button>
-                        </div>
-                        {dataPickerOpen === key && (
-                          <div className="rounded border border-border/60 bg-card shadow-lg p-2 space-y-1.5 max-h-[200px] overflow-auto">
-                            {dataPickerStep === "list" ? (
-                              dataKnowledge.length === 0 ? (
-                                <p className="text-[9px] text-muted-foreground text-center py-2">Sin conocimientos DATA</p>
-                              ) : (
-                                dataKnowledge.slice(0, 20).map((dk) => (
-                                  <button
-                                    key={dk.id}
-                                    type="button"
-                                    onClick={() => {
-                                      setDataPickerItem(dk);
-                                      setDataPickerStep("table");
-                                    }}
-                                    className="w-full text-left px-2 py-1 rounded text-[10px] hover:bg-muted transition-colors"
-                                  >
-                                    {dk.title || `#${dk.id}`}
-                                  </button>
-                                ))
-                              )
-                            ) : dataPickerItem ? (
-                              (() => {
-                                const { cols, rows } = parseDataItem(dataPickerItem);
-                                return (
-                                  <>
-                                    <div className="flex items-center gap-2 text-[9px]">
-                                      <button
-                                        type="button"
-                                        onClick={() => { setDataPickerStep("list"); setDataPickerItem(null); }}
-                                        className="text-muted-foreground hover:text-foreground"
-                                      >
-                                        ← volver
-                                      </button>
-                                      <span className="font-medium truncate">{dataPickerItem.title}</span>
-                                    </div>
-                                    <div className="overflow-auto max-h-[160px]">
-                                      <table className="w-full text-[9px] border-collapse">
-                                        <thead>
-                                          <tr className="bg-muted/40">
-                                            {cols.map((c) => (
-                                              <th key={c} className="text-left px-1.5 py-0.5 font-medium border-b">{c}</th>
-                                            ))}
-                                          </tr>
-                                        </thead>
-                                        <tbody>
-                                          {rows.slice(0, 10).map((row, ri) => (
-                                            <tr key={ri} className="hover:bg-muted/30">
+                              onBlur={() => {
+                                const pending = pendingVars[key];
+                                if (pending !== undefined && pending !== currentVal) {
+                                  const n = { ...value?.payload_variables };
+                                  n[key] = pending;
+                                  patchPayloadVariables(n);
+                                }
+                                setPendingVars((prev) => {
+                                  const next = { ...prev };
+                                  delete next[key];
+                                  return next;
+                                });
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                              }}
+                              placeholder="valor..."
+                              disabled={disabled}
+                              className="flex-1 min-w-0 px-1.5 py-1 bg-transparent outline-none placeholder:text-muted-foreground/40"
+                            />
+                            <button
+                              type="button"
+                              disabled={disabled}
+                              onClick={() => {
+                                setDataPickerOpen(dataPickerOpen === key ? null : key);
+                                setDataPickerStep("list");
+                                setDataPickerItem(null);
+                              }}
+                              className="shrink-0 px-1.5 text-[9px] text-muted-foreground/50 hover:text-primary transition-colors"
+                              title="Buscar en conocimiento"
+                            >
+                              Buscar
+                            </button>
+                          </div>
+                          {dataPickerOpen === key && (
+                            <div className="rounded border border-border/60 bg-card shadow-lg p-2 space-y-1.5 max-h-[200px] overflow-auto">
+                              {dataPickerStep === "list" ? (
+                                dataKnowledge.length === 0 ? (
+                                  <p className="text-[9px] text-muted-foreground text-center py-2">
+                                    Sin conocimientos DATA
+                                  </p>
+                                ) : (
+                                  dataKnowledge.slice(0, 20).map((dk) => (
+                                    <button
+                                      key={dk.id}
+                                      type="button"
+                                      onClick={() => {
+                                        setDataPickerItem(dk);
+                                        setDataPickerStep("table");
+                                      }}
+                                      className="w-full text-left px-2 py-1 rounded text-[10px] hover:bg-muted transition-colors"
+                                    >
+                                      {dk.title || `#${dk.id}`}
+                                    </button>
+                                  ))
+                                )
+                              ) : dataPickerItem ? (
+                                (() => {
+                                  const { cols, rows } = parseDataItem(dataPickerItem);
+                                  return (
+                                    <>
+                                      <div className="flex items-center gap-2 text-[9px]">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setDataPickerStep("list");
+                                            setDataPickerItem(null);
+                                          }}
+                                          className="text-muted-foreground hover:text-foreground"
+                                        >
+                                          ← volver
+                                        </button>
+                                        <span className="font-medium truncate">
+                                          {dataPickerItem.title}
+                                        </span>
+                                      </div>
+                                      <div className="overflow-auto max-h-[160px]">
+                                        <table className="w-full text-[9px] border-collapse">
+                                          <thead>
+                                            <tr className="bg-muted/40">
                                               {cols.map((c) => (
-                                                <td key={c} className="px-1.5 py-0.5 border-b border-border/30">
-                                                  <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                      const val = row[c] ?? "";
-                                                      const n = { ...value?.payload_variables };
-                                                      n[key] = val;
-                                                      patchPayloadVariables(n);
-                                                      setDataPickerOpen(null);
-                                                    }}
-                                                    className="hover:text-primary hover:underline text-left"
-                                                    title={`Usar "${row[c]}"`}
-                                                  >
-                                                    {String(row[c] ?? "").slice(0, 30)}
-                                                  </button>
-                                                </td>
+                                                <th
+                                                  key={c}
+                                                  className="text-left px-1.5 py-0.5 font-medium border-b"
+                                                >
+                                                  {c}
+                                                </th>
                                               ))}
                                             </tr>
-                                          ))}
-                                        </tbody>
-                                      </table>
-                                    </div>
-                                  </>
-                                );
-                              })()
-                            ) : null}
-                          </div>
-                        )}
+                                          </thead>
+                                          <tbody>
+                                            {rows.slice(0, 10).map((row, ri) => (
+                                              <tr key={ri} className="hover:bg-muted/30">
+                                                {cols.map((c) => (
+                                                  <td
+                                                    key={c}
+                                                    className="px-1.5 py-0.5 border-b border-border/30"
+                                                  >
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => {
+                                                        const val = row[c] ?? "";
+                                                        const n = { ...value?.payload_variables };
+                                                        n[key] = val;
+                                                        patchPayloadVariables(n);
+                                                        setDataPickerOpen(null);
+                                                      }}
+                                                      className="hover:text-primary hover:underline text-left"
+                                                      title={`Usar "${row[c]}"`}
+                                                    >
+                                                      {String(row[c] ?? "").slice(0, 30)}
+                                                    </button>
+                                                  </td>
+                                                ))}
+                                              </tr>
+                                            ))}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    </>
+                                  );
+                                })()
+                              ) : null}
+                            </div>
+                          )}
                         </>
                       ) : (
                         <p className="text-[10px] text-muted-foreground">
@@ -1002,213 +1034,153 @@ export function KnowledgeCronJobTab({
       }
       case 3:
         return (() => {
-          const rm = endpointResponseMapping || apiResponseMapping;
-          const hasRespFields = rm && typeof rm === "object" && Object.keys(rm).length > 0;
+          const showFullConfig = true;
           return (
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-medium mb-1">Campos del documento</h3>
-                  <p className="text-xs text-muted-foreground">
-                    {hasRespFields ? (
-                      knowledgeType === "DATA" ? (
-                        "Estos campos seran las columnas de tu tabla."
-                      ) : (
-                        "Campos disponibles como variables en tu contenido."
-                      )
-                    ) : (
-                      <span>
-                        <button
-                          type="button"
-                          disabled={disabled || discovering}
-                          onClick={handleDiscover}
-                          className="text-primary underline hover:text-primary/80 font-medium"
-                        >
-                          {discovering ? "Descubriendo..." : "Descubrir campos"}
-                        </button>{" "}
-                        para ver que devuelve el endpoint.
-                      </span>
-                    )}
-                  </p>
-                </div>
-              </div>
-
-              {hasRespFields ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {Object.entries(rm).map(([key, path]) => (
-                    <div key={key} className="rounded-lg border border-border/60 bg-card/50 p-2.5">
-                      <code className="text-[11px] font-mono font-semibold">{key}</code>
-                      <div className="text-[10px] text-muted-foreground">
-                        path: <code className="bg-muted/50 px-1 rounded">{String(path)}</code>
+              {/* Variables editables */}
+              {userPlaceholders.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {userPlaceholders.map((k) => {
+                    const val = (value?.payload_variables?.[k] ?? "") as string;
+                    return (
+                      <div
+                        key={k}
+                        className="flex items-center rounded border border-border/60 bg-card/40 overflow-hidden text-[11px] font-mono"
+                      >
+                        <span className="shrink-0 px-1.5 py-1 text-[9px] text-muted-foreground border-r border-border/60 bg-muted/30">
+                          {k}=
+                        </span>
+                        <input
+                          value={val}
+                          onChange={(e) => {
+                            const n = { ...value?.payload_variables };
+                            n[k] = e.target.value;
+                            patchPayloadVariables(n);
+                          }}
+                          placeholder="valor..."
+                          disabled={disabled}
+                          className="w-24 min-w-0 px-1.5 py-1 bg-transparent outline-none placeholder:text-muted-foreground/40"
+                        />
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
-              ) : discovering ? (
+              )}
+
+              {discovering ? (
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="h-5 w-5 animate-spin text-primary mr-2" />
                   <p className="text-xs text-muted-foreground">Consultando endpoint...</p>
                 </div>
               ) : (
+                <div className="flex items-center justify-center py-6">
+                  <Button
+                    size="sm"
+                    disabled={disabled || discovering}
+                    onClick={handleDiscover}
+                    className="gap-1.5"
+                  >
+                    {discovering ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4" />
+                    )}
+                    Sincronizar
+                  </Button>
+                </div>
+              )}
+
+              {showFullConfig && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
                   {/* Panel 1: Respuesta cruda */}
-                  {discoveredFields.length > 0 ? (
+                  {discoveredData ? (
                     <div className="rounded-lg border border-border/60 bg-card/50 overflow-hidden flex flex-col min-h-[300px]">
-                      <div className="px-3 py-1.5 bg-muted/40 border-b text-[10px] font-medium text-muted-foreground shrink-0 flex items-center justify-between">
+                      <div className="px-3 py-1.5 bg-muted/40 border-b text-[10px] font-medium text-muted-foreground shrink-0">
                         <span>Respuesta del endpoint</span>
-                        <button
-                          type="button"
-                          onClick={() => setJsonCollapsed((p) => !p)}
-                          className="text-[9px] text-muted-foreground/60 hover:text-foreground"
-                        >
-                          {jsonCollapsed ? "expandir" : "contraer"}
-                        </button>
                       </div>
-                      <pre className={["p-3 text-[10px] font-mono overflow-auto flex-1 leading-relaxed whitespace-pre-wrap break-all", jsonCollapsed ? "max-h-[120px]" : ""].join(" ")}>
+                      <pre className="p-3 text-[10px] font-mono overflow-auto flex-1 leading-relaxed whitespace-pre-wrap break-all max-h-[400px]">
                         {JSON.stringify(discoveredData, null, 2)}
                       </pre>
                     </div>
                   ) : (
                     <div className="rounded-lg border border-dashed border-border/60 bg-card/30 flex flex-col items-center justify-center min-h-[300px] text-center p-4 space-y-2">
                       <Globe className="h-6 w-6 text-muted-foreground/40" />
-                      <p className="text-[10px] text-muted-foreground">Descubre para ver la respuesta del endpoint</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        Presiona Sincronizar para ver la respuesta del endpoint
+                      </p>
                     </div>
                   )}
 
-                  {/* Panel 2: Configuración del mapeo */}
                   <div className="rounded-lg border border-primary/20 bg-card/60 p-3 space-y-3 flex flex-col min-h-[300px]">
                     <div className="flex items-center justify-between shrink-0">
                       <p className="text-[10px] font-medium text-primary/70 uppercase tracking-wider">
                         Configurar mapeo
                       </p>
-                      {discoveredFields.length === 0 && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={disabled || discovering}
-                          onClick={handleDiscover}
-                          className="h-6 text-[9px]"
-                        >
-                          {discovering ? "..." : "Descubrir"}
-                        </Button>
-                      )}
                     </div>
-                    <div className="rounded-lg border border-amber-500/20 bg-amber-500/[0.03] p-2.5 shrink-0">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-medium">Sincronización por fechas</span>
-                        {value?.content_mapping.date_range ? (
-                          <button
-                            type="button"
-                            onClick={() => patchMapping({ date_range: undefined })}
-                            className="text-[9px] text-muted-foreground/60 hover:text-destructive"
-                          >
-                            Quitar
-                          </button>
-                        ) : null}
-                      </div>
-                      {value?.content_mapping.date_range ? (
-                        <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                          <div className="flex items-center gap-1">
-                            <span className="text-[9px] text-muted-foreground">desde hoy</span>
-                            <Input
-                              type="number"
-                              value={value.content_mapping.date_range.start}
-                              onChange={(e) => patchMapping({ date_range: { ...value.content_mapping.date_range!, start: Number(e.target.value) } })}
-                              disabled={disabled}
-                              className="h-7 w-14 font-mono text-[10px] text-center"
-                            />
-                            <span className="text-[9px] text-muted-foreground">hasta +</span>
-                            <Input
-                              type="number"
-                              value={value.content_mapping.date_range.end}
-                              onChange={(e) => patchMapping({ date_range: { ...value.content_mapping.date_range!, end: Number(e.target.value) } })}
-                              disabled={disabled}
-                              className="h-7 w-14 font-mono text-[10px] text-center"
-                            />
-                            <span className="text-[9px] text-muted-foreground">días</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <span className="text-[9px] text-muted-foreground">variable:</span>
-                            <Select
-                              value={value.content_mapping.date_range.param_name || undefined}
-                              onValueChange={(v) => patchMapping({ date_range: { ...value.content_mapping.date_range!, param_name: v } })}
-                              disabled={disabled}
-                            >
-                              <SelectTrigger className="h-7 w-28 text-[10px] font-mono">
-                                <SelectValue placeholder="Elige..." />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {userPlaceholders.map((k) => (
-                                  <SelectItem key={k} value={k} className="text-[10px] font-mono">
-                                    {k}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => patchMapping({ date_range: { start: 0, end: 7, param_name: "" } })}
-                          disabled={disabled}
-                          className="mt-1.5 h-7 w-full rounded-md border border-dashed border-amber-500/30 bg-amber-500/[0.02] flex items-center justify-center gap-1 text-[9px] text-amber-600/70 hover:text-amber-600 hover:border-amber-500/50 transition-colors"
-                        >
-                          <Calendar className="h-3 w-3" /> Activar por rango de fechas
-                        </button>
-                      )}
-                    </div>
+
                     <div className="space-y-1 shrink-0">
                       <Label className="text-[10px]">Ruta (path)</Label>
                       {discoveredFields.length > 0 ? (
                         <Select
-                        value={value?.content_mapping.path || undefined}
-                        onValueChange={(v) => {
-                          if (!value) return;
-                          onChange({
-                            ...value,
-                            content_mapping: { ...value.content_mapping, path: v },
-                          });
-                        }}
-                        disabled={disabled}
-                      >
-                        <SelectTrigger className="h-7 text-[10px] font-mono">
-                          <SelectValue placeholder="Elige una ruta..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {(() => {
-                            const prefixes = new Set<string>();
-                            for (const f of discoveredFields) {
-                              const parts = f.split(".");
-                              for (let i = 1; i <= parts.length; i++) {
-                                const prefix = parts.slice(0, i).join(".");
-                                if (!prefix.includes("*")) prefixes.add(prefix);
-                              }
-                              for (let i = 0; i < parts.length; i++) {
-                                const part = parts[i];
-                                const looksDynamic = /^\d{4}-\d{2}-\d{2}/.test(part) ||
-                                  /^[0-9a-f]{8}-[0-9a-f]{4}/.test(part) ||
-                                  /^\d{10,}$/.test(part);
-                                if (looksDynamic) {
-                                  const wildcard = [...parts.slice(0, i), "*", ...parts.slice(i + 1)].join(".");
-                                  prefixes.add(wildcard);
+                          value={value?.content_mapping.path || undefined}
+                          onValueChange={(v) => {
+                            if (!value) return;
+                            onChange({
+                              ...value,
+                              content_mapping: { ...value.content_mapping, path: v },
+                            });
+                          }}
+                          disabled={disabled}
+                        >
+                          <SelectTrigger className="h-7 text-[10px] font-mono">
+                            <SelectValue placeholder="Elige una ruta..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {(() => {
+                              const prefixes = new Set<string>();
+                              for (const f of discoveredFields) {
+                                const parts = f.split(".");
+                                for (let i = 1; i <= parts.length; i++) {
+                                  const prefix = parts.slice(0, i).join(".");
+                                  if (!prefix.includes("*")) prefixes.add(prefix);
+                                }
+                                for (let i = 0; i < parts.length; i++) {
+                                  const part = parts[i];
+                                  const looksDynamic =
+                                    /^\d{4}-\d{2}-\d{2}/.test(part) ||
+                                    /^[0-9a-f]{8}-[0-9a-f]{4}/.test(part) ||
+                                    /^\d{10,}$/.test(part);
+                                  if (looksDynamic) {
+                                    const wildcard = [
+                                      ...parts.slice(0, i),
+                                      "*",
+                                      ...parts.slice(i + 1),
+                                    ].join(".");
+                                    prefixes.add(wildcard);
+                                  }
                                 }
                               }
-                            }
-                            return Array.from(prefixes).sort().map((p) => (
-                              <SelectItem key={p} value={p} className="text-[10px] font-mono">
-                                {p}
-                              </SelectItem>
-                            ));
-                          })()}
-                        </SelectContent>
-                      </Select>
+                              return Array.from(prefixes)
+                                .sort()
+                                .map((p) => (
+                                  <SelectItem key={p} value={p} className="text-[10px] font-mono">
+                                    {p}
+                                  </SelectItem>
+                                ));
+                            })()}
+                          </SelectContent>
+                        </Select>
                       ) : (
-                        <div className="h-7 rounded-md border border-dashed border-border/60 bg-muted/20 flex items-center px-2">
-                          <span className="text-[9px] text-muted-foreground/60">Descubre primero...</span>
-                        </div>
+                        <Input
+                          value={value?.content_mapping.path ?? ""}
+                          onChange={(e) => patchMapping({ path: e.target.value })}
+                          placeholder="Ej: data, results.items"
+                          disabled={disabled}
+                          className="h-7 font-mono text-[10px]"
+                        />
                       )}
                     </div>
+
                     <div className="space-y-1 shrink-0">
                       <Label className="text-[10px]">Tipo</Label>
                       <Select
@@ -1241,30 +1213,39 @@ export function KnowledgeCronJobTab({
                           <SelectItem value="json_to_table" className="text-[10px]">
                             <span className="flex flex-col text-left">
                               <span>Tabla</span>
-                              <span className="text-[8px] text-muted-foreground font-normal">Array de objetos → tabla Markdown/JSON/CSV</span>
+                              <span className="text-[8px] text-muted-foreground font-normal">
+                                Array de objetos → tabla Markdown/JSON/CSV
+                              </span>
                             </span>
                           </SelectItem>
                           <SelectItem value="json_path" className="text-[10px]">
                             <span className="flex flex-col text-left">
                               <span>JSON</span>
-                              <span className="text-[8px] text-muted-foreground font-normal">Guarda el fragmento JSON tal cual como texto</span>
+                              <span className="text-[8px] text-muted-foreground font-normal">
+                                Guarda el fragmento JSON tal cual como texto
+                              </span>
                             </span>
                           </SelectItem>
                           <SelectItem value="raw_string" className="text-[10px]">
                             <span className="flex flex-col text-left">
                               <span>Texto plano</span>
-                              <span className="text-[8px] text-muted-foreground font-normal">str(valor) — para strings, números, booleanos</span>
+                              <span className="text-[8px] text-muted-foreground font-normal">
+                                str(valor) — para strings, números, booleanos
+                              </span>
                             </span>
                           </SelectItem>
                           <SelectItem value="title_and_body" className="text-[10px]">
                             <span className="flex flex-col text-left">
                               <span>Título + Cuerpo</span>
-                              <span className="text-[8px] text-muted-foreground font-normal"># título\n\ncuerpo desde 2 rutas JSON distintas</span>
+                              <span className="text-[8px] text-muted-foreground font-normal">
+                                # título\n\ncuerpo desde 2 rutas JSON distintas
+                              </span>
                             </span>
                           </SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
+
                     {value?.content_mapping.type === "title_and_body" && (
                       <div className="space-y-1 shrink-0">
                         <Label className="text-[10px]">Ruta del título</Label>
@@ -1296,16 +1277,24 @@ export function KnowledgeCronJobTab({
                             <Label className="text-[10px]">Formato</Label>
                             <Select
                               value={value.content_mapping.format ?? "markdown"}
-                              onValueChange={(v) => patchMapping({ format: v as "markdown" | "json" | "csv" })}
+                              onValueChange={(v) =>
+                                patchMapping({ format: v as "markdown" | "json" | "csv" })
+                              }
                               disabled={disabled}
                             >
                               <SelectTrigger className="h-7 text-[10px]">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="markdown" className="text-[10px]">Markdown (tabla)</SelectItem>
-                                <SelectItem value="json" className="text-[10px]">JSON (array)</SelectItem>
-                                <SelectItem value="csv" className="text-[10px]">CSV</SelectItem>
+                                <SelectItem value="markdown" className="text-[10px]">
+                                  Markdown (tabla)
+                                </SelectItem>
+                                <SelectItem value="json" className="text-[10px]">
+                                  JSON (array)
+                                </SelectItem>
+                                <SelectItem value="csv" className="text-[10px]">
+                                  CSV
+                                </SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
@@ -1324,43 +1313,46 @@ export function KnowledgeCronJobTab({
                         </div>
                       </>
                     )}
-                    </div>
+                  </div>
 
-                  {/* Panel 3: Resultado mapeado */}
-                  {discoveredFields.length > 0 ? (
+                  {/* Panel 3: Resultado mapeado — solo si hay parsed_data del backend */}
+                  {parsedData ? (
                     <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/[0.02] overflow-hidden flex flex-col min-h-[300px]">
-                      <div className="px-3 py-1.5 bg-emerald-500/[0.06] border-b border-emerald-500/10 flex items-center justify-between shrink-0">
-                        <span className="text-[10px] font-medium text-emerald-600">Resultado mapeado</span>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setJsonCollapsed((p) => !p)}
-                            className="text-[9px] text-emerald-600/60 hover:text-emerald-600"
-                          >
-                            {jsonCollapsed ? "expandir" : "contraer"}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setDiscoveredFields([]);
-                              setDiscoveredData(null);
-                            }}
-                            className="text-[9px] text-muted-foreground/60 hover:text-muted-foreground"
-                          >
-                            ocultar
-                          </button>
-                        </div>
+                      <div className="px-3 py-1.5 bg-emerald-500/[0.06] border-b border-emerald-500/10 shrink-0">
+                        <span className="text-[10px] font-medium text-emerald-600">
+                          Resultado mapeado
+                        </span>
                       </div>
-                      <pre className={["p-3 text-[10px] font-mono overflow-auto flex-1 leading-relaxed whitespace-pre-wrap break-all", jsonCollapsed ? "max-h-[120px]" : ""].join(" ")}>
-                        {JSON.stringify(parsedData ?? discoveredData, null, 2)}
+                      <pre className="p-3 text-[10px] font-mono overflow-auto flex-1 leading-relaxed whitespace-pre-wrap break-all max-h-[400px]">
+                        {JSON.stringify(parsedData, null, 2)}
                       </pre>
                     </div>
                   ) : (
                     <div className="rounded-lg border border-dashed border-emerald-500/20 bg-emerald-500/[0.01] flex flex-col items-center justify-center min-h-[300px] text-center p-4 space-y-2">
                       <Layers className="h-6 w-6 text-emerald-500/30" />
-                      <p className="text-[10px] text-muted-foreground">El resultado del mapeo aparecerá aquí</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        Configura el mapeo y presiona Descubrir para ver el resultado
+                      </p>
                     </div>
                   )}
+                </div>
+              )}
+
+              {discoveredData && (
+                <div className="flex items-center justify-center pt-2">
+                  <Button
+                    size="sm"
+                    disabled={disabled || syncing}
+                    onClick={handleSyncSave}
+                    className="gap-1.5"
+                  >
+                    {syncing ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4" />
+                    )}
+                    Actualizar ahora
+                  </Button>
                 </div>
               )}
             </div>
@@ -1368,61 +1360,108 @@ export function KnowledgeCronJobTab({
         })();
       case 4:
         return (
-          <div className="space-y-5">
+          <div className="space-y-5 max-w-2xl">
             <div>
-              <h3 className="text-sm font-medium mb-1">Estrategia y template</h3>
+              <h3 className="text-sm font-medium mb-1">Configuración</h3>
               <p className="text-xs text-muted-foreground mb-4">
-                Como se combina el nuevo contenido con el existente y cada cuanto se ejecuta.
+                Rango de fechas, frecuencia y como se combina el contenido.
               </p>
             </div>
+
             <div className="space-y-1.5">
-              <Label className="text-xs">Template de contenido</Label>
-              <textarea
-                value={pendingTemplate ?? value.content_template ?? ""}
-                onChange={(e) => setPendingTemplate(e.target.value)}
-                onBlur={() => {
-                  if (pendingTemplate !== null && pendingTemplate !== (value.content_template ?? "")) {
-                    patch({ content_template: pendingTemplate });
-                  }
-                  setPendingTemplate(null);
-                }}
-                placeholder={`Ej: {{json_to_table}}\n\nUltima actualizacion: {{now}}`}
-                disabled={disabled}
-                rows={4}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-muted-foreground/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50"
-              />
-              <div className="flex flex-wrap gap-1 pt-1">
-                {[
-                  "{{title}}",
-                  "{{data}}",
-                  "{{timestamp}}",
-                  "{{raw_json}}",
-                  ...(value.content_mapping.type === "json_to_table" ? ["{{json_to_table}}"] : []),
-                  ...columns.map((c) => `{{${c}}}`),
-                  "{{today}}",
-                  "{{now}}",
-                  "{{yesterday}}",
-                ].map((v) => (
-                  <button
-                    key={v}
-                    type="button"
-                    disabled={disabled}
-                    onClick={() => {
-                      const base = pendingTemplate ?? value.content_template ?? "";
-                      const next = base + (base && !base.endsWith(" ") ? " " : "") + v;
-                      patch({ content_template: next });
-                      setPendingTemplate(null);
-                    }}
-                    className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-muted/60 hover:bg-primary/10 hover:text-primary transition-colors border border-transparent hover:border-primary/20"
-                    title={`Insertar ${v}`}
-                  >
-                    {v}
-                  </button>
-                ))}
-              </div>
+              <Label className="text-xs font-medium">Sincronización por fechas</Label>
+              <p className="text-[11px] text-muted-foreground">
+                Itera sobre un rango de fechas llamando al endpoint N veces.
+              </p>
+              {value?.content_mapping.date_range ? (
+                <div className="rounded-lg border border-amber-500/20 bg-amber-500/[0.03] p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-medium text-amber-700">Rango activo</span>
+                    <button
+                      type="button"
+                      onClick={() => patchMapping({ date_range: undefined })}
+                      className="text-[9px] text-muted-foreground/60 hover:text-destructive"
+                    >
+                      Desactivar
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[9px] text-muted-foreground">desde hoy</span>
+                    <Input
+                      type="number"
+                      value={value.content_mapping.date_range.start}
+                      onChange={(e) =>
+                        patchMapping({
+                          date_range: {
+                            ...value.content_mapping.date_range!,
+                            start: Number(e.target.value),
+                          },
+                        })
+                      }
+                      disabled={disabled}
+                      className="h-7 w-14 font-mono text-[10px] text-center"
+                    />
+                    <span className="text-[9px] text-muted-foreground">hasta +</span>
+                    <Input
+                      type="number"
+                      value={value.content_mapping.date_range.end}
+                      onChange={(e) =>
+                        patchMapping({
+                          date_range: {
+                            ...value.content_mapping.date_range!,
+                            end: Number(e.target.value),
+                          },
+                        })
+                      }
+                      disabled={disabled}
+                      className="h-7 w-14 font-mono text-[10px] text-center"
+                    />
+                    <span className="text-[9px] text-muted-foreground">días</span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[9px] text-muted-foreground">variable:</span>
+                      <Select
+                        value={value.content_mapping.date_range.param_name || undefined}
+                        onValueChange={(v) =>
+                          patchMapping({
+                            date_range: {
+                              ...value.content_mapping.date_range!,
+                              param_name: v,
+                            },
+                          })
+                        }
+                        disabled={disabled}
+                      >
+                        <SelectTrigger className="h-7 w-28 text-[10px] font-mono">
+                          <SelectValue placeholder="Elige..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {userPlaceholders.map((k) => (
+                            <SelectItem key={k} value={k} className="text-[10px] font-mono">
+                              {k}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <p className="text-[9px] text-muted-foreground">
+                    El backend itera día por día y acumula resultados.
+                  </p>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => patchMapping({ date_range: { start: 0, end: 7, param_name: "" } })}
+                  disabled={disabled}
+                  className="h-8 w-full rounded-md border border-dashed border-amber-500/30 bg-amber-500/[0.02] flex items-center justify-center gap-1.5 text-[10px] text-amber-600/70 hover:text-amber-600 hover:border-amber-500/50 transition-colors"
+                >
+                  <Calendar className="h-3.5 w-3.5" /> Activar por rango de fechas
+                </button>
+              )}
             </div>
+
             <div className="space-y-1.5 max-w-xs">
-              <Label className="text-xs">Frecuencia (cron)</Label>
+              <Label className="text-xs font-medium">Frecuencia (cron)</Label>
               {isCustomCron ? (
                 <Input
                   value={value.cron}
@@ -1453,8 +1492,9 @@ export function KnowledgeCronJobTab({
                 </Select>
               )}
             </div>
+
             <div className="space-y-2">
-              <Label className="text-xs">Estrategia de integracion</Label>
+              <Label className="text-xs font-medium">Estrategia de integracion</Label>
               <div className="grid gap-2 sm:grid-cols-2">
                 {STRATEGY_OPTIONS.map((opt) => (
                   <label
@@ -1491,6 +1531,7 @@ export function KnowledgeCronJobTab({
                 ))}
               </div>
             </div>
+
             {strategyMode === "append" && (
               <div className="grid gap-3 sm:grid-cols-2 max-w-md">
                 <div className="space-y-1.5">
@@ -1520,131 +1561,96 @@ export function KnowledgeCronJobTab({
                 </div>
               </div>
             )}
-          </div>
-        );
-      case 5:
-        return (
-          <div className="space-y-4">
-            <div>
-              <h3 className="text-sm font-medium mb-1 flex items-center gap-2">
-                Probar el CronJob
-                {value?.tested_ok && (
+
+            {knowledgeType !== "DATA" && (
+              <div className="space-y-1.5 border-t border-border/60 pt-4">
+                <Label className="text-xs font-medium">
+                  Template de contenido{" "}
+                  <span className="text-muted-foreground font-normal">(opcional)</span>
+                </Label>
+                <p className="text-[11px] text-muted-foreground">
+                  Para DATA la tabla serializada se guarda directamente. Usa template solo si
+                  necesitas formato personalizado.
+                </p>
+                <textarea
+                  value={pendingTemplate ?? value.content_template ?? ""}
+                  onChange={(e) => setPendingTemplate(e.target.value)}
+                  onBlur={() => {
+                    if (
+                      pendingTemplate !== null &&
+                      pendingTemplate !== (value.content_template ?? "")
+                    ) {
+                      patch({ content_template: pendingTemplate });
+                    }
+                    setPendingTemplate(null);
+                  }}
+                  placeholder={`Ej: {{json_to_table}}\n\nUltima actualizacion: {{now}}`}
+                  disabled={disabled}
+                  rows={4}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-muted-foreground/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50"
+                />
+                <div className="flex flex-wrap gap-1 pt-1">
+                  {[
+                    "{{title}}",
+                    "{{data}}",
+                    "{{timestamp}}",
+                    "{{raw_json}}",
+                    ...(value.content_mapping.type === "json_to_table"
+                      ? ["{{json_to_table}}"]
+                      : []),
+                    ...columns.map((c) => `{{${c}}}`),
+                    "{{today}}",
+                    "{{now}}",
+                    "{{yesterday}}",
+                  ].map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => {
+                        const base = pendingTemplate ?? value.content_template ?? "";
+                        const next = base + (base && !base.endsWith(" ") ? " " : "") + v;
+                        patch({ content_template: next });
+                        setPendingTemplate(null);
+                      }}
+                      className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-muted/60 hover:bg-primary/10 hover:text-primary transition-colors border border-transparent hover:border-primary/20"
+                      title={`Insertar ${v}`}
+                    >
+                      {v}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="border-t border-border/60 pt-4 flex items-center justify-between">
+              <div>
+                {stepValid(4) ? (
                   <Badge
                     variant="outline"
                     className="text-[10px] text-emerald-600 border-emerald-500/30"
                   >
-                    <Check className="h-3 w-3 mr-1" /> Validado
+                    <Check className="h-3 w-3 mr-1" /> Configuracion completa
                   </Badge>
+                ) : (
+                  <p className="text-[10px] text-muted-foreground">
+                    Completa todos los pasos anteriores para activar
+                  </p>
                 )}
-              </h3>
-              <p className="text-xs text-muted-foreground mb-4">
-                Ejecuta el pipeline ahora mismo para ver el resultado. Asegurate de haber guardado
-                antes.
-              </p>
-            </div>
-            {!hasConfig ? (
-              <div className="rounded-lg border border-dashed p-6 text-center">
-                <p className="text-xs text-muted-foreground">Completa los pasos 1-4 primero.</p>
               </div>
-            ) : (
-              <>
-                <div className="flex flex-wrap gap-3">
-                  <Button size="sm" disabled={testing} onClick={handleTest}>
-                    {testing ? (
-                      <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-                    ) : (
-                      <Play className="h-4 w-4 mr-1.5" />
-                    )}
-                    Ejecutar ahora
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={!testResult}
-                    onClick={() => setTestResult(null)}
-                  >
-                    Limpiar
-                  </Button>
-                </div>
-                {testing && (
-                  <div className="flex items-center gap-3 rounded-lg border border-primary/20 bg-primary/5 p-4">
-                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                    <div>
-                      <p className="text-xs font-medium">Ejecutando...</p>
-                      <p className="text-[11px] text-muted-foreground">
-                        Consultando endpoint y procesando respuesta
-                      </p>
-                    </div>
-                  </div>
-                )}
-                {testResult && !testing && (
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap gap-1">
-                      <Badge
-                        variant="outline"
-                        className={[
-                          "text-[10px]",
-                          (testResult as Record<string, unknown>)?.success
-                            ? "text-emerald-600 border-emerald-500/30"
-                            : "text-red-600 border-red-500/30",
-                        ].join(" ")}
-                      >
-                        {(testResult as Record<string, unknown>)?.success ? "OK" : "Error"}
-                      </Badge>
-                      {value?.tested_ok && (
-                        <Badge
-                          variant="outline"
-                          className="text-[10px] text-emerald-600 border-emerald-500/30"
-                        >
-                          <Check className="h-3 w-3 mr-1" /> Validado
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
-                      <div className="rounded-lg border border-border/60 bg-card/50 overflow-hidden">
-                        <div className="px-3 py-1.5 bg-muted/40 border-b flex items-center justify-between">
-                          <span className="text-[10px] font-medium text-muted-foreground">
-                            Respuesta del endpoint
-                          </span>
-                          <span className="text-[8px] text-muted-foreground/50">crudo</span>
-                        </div>
-                        <pre className="p-3 text-[10px] font-mono overflow-auto max-h-[300px] leading-relaxed whitespace-pre-wrap break-all">
-                          {JSON.stringify(
-                            (testResult as Record<string, unknown>)?.raw_response_preview ??
-                              testResult,
-                            null,
-                            2,
-                          )}
-                        </pre>
-                      </div>
-                      <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/[0.02] overflow-hidden">
-                        <div className="px-3 py-1.5 bg-emerald-500/[0.06] border-b border-emerald-500/10 flex items-center justify-between">
-                          <span className="text-[10px] font-medium text-emerald-600">
-                            Resultado mapeado
-                          </span>
-                          <span className="text-[8px] text-emerald-600/50">segun config</span>
-                        </div>
-                        <pre className="p-3 text-[10px] font-mono overflow-auto max-h-[300px] leading-relaxed whitespace-pre-wrap break-all">
-                          {JSON.stringify(
-                            (testResult as Record<string, unknown>)?.parsed_data ??
-                              (testResult as Record<string, unknown>)?.parsed_content_preview ??
-                              (testResult as Record<string, unknown>)?.raw_response_preview ??
-                              testResult,
-                            null,
-                            2,
-                          )}
-                        </pre>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                {!testResult && !testing && (
-                  <div className="rounded-lg border border-dashed p-6 text-center text-xs text-muted-foreground">
-                    Presiona "Ejecutar ahora" para probar el pipeline completo.
-                  </div>
-                )}
-              </>
-            )}
+              <Button
+                size="sm"
+                disabled={!stepValid(4) || disabled}
+                onClick={() => {
+                  patch({ tested_ok: true });
+                  toast.success("CronJob activado — se ejecutara segun la frecuencia configurada");
+                }}
+                className="gap-1.5"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Activar CronJob
+              </Button>
+            </div>
           </div>
         );
       default:
@@ -1657,39 +1663,55 @@ export function KnowledgeCronJobTab({
       {/* Flow navegable + Desactivar */}
       <div className="rounded-xl border bg-card/60 p-3 flex items-center justify-between gap-3">
         <div className="flex-1 min-w-0">{renderFlow()}</div>
-        <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-          <AlertDialogTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              className="shrink-0 text-destructive border-destructive/30 hover:bg-destructive/10"
-              disabled={disabled}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Desactivar CronJob?</AlertDialogTitle>
-              <AlertDialogDescription>
-                El CronJob se detendra y se eliminara la configuracion actual. Puedes volver a
-                configurarlo despues.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                onClick={() => {
-                  setConfirmOpen(false);
-                  onChange(null);
-                }}
+        <div className="flex items-center gap-1.5 shrink-0">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={disabled || syncing || !hasConfig}
+            onClick={handleSyncSave}
+            className="gap-1.5 h-8"
+          >
+            {syncing ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3.5 w-3.5" />
+            )}
+            Actualizar ahora
+          </Button>
+          <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0 text-destructive border-destructive/30 hover:bg-destructive/10"
+                disabled={disabled}
               >
-                Desactivar
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Desactivar CronJob?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  El CronJob se detendra y se eliminara la configuracion actual. Puedes volver a
+                  configurarlo despues.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  onClick={() => {
+                    setConfirmOpen(false);
+                    onChange(null);
+                  }}
+                >
+                  Desactivar
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
       </div>
       {/* Step content */}
       <div className="flex-1 rounded-xl border bg-card/60 p-5">{renderStep()}</div>
