@@ -26,6 +26,7 @@ import {
   useUpdateKnowledge,
   isKnowledgeIndexed,
   type AgentKnowledge,
+  type ApiRefreshConfig,
 } from "@/api/hooks/useKnowledge";
 import {
   ContentRenderer,
@@ -48,7 +49,7 @@ import { apiErrorMessage } from "@/lib/apiError";
 type TabId = "documento" | "vectores" | "uso" | "cronjob";
 
 /** Estado de validación del cron job para el indicador visual. */
-function cronJobStatus(config: ReturnType<typeof useKnowledge>["data"]) {
+function cronJobStatus(config: ApiRefreshConfig | null | undefined) {
   if (!config) return "none"; // sin cron
   if (config.tested_ok === true) return "validated"; // test exitoso
   if (!config.external_api_id || !config.endpoint || !config.cron) return "incomplete";

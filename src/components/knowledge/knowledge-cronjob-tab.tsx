@@ -320,7 +320,7 @@ export function KnowledgeCronJobTab({
         toast.error("No se pudo identificar el documento");
         return;
       }
-      const res = await POST(ENDPOINTS.knowledge.refresh(knowledgeId) + "?preview=true");
+      const res = await POST(ENDPOINTS.knowledge.refresh(knowledgeId!) + "?preview=true");
       setTestResult(res as Record<string, unknown>);
       const ok = (res as Record<string, unknown>)?.success ?? false;
       toast.success(ok ? "CronJob ejecutado correctamente" : "El test reporto errores");
@@ -368,7 +368,7 @@ export function KnowledgeCronJobTab({
     setDiscoveredData(null);
     try {
       const res = (await POST(
-        ENDPOINTS.knowledge.refresh(knowledgeId) + "?preview=true",
+        ENDPOINTS.knowledge.refresh(knowledgeId!) + "?preview=true",
       )) as Record<string, unknown>;
       const raw =
         (res as Record<string, unknown>)?.raw_response_preview ??
@@ -407,6 +407,10 @@ export function KnowledgeCronJobTab({
   const handleSyncSave = async () => {
     if (!value || !hasConfig) {
       toast.error("Selecciona aplicacion y endpoint primero");
+      return;
+    }
+    if (!knowledgeId) {
+      toast.error("No se pudo identificar el documento");
       return;
     }
     setSyncing(true);

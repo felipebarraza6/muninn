@@ -48,3 +48,9 @@ export {
   useWorkflowExecutions,
   useWorkflowExecution,
 } from "./useWorkflows";
+export {
+  useChatbotSessions,
+  useChatbotSession,
+  useCloseChatbotSession,
+} from "./useChatbotSessions";
+export { useDataVolumes } from "./useDataVolumes";

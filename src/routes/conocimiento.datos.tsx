@@ -39,6 +39,7 @@ import {
   useParseSpreadsheet,
   useBulkCreateKnowledge,
   type SpreadsheetParseRow,
+  type ApiRefreshConfig,
 } from "@/api/hooks/useKnowledge";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -678,7 +679,7 @@ export default function ConocimientoDatos() {
       knowledge_type: "DATA" | "DOCUMENT";
       tags: string[];
       is_active: boolean;
-      api_refresh_config?: Record<string, unknown>;
+      api_refresh_config?: ApiRefreshConfig;
     }>[] = [
       {
         title: bundleTitle.trim() || fileName || "Datos",
