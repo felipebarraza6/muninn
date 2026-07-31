@@ -16,13 +16,16 @@ const ScrollArea = React.forwardRef<
 >(({ className, children, viewportRef, showScrollbar = false, ...props }, ref) => (
   <ScrollAreaPrimitive.Root
     ref={ref}
-    className={cn("relative overflow-hidden", className)}
+    className={cn("relative overflow-hidden flex flex-col", className)}
     {...props}
   >
     <ScrollAreaPrimitive.Viewport
       ref={viewportRef}
-      className={cn("h-full w-full rounded-[inherit]", !showScrollbar && "overscroll-contain")}
-      style={showScrollbar ? undefined : { overflowY: "auto", overflowX: "auto" }}
+      className={cn(
+        "flex-1 min-h-0 w-full rounded-[inherit]",
+        !showScrollbar && "overscroll-contain",
+      )}
+      style={{ overflowY: "auto", overflowX: "auto" }}
     >
       {children}
     </ScrollAreaPrimitive.Viewport>
