@@ -22,15 +22,15 @@ export function isConversationLive(c: {
 
 export const POLL = {
   /** Lista con ítems vivos */
-  live: 3_000,
+  live: 10_000,
   /** Lista en reposo */
-  idle: 20_000,
+  idle: 30_000,
   /** Mensajes de hilo abierto con actividad */
-  messagesLive: 5_000,
+  messagesLive: 10_000,
   /** Mensajes sin actividad urgente */
-  messagesIdle: 15_000,
+  messagesIdle: 30_000,
   /** Detalle de plan/ejecución running */
-  detailLive: 3_000,
+  detailLive: 10_000,
   /** Detalle en reposo */
-  detailIdle: 20_000,
+  detailIdle: 30_000,
 } as const;

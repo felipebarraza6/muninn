@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isExecutionLive } from "@/lib/workflowGraph";
 import { DELETE, GET, PATCH, POST, normalizeListResponse } from "../client";
 import { ENDPOINTS } from "../endpoints/index";
+import { POLL } from "@/lib/pollInterval";
 
 export type WorkflowNodeType =
   | "trigger"
@@ -280,7 +281,7 @@ export function useWorkflowExecution(id: string | undefined) {
     queryKey: ["workflow-executions", "detail", id],
     queryFn: () => GET<WorkflowExecution>(ENDPOINTS.workflowExecutions.detail(id!)),
     enabled: !!id,
-    refetchInterval: (q) => (isExecutionLive(q.state.data?.status) ? 2500 : false),
+    refetchInterval: (q) => (isExecutionLive(q.state.data?.status) ? POLL.detailLive : false),
     refetchIntervalInBackground: false,
   });
 }
