@@ -25,6 +25,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { motionTokens } from "@/lib/motion";
 import { prettyJson } from "@/lib/json";
 import { ChatMarkdown } from "@/components/chat/chat-markdown";
 import {
@@ -672,7 +673,7 @@ export function MessageInsightSheet({
                 initial={reduceMotion ? false : { opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={reduceMotion ? undefined : { opacity: 0 }}
-                transition={{ duration: 0.28, ease: [0.25, 0.1, 0.25, 1] }}
+                transition={{ duration: motionTokens.card, ease: motionTokens.ease }}
               >
                 <div className={cn("rounded-xl border p-4 space-y-3", style.box)}>
                   <div className="flex items-start gap-3">
@@ -896,9 +897,9 @@ export function MessageInspectButton({
       <motion.button
         type="button"
         onClick={onClick}
-        whileTap={{ scale: 0.92 }}
-        whileHover={{ scale: 1.08 }}
-        transition={{ type: "spring", stiffness: 420, damping: 28 }}
+        whileTap={{ scale: 0.95 }}
+        whileHover={{ scale: 1.05 }}
+        transition={{ type: "spring", stiffness: 380, damping: 30 }}
         className={cn(
           "inline-flex h-5 w-5 items-center justify-center rounded-full transition-colors cursor-pointer",
           hasData

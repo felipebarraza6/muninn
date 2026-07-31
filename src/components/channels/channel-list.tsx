@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowUpRight, CheckCircle2, Loader2, Plus, Play, Radio, Bot } from "lucide-react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { motionTokens } from "@/lib/motion";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -121,7 +122,7 @@ export function ChannelList() {
             initial={reduceMotion ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: motionTokens.base }}
           >
             <PageSkeleton variant="cards" padded={false} />
           </motion.div>
@@ -131,7 +132,7 @@ export function ChannelList() {
             initial={reduceMotion ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: motionTokens.base }}
             className="rounded-2xl border border-dashed border-border/70 bg-muted/20 px-6 py-16 text-center"
           >
             <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
@@ -156,7 +157,7 @@ export function ChannelList() {
                 ? undefined
                 : {
                     hidden: {},
-                    show: { transition: { staggerChildren: 0.04 } },
+                    show: { transition: { staggerChildren: motionTokens.stagger } },
                   }
             }
             initial={reduceMotion ? false : "hidden"}
@@ -174,7 +175,7 @@ export function ChannelList() {
                     ? undefined
                     : {
                         hidden: { opacity: 0, y: 10 },
-                        show: { opacity: 1, y: 0, transition: { duration: 0.28 } },
+                        show: { opacity: 1, y: 0, transition: { duration: motionTokens.card } },
                       }
                 }
               >

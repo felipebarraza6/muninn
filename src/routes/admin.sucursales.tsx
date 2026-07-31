@@ -1,6 +1,7 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { motionTokens } from "@/lib/motion";
 import {
   ExternalLink,
   Globe2,
@@ -1066,7 +1067,7 @@ export default function AdminSucursalesPage() {
           initial={reduceMotion ? false : { opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
+          transition={{ duration: motionTokens.base }}
           className="px-4 md:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto"
         >
           <AdminPageLoader variant="table" />

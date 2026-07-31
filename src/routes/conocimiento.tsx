@@ -60,6 +60,7 @@ import {
 } from "@/lib/knowledge-types";
 import { toast } from "sonner";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { motionTokens } from "@/lib/motion";
 import { apiErrorMessage } from "@/lib/apiError";
 import { AdminPageMotion } from "@/components/admin/AdminPageMotion";
 import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
@@ -572,7 +573,7 @@ export default function Conocimiento() {
             initial={reduceMotion ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: motionTokens.base }}
           >
             <PageSkeleton variant="cards" padded={false} />
           </motion.div>
@@ -582,7 +583,7 @@ export default function Conocimiento() {
             initial={reduceMotion ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: motionTokens.base }}
           >
             <EmptyState
               title={q.trim() ? "Sin resultados" : "Biblioteca vacía"}
@@ -610,7 +611,7 @@ export default function Conocimiento() {
                 ? undefined
                 : {
                     hidden: {},
-                    show: { transition: { staggerChildren: 0.04 } },
+                    show: { transition: { staggerChildren: motionTokens.stagger } },
                   }
             }
             initial={reduceMotion ? false : "hidden"}
@@ -628,7 +629,7 @@ export default function Conocimiento() {
                       ? undefined
                       : {
                           hidden: { opacity: 0, y: 10 },
-                          show: { opacity: 1, y: 0, transition: { duration: 0.28 } },
+                          show: { opacity: 1, y: 0, transition: { duration: motionTokens.card } },
                         }
                   }
                 >

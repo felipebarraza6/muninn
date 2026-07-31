@@ -14,6 +14,7 @@ import {
   LOGIN_LANDING_TAGLINE,
   type LoginLandingModuleId,
 } from "@/lib/loginLanding";
+import { motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
 /** Botón manito: “¿qué es un harness?” (después de “magia”). */
@@ -117,7 +118,7 @@ export function PitchSwap({ centered, brand }: { centered?: boolean; brand?: boo
             initial={reduceMotion ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={reduceMotion ? undefined : { opacity: 0 }}
-            transition={{ duration: 0.15, ease: "linear" }}
+            transition={{ duration: motionTokens.fast, ease: motionTokens.ease }}
           >
             {brand && (
               <div
@@ -157,7 +158,7 @@ export function PitchSwap({ centered, brand }: { centered?: boolean; brand?: boo
             initial={reduceMotion ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={reduceMotion ? undefined : { opacity: 0 }}
-            transition={{ duration: 0.15, ease: "linear" }}
+            transition={{ duration: motionTokens.fast, ease: motionTokens.ease }}
           >
             <div className="pixel-harness-box space-y-2.5 text-left">
               <div className="flex items-start justify-between gap-2">

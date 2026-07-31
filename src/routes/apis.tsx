@@ -1,6 +1,7 @@
 import { useMemo, useState, startTransition } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { motionTokens } from "@/lib/motion";
 import { Loader2, Plus, FlaskConical, ArrowUpRight, Lock, LayoutGrid, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -488,7 +489,7 @@ export default function APIs() {
             initial={reduceMotionLocal ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: motionTokens.base }}
           >
             <PageSkeleton variant="cards" padded={false} />
           </motion.div>
@@ -498,7 +499,7 @@ export default function APIs() {
             initial={reduceMotionLocal ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: motionTokens.base }}
             className="rounded-2xl border border-dashed border-border/80 py-16 text-center space-y-3 bg-card/30"
           >
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20">
@@ -533,7 +534,7 @@ export default function APIs() {
                 ? undefined
                 : {
                     hidden: {},
-                    show: { transition: { staggerChildren: 0.04 } },
+                    show: { transition: { staggerChildren: motionTokens.stagger } },
                   }
             }
             initial={reduceMotion ? false : "hidden"}
@@ -550,7 +551,7 @@ export default function APIs() {
                       ? undefined
                       : {
                           hidden: { opacity: 0, y: 10 },
-                          show: { opacity: 1, y: 0, transition: { duration: 0.28 } },
+                          show: { opacity: 1, y: 0, transition: { duration: motionTokens.card } },
                         }
                   }
                   exit={reduceMotion ? undefined : { opacity: 0, scale: 0.98 }}

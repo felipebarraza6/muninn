@@ -18,6 +18,7 @@ import {
   LOGIN_VALUE_BLOCKS,
   type LoginLandingModuleId,
 } from "@/lib/loginLanding";
+import { motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
 type SectionId = "hero" | "agente" | "tecnico" | "live" | "docs";
@@ -384,7 +385,7 @@ function FlowSteps() {
           initial={reduceMotion ? false : { opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
           exit={reduceMotion ? undefined : { opacity: 0, y: -4 }}
-          transition={{ duration: 0.2, ease: "linear" }}
+          transition={{ duration: motionTokens.base, ease: motionTokens.ease }}
           className="login-pixel-readout !p-4 pixel-jules-sm"
         >
           <p className="pixel-font text-[10px] uppercase text-primary">Paso {current.n}</p>
@@ -466,7 +467,7 @@ export function MuninnLoginLanding({ className, liveNonce = 0 }: Props) {
               initial={{ opacity: 0, filter: "blur(8px)", y: 14 }}
               animate={{ opacity: 1, filter: "blur(0px)", y: 0 }}
               exit={{ opacity: 0, filter: "blur(6px)", y: -14 }}
-              transition={{ duration: 0.35, ease: [0.45, 0, 0.2, 1] }}
+              transition={{ duration: motionTokens.slow, ease: motionTokens.easePunchy }}
               className="flex w-full max-w-3xl flex-col"
             >
               {activeSection === "hero" && (
@@ -919,7 +920,7 @@ export function MuninnLoginLanding({ className, liveNonce = 0 }: Props) {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  transition={{ duration: 0.2 }}
+                  transition={{ duration: motionTokens.base }}
                   className="fixed inset-0 z-50 flex items-center justify-center bg-background/70 p-4 backdrop-blur-sm"
                   onClick={() => setSelectedAtom(null)}
                 >
@@ -927,7 +928,7 @@ export function MuninnLoginLanding({ className, liveNonce = 0 }: Props) {
                     initial={{ opacity: 0, scale: 0.95, y: 10 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                    transition={{ duration: 0.25, ease: "easeOut" }}
+                    transition={{ duration: motionTokens.base, ease: motionTokens.easeOut }}
                     className="relative w-full max-w-md border-2 border-primary/40 bg-card pixel-jules-sm p-5 shadow-[6px_6px_0_0_color-mix(in_oklab,var(--primary)_25%,transparent)]"
                     onClick={(e) => e.stopPropagation()}
                   >

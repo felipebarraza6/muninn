@@ -12,6 +12,7 @@ import { AppIcon } from "@/components/applications/app-icon";
 import { LoginSocialLinks } from "@/components/brand/LoginSocialLinks";
 import { MuninnBrand } from "@/components/brand/MuninnBrand";
 import { ORG_LOGIN_CAPABILITIES, type OrgLoginCapabilityId } from "@/lib/orgLoginLanding";
+import { motionTokens } from "@/lib/motion";
 import type { PublicAvailableApp, PublicSocialLink, PublicSponsor } from "@/lib/publicLoginTheme";
 import { resolveMediaUrl } from "@/lib/mediaUrl";
 import { cn } from "@/lib/utils";
@@ -115,9 +116,11 @@ export function OrgLoginLanding({
         initial={reduceMotion ? false : { opacity: 0, y: 14 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{
-          duration: 0.35,
-          delay: reduceMotion ? 0 : Math.min(0.04 + i * 0.03, 0.45),
-          ease: [0.22, 1, 0.36, 1],
+          duration: motionTokens.slow,
+          delay: reduceMotion
+            ? 0
+            : Math.min(motionTokens.stagger + i * motionTokens.stagger, motionTokens.slow),
+          ease: motionTokens.easePage,
         }}
         className={cn(
           "group flex h-full flex-col rounded-2xl bg-card/50 p-4 backdrop-blur-sm",
@@ -195,7 +198,7 @@ export function OrgLoginLanding({
             <motion.div
               initial={reduceMotion ? false : { opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+              transition={{ duration: motionTokens.slow, ease: motionTokens.easePage }}
               className="flex flex-col items-center gap-5 text-center lg:items-start lg:text-left"
             >
               {loading ? (
@@ -252,7 +255,10 @@ export function OrgLoginLanding({
             <motion.div
               initial={reduceMotion ? false : { opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: reduceMotion ? 0 : 0.06 }}
+              transition={{
+                duration: motionTokens.slow,
+                delay: reduceMotion ? 0 : motionTokens.page,
+              }}
               className="mx-auto w-full max-w-md lg:mx-0 lg:max-w-none"
             >
               {children}

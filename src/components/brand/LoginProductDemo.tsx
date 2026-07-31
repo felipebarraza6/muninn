@@ -12,6 +12,7 @@ import {
   type LoginDemoNodeKind,
   type LoginDemoStageId,
 } from "@/lib/loginLanding";
+import { motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -46,7 +47,7 @@ const STEP_MOTION = {
   initial: { opacity: 0 },
   animate: { opacity: 1 },
   exit: { opacity: 0 },
-  transition: { duration: 0.28, ease: "linear" as const },
+  transition: { duration: motionTokens.card, ease: motionTokens.ease },
 };
 
 type ChatLine = LoginDemoMessage & { id: string };
@@ -400,7 +401,7 @@ export function LoginProductDemo({ className, liveFocusToken = 0, demoOnly = fal
                     initial={reduceMotion ? false : { opacity: 0, y: 8, filter: "blur(2px)" }}
                     animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
                     exit={{ opacity: 0, y: -6, filter: "blur(2px)" }}
-                    transition={{ duration: 0.35, ease: [0.45, 0, 0.2, 1] }}
+                    transition={{ duration: motionTokens.slow, ease: motionTokens.easePunchy }}
                     className={cn(
                       "pixel-display max-w-[98%] border-2 px-2.5 py-1.5 text-[13px] leading-snug",
                       msg.role === "user" &&

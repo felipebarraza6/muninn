@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { getStoredBranches, getStoredUser } from "@/lib/authSession";
+import { motionTokens } from "@/lib/motion";
 import {
   canAccessBranchesAdmin,
   canAccessLlmAdmin,
@@ -198,7 +199,7 @@ export default function PerfilPage() {
           initial={reduceMotion ? false : { opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
+          transition={{ duration: motionTokens.base }}
         >
           <PageSkeleton variant="profile" />
         </motion.div>
@@ -207,7 +208,7 @@ export default function PerfilPage() {
           key="content"
           initial={reduceMotion ? false : { opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: motionTokens.base, ease: motionTokens.easePage }}
           className="mx-auto w-full max-w-6xl space-y-5 px-4 py-5 md:px-6 lg:px-8"
         >
           <section className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">

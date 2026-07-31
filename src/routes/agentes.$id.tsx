@@ -37,6 +37,7 @@ import { AdminPageMotion } from "@/components/admin/AdminPageMotion";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { isSuperAdmin } from "@/lib/authGuards";
 import { cn } from "@/lib/utils";
+import { motionTokens } from "@/lib/motion";
 import { apiErrorMessage } from "@/lib/apiError";
 import { toast } from "sonner";
 
@@ -138,8 +139,16 @@ export default function AgentDetailPage() {
         ? undefined
         : {
             initial: { opacity: 0, y: 10 },
-            animate: { opacity: 1, y: 0, transition: { duration: 0.22, ease: "easeOut" as const } },
-            exit: { opacity: 0, y: -6, transition: { duration: 0.16, ease: "easeIn" as const } },
+            animate: {
+              opacity: 1,
+              y: 0,
+              transition: { duration: motionTokens.page, ease: motionTokens.easePage },
+            },
+            exit: {
+              opacity: 0,
+              y: -6,
+              transition: { duration: motionTokens.fast, ease: motionTokens.easeOut },
+            },
           },
     [reduceMotion],
   );

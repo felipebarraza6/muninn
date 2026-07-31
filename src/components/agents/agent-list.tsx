@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { motionTokens } from "@/lib/motion";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -143,7 +144,7 @@ export function AgentList() {
             initial={reduceMotion ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: motionTokens.base }}
           >
             <PageSkeleton variant="cards" padded={false} />
           </motion.div>
@@ -153,7 +154,7 @@ export function AgentList() {
             initial={reduceMotion ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: motionTokens.base }}
           >
             <EmptyState
               title={q.trim() ? "Sin agentes para esa búsqueda" : "No hay agentes aún"}
@@ -181,10 +182,14 @@ export function AgentList() {
                 ? undefined
                 : {
                     hidden: {},
-                    show: { transition: { staggerChildren: 0.06 } },
+                    show: { transition: { staggerChildren: motionTokens.stagger } },
                     exit: {
                       opacity: 0,
-                      transition: { duration: 0.12, staggerChildren: 0.03, staggerDirection: -1 },
+                      transition: {
+                        duration: motionTokens.fast, // micro-exit rápido
+                        staggerChildren: motionTokens.stagger,
+                        staggerDirection: -1,
+                      },
                     },
                   }
             }
@@ -222,12 +227,12 @@ function AgentCard({ agent, reduceMotion }: { agent: Agent; reduceMotion: boolea
           ? undefined
           : {
               hidden: { opacity: 0, y: 10 },
-              show: { opacity: 1, y: 0, transition: { duration: 0.28 } },
+              show: { opacity: 1, y: 0, transition: { duration: motionTokens.card } },
               exit: {
                 opacity: 0,
                 y: -8,
                 scale: 0.98,
-                transition: { duration: 0.2, ease: "easeIn" },
+                transition: { duration: motionTokens.base, ease: motionTokens.easeOut },
               },
             }
       }
