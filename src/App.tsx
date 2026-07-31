@@ -11,7 +11,7 @@ import {
 } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HelmetProvider } from "react-helmet-async";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import RootLayout from "./routes/__root";
 import { APP_STORE_PATH } from "./lib/applications";
 import { RequireAuth, RedirectIfAuthenticated } from "./components/auth/RequireAuth";
@@ -33,6 +33,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { PwaUpdatePrompt } from "./components/PwaUpdatePrompt";
 import { Toaster } from "./components/ui/sonner";
 import { RealtimeProvider } from "./lib/realtime";
+import { motionTokens } from "@/lib/motion";
 import Login from "./routes/login";
 import Entrar from "./routes/entrar";
 
@@ -122,6 +123,7 @@ function NotFoundPage() {
 
 function AnimatedOutlet() {
   const location = useLocation();
+  const reduceMotion = useReducedMotion();
   // Chat / bandeja: sin fade de ruta (evita “doble animación” y se siente página propia).
   const skipRouteFade =
     location.pathname === "/app/chat" ||
@@ -313,7 +315,7 @@ function AnimatedOutlet() {
     </Suspense>
   );
 
-  if (skipRouteFade) {
+  if (skipRouteFade || reduceMotion) {
     return <div className="min-h-0 h-full">{routeTree}</div>;
   }
 
@@ -324,7 +326,7 @@ function AnimatedOutlet() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1], delay: 0.03 }}
+        transition={{ duration: motionTokens.page, ease: motionTokens.easePage, delay: 0.03 }}
         className="min-h-0"
       >
         {routeTree}
@@ -336,6 +338,16 @@ function AnimatedOutlet() {
 /** Transición Jules: landing (/) ↔ auth (/entrar). */
 function MuninnGateLayout() {
   const location = useLocation();
+  const reduceMotion = useReducedMotion();
+
+  if (reduceMotion) {
+    return (
+      <RedirectIfAuthenticated>
+        <Outlet />
+      </RedirectIfAuthenticated>
+    );
+  }
+
   return (
     <RedirectIfAuthenticated>
       <AnimatePresence mode="wait">
@@ -344,7 +356,7 @@ function MuninnGateLayout() {
           initial={{ opacity: 0, x: location.pathname === "/entrar" ? 20 : -14 }}
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: location.pathname === "/entrar" ? -14 : 20 }}
-          transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: motionTokens.card, ease: motionTokens.easePage }}
           className="min-h-dvh"
         >
           <Outlet />

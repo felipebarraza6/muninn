@@ -1,17 +1,16 @@
 import { motion, useReducedMotion, type Variants } from "framer-motion";
+import { motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
-
-const easeOut = [0.22, 1, 0.36, 1] as const;
 
 const pageVariants: Variants = {
   hidden: { opacity: 0 },
   show: {
     opacity: 1,
     transition: {
-      duration: 0.2,
-      ease: easeOut,
+      duration: motionTokens.base,
+      ease: motionTokens.easePage,
       when: "beforeChildren",
-      staggerChildren: 0.03,
+      staggerChildren: motionTokens.stagger,
     },
   },
 };
@@ -20,7 +19,7 @@ const itemVariants: Variants = {
   hidden: { opacity: 0 },
   show: {
     opacity: 1,
-    transition: { duration: 0.18, ease: easeOut },
+    transition: { duration: motionTokens.fast, ease: motionTokens.easePage },
   },
 };
 
@@ -81,7 +80,7 @@ export function AdminMotionList({
           ? instant
           : {
               hidden: {},
-              show: { transition: { staggerChildren: 0.025 } },
+              show: { transition: { staggerChildren: motionTokens.stagger } },
             }
       }
       initial="hidden"

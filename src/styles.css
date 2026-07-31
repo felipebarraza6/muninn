@@ -86,8 +86,11 @@
   --duration-motion-fast: 150ms;
   --duration-motion-base: 200ms;
   --duration-motion-slow: 350ms;
+  --duration-motion-page: 220ms;
+  --duration-motion-card: 280ms;
   --ease-motion-soft: cubic-bezier(0.25, 0.1, 0.25, 1);
   --ease-motion-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-motion-page: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .dark {
@@ -2960,7 +2963,7 @@ html[data-motion="off"] .pixel-nordic-ripples,
   }
 }
 
-@keyframes pixel-moon-flow {
+@keyframes pixel-moon-flow-wobble {
   0% {
     opacity: 0.5;
     transform: translateX(-8px);
@@ -2978,7 +2981,7 @@ html[data-motion="off"] .pixel-nordic-ripples,
   }
 }
 
-@keyframes pixel-moon-flow {
+@keyframes pixel-moon-flow-wobble-soft {
   0% {
     opacity: 0.45;
     transform: translateX(-4px);
@@ -3036,7 +3039,7 @@ html[data-motion="off"] .pixel-nordic-ripples,
   }
 }
 
-@keyframes pixel-ripple-flow {
+@keyframes pixel-ripple-flow-wobble {
   0% {
     transform: translateX(-4px);
     opacity: 0.4;
@@ -3054,7 +3057,7 @@ html[data-motion="off"] .pixel-nordic-ripples,
   }
 }
 
-@keyframes pixel-ripple-flow {
+@keyframes pixel-ripple-flow-spread {
   0% {
     transform: translateX(-30px);
     opacity: 0.3;

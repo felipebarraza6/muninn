@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
 export type AdminOwnerTab = {
@@ -185,7 +186,7 @@ export function AdminMultiEditShell({
       initial={reduceMotion ? false : { opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={reduceMotion ? undefined : { opacity: 0 }}
-      transition={{ duration: 0.18, ease: "easeOut" }}
+      transition={{ duration: motionTokens.fast, ease: motionTokens.easeOut }}
       className={cn("mx-auto w-full max-w-4xl space-y-5", className)}
     >
       <div className="flex flex-wrap items-center gap-3">

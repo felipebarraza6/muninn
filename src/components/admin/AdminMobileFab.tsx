@@ -2,6 +2,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Menu, X, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
 export type AdminMobileFabAction = {
@@ -44,7 +45,7 @@ export function AdminMobileFab({
             initial={reduceMotion ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={reduceMotion ? undefined : { opacity: 0 }}
-            transition={{ duration: 0.15 }}
+            transition={{ duration: motionTokens.fast }}
           >
             <AnimatePresence>
               {open && (
@@ -52,7 +53,7 @@ export function AdminMobileFab({
                   initial={reduceMotion ? false : { opacity: 0, scale: 0.96 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={reduceMotion ? undefined : { opacity: 0, scale: 0.96 }}
-                  transition={{ duration: 0.15 }}
+                  transition={{ duration: motionTokens.fast }}
                   className="mb-1 flex flex-col items-end gap-2"
                 >
                   {actions.map((action) => {
