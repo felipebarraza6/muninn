@@ -256,6 +256,16 @@
     height: 0;
   }
 
+  /* Radix ScrollArea: el Viewport tiene overflow hidden inline (Radix lo pone DESPUÉS
+   * de cualquier style prop). Forzar overflow nativo para que scrollIntoView/scrollTop
+   * funcionen dentro del contenedor (chat bandeja, sheets). El scrollbar sigue oculto
+   * por las reglas de arriba. */
+  .radix-viewport-scrollable,
+  [data-radix-scroll-area-viewport].radix-viewport-scrollable {
+    overflow-y: auto !important;
+    overflow-x: auto !important;
+  }
+
   html,
   body {
     background-color: var(--color-background);

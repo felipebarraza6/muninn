@@ -22,10 +22,9 @@ const ScrollArea = React.forwardRef<
     <ScrollAreaPrimitive.Viewport
       ref={viewportRef}
       className={cn(
-        "flex-1 min-h-0 w-full rounded-[inherit]",
+        "flex-1 min-h-0 w-full rounded-[inherit] radix-viewport-scrollable",
         !showScrollbar && "overscroll-contain",
       )}
-      style={{ overflowY: "auto", overflowX: "auto" }}
     >
       {children}
     </ScrollAreaPrimitive.Viewport>
