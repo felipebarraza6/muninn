@@ -86,10 +86,7 @@ export function ChatPane({
   const [draft, setDraft] = useState(() => loadChatDraft(draftKey));
   const [inspectMessage, setInspectMessage] = useState<InsightMessage | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const { endRef, bindViewport, showJump, scrollToBottom } = useStickyChatScroll([
-    conversation.messages.length,
-    conversation.id,
-  ]);
+  const { endRef, bindViewport, showJump, scrollToBottom } = useStickyChatScroll([conversation.id]);
 
   useEffect(() => {
     setDraft(loadChatDraft(draftKey));
