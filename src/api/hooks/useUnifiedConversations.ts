@@ -72,12 +72,21 @@ export function useUnifiedConversations(filters?: { status?: string }) {
 
 export function useUnifiedConversationMessages(id: string | undefined, source: string | undefined) {
   const branchId = useBranchId();
+  const queryClient = useQueryClient();
   const params = useMemo(() => ({ source, branch: branchId }), [source, branchId]);
   return useQuery({
     queryKey: [QUERY_KEY, id, "messages", params],
     queryFn: () => GET<UnifiedMessage[]>(ENDPOINTS.unifiedConversations.messages(id!), { params }),
     enabled: !!id && !!source,
-    refetchInterval: POLL.messagesLive,
+    refetchInterval: () => {
+      // Poll rápido solo si la conversación está viva; si no, poll lento
+      // (evita quemar el rate-limit del API con la bandeja abierta en reposo).
+      const cached = queryClient
+        .getQueriesData<UnifiedConversation[]>({ queryKey: [QUERY_KEY] })
+        .flatMap(([, data]) => data ?? []);
+      const live = cached.some((c) => String(c.id) === String(id) && isConversationLive(c));
+      return live ? POLL.messagesLive : POLL.messagesIdle;
+    },
     refetchIntervalInBackground: false,
   });
 }

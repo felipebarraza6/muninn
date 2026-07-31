@@ -69,7 +69,15 @@ const PerfilPage = lazy(() => import("./routes/perfil"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: { retry: 1, refetchOnWindowFocus: false },
+    queries: {
+      refetchOnWindowFocus: false,
+      // No reintentar 429: reintentar amplifica el rate-limit del API.
+      retry: (failureCount, error) => {
+        const status = (error as { response?: { status?: number } })?.response?.status;
+        if (status === 429) return false;
+        return failureCount < 1;
+      },
+    },
   },
 });
 
