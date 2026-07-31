@@ -231,6 +231,12 @@ export function AgentChatCore({
   const streamAbortRef = useRef<AbortController | null>(null);
   /** Evita que el finally de un stream abortado pise uno nuevo. */
   const streamGenerationRef = useRef(0);
+  /** Marca que el cambio de conversationId proviene de ensureConversationId (creación de hilo). */
+  const creatingConversationRef = useRef(false);
+  /** Creación en vuelo: los envíos concurrentes esperan la misma promesa. */
+  const creatingPromiseRef = useRef<Promise<string | null> | null>(null);
+  /** Conversación cuya bienvenida local no debe pisarse con un GET de mensajes vacío. */
+  const welcomeOnlyConversationRef = useRef<string | null>(null);
 
   const isBusy = sendMessage.isPending || isStreaming;
 
@@ -332,6 +338,9 @@ export function AgentChatCore({
     setMessages([]);
     setCreateError(null);
     lastRemoteMessagesRef.current = "";
+    creatingConversationRef.current = false;
+    creatingPromiseRef.current = null;
+    welcomeOnlyConversationRef.current = null;
     // Solo reset fuerte al cambiar de agente; conversation synca en otro effect.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- conversationIdFromUrl se aplica abajo
   }, [agentId]);
@@ -349,6 +358,12 @@ export function AgentChatCore({
   }, [conversationIdFromUrl]);
 
   useEffect(() => {
+    if (creatingConversationRef.current) {
+      // La conversación se acaba de crear aquí: no abortar el stream ya iniciado.
+      creatingConversationRef.current = false;
+      lastRemoteMessagesRef.current = "";
+      return;
+    }
     lastRemoteMessagesRef.current = "";
     // Abort stream al cambiar de hilo (evita deltas en conversación equivocada).
     streamAbortRef.current?.abort();
@@ -366,6 +381,9 @@ export function AgentChatCore({
     // Don't overwrite live stream data while the model is responding.
     if (isStreaming) return;
     const next = normalizeAgentChatMessages(remoteMessages);
+    // Hilo recién creado: el backend aún no tiene mensajes, conservar la bienvenida local.
+    if (!next.length && welcomeOnlyConversationRef.current === conversationId) return;
+    welcomeOnlyConversationRef.current = null;
     const key = JSON.stringify(next.map((m) => ({ id: m.id, content: m.content })));
     if (key === lastRemoteMessagesRef.current) return;
     lastRemoteMessagesRef.current = key;
@@ -468,50 +486,57 @@ export function AgentChatCore({
 
   const ensureConversationId = useCallback(async (): Promise<string | null> => {
     if (conversationIdRef.current) return conversationIdRef.current;
-    if (!agent || !agentId || isCreatingRef.current) return null;
+    if (creatingPromiseRef.current) return creatingPromiseRef.current;
+    if (!agent || !agentId) return null;
 
     isCreatingRef.current = true;
     setIsCreating(true);
     setCreateError(null);
 
-    try {
-      const data = await createConversation.mutateAsync({
-        agent: agentId,
-        title: `Chat con ${agent.name}`,
-        user: getCurrentUserId(),
-        ...(agentBranchId ? { branch: agentBranchId } : {}),
-      });
-      const id = String(data.id);
-      lastRemoteMessagesRef.current = "";
-      conversationIdRef.current = id;
-      setConversationId(id);
-      setIsDraftNew(false);
-      mergeSearchParams({ conversation: id });
-      return id;
-    } catch (err) {
-      const msg = apiErrorMessage(err, "No se pudo iniciar la conversación");
-      setCreateError(msg);
-      toast.error(msg);
-      return null;
-    } finally {
-      isCreatingRef.current = false;
-      setIsCreating(false);
-    }
+    const pending = (async (): Promise<string | null> => {
+      try {
+        const data = await createConversation.mutateAsync({
+          agent: agentId,
+          title: `Chat con ${agent.name}`,
+          user: getCurrentUserId(),
+          ...(agentBranchId ? { branch: agentBranchId } : {}),
+        });
+        const id = String(data.id);
+        lastRemoteMessagesRef.current = "";
+        conversationIdRef.current = id;
+        creatingConversationRef.current = true;
+        setConversationId(id);
+        setIsDraftNew(false);
+        mergeSearchParams({ conversation: id });
+        return id;
+      } catch (err) {
+        const msg = apiErrorMessage(err, "No se pudo iniciar la conversación");
+        setCreateError(msg);
+        toast.error(msg);
+        return null;
+      } finally {
+        creatingPromiseRef.current = null;
+        isCreatingRef.current = false;
+        setIsCreating(false);
+      }
+    })();
+
+    creatingPromiseRef.current = pending;
+    return pending;
   }, [agent, agentBranchId, agentId, createConversation, mergeSearchParams]);
 
   const doCreateConversation = useCallback(() => {
     void ensureConversationId().then((id) => {
-      if (!id || !agent) return;
-      if (agent.welcome_message) {
-        setMessages([
-          {
-            id: makeChatId("welcome"),
-            role: "agent",
-            content: agent.welcome_message,
-            created: new Date().toISOString(),
-          },
-        ]);
-      }
+      if (!id || !agent?.welcome_message) return;
+      welcomeOnlyConversationRef.current = id;
+      setMessages([
+        {
+          id: makeChatId("welcome"),
+          role: "agent",
+          content: agent.welcome_message,
+          created: new Date().toISOString(),
+        },
+      ]);
     });
   }, [agent, ensureConversationId]);
 
@@ -559,13 +584,15 @@ export function AgentChatCore({
         ? ""
         : attachedSkills.map((s) => formatSkillInvocation(s.slug, s.params)).join(" ");
     const text = [skillPrefix, freeText].filter(Boolean).join("\n").trim();
-    if (!text || isBusy || isCreating) return;
+    if (!text || isBusy) return;
 
     const activeReply = overrides && "reply" in overrides ? overrides.reply : replyTo;
     const replyToId = activeReply?.id ?? null;
 
-    const activeId = conversationId ?? (await ensureConversationId());
+    const activeId = conversationIdRef.current ?? (await ensureConversationId());
     if (!activeId) return;
+    // Anti doble-envío: otro send que esperaba la misma creación ya arrancó el stream.
+    if (streamAbortRef.current) return;
 
     const userMsgId = makeChatId("user");
     const userMsg: ChatMessage = {
@@ -598,7 +625,6 @@ export function AgentChatCore({
     ]);
     setIsStreaming(true);
 
-    streamAbortRef.current?.abort();
     const abort = new AbortController();
     streamAbortRef.current = abort;
     const generation = ++streamGenerationRef.current;
@@ -833,12 +859,14 @@ export function AgentChatCore({
     isCreatingRef.current = false;
     conversationIdRef.current = null;
     lastRemoteMessagesRef.current = "";
-    setIsDraftNew(true);
+    welcomeOnlyConversationRef.current = null;
+    setIsDraftNew(false);
     setConversationId(null);
     setMessages([]);
     setCreateError(null);
     setInput("");
     mergeSearchParams({ conversation: null });
+    doCreateConversation();
   };
 
   const handleSelectConversation = (convId: string) => {
@@ -1397,7 +1425,6 @@ export function AgentChatCore({
                           ? "Escribe para iniciar… (/ para skills)"
                           : "Escribe tu mensaje… (/ para skills)"
               }
-              disabled={isCreating}
               busy={isBusy}
               canStop={isStreaming}
               onStop={stopStreaming}

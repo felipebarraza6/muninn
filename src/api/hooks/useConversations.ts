@@ -3,6 +3,8 @@ import { GET, POST, normalizeListResponse } from "../client";
 import { ENDPOINTS } from "../endpoints/index";
 import { getActiveBranchIdInt } from "@/lib/branchStorage";
 import { POLL } from "@/lib/pollInterval";
+import { useActiveBranchId } from "@/hooks/useActiveBranchId";
+import type { UnifiedConversation } from "@/api/hooks/useUnifiedConversations";
 
 export interface Conversation {
   id: string | number;
@@ -184,13 +186,38 @@ export function useArchiveConversation() {
 
 export function useUpdateConversationStatus() {
   const queryClient = useQueryClient();
-  const branchId = getActiveBranchIdInt();
+  const activeBranchId = useActiveBranchId();
+  const branchId =
+    activeBranchId == null || activeBranchId === ""
+      ? undefined
+      : Number.isFinite(Number(activeBranchId))
+        ? Number(activeBranchId)
+        : undefined;
   return useMutation({
     mutationFn: ({ id, status }: { id: string | number; status: string }) =>
       POST(ENDPOINTS.unifiedConversations.setStatus(String(id)), {
         status,
         branch: branchId,
       }),
+    onMutate: async ({ id, status }) => {
+      await queryClient.cancelQueries({ queryKey: ["unified-conversations"] });
+      const previous = queryClient.getQueriesData<UnifiedConversation[]>({
+        queryKey: ["unified-conversations"],
+      });
+      queryClient.setQueriesData<UnifiedConversation[]>(
+        { queryKey: ["unified-conversations"] },
+        (old) =>
+          old?.map((conversation) =>
+            String(conversation.id) === String(id)
+              ? { ...conversation, status: status.toLowerCase() }
+              : conversation,
+          ),
+      );
+      return { previous };
+    },
+    onError: (_err, _variables, context) => {
+      context?.previous.forEach(([key, data]) => queryClient.setQueryData(key, data));
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["conversations"], refetchType: "all" });
       queryClient.invalidateQueries({ queryKey: ["unified-conversations"], refetchType: "all" });

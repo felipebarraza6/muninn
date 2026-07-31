@@ -37,6 +37,7 @@ function apiStatusToLocal(status?: string): ConversationStatus {
       return "requires_human";
     case "active":
       return "ai_responding";
+    case "archived":
     case "inactive":
     case "closed":
     case "spam":

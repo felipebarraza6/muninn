@@ -37,3 +37,4 @@ src/api/generated/schema.ts
 *.sw?
 .omo/run-continuation/
 .omo/drafts/
+.omo/notepads/
