@@ -291,25 +291,10 @@ export function BusinessHome() {
                   label="Conversaciones"
                   tone="primary"
                 />
-                <QuickLink
-                  href="/app/agentes"
-                  icon={Bot}
-                  label="Agentes"
-                  tone="success"
-                />
-                <QuickLink
-                  href="/app/canales"
-                  icon={Share2}
-                  label="Canales"
-                  tone="info"
-                />
+                <QuickLink href="/app/agentes" icon={Bot} label="Agentes" tone="success" />
+                <QuickLink href="/app/canales" icon={Share2} label="Canales" tone="info" />
                 {showSkills && (
-                  <QuickLink
-                    href="/app/skills"
-                    icon={Sparkles}
-                    label="Skills"
-                    tone="warning"
-                  />
+                  <QuickLink href="/app/skills" icon={Sparkles} label="Skills" tone="warning" />
                 )}
                 <QuickLink
                   href="/app/aplicaciones"
@@ -341,12 +326,27 @@ export function BusinessHome() {
             </div>
             <div className="grid gap-3 grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
               {widgets.map((w) => {
-                const { icon: Icon, toneClass, iconBox, glow, bg } = resolveWidgetStyle(w.source, w.key);
-                const isRevenue = w.source === "function_execution_revenue" || /revenue|ingresos|venta|precio/i.test(w.key);
-                const formattedValue = isRevenue 
+                const {
+                  icon: Icon,
+                  toneClass,
+                  iconBox,
+                  glow,
+                  bg,
+                } = resolveWidgetStyle(w.source, w.key);
+                const isRevenue =
+                  w.source === "function_execution_revenue" ||
+                  /revenue|ingresos|venta|precio/i.test(w.key);
+                const formattedValue = isRevenue
                   ? `$${formatNumber(w.value)}`
                   : formatNumber(w.value);
-                const rangeLabel = w.range === "today" ? "Hoy" : w.range === "week" ? "7 días" : w.range === "month" ? "Mes" : w.range;
+                const rangeLabel =
+                  w.range === "today"
+                    ? "Hoy"
+                    : w.range === "week"
+                      ? "7 días"
+                      : w.range === "month"
+                        ? "Mes"
+                        : w.range;
                 const hasRevenue = w.revenue != null && w.revenue > 0;
                 const formattedRevenue = hasRevenue ? `$${formatNumber(w.revenue)}` : null;
                 return (
