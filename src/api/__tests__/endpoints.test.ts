@@ -15,6 +15,7 @@ describe("API Endpoints", () => {
       expect(ENDPOINTS.agents.byApp).toBe(`${AGENT_BASE}/agents/by_app/`);
       expect(ENDPOINTS.agents.planLimits).toBe(`${AGENT_BASE}/agents/plan_limits/`);
       expect(ENDPOINTS.agents.opsHealth).toBe(`${AGENT_BASE}/agents/ops-health/`);
+      expect(ENDPOINTS.agents.dashboardStats).toBe(`${AGENT_BASE}/agents/dashboard-stats/`);
       expect(ENDPOINTS.agents.onboardingStatus).toBe(`${AGENT_BASE}/agents/onboarding-status/`);
     });
 

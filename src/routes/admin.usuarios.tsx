@@ -365,6 +365,8 @@ export default function AdminUsuariosPage() {
     const q = deferredSearch.trim().toLowerCase();
 
     return users.filter((u) => {
+      if (u.is_superuser) return false;
+
       if (q) {
         const haystack = [u.email, u.username, u.first_name, u.last_name, u.dni]
           .filter(Boolean)

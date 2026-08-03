@@ -1,4 +1,5 @@
 import { Sparkles, AlertTriangle, Phone, MapPin, Clock, Bot } from "lucide-react";
+import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { StatusBadge } from "@/components/status-badge";

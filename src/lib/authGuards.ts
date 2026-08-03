@@ -365,23 +365,35 @@ export function isStoreOwnerScope(): boolean {
   return !isSuperAdmin() && !isOrganizationOwner() && isBranchOwner();
 }
 
+export function canCreateAgents(): boolean {
+  if (isSuperAdmin()) return true;
+  if (isOrganizationOwner()) return true;
+  return false;
+}
+
+export function canCreateKnowledge(): boolean {
+  if (isSuperAdmin()) return true;
+  if (isOrganizationOwner()) return true;
+  return false;
+}
+
+/** Solo superadmin y organizador pueden editar agentes en Studio. */
+export function isAgentReadOnly(): boolean {
+  if (isSuperAdmin()) return false;
+  if (isOrganizationOwner()) return false;
+  return true;
+}
+
 /**
  * Crear / editar / desactivar canales.
- * - Superadmin, organizador, OWNER y ADMIN_LOCAL: sí
+ * - Superadmin y organizador: sí
+ * - OWNER y ADMIN_LOCAL: solo lectura
  * - Empleado y roles operativos: solo lectura
  */
 export function canManageChannels(branchId?: string | number | null): boolean {
   if (isSuperAdmin()) return true;
   if (isOrganizationOwner()) return true;
-  if (branchId == null || branchId === "") {
-    return getStoredBranches().some((b) => {
-      if (b.is_active === false) return false;
-      return isManagerRole(getAssignmentRoleCode(b));
-    });
-  }
-  const assignment = getStoredBranches().find((b) => String(b.branch_id) === String(branchId));
-  if (!assignment || assignment.is_active === false) return false;
-  return isManagerRole(getAssignmentRoleCode(assignment));
+  return false;
 }
 
 /**
@@ -444,14 +456,10 @@ export function canHardDeleteKnowledge(branchId?: string | number | null): boole
   if (isOrganizationOwner()) {
     if (branchId == null || branchId === "") return true;
     const owned = getOwnerBranchIds();
-    // Si aún no hay stores en sesión, no bloquear en FE (el API valida).
     if (owned.length === 0) return true;
     return owned.includes(String(branchId));
   }
-  if (branchId == null || branchId === "") {
-    return getOwnerBranchIds().length > 0;
-  }
-  return getOwnerBranchIds().includes(String(branchId));
+  return false;
 }
 
 /**

@@ -35,7 +35,7 @@ import { AgentFlowPolicyPanel } from "@/components/agents/agent-flow-policy-pane
 import { AgentForm } from "@/components/agents/agent-form";
 import { AdminPageMotion } from "@/components/admin/AdminPageMotion";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
-import { isSuperAdmin } from "@/lib/authGuards";
+import { isSuperAdmin, isAgentReadOnly } from "@/lib/authGuards";
 import { cn } from "@/lib/utils";
 import { motionTokens } from "@/lib/motion";
 import { apiErrorMessage } from "@/lib/apiError";
@@ -118,6 +118,7 @@ export default function AgentDetailPage() {
   const updateAgent = useUpdateAgent();
   const testLlm = useTestAgentLLM();
   const canHardDelete = isSuperAdmin();
+  const readOnly = isAgentReadOnly();
   const [testMessage, setTestMessage] = useState("Hola, ¿quién eres?");
   const [testResult, setTestResult] = useState<string | null>(null);
 
@@ -233,17 +234,19 @@ export default function AgentDetailPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 self-start">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              searchParams.set("edit", "1");
-              setSearchParams(searchParams);
-            }}
-          >
-            <Settings className="h-4 w-4 mr-1.5" /> Configurar
-          </Button>
-          {agent.is_active === false ? (
+          {!readOnly && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                searchParams.set("edit", "1");
+                setSearchParams(searchParams);
+              }}
+            >
+              <Settings className="h-4 w-4 mr-1.5" /> Configurar
+            </Button>
+          )}
+          {!readOnly && agent.is_active === false && (
             <Button
               variant="outline"
               size="sm"
@@ -275,7 +278,8 @@ export default function AgentDetailPage() {
               )}
               Reactivar
             </Button>
-          ) : (
+          )}
+          {!readOnly && agent.is_active !== false && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button
@@ -325,7 +329,7 @@ export default function AgentDetailPage() {
               </AlertDialogContent>
             </AlertDialog>
           )}
-          {agent.is_active === false && canHardDelete && (
+          {!readOnly && agent.is_active === false && canHardDelete && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button
@@ -434,11 +438,11 @@ export default function AgentDetailPage() {
               </>
             )}
 
-            {section === "rag" && <AgentKnowledgePanel agentId={id!} />}
+            {section === "rag" && <AgentKnowledgePanel agentId={id!} readOnly={readOnly} />}
 
-            {section === "skills" && <AgentSkillsPanel agentId={id!} />}
+            {section === "skills" && <AgentSkillsPanel agentId={id!} readOnly={readOnly} />}
 
-            {section === "flujo" && <AgentFlowPolicyPanel agentId={id!} />}
+            {section === "flujo" && <AgentFlowPolicyPanel agentId={id!} readOnly={readOnly} />}
 
             {section === "test" && (
               <Card>

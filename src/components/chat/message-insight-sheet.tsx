@@ -646,13 +646,7 @@ export function MessageInsightSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className={cn(
-          "w-full sm:max-w-2xl md:max-w-3xl lg:max-w-4xl p-0 flex flex-col gap-0 bg-background overflow-hidden",
-          "data-[state=open]:duration-500 data-[state=closed]:duration-300",
-          "data-[state=open]:slide-in-from-right-10 data-[state=closed]:slide-out-to-right-10",
-          "data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0",
-        )}
-        style={{ maxWidth: "min(96vw, 52rem)" }}
+        className="w-full sm:max-w-2xl p-0 bg-background flex flex-col h-full gap-0"
       >
         <SheetHeader className="px-5 sm:px-6 py-4 border-b border-border/60 shrink-0 space-y-1 text-left">
           <SheetTitle className="text-lg flex items-center gap-2.5">

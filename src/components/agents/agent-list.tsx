@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/ui/empty-state";
+import { canCreateAgents } from "@/lib/authGuards";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { useAgents, type Agent } from "@/api/hooks/useAgents";
 import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
@@ -118,11 +119,13 @@ export function AgentList() {
                 {includeInactive ? "Ocultar inactivos" : "Ver inactivos"}
               </Button>
             )}
-            <Button size="sm" asChild className="cursor-pointer">
-              <Link to="/app/agentes/nuevo">
-                <Plus className="h-4 w-4 mr-1.5" /> Nuevo
-              </Link>
-            </Button>
+            {canCreateAgents() && (
+              <Button size="sm" asChild className="cursor-pointer">
+                <Link to="/app/agentes/nuevo">
+                  <Plus className="h-4 w-4 mr-1.5" /> Nuevo
+                </Link>
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -163,7 +166,7 @@ export function AgentList() {
               }
               icon={<Bot className="h-5 w-5" />}
               action={
-                !q.trim() ? (
+                !q.trim() && canCreateAgents() ? (
                   <Button size="sm" asChild className="cursor-pointer">
                     <Link to="/app/agentes/nuevo">
                       <Plus className="h-4 w-4 mr-1.5" /> Crear agente

@@ -45,6 +45,7 @@ import { KNOWLEDGE_TYPE_LABEL, parseFaqPairs, serializeFaqPairs } from "@/lib/kn
 import { AdminPageMotion } from "@/components/admin/AdminPageMotion";
 import { toast } from "sonner";
 import { apiErrorMessage } from "@/lib/apiError";
+import { canCreateKnowledge } from "@/lib/authGuards";
 
 type TabId = "documento" | "vectores" | "uso" | "cronjob";
 
@@ -418,9 +419,11 @@ export default function ConocimientoDetail() {
                   <RefreshCw className="h-3.5 w-3.5 mr-1" /> CronJob activo
                 </Button>
               ) : (
-                <Button type="button" variant="outline" size="sm" onClick={startEdit}>
-                  <Pencil className="h-3.5 w-3.5 mr-1" /> Editar
-                </Button>
+                canCreateKnowledge() && (
+                  <Button type="button" variant="outline" size="sm" onClick={startEdit}>
+                    <Pencil className="h-3.5 w-3.5 mr-1" /> Editar
+                  </Button>
+                )
               );
             })()
           )}
@@ -490,20 +493,22 @@ export default function ConocimientoDetail() {
                 </Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="cronjob" className="gap-1.5 flex-1 sm:flex-none">
-              <Clock className="h-3.5 w-3.5" />
-              CronJob
-              {(() => {
-                const status = cronJobStatus(doc.api_refresh_config);
-                if (status === "validated")
-                  return <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />;
-                if (status === "configured")
-                  return <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />;
-                if (status === "incomplete")
-                  return <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />;
-                return null;
-              })()}
-            </TabsTrigger>
+            {canCreateKnowledge() && (
+              <TabsTrigger value="cronjob" className="gap-1.5 flex-1 sm:flex-none">
+                <Clock className="h-3.5 w-3.5" />
+                CronJob
+                {(() => {
+                  const status = cronJobStatus(doc.api_refresh_config);
+                  if (status === "validated")
+                    return <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />;
+                  if (status === "configured")
+                    return <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />;
+                  if (status === "incomplete")
+                    return <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />;
+                  return null;
+                })()}
+              </TabsTrigger>
+            )}
             <TabsTrigger value="uso" className="gap-1.5 flex-1 sm:flex-none">
               <Users className="h-3.5 w-3.5" />
               Uso
@@ -556,55 +561,57 @@ export default function ConocimientoDetail() {
             </div>
           </TabsContent>
 
-          <TabsContent
-            value="cronjob"
-            className="flex-1 min-h-0 mt-3 data-[state=inactive]:hidden"
-            forceMount
-          >
-            <div className="h-full min-h-[60vh] overflow-y-auto rounded-xl">
-              <KnowledgeCronJobTab
-                value={doc.api_refresh_config ?? null}
-                onChange={(next) => {
-                  if (!doc) return;
-                  const wasNull = !doc.api_refresh_config;
-                  const isNull = !next;
+          {canCreateKnowledge() && (
+            <TabsContent
+              value="cronjob"
+              className="flex-1 min-h-0 mt-3 data-[state=inactive]:hidden"
+              forceMount
+            >
+              <div className="h-full min-h-[60vh] overflow-y-auto rounded-xl">
+                <KnowledgeCronJobTab
+                  value={doc.api_refresh_config ?? null}
+                  onChange={(next) => {
+                    if (!doc) return;
+                    const wasNull = !doc.api_refresh_config;
+                    const isNull = !next;
 
-                  // Solo mandamos api_refresh_config, NO content ni title
-                  // porque el contenido lo gestiona el cron job (POST /refresh)
-                  const data: Partial<typeof doc> = {};
-                  if (next) data.api_refresh_config = next;
-                  else data.api_refresh_config = null;
+                    // Solo mandamos api_refresh_config, NO content ni title
+                    // porque el contenido lo gestiona el cron job (POST /refresh)
+                    const data: Partial<typeof doc> = {};
+                    if (next) data.api_refresh_config = next;
+                    else data.api_refresh_config = null;
 
-                  const showToast = wasNull || isNull;
+                    const showToast = wasNull || isNull;
 
-                  update.mutate(
-                    {
-                      id: String(doc.id),
-                      data,
-                      branch: doc.branch,
-                    },
-                    {
-                      onSuccess: () => {
-                        if (showToast) {
-                          toast.success(
-                            isNull
-                              ? "CronJob desactivado."
-                              : "CronJob activado — se actualizará automáticamente.",
-                          );
-                        }
-                        void refetch();
+                    update.mutate(
+                      {
+                        id: String(doc.id),
+                        data,
+                        branch: doc.branch,
                       },
-                      onError: (e) => toast.error(apiErrorMessage(e, "Error al guardar CronJob")),
-                    },
-                  );
-                }}
-                disabled={update.isPending}
-                branch={doc.branch}
-                knowledgeId={String(doc.id)}
-                knowledgeType={doc.knowledge_type}
-              />
-            </div>
-          </TabsContent>
+                      {
+                        onSuccess: () => {
+                          if (showToast) {
+                            toast.success(
+                              isNull
+                                ? "CronJob desactivado."
+                                : "CronJob activado — se actualizará automáticamente.",
+                            );
+                          }
+                          void refetch();
+                        },
+                        onError: (e) => toast.error(apiErrorMessage(e, "Error al guardar CronJob")),
+                      },
+                    );
+                  }}
+                  disabled={update.isPending}
+                  branch={doc.branch}
+                  knowledgeId={String(doc.id)}
+                  knowledgeType={doc.knowledge_type}
+                />
+              </div>
+            </TabsContent>
+          )}
           <TabsContent value="uso" className="flex-1 min-h-0 mt-3">
             <div className="h-full min-h-[60vh] overflow-y-auto rounded-xl border border-border/70 bg-card/60 p-4">
               <UsagePanel

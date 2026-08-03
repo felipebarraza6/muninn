@@ -91,8 +91,7 @@ export function MuninnBrand({
   }, [branchLogoUrl]);
 
   const showBranchLogo = Boolean(branchLogoUrl) && !logoFailed && !pending;
-  /** Con logo de org/sucursal basta: no repetir el nombre al lado. */
-  const hideWordmark = showBranchLogo;
+  const hideWordmark = !branchName;
   const showTenantSkeleton = pending && !isMuninnPlatformBrand;
   /** Org/sucursal sin logo: inicial. Superadmin / Muninn: cuervo. */
   const monogram =

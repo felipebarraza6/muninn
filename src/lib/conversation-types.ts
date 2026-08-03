@@ -101,7 +101,7 @@ export const CONVERSATION_BUCKETS: {
   label: string;
   description: string;
 }[] = [
-  { id: "mine", label: "Para mí", description: "Necesitan ojos humanos ahora" },
+  { id: "mine", label: "Atención", description: "Necesitan ojos humanos ahora" },
   { id: "ai", label: "IA al mando", description: "La IA está respondiendo, monitoreo opcional" },
   { id: "archived", label: "Archivadas", description: "Agendadas, cerradas o recuperadas" },
 ];

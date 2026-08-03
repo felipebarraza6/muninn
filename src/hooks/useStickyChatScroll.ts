@@ -58,10 +58,13 @@ export function useStickyChatScroll(deps: unknown[], options?: Options) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- deps are the scroll triggers
   }, deps);
 
-  const scrollToBottom = useCallback(() => {
+  const scrollToBottom = useCallback((behaviorOverride?: ScrollBehavior) => {
     stickToBottomRef.current = true;
     setShowJump(false);
-    endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    endRef.current?.scrollIntoView({
+      behavior: behaviorOverride ?? "smooth",
+      block: "end",
+    });
   }, []);
 
   return { endRef, bindViewport, showJump, scrollToBottom, measure };

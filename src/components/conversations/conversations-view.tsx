@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
+import { motion, AnimatePresence } from "framer-motion";
 import { ConversationList } from "./conversation-list";
 import { ChatPane } from "./chat-pane";
 import { ConversationDetailsPanel } from "./details-panel";
@@ -29,6 +31,7 @@ import {
 } from "@/api/hooks/useUnifiedConversations";
 import { useSendConversationMessage } from "@/api/hooks/useConversations";
 import { canInterveneInConversations, isSuperAdmin } from "@/lib/authGuards";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 function apiStatusToLocal(status?: string): ConversationStatus {
   const s = (status || "").toLowerCase();
@@ -156,6 +159,7 @@ function mapApiConversation(api: UnifiedConversation): Conversation {
 export function ConversationsView() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const queryClient = useQueryClient();
   const analysisOnly = !canInterveneInConversations();
   const isPlatformAnalysis = isSuperAdmin();
 
@@ -178,6 +182,7 @@ export function ConversationsView() {
   const [query, setQuery] = useState("");
   const [mobileView, setMobileView] = useState<"list" | "chat">("list");
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   // Mensajes locales enviados optimistamente mientras llega el refetch.
   const [localMessages, setLocalMessages] = useState<Record<string, ChatMessage[]>>({});
@@ -237,7 +242,9 @@ export function ConversationsView() {
 
   const handleSelect = (id: string) => {
     setSelectedId(id);
-    setMobileView("chat");
+    if (isMobile) {
+      setMobileView("chat");
+    }
     setSearchParams({ id }, { replace: true });
   };
 
@@ -255,12 +262,12 @@ export function ConversationsView() {
         navigate("/app");
         return;
       }
-      if (e.key !== "j" && e.key !== "k" && e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+      if (e.key !== "j" && e.key !== "k") return;
       const inBucket = convos.filter((c) => getConversationBucket(c) === bucket);
       if (!inBucket.length) return;
       e.preventDefault();
       const idx = inBucket.findIndex((c) => c.id === selectedId);
-      const delta = e.key === "j" || e.key === "ArrowDown" ? 1 : -1;
+      const delta = e.key === "j" ? 1 : -1;
       const nextIdx = Math.max(0, Math.min(inBucket.length - 1, (idx < 0 ? 0 : idx) + delta));
       const next = inBucket[nextIdx];
       if (next) handleSelect(next.id);
@@ -370,10 +377,24 @@ export function ConversationsView() {
   const handleResolve = () => {
     if (analysisOnly) return;
     if (selectedSource === "channel" && selectedId) {
+      const closingId = selectedId;
       setStatusMutation.mutate(
         { id: selectedId, status: "closed" },
         {
-          onSuccess: () => toast.success("Conversación cerrada"),
+          onSuccess: async () => {
+            toast.success("Conversación cerrada");
+            await queryClient.invalidateQueries({ queryKey: ["unified-conversations"] });
+            const updatedConvos = queryClient.getQueryData(["unified-conversations"]) as
+              | UnifiedConversation[]
+              | undefined;
+            if (updatedConvos && closingId === selectedId) {
+              const mappedConvos = updatedConvos.map(mapApiConversation);
+              const next = mappedConvos.find((c) => getConversationBucket(c) !== "archived");
+              if (next) {
+                handleSelect(next.id);
+              }
+            }
+          },
           onError: (e) => toast.error(apiErrorMessage(e, "Error al cerrar la conversación")),
         },
       );
@@ -389,6 +410,68 @@ export function ConversationsView() {
         {
           onSuccess: () => toast.success("Conversación marcada como inactiva"),
           onError: (e) => toast.error(apiErrorMessage(e, "Error al cambiar el estado")),
+        },
+      );
+    }
+  };
+
+  const handleArchive = (id: string) => {
+    if (analysisOnly) return;
+    setStatusMutation.mutate(
+      { id, status: "closed" },
+      {
+        onSuccess: async () => {
+          toast.success("Conversación archivada");
+          await queryClient.invalidateQueries({ queryKey: ["unified-conversations"] });
+          const updatedConvos = queryClient.getQueryData(["unified-conversations"]) as
+            | UnifiedConversation[]
+            | undefined;
+          if (updatedConvos && id === selectedId) {
+            const mappedConvos = updatedConvos.map(mapApiConversation);
+            const next = mappedConvos.find((c) => getConversationBucket(c) !== "archived");
+            if (next) {
+              handleSelect(next.id);
+            }
+          }
+        },
+        onError: (e) => toast.error(apiErrorMessage(e, "Error al archivar la conversación")),
+      },
+    );
+  };
+
+  const handleAssignToHuman = (id: string) => {
+    if (analysisOnly) return;
+    const c = convos.find((x) => x.id === id);
+    if (c?.source === "channel") {
+      takeControlMutation.mutate(id, {
+        onSuccess: () => toast.success("Conversación movida a Atención"),
+        onError: (e) => toast.error(apiErrorMessage(e, "Error al tomar control")),
+      });
+    } else {
+      setStatusMutation.mutate(
+        { id, status: "waiting_human" },
+        {
+          onSuccess: () => toast.success("Conversación movida a Atención"),
+          onError: (e) => toast.error(apiErrorMessage(e, "Error al mover la conversación")),
+        },
+      );
+    }
+  };
+
+  const handleAssignToAi = (id: string) => {
+    if (analysisOnly) return;
+    const c = convos.find((x) => x.id === id);
+    if (c?.source === "channel" && c?.isWaitingHuman) {
+      releaseMutation.mutate(id, {
+        onSuccess: () => toast.success("IA retomó el hilo"),
+        onError: (e) => toast.error(apiErrorMessage(e, "Error al liberar a IA")),
+      });
+    } else {
+      setStatusMutation.mutate(
+        { id, status: "active" },
+        {
+          onSuccess: () => toast.success("IA retomó el hilo"),
+          onError: (e) => toast.error(apiErrorMessage(e, "Error al asignar a IA")),
         },
       );
     }
@@ -442,69 +525,140 @@ export function ConversationsView() {
           revisar el hilo.
         </div>
       ) : null}
-      <div className="flex flex-1 min-h-0 overflow-hidden">
-        <aside
-          className={`${mobileView === "list" ? "flex" : "hidden"} md:flex w-full md:w-[340px] lg:w-[360px] border-r bg-card flex-col shrink-0`}
-        >
-          <ConversationList
-            conversations={convos}
-            selectedId={selectedId}
-            onSelect={handleSelect}
-            bucket={bucket}
-            onBucketChange={setBucket}
-            subFilter={subFilter}
-            onSubFilterChange={setSubFilter}
-            query={query}
-            onQueryChange={setQuery}
-          />
-        </aside>
-
-        <section
-          className={`${mobileView === "chat" ? "flex" : "hidden"} md:flex flex-1 flex-col min-w-0`}
-        >
-          <div className="md:hidden flex items-center gap-2 border-b px-3 h-12 shrink-0">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => setMobileView("list")}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="font-medium text-sm truncate flex-1">
-              {selectedWithMessages?.patientName || "Selecciona una conversación"}
-            </span>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => setDetailsOpen(true)}
-            >
-              <Info className="h-4 w-4" />
-            </Button>
-          </div>
-          {selectedWithMessages ? (
-            <ChatPane
-              conversation={selectedWithMessages}
-              onTakeControl={handleTakeControl}
-              onRelease={handleRelease}
-              onSend={handleSend}
-              onOpenDetails={() => setDetailsOpen(true)}
-              onResolve={handleResolve}
-              analysisOnly={analysisOnly}
-              sending={replyMutation.isPending || internalSendMutation.isPending}
+      <div className="relative flex flex-1 min-h-0 overflow-hidden">
+        {/* Desktop layout */}
+        <div className="hidden md:flex flex-1 min-h-0 overflow-hidden">
+          <aside className="w-[340px] lg:w-[360px] border-r bg-card flex-col shrink-0 h-full min-h-0 flex">
+            <ConversationList
+              conversations={convos}
+              selectedId={selectedId}
+              onSelect={handleSelect}
+              bucket={bucket}
+              onBucketChange={setBucket}
+              subFilter={subFilter}
+              onSubFilterChange={setSubFilter}
+              query={query}
+              onQueryChange={setQuery}
+              onArchive={handleArchive}
+              onAssignToHuman={handleAssignToHuman}
+              onAssignToAi={handleAssignToAi}
+              isLoading={isLoading}
+              isFetching={isFetching && convos.length === 0}
             />
-          ) : (
-            <div className="flex-1 flex items-center justify-center p-6">
-              <EmptyState
-                title="Selecciona una conversación"
-                description="Elige un hilo en la bandeja o usa j/k para navegar."
+          </aside>
+          <section className="flex-1 flex-col min-w-0 flex bg-background">
+            {selectedWithMessages ? (
+              <ChatPane
+                conversation={selectedWithMessages}
+                onTakeControl={handleTakeControl}
+                onRelease={handleRelease}
+                onSend={handleSend}
+                onOpenDetails={() => setDetailsOpen(true)}
+                onResolve={handleResolve}
+                analysisOnly={analysisOnly}
+                sending={replyMutation.isPending || internalSendMutation.isPending}
               />
-            </div>
-          )}
-        </section>
+            ) : (
+              <motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+                className="flex-1 flex items-center justify-center p-6"
+              >
+                <EmptyState
+                  title="Selecciona una conversación"
+                  description="Elige un hilo en la bandeja o usa j/k para navegar."
+                />
+              </motion.div>
+            )}
+          </section>
+        </div>
 
-        <aside className="hidden xl:flex w-[340px] border-l bg-card flex-col shrink-0 overflow-y-auto">
+        {/* Mobile layout */}
+        <div className="md:hidden absolute inset-0">
+          <AnimatePresence mode="wait" initial={false}>
+            {mobileView === "list" && (
+              <motion.aside
+                key="list"
+                initial={{ x: -20, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={{ x: -20, opacity: 0 }}
+                transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+                className="absolute inset-0 w-full bg-card flex-col shrink-0 h-full min-h-0 flex"
+              >
+                <ConversationList
+                  conversations={convos}
+                  selectedId={selectedId}
+                  onSelect={handleSelect}
+                  bucket={bucket}
+                  onBucketChange={setBucket}
+                  subFilter={subFilter}
+                  onSubFilterChange={setSubFilter}
+                  query={query}
+                  onQueryChange={setQuery}
+                  onArchive={handleArchive}
+                  onAssignToHuman={handleAssignToHuman}
+                  onAssignToAi={handleAssignToAi}
+                  isLoading={isLoading}
+                  isFetching={isFetching && convos.length === 0}
+                />
+              </motion.aside>
+            )}
+            {mobileView === "chat" && (
+              <motion.section
+                key="chat"
+                initial={{ x: 20, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={{ x: 20, opacity: 0 }}
+                transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+                className="absolute inset-0 flex flex-col min-w-0 bg-background"
+              >
+                <div className="flex items-center gap-2 border-b bg-card px-3 h-12 shrink-0">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setMobileView("list")}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="font-medium text-sm truncate flex-1">
+                    {selectedWithMessages?.patientName || "Selecciona una conversación"}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setDetailsOpen(true)}
+                  >
+                    <Info className="h-4 w-4" />
+                  </Button>
+                </div>
+                {selectedWithMessages ? (
+                  <ChatPane
+                    conversation={selectedWithMessages}
+                    onTakeControl={handleTakeControl}
+                    onRelease={handleRelease}
+                    onSend={handleSend}
+                    onOpenDetails={() => setDetailsOpen(true)}
+                    onResolve={handleResolve}
+                    analysisOnly={analysisOnly}
+                    sending={replyMutation.isPending || internalSendMutation.isPending}
+                  />
+                ) : (
+                  <div className="flex-1 flex items-center justify-center p-6">
+                    <EmptyState
+                      title="Selecciona una conversación"
+                      description="Elige un hilo en la bandeja o usa j/k para navegar."
+                    />
+                  </div>
+                )}
+              </motion.section>
+            )}
+          </AnimatePresence>
+        </div>
+
+        <aside className="hidden xl:flex w-[340px] border-l bg-card flex-col shrink-0 h-full min-h-0 overflow-y-auto">
           {selectedWithMessages && (
             <ConversationDetailsPanel
               conversation={selectedWithMessages}

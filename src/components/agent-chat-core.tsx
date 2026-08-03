@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ChatThread } from "@/components/chat/chat-thread";
@@ -11,10 +12,12 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   ArrowLeft,
   Bot,
+  Database,
   Loader2,
   MessageSquarePlus,
   Archive,
   ArrowUpRight,
+  Shield,
   User,
   Wrench,
   X,
@@ -38,13 +41,16 @@ import {
   type ChatMessageResponse,
 } from "@/api/hooks/useConversations";
 import { ChatMarkdown } from "@/components/chat/chat-markdown";
+import {
+  TypewriterText,
+  clearTypingSeen,
+  hasActiveTyping,
+  markAllTyped,
+  useAnyTyping,
+} from "@/components/chat/typewriter-text";
 import { ChatMessageActions } from "@/components/chat/chat-message-actions";
 import { ConversationRagSummary } from "@/components/chat/chat-message-insights";
-import {
-  ChatProcessingIndicator,
-  MessageActivityTrail,
-  type LiveStreamStep,
-} from "@/components/chat/chat-processing";
+import type { LiveStreamStep } from "@/components/chat/chat-processing";
 import {
   MessageInsightSheet,
   MessageInspectButton,
@@ -104,6 +110,205 @@ type PendingSkillParams = {
   values: Record<string, string>;
 };
 
+const EMPTY_LIVE_STEPS: LiveStreamStep[] = [];
+
+type AgentChatMessageProps = {
+  msg: ChatMessage;
+  isLastAgent: boolean;
+  isStreamingBubble: boolean;
+  reduceMotion: boolean;
+  isBusy: boolean;
+  agent: Agent | undefined;
+  liveSteps: LiveStreamStep[];
+  skipEntrance: boolean;
+  onReply: (msg: ChatMessage) => void;
+  onResend: (msg: ChatMessage) => void;
+  onInspect: (msg: InsightMessage) => void;
+};
+
+const AgentChatMessage = memo(function AgentChatMessage({
+  msg,
+  isLastAgent,
+  isStreamingBubble,
+  reduceMotion,
+  isBusy,
+  agent,
+  liveSteps,
+  skipEntrance,
+  onReply,
+  onResend,
+  onInspect,
+}: AgentChatMessageProps) {
+  const ragCount = Array.isArray(msg.rag_sources) ? msg.rag_sources.length : 0;
+  const toolCount = Array.isArray(msg.tool_calls) ? msg.tool_calls.length : 0;
+  const msgPolicy =
+    extractPolicyTrace(msg) ??
+    (msg.role === "agent" ? inferPolicyTraceFromConfig(agent?.flow_policy, msg.tool_calls) : null);
+  const policyCount = policyTraceSignalCount(msgPolicy);
+  const liveIndicator = isStreamingBubble
+    ? (liveSteps.find((s) => s.status === "active") ?? liveSteps[liveSteps.length - 1])
+    : undefined;
+
+  return (
+    <motion.div
+      key={msg.id}
+      initial={reduceMotion || skipEntrance ? false : { opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.22, ease: "easeOut" }}
+      className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}
+    >
+      <div
+        className={`h-8 w-8 rounded-full shrink-0 flex items-center justify-center ${
+          msg.role === "user" ? "bg-muted" : "bg-primary/10"
+        }`}
+      >
+        {msg.role === "user" ? (
+          <User className="h-4 w-4" />
+        ) : (
+          <Bot className="h-4 w-4 text-primary" />
+        )}
+      </div>
+      <div
+        className={`group max-w-[85%] sm:max-w-[75%] space-y-1 ${
+          msg.role === "user" ? "items-end" : "items-start"
+        }`}
+      >
+        <motion.div
+          className={cn(
+            "relative px-4 py-2.5 text-sm leading-relaxed rounded-2xl transition-all break-words",
+            msg.role === "user"
+              ? "bg-primary text-primary-foreground rounded-br-md"
+              : msg.role === "system"
+                ? "bg-destructive/10 text-destructive rounded-bl-md border border-destructive/20"
+                : "bg-muted text-foreground rounded-bl-md",
+            isStreamingBubble && !reduceMotion && "chat-bubble-streaming",
+          )}
+          transition={{ duration: 0.2 }}
+        >
+          {msg.role === "agent" && (
+            <div
+              className={cn(
+                "absolute -top-2.5 -right-2.5 z-10 transition-opacity",
+                isStreamingBubble ? "opacity-50 pointer-events-none" : "opacity-100",
+              )}
+            >
+              <MessageInspectButton
+                variant="icon"
+                chunkCount={ragCount}
+                toolCount={toolCount}
+                policyCount={policyCount}
+                onClick={() =>
+                  onInspect({
+                    id: msg.id,
+                    content: msg.content,
+                    created: msg.created,
+                    rag_sources: msg.rag_sources,
+                    tool_calls: msg.tool_calls,
+                    tool_results: msg.tool_results,
+                    policy_trace: msg.policy_trace,
+                    flow_policy_trace: msg.flow_policy_trace,
+                    policies: msg.policies,
+                    metadata: msg.metadata,
+                  })
+                }
+              />
+            </div>
+          )}
+          {msg.replyToPreview && (
+            <div
+              className={`mb-2 rounded-md border-l-2 px-2 py-1 text-[11px] leading-snug ${
+                msg.role === "user"
+                  ? "border-primary-foreground/50 bg-primary-foreground/10 text-primary-foreground/85"
+                  : "border-primary/50 bg-background/60 text-muted-foreground"
+              }`}
+            >
+              <p className="font-semibold opacity-90">
+                Respondiendo a {roleLabel(msg.replyToRole)}
+              </p>
+              <p className="line-clamp-2 opacity-80">{msg.replyToPreview}</p>
+            </div>
+          )}
+          {msg.role === "agent" ? (
+            isStreamingBubble && msg.content.length === 0 ? (
+              <span className="inline-flex items-center gap-1 py-1" aria-label="Escribiendo">
+                <span
+                  className="h-1.5 w-1.5 rounded-full bg-muted-foreground/60 animate-bounce"
+                  style={{ animationDelay: "0ms" }}
+                />
+                <span
+                  className="h-1.5 w-1.5 rounded-full bg-muted-foreground/60 animate-bounce"
+                  style={{ animationDelay: "150ms" }}
+                />
+                <span
+                  className="h-1.5 w-1.5 rounded-full bg-muted-foreground/60 animate-bounce"
+                  style={{ animationDelay: "300ms" }}
+                />
+              </span>
+            ) : (
+              <TypewriterText id={String(msg.id)} text={msg.content} streaming={isStreamingBubble}>
+                <ChatMarkdown content={msg.content} inverted={false} />
+              </TypewriterText>
+            )
+          ) : (
+            <ChatMarkdown content={msg.content} inverted={msg.role === "user"} />
+          )}
+          <div
+            className={`mt-1.5 flex items-center gap-1.5 text-[10px] tabular-nums font-medium ${
+              msg.role === "user"
+                ? "justify-end text-primary-foreground/70"
+                : "justify-end text-muted-foreground"
+            }`}
+          >
+            {msg.role === "agent" && isStreamingBubble && liveIndicator && (
+              <span className="mr-auto inline-flex items-center gap-1.5 font-normal text-muted-foreground/75">
+                {liveIndicator.icon === "wrench" && liveIndicator.status === "active" ? (
+                  <Wrench className="h-3 w-3 shrink-0" />
+                ) : liveIndicator.icon === "database" && liveIndicator.status === "active" ? (
+                  <Database className="h-3 w-3 shrink-0" />
+                ) : (
+                  <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
+                )}
+                <span className="truncate max-w-[14rem]">
+                  {liveIndicator.detail || liveIndicator.label}
+                </span>
+                {liveIndicator.status === "active" && (
+                  <span className="animate-pulse tracking-wider">…</span>
+                )}
+              </span>
+            )}
+            {msg.role === "agent" && policyCount > 0 && (
+              <span title={`${policyCount} policy aplicada${policyCount > 1 ? "s" : ""}`}>
+                <Shield className="h-3 w-3 text-primary/60" />
+              </span>
+            )}
+            <span title={formatDateTime(msg.created) ?? undefined}>
+              {formatMessageStamp(msg.created) || "Sin fecha"}
+            </span>
+          </div>
+        </motion.div>
+        {!isStreamingBubble && (
+          <ChatMessageActions
+            text={msg.content}
+            align={msg.role === "user" ? "end" : "start"}
+            onReply={msg.role !== "system" && !isBusy ? () => onReply(msg) : undefined}
+            onResend={msg.role === "user" && !isBusy ? () => onResend(msg) : undefined}
+          />
+        )}
+        {msg.role === "user" && msg.deliveryStatus === "failed" && (
+          <button
+            type="button"
+            onClick={() => onResend(msg)}
+            className="text-[11px] text-destructive underline self-end font-medium"
+          >
+            Reintentar
+          </button>
+        )}
+      </div>
+    </motion.div>
+  );
+});
+
 interface AgentChatCoreProps {
   agentId: string;
   showBackLink?: boolean;
@@ -137,6 +342,7 @@ export function AgentChatCore({
   const [searchParams, setSearchParams] = useSearchParams();
   const conversationIdFromUrl = searchParams.get("conversation");
   const agentIdFromUrl = searchParams.get("agent");
+  const newConversationFromUrl = searchParams.get("new") === "1";
 
   useEffect(() => {
     if (!showBackLink) return;
@@ -212,6 +418,7 @@ export function AgentChatCore({
   const [isCreating, setIsCreating] = useState(false);
   /** Tras «Nueva»: chat vacío listo para escribir; se crea al primer mensaje. */
   const [isDraftNew, setIsDraftNew] = useState(false);
+  const newConversationModeRef = useRef(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [historyTab, setHistoryTab] = useState<"active" | "archived">("active");
@@ -219,9 +426,18 @@ export function AgentChatCore({
   const [isStreaming, setIsStreaming] = useState(false);
   const [liveSteps, setLiveSteps] = useState<LiveStreamStep[]>([]);
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
+  const lastAgentIndex = useMemo(() => {
+    const idx = messages
+      .map((m, i) => (m.role === "agent" ? i : -1))
+      .filter((i) => i !== -1)
+      .pop();
+    return idx ?? -1;
+  }, [messages]);
   const streamingMsgIdRef = useRef<string | null>(null);
   const streamingDraftRef = useRef("");
   const deltaRafRef = useRef<number | null>(null);
+  const streamedIdsRef = useRef<Set<string | number>>(new Set());
+  const historyIdsRef = useRef<Set<string>>(new Set());
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
   const [initialized, setInitialized] = useState(false);
   const skipAutoSelectRef = useRef(false);
@@ -249,15 +465,85 @@ export function AgentChatCore({
     behavior: isStreaming ? "auto" : "smooth",
   });
 
+  const initialScrollDoneRef = useRef(false);
+  const prevConversationIdRef = useRef(conversationId);
+
+  useEffect(() => {
+    if (prevConversationIdRef.current !== conversationId) {
+      initialScrollDoneRef.current = false;
+      prevConversationIdRef.current = conversationId;
+    }
+  }, [conversationId]);
+
+  useEffect(() => {
+    if (!initialScrollDoneRef.current && messages.length > 0 && !isStreaming) {
+      const timer = setTimeout(() => {
+        scrollToBottom();
+        initialScrollDoneRef.current = true;
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [messages.length, isStreaming, scrollToBottom]);
+
   useEffect(() => {
     setReplyTo(null);
-  }, [conversationId]);
+    streamedIdsRef.current.clear();
+    clearTypingSeen();
+    requestAnimationFrame(() => {
+      scrollToBottom();
+    });
+  }, [conversationId, scrollToBottom]);
 
   useEffect(() => {
     setAttachedSkills([]);
     setPendingSkill(null);
     setSkillMenuOpen(false);
   }, [agentId]);
+
+  const typingActive = useAnyTyping();
+  const typingPinRef = useRef(true);
+  const viewportElRef = useRef<HTMLElement | null>(null);
+  const bindViewportCapture = useCallback(
+    (node: HTMLElement | null) => {
+      viewportElRef.current = node;
+      bindViewport(node);
+    },
+    [bindViewport],
+  );
+
+  useEffect(() => {
+    const el = viewportElRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (e.deltaY < 0) {
+        typingPinRef.current = false;
+      } else if (e.deltaY > 0) {
+        const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+        if (dist <= 96) typingPinRef.current = true;
+      }
+    };
+    el.addEventListener("wheel", onWheel, { passive: true });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
+
+  useEffect(() => {
+    const active = isStreaming || liveSteps.length > 0 || typingActive;
+    if (!active) {
+      typingPinRef.current = true;
+      return;
+    }
+
+    let rafId: number;
+    const scrollLoop = () => {
+      if (typingPinRef.current && (isStreaming || liveSteps.length > 0 || hasActiveTyping())) {
+        scrollToBottom("auto");
+        rafId = requestAnimationFrame(scrollLoop);
+      }
+    };
+
+    rafId = requestAnimationFrame(scrollLoop);
+    return () => cancelAnimationFrame(rafId);
+  }, [isStreaming, liveSteps.length, typingActive, scrollToBottom]);
 
   const mergeSearchParams = useCallback(
     (updates: Record<string, string | null>) => {
@@ -322,6 +608,7 @@ export function AgentChatCore({
   }, [conversationId]);
 
   useEffect(() => {
+    newConversationModeRef.current = false;
     streamAbortRef.current?.abort();
     streamAbortRef.current = null;
     streamGenerationRef.current += 1;
@@ -346,16 +633,22 @@ export function AgentChatCore({
   }, [agentId]);
 
   useEffect(() => {
-    if (conversationIdFromUrl) {
+    if (newConversationFromUrl) {
+      skipAutoSelectRef.current = true;
+      setIsDraftNew(true);
+      setConversationId(null);
+      setMessages([]);
+      return;
+    }
+    if (conversationIdFromUrl && !skipAutoSelectRef.current) {
       setIsDraftNew(false);
       setConversationId(conversationIdFromUrl);
       return;
     }
-    // URL sin conversation: solo limpiar si estamos en modo «nueva» (no reabrir la anterior)
-    if (skipAutoSelectRef.current) {
+    if (!conversationIdFromUrl && skipAutoSelectRef.current) {
       setConversationId(null);
     }
-  }, [conversationIdFromUrl]);
+  }, [conversationIdFromUrl, newConversationFromUrl]);
 
   useEffect(() => {
     if (creatingConversationRef.current) {
@@ -387,6 +680,8 @@ export function AgentChatCore({
     const key = JSON.stringify(next.map((m) => ({ id: m.id, content: m.content })));
     if (key === lastRemoteMessagesRef.current) return;
     lastRemoteMessagesRef.current = key;
+    for (const m of next) historyIdsRef.current.add(String(m.id));
+    markAllTyped(next.filter((m) => m.role === "agent").map((m) => String(m.id)));
     setMessages(next);
   }, [remoteMessages, conversationId, isDraftNew, isStreaming]);
 
@@ -484,46 +779,50 @@ export function AgentChatCore({
     requestAnimationFrame(() => textareaRef.current?.focus());
   }, [pendingSkill]);
 
-  const ensureConversationId = useCallback(async (): Promise<string | null> => {
-    if (conversationIdRef.current) return conversationIdRef.current;
-    if (creatingPromiseRef.current) return creatingPromiseRef.current;
-    if (!agent || !agentId) return null;
+  const ensureConversationId = useCallback(
+    async (forceNew = false): Promise<string | null> => {
+      if (!forceNew && conversationIdRef.current) return conversationIdRef.current;
+      if (!forceNew && creatingPromiseRef.current) return creatingPromiseRef.current;
+      if (!agent || !agentId) return null;
 
-    isCreatingRef.current = true;
-    setIsCreating(true);
-    setCreateError(null);
+      isCreatingRef.current = true;
+      setIsCreating(true);
+      setCreateError(null);
 
-    const pending = (async (): Promise<string | null> => {
-      try {
-        const data = await createConversation.mutateAsync({
-          agent: agentId,
-          title: `Chat con ${agent.name}`,
-          user: getCurrentUserId(),
-          ...(agentBranchId ? { branch: agentBranchId } : {}),
-        });
-        const id = String(data.id);
-        lastRemoteMessagesRef.current = "";
-        conversationIdRef.current = id;
-        creatingConversationRef.current = true;
-        setConversationId(id);
-        setIsDraftNew(false);
-        mergeSearchParams({ conversation: id });
-        return id;
-      } catch (err) {
-        const msg = apiErrorMessage(err, "No se pudo iniciar la conversación");
-        setCreateError(msg);
-        toast.error(msg);
-        return null;
-      } finally {
-        creatingPromiseRef.current = null;
-        isCreatingRef.current = false;
-        setIsCreating(false);
-      }
-    })();
+      const pending = (async (): Promise<string | null> => {
+        try {
+          const data = await createConversation.mutateAsync({
+            agent: agentId,
+            title: `Chat con ${agent.name}`,
+            user: getCurrentUserId(),
+            ...(agentBranchId ? { branch: agentBranchId } : {}),
+          });
+          const id = String(data.id);
+          lastRemoteMessagesRef.current = "";
+          conversationIdRef.current = id;
+          creatingConversationRef.current = true;
+          welcomeOnlyConversationRef.current = id;
+          setConversationId(id);
+          setIsDraftNew(false);
+          mergeSearchParams({ conversation: id, new: null });
+          return id;
+        } catch (err) {
+          const msg = apiErrorMessage(err, "No se pudo iniciar la conversación");
+          setCreateError(msg);
+          toast.error(msg);
+          return null;
+        } finally {
+          creatingPromiseRef.current = null;
+          isCreatingRef.current = false;
+          setIsCreating(false);
+        }
+      })();
 
-    creatingPromiseRef.current = pending;
-    return pending;
-  }, [agent, agentBranchId, agentId, createConversation, mergeSearchParams]);
+      creatingPromiseRef.current = pending;
+      return pending;
+    },
+    [agent, agentBranchId, agentId, createConversation, mergeSearchParams],
+  );
 
   const doCreateConversation = useCallback(() => {
     void ensureConversationId().then((id) => {
@@ -542,9 +841,18 @@ export function AgentChatCore({
 
   useEffect(() => {
     if (agentLoading || !agent || initialized || conversationsLoading) return;
+    if (newConversationModeRef.current) return;
     setInitialized(true);
 
-    if (skipAutoSelectRef.current) return;
+    if (skipAutoSelectRef.current || newConversationFromUrl) {
+      if (newConversationFromUrl) {
+        skipAutoSelectRef.current = true;
+        setIsDraftNew(true);
+        setConversationId(null);
+        setMessages([]);
+      }
+      return;
+    }
 
     if (conversationIdFromUrl) {
       setConversationId(conversationIdFromUrl);
@@ -554,7 +862,7 @@ export function AgentChatCore({
     const lastActive = activeAgentConversations[0];
     if (lastActive) {
       setConversationId(String(lastActive.id));
-      mergeSearchParams({ conversation: String(lastActive.id) });
+      mergeSearchParams({ conversation: String(lastActive.id), new: null });
       return;
     }
 
@@ -569,6 +877,7 @@ export function AgentChatCore({
     initialized,
     conversationsLoading,
     conversationIdFromUrl,
+    newConversationFromUrl,
     activeAgentConversations,
     mergeSearchParams,
   ]);
@@ -595,6 +904,7 @@ export function AgentChatCore({
     if (streamAbortRef.current) return;
 
     const userMsgId = makeChatId("user");
+    const placeholderId = makeChatId("agent-stream");
     const userMsg: ChatMessage = {
       id: userMsgId,
       role: "user",
@@ -606,7 +916,19 @@ export function AgentChatCore({
       deliveryStatus: "pending",
     };
 
-    setMessages((prev) => [...prev, userMsg]);
+    setMessages((prev) => [
+      ...prev,
+      userMsg,
+      {
+        id: placeholderId,
+        role: "agent" as const,
+        content: "",
+        created: new Date().toISOString(),
+      },
+    ]);
+    streamingMsgIdRef.current = placeholderId;
+    streamedIdsRef.current.add(placeholderId);
+    setStreamingMessageId(placeholderId);
     setInput("");
     clearChatDraft(chatDraftKey("studio", activeId));
     setInputCursor(0);
@@ -617,7 +939,7 @@ export function AgentChatCore({
     setLiveSteps([
       {
         key: "connected",
-        label: "Conectado",
+        label: "Pensando...",
         detail: "Iniciando…",
         icon: "sparkles",
         status: "active",
@@ -654,8 +976,6 @@ export function AgentChatCore({
     };
 
     streamingDraftRef.current = "";
-    streamingMsgIdRef.current = null;
-    setStreamingMessageId(null);
 
     try {
       const data = await streamConversationChat(
@@ -696,6 +1016,7 @@ export function AgentChatCore({
             if (deltaRafRef.current != null) return;
             deltaRafRef.current = requestAnimationFrame(() => {
               deltaRafRef.current = null;
+              if (streamGenerationRef.current !== generation) return;
               const textDraft = streamingDraftRef.current;
               setMessages((prev) => {
                 const sid = streamingMsgIdRef.current;
@@ -704,6 +1025,7 @@ export function AgentChatCore({
                 }
                 const id = makeChatId("agent-stream");
                 streamingMsgIdRef.current = id;
+                streamedIdsRef.current.add(id);
                 setStreamingMessageId(id);
                 return [
                   ...prev,
@@ -754,9 +1076,6 @@ export function AgentChatCore({
       );
       // Lista sí; mensajes no (la UI local ya tiene el hilo — evita flash post-stream).
       void queryClient.invalidateQueries({ queryKey: ["unified-conversations"] });
-      void queryClient.invalidateQueries({
-        queryKey: ["conversations", activeId, "messages"],
-      });
     } catch (err) {
       if ((err as Error)?.name === "AbortError") return;
       // Fallback al POST clásico si el stream no está disponible.
@@ -778,42 +1097,51 @@ export function AgentChatCore({
               const withSent = prev.map((m) =>
                 m.id === userMsgId ? { ...m, deliveryStatus: "sent" as const } : m,
               );
-              return [
-                ...withSent,
-                {
-                  id: data.id ?? makeChatId("agent"),
-                  role: data.sender?.toLowerCase() === "user" ? "user" : ("agent" as const),
-                  content: data.message ?? data.content ?? data.text ?? "",
-                  created:
-                    data.created_at ?? data.created ?? data.timestamp ?? new Date().toISOString(),
-                  rag_sources: data.rag_sources ?? data.sources,
-                  tool_calls: data.tool_calls,
-                  tool_results: data.tool_results,
-                  policy_trace: data.policy_trace ?? fallbackMeta?.policy_trace,
-                  flow_policy_trace: data.flow_policy_trace ?? fallbackMeta?.flow_policy_trace,
-                  policies: data.policies ?? fallbackMeta?.policies,
-                  metadata: fallbackMeta,
-                },
-              ];
+              const finalMsg: ChatMessage = {
+                id: placeholderId,
+                role: data.sender?.toLowerCase() === "user" ? "user" : ("agent" as const),
+                content: data.message ?? data.content ?? data.text ?? "",
+                created:
+                  data.created_at ?? data.created ?? data.timestamp ?? new Date().toISOString(),
+                rag_sources: data.rag_sources ?? data.sources,
+                tool_calls: data.tool_calls,
+                tool_results: data.tool_results,
+                policy_trace: data.policy_trace ?? fallbackMeta?.policy_trace,
+                flow_policy_trace: data.flow_policy_trace ?? fallbackMeta?.flow_policy_trace,
+                policies: data.policies ?? fallbackMeta?.policies,
+                metadata: fallbackMeta,
+              };
+              if (withSent.some((m) => m.id === placeholderId)) {
+                return withSent.map((m) => (m.id === placeholderId ? finalMsg : m));
+              }
+              return [...withSent, finalMsg];
             });
           }
         } catch (e) {
           toast.error(apiErrorMessage(e, "Error al enviar el mensaje"));
           setMessages((prev) =>
-            prev.map((m) => (m.id === userMsgId ? { ...m, deliveryStatus: "failed" as const } : m)),
+            prev
+              .filter((m) => m.id !== placeholderId)
+              .map((m) => (m.id === userMsgId ? { ...m, deliveryStatus: "failed" as const } : m)),
           );
           if (activeReply) setReplyTo(activeReply);
         }
       } else {
         toast.error(msg || "Error al enviar el mensaje");
         setMessages((prev) =>
-          prev.map((m) => (m.id === userMsgId ? { ...m, deliveryStatus: "failed" as const } : m)),
+          prev
+            .filter((m) => m.id !== placeholderId)
+            .map((m) => (m.id === userMsgId ? { ...m, deliveryStatus: "failed" as const } : m)),
         );
         if (activeReply) setReplyTo(activeReply);
       }
     } finally {
       // Solo el stream vigente limpia estado (evita race con stop + reenvío).
       if (streamGenerationRef.current === generation) {
+        if (deltaRafRef.current != null) {
+          cancelAnimationFrame(deltaRafRef.current);
+          deltaRafRef.current = null;
+        }
         setIsStreaming(false);
         streamingDraftRef.current = "";
         streamingMsgIdRef.current = null;
@@ -828,23 +1156,33 @@ export function AgentChatCore({
     }
   };
 
-  const startReply = (msg: ChatMessage) => {
+  const handleSendRef = useRef(handleSend);
+  handleSendRef.current = handleSend;
+
+  const startReply = useCallback((msg: ChatMessage) => {
     setReplyTo({
       id: msg.id,
       role: msg.role,
       preview: previewText(msg.content),
     });
-  };
+  }, []);
 
-  const resendMessage = (msg: ChatMessage) => {
-    if (isBusy || isCreating) return;
-    void handleSend(undefined, { text: msg.content, reply: null });
-  };
+  const resendMessage = useCallback(
+    (msg: ChatMessage) => {
+      if (isBusy || isCreating) return;
+      void handleSendRef.current(undefined, { text: msg.content, reply: null });
+    },
+    [isBusy, isCreating],
+  );
 
   const stopStreaming = useCallback(() => {
     streamGenerationRef.current += 1;
     streamAbortRef.current?.abort();
     streamAbortRef.current = null;
+    const sid = streamingMsgIdRef.current;
+    if (sid) {
+      setMessages((prev) => prev.filter((m) => m.id !== sid || (m.content?.length ?? 0) > 0));
+    }
     setIsStreaming(false);
     streamingDraftRef.current = "";
     streamingMsgIdRef.current = null;
@@ -852,30 +1190,46 @@ export function AgentChatCore({
     window.setTimeout(() => setLiveSteps([]), 280);
   }, []);
 
-  const handleNewConversation = () => {
+  const handleNewConversation = async () => {
     if (!agent || isCreating) return;
-    skipAutoSelectRef.current = true;
-    setInitialized(true);
-    isCreatingRef.current = false;
-    conversationIdRef.current = null;
-    lastRemoteMessagesRef.current = "";
-    welcomeOnlyConversationRef.current = null;
-    setIsDraftNew(false);
-    setConversationId(null);
     setMessages([]);
-    setCreateError(null);
+    setConversationId(null);
     setInput("");
-    mergeSearchParams({ conversation: null });
-    doCreateConversation();
+    setIsCreating(true);
+
+    try {
+      if (conversationId) {
+        await closeConversation.mutateAsync(String(conversationId));
+      }
+      const data = await createConversation.mutateAsync({
+        agent: agentId,
+        title: `Chat con ${agent.name}`,
+        user: getCurrentUserId(),
+        ...(agentBranchId ? { branch: agentBranchId } : {}),
+      });
+      const newId = String(data.id);
+      conversationIdRef.current = newId;
+      welcomeOnlyConversationRef.current = newId;
+      creatingConversationRef.current = true;
+      skipAutoSelectRef.current = true;
+      setConversationId(newId);
+      setIsDraftNew(false);
+      navigate(`?agent=${agentId}&conversation=${newId}`, { replace: true });
+    } catch (err) {
+      toast.error(apiErrorMessage(err, "No se pudo crear la conversación"));
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   const handleSelectConversation = (convId: string) => {
+    newConversationModeRef.current = false;
     skipAutoSelectRef.current = false;
     setIsDraftNew(false);
     lastRemoteMessagesRef.current = "";
     conversationIdRef.current = convId;
     setConversationId(convId);
-    mergeSearchParams({ conversation: convId });
+    mergeSearchParams({ conversation: convId, new: null });
     setSidebarOpen(false);
   };
 
@@ -893,7 +1247,7 @@ export function AgentChatCore({
             setIsDraftNew(true);
             setConversationId(null);
             setMessages([]);
-            mergeSearchParams({ conversation: null });
+            mergeSearchParams({ conversation: null, new: null });
           }
         },
         onError: (err) => {
@@ -911,19 +1265,53 @@ export function AgentChatCore({
   };
 
   const handleArchiveConversation = (convId: string | number) => {
-    changeConversationStatus(convId, "ARCHIVED");
+    closeConversation.mutate(String(convId), {
+      onSuccess: () => {
+        toast.success("Conversación archivada");
+        if (String(convId) === conversationId) {
+          moveAfterClose(String(convId));
+        }
+        void queryClient.invalidateQueries({ queryKey: ["conversations"] });
+        void queryClient.invalidateQueries({ queryKey: ["unified-conversations"] });
+      },
+      onError: (err) => {
+        toast.error(apiErrorMessage(err, "No se pudo archivar la conversación"));
+      },
+    });
   };
 
   const handleRestoreConversation = (convId: string | number) => {
     changeConversationStatus(convId, "ACTIVE");
   };
 
+  const moveAfterClose = (closedId: string) => {
+    const next = activeAgentConversations.find(
+      (conversation) => String(conversation.id) !== closedId,
+    );
+    if (!next) {
+      void handleNewConversation();
+      return;
+    }
+
+    const nextId = String(next.id);
+    newConversationModeRef.current = false;
+    skipAutoSelectRef.current = false;
+    conversationIdRef.current = nextId;
+    lastRemoteMessagesRef.current = "";
+    setIsDraftNew(false);
+    setConversationId(nextId);
+    setMessages([]);
+    mergeSearchParams({ conversation: nextId, new: null });
+  };
+
   const handleCloseCurrentConversation = () => {
     if (!conversationId) return;
+    const closedId = conversationId;
     closeConversation.mutate(conversationId, {
       onSuccess: () => {
         toast.success("Conversación cerrada");
         setConfirmCloseOpen(false);
+        moveAfterClose(closedId);
         void queryClient.invalidateQueries({ queryKey: ["conversations"] });
         void queryClient.invalidateQueries({ queryKey: ["unified-conversations"] });
       },
@@ -935,6 +1323,7 @@ export function AgentChatCore({
             onSuccess: () => {
               toast.success("No se pudo cerrar — la conversación se archivó en su lugar");
               setConfirmCloseOpen(false);
+              moveAfterClose(closedId);
             },
             onError: (e) => {
               toast.error(apiErrorMessage(e, "No se pudo cerrar"));
@@ -1030,7 +1419,7 @@ export function AgentChatCore({
 
   return (
     <div className={shellClass}>
-      <header className="flex shrink-0 flex-col gap-2 border-b border-border/50 bg-card/50 px-3 py-2 backdrop-blur sm:flex-row sm:items-center sm:gap-3 sm:px-4">
+      <header className="flex shrink-0 flex-col gap-2 border-b border-border/50 bg-card/50 px-4 py-3 backdrop-blur sm:flex-row sm:items-center sm:gap-3 sm:px-5">
         <div className="flex min-w-0 items-center gap-2">
           {showBackLink && (
             <Button
@@ -1073,11 +1462,33 @@ export function AgentChatCore({
             </>
           )}
 
-          <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:hidden">
+          {!conversationId && (
+            <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:hidden">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 shrink-0 cursor-pointer px-2"
+                onClick={handleNewConversation}
+                disabled={isCreating}
+                title="Nueva conversación"
+              >
+                {isCreating ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <MessageSquarePlus className="h-3.5 w-3.5" />
+                )}
+              </Button>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1.5 sm:ml-auto sm:gap-2">
+          {headerExtra ? <div className="min-w-0 flex-1 sm:flex-none">{headerExtra}</div> : null}
+          {!conversationId && (
             <Button
               variant="outline"
               size="sm"
-              className="h-8 shrink-0 cursor-pointer px-2"
+              className="hidden shrink-0 cursor-pointer gap-1.5 sm:inline-flex"
               onClick={handleNewConversation}
               disabled={isCreating}
               title="Nueva conversación"
@@ -1087,27 +1498,9 @@ export function AgentChatCore({
               ) : (
                 <MessageSquarePlus className="h-3.5 w-3.5" />
               )}
+              <span>Nueva</span>
             </Button>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-1.5 sm:ml-auto sm:gap-2">
-          {headerExtra ? <div className="min-w-0 flex-1 sm:flex-none">{headerExtra}</div> : null}
-          <Button
-            variant="outline"
-            size="sm"
-            className="hidden shrink-0 cursor-pointer gap-1.5 sm:inline-flex"
-            onClick={handleNewConversation}
-            disabled={isCreating}
-            title="Nueva conversación"
-          >
-            {isCreating ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <MessageSquarePlus className="h-3.5 w-3.5" />
-            )}
-            <span>Nueva</span>
-          </Button>
+          )}
 
           {conversationId && (
             <>
@@ -1128,10 +1521,10 @@ export function AgentChatCore({
                 className="shrink-0 gap-1.5 cursor-pointer"
                 onClick={() => setConfirmCloseOpen(true)}
                 disabled={closeConversation.isPending || updateStatus.isPending}
-                title="Cerrar conversación"
+                title="Archivar conversación"
               >
                 <Archive className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Cerrar</span>
+                <span className="hidden sm:inline">Archivar</span>
               </Button>
             </>
           )}
@@ -1197,18 +1590,11 @@ export function AgentChatCore({
       )}
 
       <ChatThread
-        viewportRef={bindViewport}
+        viewportRef={bindViewportCapture}
         endRef={messagesEndRef}
         showJump={showJump}
         onJump={scrollToBottom}
         contentClassName="py-6 space-y-5"
-        footer={
-          <AnimatePresence>
-            {isBusy && !streamingMessageId ? (
-              <ChatProcessingIndicator liveSteps={liveSteps} compact={liveSteps.length === 0} />
-            ) : null}
-          </AnimatePresence>
-        }
       >
         {messages.length > 0 && agent.use_rag && (
           <ConversationRagSummary
@@ -1252,131 +1638,28 @@ export function AgentChatCore({
             }
           />
         ) : (
-          messages.map((msg) => {
-            const ragCount = Array.isArray(msg.rag_sources) ? msg.rag_sources.length : 0;
-            const toolCount = Array.isArray(msg.tool_calls) ? msg.tool_calls.length : 0;
-            const msgPolicy =
-              extractPolicyTrace(msg) ??
-              (msg.role === "agent"
-                ? inferPolicyTraceFromConfig(agent.flow_policy, msg.tool_calls)
-                : null);
-            const policyCount = policyTraceSignalCount(msgPolicy);
-            const isStreamingBubble =
-              isStreaming && streamingMessageId != null && String(msg.id) === streamingMessageId;
-            return (
-              <motion.div
-                key={msg.id}
-                initial={reduceMotion ? false : { opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: motionTokens.base, ease: motionTokens.ease }}
-                className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}
-              >
-                <div
-                  className={`h-8 w-8 rounded-full shrink-0 flex items-center justify-center ${
-                    msg.role === "user" ? "bg-muted" : "bg-primary/10"
-                  }`}
-                >
-                  {msg.role === "user" ? (
-                    <User className="h-4 w-4" />
-                  ) : (
-                    <Bot className="h-4 w-4 text-primary" />
-                  )}
-                </div>
-                <div
-                  className={`group max-w-[85%] sm:max-w-[75%] space-y-1 ${
-                    msg.role === "user" ? "items-end" : "items-start"
-                  }`}
-                >
-                  <div
-                    className={`px-4 py-2.5 text-sm leading-relaxed rounded-2xl ${
-                      msg.role === "user"
-                        ? "bg-primary text-primary-foreground rounded-br-md"
-                        : msg.role === "system"
-                          ? "bg-destructive/10 text-destructive rounded-bl-md border border-destructive/20"
-                          : "bg-muted text-foreground rounded-bl-md"
-                    }`}
-                  >
-                    {msg.replyToPreview && (
-                      <div
-                        className={`mb-2 rounded-md border-l-2 px-2 py-1 text-[11px] leading-snug ${
-                          msg.role === "user"
-                            ? "border-primary-foreground/50 bg-primary-foreground/10 text-primary-foreground/85"
-                            : "border-primary/50 bg-background/60 text-muted-foreground"
-                        }`}
-                      >
-                        <p className="font-semibold opacity-90">
-                          Respondiendo a {roleLabel(msg.replyToRole)}
-                        </p>
-                        <p className="line-clamp-2 opacity-80">{msg.replyToPreview}</p>
-                      </div>
-                    )}
-                    <ChatMarkdown content={msg.content} inverted={msg.role === "user"} />
-                    {isStreamingBubble && !reduceMotion && (
-                      <span
-                        aria-hidden
-                        className="inline-block w-[2px] h-[1em] ml-0.5 align-[-0.1em] bg-primary/80 animate-pulse rounded-sm"
-                      />
-                    )}
-                    <div
-                      className={`mt-1.5 flex items-center gap-1.5 text-[10px] tabular-nums font-medium ${
-                        msg.role === "user"
-                          ? "justify-end text-primary-foreground/70"
-                          : "justify-end text-muted-foreground"
-                      }`}
-                    >
-                      <span title={formatDateTime(msg.created) ?? undefined}>
-                        {formatMessageStamp(msg.created) || "Sin fecha"}
-                      </span>
-                      {msg.role === "agent" && !isStreamingBubble && (
-                        <MessageInspectButton
-                          variant="icon"
-                          chunkCount={ragCount}
-                          toolCount={toolCount}
-                          policyCount={policyCount}
-                          onClick={() =>
-                            setInspectMessage({
-                              id: msg.id,
-                              content: msg.content,
-                              created: msg.created,
-                              rag_sources: msg.rag_sources,
-                              tool_calls: msg.tool_calls,
-                              tool_results: msg.tool_results,
-                              policy_trace: msg.policy_trace,
-                              flow_policy_trace: msg.flow_policy_trace,
-                              policies: msg.policies,
-                              metadata: msg.metadata,
-                            })
-                          }
-                        />
-                      )}
-                    </div>
-                  </div>
-                  {msg.role === "agent" && (
-                    <MessageActivityTrail
-                      toolCalls={msg.tool_calls}
-                      toolResults={msg.tool_results}
-                      policyTrace={msgPolicy}
-                    />
-                  )}
-                  <ChatMessageActions
-                    text={msg.content}
-                    align={msg.role === "user" ? "end" : "start"}
-                    onReply={msg.role !== "system" && !isBusy ? () => startReply(msg) : undefined}
-                    onResend={msg.role === "user" && !isBusy ? () => resendMessage(msg) : undefined}
-                  />
-                  {msg.role === "user" && msg.deliveryStatus === "failed" && (
-                    <button
-                      type="button"
-                      onClick={() => resendMessage(msg)}
-                      className="text-[11px] text-destructive underline self-end font-medium"
-                    >
-                      Reintentar
-                    </button>
-                  )}
-                </div>
-              </motion.div>
-            );
-          })
+          <>
+            {messages.map((msg, idx) => {
+              const isStreamingBubble =
+                isStreaming && streamingMessageId != null && String(msg.id) === streamingMessageId;
+              return (
+                <AgentChatMessage
+                  key={msg.id}
+                  msg={msg}
+                  isLastAgent={idx === lastAgentIndex}
+                  isStreamingBubble={isStreamingBubble}
+                  reduceMotion={reduceMotion}
+                  isBusy={isBusy}
+                  agent={agent}
+                  liveSteps={isStreamingBubble ? liveSteps : EMPTY_LIVE_STEPS}
+                  skipEntrance={historyIdsRef.current.has(String(msg.id))}
+                  onReply={startReply}
+                  onResend={resendMessage}
+                  onInspect={setInspectMessage}
+                />
+              );
+            })}
+          </>
         )}
       </ChatThread>
 
@@ -1395,7 +1678,7 @@ export function AgentChatCore({
         flowPolicy={agent.flow_policy}
       />
 
-      <div className="border-t border-border/50 bg-card/50 backdrop-blur p-3 sm:p-4">
+      <div className="border-t border-border/50 bg-card/50 backdrop-blur px-4 py-3 sm:px-5 sm:py-4">
         <div className="max-w-3xl mx-auto">
           <ChatSkillCommand
             open={skillMenuOpen && agentSkillOptions.length > 0}
@@ -1607,9 +1890,9 @@ export function AgentChatCore({
       <ConfirmDialog
         open={confirmCloseOpen}
         onOpenChange={setConfirmCloseOpen}
-        title="¿Cerrar esta conversación?"
-        description="La conversación se marcará como cerrada y saldrá del hilo activo. Podrás consultarla desde el historial."
-        confirmLabel="Cerrar conversación"
+        title="¿Archivar esta conversación?"
+        description="La conversación se archivará y saldrá del hilo activo. Podrás consultarla desde el historial."
+        confirmLabel="Archivar conversación"
         busy={closeConversation.isPending || updateStatus.isPending}
         onConfirm={handleCloseCurrentConversation}
       />

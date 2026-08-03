@@ -69,6 +69,7 @@ import {
   canManageKnowledge,
   canRestoreKnowledge,
   canViewInactiveKnowledge,
+  canCreateKnowledge,
 } from "@/lib/authGuards";
 import { cn } from "@/lib/utils";
 import {
@@ -469,37 +470,43 @@ export default function Conocimiento() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 shrink-0">
-            <Button variant="outline" size="sm" asChild>
-              <Link to="/app/conocimiento/datos">
-                <FileSpreadsheet className="h-4 w-4 mr-1.5" /> Datos
-              </Link>
-            </Button>
-            <Button size="sm" asChild>
-              <Link to="/app/conocimiento/nuevo">
-                <Plus className="h-4 w-4 mr-1.5" /> Nuevo
-              </Link>
-            </Button>
+            {canCreateKnowledge() && (
+              <Button variant="outline" size="sm" asChild>
+                <Link to="/app/conocimiento/datos">
+                  <FileSpreadsheet className="h-4 w-4 mr-1.5" /> Datos
+                </Link>
+              </Button>
+            )}
+            {canCreateKnowledge() && (
+              <Button size="sm" asChild>
+                <Link to="/app/conocimiento/nuevo">
+                  <Plus className="h-4 w-4 mr-1.5" /> Nuevo
+                </Link>
+              </Button>
+            )}
           </div>
         </div>
         {/* Botones directos por tipo de documento */}
-        <div className="relative mt-4 flex flex-wrap gap-1.5">
-          {CREATE_KNOWLEDGE_TYPES.map((type) => {
-            const { label, Icon, style } = knowledgeTypeMeta(type);
-            return (
-              <Link
-                key={type}
-                to={`/app/conocimiento/nuevo?type=${type}`}
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors hover:scale-105",
-                  style.chip,
-                )}
-              >
-                <Icon className="h-3.5 w-3.5" />
-                {label}
-              </Link>
-            );
-          })}
-        </div>
+        {canCreateKnowledge() && (
+          <div className="relative mt-4 flex flex-wrap gap-1.5">
+            {CREATE_KNOWLEDGE_TYPES.map((type) => {
+              const { label, Icon, style } = knowledgeTypeMeta(type);
+              return (
+                <Link
+                  key={type}
+                  to={`/app/conocimiento/nuevo?type=${type}`}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors hover:scale-105",
+                    style.chip,
+                  )}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {label}
+                </Link>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div className="flex flex-col sm:flex-row gap-2 sm:items-center">

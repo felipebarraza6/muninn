@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Sparkles,
   MoreHorizontal,
@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   ArrowUpRight,
 } from "lucide-react";
+import { motion } from "framer-motion";
 import { formatCLP } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -25,6 +26,14 @@ import { ChatMarkdown } from "@/components/chat/chat-markdown";
 import { ChatCopyButton } from "@/components/chat/chat-copy-button";
 import { ChatComposer } from "@/components/chat/chat-composer";
 import { ChatThread } from "@/components/chat/chat-thread";
+import {
+  TypewriterText,
+  clearTypingSeen,
+  hasActiveTyping,
+  isTypingId,
+  markAllTyped,
+  useAnyTyping,
+} from "@/components/chat/typewriter-text";
 import {
   MessageInsightSheet,
   MessageInspectButton,
@@ -113,9 +122,77 @@ export function ChatPane({
     !analysisOnly && isOpen && conversation.isWaitingHuman === true && Boolean(onRelease);
   const ChannelIcon = channelIcon(conversation.channelType);
   const aiWorking = isOpen && isAiControlled && !conversation.isWaitingHuman;
+  const lastAiIndex = useMemo(() => {
+    const idx = conversation.messages
+      .map((m, i) => (m.sender === "ai" ? i : -1))
+      .filter((i) => i !== -1)
+      .pop();
+    return idx ?? -1;
+  }, [conversation.messages]);
+
+  const typingActive = useAnyTyping();
+  const typingPinRef = useRef(true);
+  const viewportElRef = useRef<HTMLElement | null>(null);
+  const bindViewportCapture = useCallback(
+    (node: HTMLElement | null) => {
+      viewportElRef.current = node;
+      bindViewport(node);
+    },
+    [bindViewport],
+  );
+
+  useEffect(() => {
+    const el = viewportElRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (e.deltaY < 0) {
+        typingPinRef.current = false;
+      } else if (e.deltaY > 0) {
+        const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+        if (dist <= 96) typingPinRef.current = true;
+      }
+    };
+    el.addEventListener("wheel", onWheel, { passive: true });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
+
+  useEffect(() => {
+    if (!typingActive) {
+      typingPinRef.current = true;
+      return;
+    }
+    let rafId: number;
+    const scrollLoop = () => {
+      if (typingPinRef.current && hasActiveTyping()) {
+        scrollToBottom("auto");
+        rafId = requestAnimationFrame(scrollLoop);
+      }
+    };
+    rafId = requestAnimationFrame(scrollLoop);
+    return () => cancelAnimationFrame(rafId);
+  }, [typingActive, scrollToBottom]);
+
+  const initConvRef = useRef<string | null>(null);
+  const initialIdsRef = useRef<Set<string>>(new Set());
+  if (initConvRef.current !== conversation.id && conversation.messages.length > 0) {
+    initConvRef.current = conversation.id;
+    markAllTyped(conversation.messages.filter((m) => m.sender === "ai").map((m) => String(m.id)));
+    initialIdsRef.current = new Set(conversation.messages.map((m) => String(m.id)));
+  }
+
+  useEffect(() => {
+    clearTypingSeen();
+    scrollToBottom();
+  }, [conversation.id, scrollToBottom]);
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 bg-muted/20">
+    <motion.div
+      key={conversation.id}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+      className="flex flex-col flex-1 min-h-0 bg-muted/20"
+    >
       <div className="hidden md:flex items-center gap-3 border-b bg-card px-4 h-14 shrink-0">
         <Avatar className="h-9 w-9">
           <AvatarFallback
@@ -152,7 +229,7 @@ export function ChatPane({
               Devolver a IA
             </Button>
           )}
-          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={onOpenDetails}>
+          <Button size="icon" variant="ghost" className="h-8 w-8 xl:hidden" onClick={onOpenDetails}>
             <Info className="h-4 w-4" />
           </Button>
           {!analysisOnly && (
@@ -193,21 +270,27 @@ export function ChatPane({
         </div>
       )}
 
-      <div className="relative flex-1 min-h-0">
+      <div className="relative z-0 flex flex-col flex-1 min-h-0">
         <ChatThread
-          viewportRef={bindViewport}
+          viewportRef={bindViewportCapture}
           endRef={endRef}
           showJump={showJump}
           onJump={scrollToBottom}
         >
-          {conversation.messages.map((m) => {
+          {conversation.messages.map((m, idx) => {
             if (m.sender === "system") {
               return (
-                <div key={m.id} className="flex justify-center">
+                <motion.div
+                  key={m.id}
+                  initial={initialIdsRef.current.has(String(m.id)) ? false : { opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.2, ease: "easeOut" }}
+                  className="flex justify-center"
+                >
                   <span className="text-[11px] text-muted-foreground bg-muted/60 rounded-full px-3 py-1">
                     {m.text}
                   </span>
-                </div>
+                </motion.div>
               );
             }
             const isPatient = m.sender === "patient";
@@ -222,8 +305,11 @@ export function ChatPane({
             const toolCount = Array.isArray(m.tool_calls) ? m.tool_calls.length : 0;
             const canInspect = isAi || ragCount > 0 || toolCount > 0;
             return (
-              <div
+              <motion.div
                 key={m.id}
+                initial={initialIdsRef.current.has(String(m.id)) ? false : { opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
                 className={cn("flex gap-2 w-full", isPatient ? "justify-start" : "justify-end")}
               >
                 {isPatient && (
@@ -246,12 +332,21 @@ export function ChatPane({
                 >
                   <div
                     className={cn(
-                      "w-fit max-w-full rounded-2xl px-3.5 py-2 text-sm shadow-sm",
+                      "relative w-fit max-w-full rounded-2xl px-3.5 py-2 text-sm shadow-sm break-words",
                       tone,
                       isPatient ? "rounded-bl-sm" : "rounded-br-sm",
+                      isAi && idx === lastAiIndex && (aiWorking || isTypingId(String(m.id)))
+                        ? "ring-[3px] ring-primary/50 animate-pulse shadow-[0_0_12px_rgba(45,212,191,0.25)]"
+                        : "",
                     )}
                   >
-                    <ChatMarkdown content={m.text} />
+                    {isAi ? (
+                      <TypewriterText id={String(m.id)} text={m.text}>
+                        <ChatMarkdown content={m.text} />
+                      </TypewriterText>
+                    ) : (
+                      <ChatMarkdown content={m.text} />
+                    )}
                     <div className="flex items-center justify-end gap-1.5 mt-1">
                       {typeof m.response_time_ms === "number" && m.response_time_ms > 0 ? (
                         <span
@@ -263,6 +358,16 @@ export function ChatPane({
                       ) : null}
                       <span className="text-[10px] opacity-50 font-medium">{m.time}</span>
                     </div>
+                    {canInspect && (
+                      <div className="absolute -bottom-2 -right-2">
+                        <MessageInspectButton
+                          chunkCount={ragCount}
+                          toolCount={toolCount}
+                          variant="icon"
+                          onClick={() => setInspectMessage(toInsightMessage(m))}
+                        />
+                      </div>
+                    )}
                   </div>
                   <div
                     className={cn(
@@ -271,17 +376,9 @@ export function ChatPane({
                     )}
                   >
                     <ChatCopyButton text={m.text} />
-                    {canInspect && (
-                      <MessageInspectButton
-                        chunkCount={ragCount}
-                        toolCount={toolCount}
-                        variant="icon"
-                        onClick={() => setInspectMessage(toInsightMessage(m))}
-                      />
-                    )}
                   </div>
                 </div>
-              </div>
+              </motion.div>
             );
           })}
         </ChatThread>
@@ -294,70 +391,72 @@ export function ChatPane({
         message={inspectMessage}
       />
 
-      <div className="border-t bg-card px-4 py-3 shrink-0">
-        <div className="max-w-3xl mx-auto space-y-2">
-          {analysisOnly ? (
-            <div className="rounded-lg border border-border/60 bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
-              <p className="font-medium text-foreground">Modo análisis</p>
-              <p className="text-xs mt-0.5 leading-relaxed">
-                Solo lectura: podés inspeccionar mensajes, no intervenir.
-              </p>
-            </div>
-          ) : !canReply ? (
-            <div className="rounded-lg border border-border/60 bg-muted/40 px-4 py-3 text-sm text-muted-foreground flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-primary shrink-0" />
-              <span>
-                {aiWorking
-                  ? "La IA está al mando. Tomá el control para responder."
-                  : "No podés responder en este estado."}
-              </span>
-              {showTakeControl ? (
-                <Button size="sm" className="ml-auto shrink-0" onClick={onTakeControl}>
-                  Tomar control
-                </Button>
-              ) : null}
-            </div>
-          ) : (
-            <>
-              {conversation.suggestion ? (
-                <button
-                  type="button"
-                  className="w-full text-left rounded-lg border border-primary/25 bg-primary/5 px-3 py-2 text-xs hover:bg-primary/10 transition-colors"
-                  onClick={() => setDraft(conversation.suggestion!)}
-                >
-                  <span className="font-medium text-primary">Sugerencia</span>
-                  <span className="block text-muted-foreground mt-0.5 line-clamp-2">
-                    {conversation.suggestion}
-                  </span>
-                </button>
-              ) : null}
-              <div className="flex flex-wrap gap-1.5">
-                {MACROS.map((m) => (
-                  <Button
-                    key={m.id}
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-[11px]"
-                    onClick={() => setDraft(m.text)}
-                  >
-                    {m.label}
-                  </Button>
-                ))}
+      {!isOpen ? null : (
+        <div className="relative z-10 border-t bg-card px-4 py-3 shrink-0">
+          <div className="max-w-3xl mx-auto space-y-2">
+            {analysisOnly ? (
+              <div className="rounded-lg border border-border/60 bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+                <p className="font-medium text-foreground">Modo análisis</p>
+                <p className="text-xs mt-0.5 leading-relaxed">
+                  Solo lectura: podés inspeccionar mensajes, no intervenir.
+                </p>
               </div>
-              <ChatComposer
-                ref={textareaRef}
-                value={draft}
-                onChange={setDraft}
-                onSubmit={send}
-                busy={sending}
-                disabled={sending}
-                placeholder="Escribe una respuesta… (Enter envía, Shift+Enter salto)"
-              />
-            </>
-          )}
+            ) : !canReply ? (
+              <div className="rounded-lg border border-border/60 bg-muted/40 px-4 py-3 text-sm text-muted-foreground flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-primary shrink-0" />
+                <span>
+                  {aiWorking
+                    ? "La IA está al mando. Tomá el control para responder."
+                    : "No podés responder en este estado."}
+                </span>
+                {showTakeControl ? (
+                  <Button size="sm" className="ml-auto shrink-0" onClick={onTakeControl}>
+                    Tomar control
+                  </Button>
+                ) : null}
+              </div>
+            ) : (
+              <>
+                {conversation.suggestion ? (
+                  <button
+                    type="button"
+                    className="w-full text-left rounded-lg border border-primary/25 bg-primary/5 px-3 py-2 text-xs hover:bg-primary/10 transition-colors"
+                    onClick={() => setDraft(conversation.suggestion!)}
+                  >
+                    <span className="font-medium text-primary">Sugerencia</span>
+                    <span className="block text-muted-foreground mt-0.5 line-clamp-2">
+                      {conversation.suggestion}
+                    </span>
+                  </button>
+                ) : null}
+                <div className="flex flex-wrap gap-1.5">
+                  {MACROS.map((m) => (
+                    <Button
+                      key={m.id}
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-[11px]"
+                      onClick={() => setDraft(m.text)}
+                    >
+                      {m.label}
+                    </Button>
+                  ))}
+                </div>
+                <ChatComposer
+                  ref={textareaRef}
+                  value={draft}
+                  onChange={setDraft}
+                  onSubmit={send}
+                  busy={sending}
+                  disabled={sending}
+                  placeholder="Escribe una respuesta… (Enter envía, Shift+Enter salto)"
+                />
+              </>
+            )}
+          </div>
         </div>
-      </div>
-    </div>
+      )}
+    </motion.div>
   );
 }

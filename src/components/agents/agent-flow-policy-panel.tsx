@@ -45,7 +45,7 @@ import type { ParameterSource } from "@/api/hooks/useAgentFunctions";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-type Props = { agentId: string };
+type Props = { agentId: string; readOnly?: boolean };
 type LinkMode = "requires" | "capture" | "prerequisites";
 
 function ToggleChip({
@@ -87,7 +87,7 @@ function toggleList(list: string[], value: string): string[] {
   return list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
 }
 
-export function AgentFlowPolicyPanel({ agentId }: Props) {
+export function AgentFlowPolicyPanel({ agentId, readOnly }: Props) {
   const { data: agent, isLoading, refetch } = useAgent(agentId);
   const agentBranchId = agent?.branch ?? null;
   const { data: catalog = [] } = useAgentFunctions({ branch: agentBranchId });
@@ -418,478 +418,500 @@ export function AgentFlowPolicyPanel({ agentId }: Props) {
       )}
     >
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        {/* Repisa: solo ella scrollea */}
-        <aside className="flex w-[min(100%,300px)] shrink-0 flex-col overflow-hidden border-r border-border/60 bg-muted/15 sm:w-[320px]">
-          <div className="shrink-0 space-y-3 border-b border-border/50 px-3 py-3">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="flex items-center gap-1.5 text-sm font-semibold tracking-tight">
-                  <GitBranch className="h-3.5 w-3.5 text-primary shrink-0" />
-                  DataRules
-                </p>
-                <p className="mt-0.5 text-[11px] text-muted-foreground leading-snug">
-                  Datos y reglas en la repisa. La pizarra no se mueve.
-                </p>
+        {!readOnly && (
+          <aside className="flex w-[min(100%,300px)] shrink-0 flex-col overflow-hidden border-r border-border/60 bg-muted/15 sm:w-[320px]">
+            <div className="shrink-0 space-y-3 border-b border-border/50 px-3 py-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="flex items-center gap-1.5 text-sm font-semibold tracking-tight">
+                    <GitBranch className="h-3.5 w-3.5 text-primary shrink-0" />
+                    DataRules
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground leading-snug">
+                    Datos y reglas en la repisa. La pizarra no se mueve.
+                  </p>
+                </div>
+                <Badge
+                  variant={active ? "default" : "secondary"}
+                  className="shrink-0 font-normal text-[10px]"
+                >
+                  {active ? "Activo" : "Sin reglas"}
+                </Badge>
               </div>
-              <Badge
-                variant={active ? "default" : "secondary"}
-                className="shrink-0 font-normal text-[10px]"
-              >
-                {active ? "Activo" : "Sin reglas"}
-              </Badge>
+
+              {!readOnly && (
+                <Button
+                  type="button"
+                  size="sm"
+                  className="w-full h-8"
+                  onClick={() => {
+                    setCreatingSlot(true);
+                    setDatosOpen(true);
+                  }}
+                >
+                  <Plus className="h-3.5 w-3.5 mr-1.5" />
+                  Nuevo dato
+                </Button>
+              )}
+              {!readOnly && knownPreset && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  className="w-full h-8"
+                  onClick={restoreKnownPreset}
+                  title="Restaura el flujo oficial de agendamiento Clínica WM"
+                >
+                  <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+                  Restaurar flujo WM
+                </Button>
+              )}
+              {suggestedSlots.length > 0 && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="w-full h-8"
+                  disabled={missingSuggestedCount === 0}
+                  onClick={fillSlotsFromSkills}
+                  title="Agrega params de tus skills (omite valores static de la config)"
+                >
+                  <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                  {slots.length === 0
+                    ? `Desde skills (${suggestedSlots.length})`
+                    : missingSuggestedCount > 0
+                      ? `Completar skills (${missingSuggestedCount})`
+                      : "Skills al día"}
+                </Button>
+              )}
+              <p className="px-0.5 text-[10px] text-muted-foreground leading-snug">
+                {knownPreset
+                  ? "Flujo WM: horas/próxima → crear cita (con consentimiento). Estado es independiente."
+                  : "No pongas en Datos lo que ya es static en la skill (IDs fijos, sede…)."}
+              </p>
             </div>
 
-            <Button
-              type="button"
-              size="sm"
-              className="w-full h-8"
-              onClick={() => {
-                setCreatingSlot(true);
-                setDatosOpen(true);
-              }}
-            >
-              <Plus className="h-3.5 w-3.5 mr-1.5" />
-              Nuevo dato
-            </Button>
-            {knownPreset && (
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                className="w-full h-8"
-                onClick={restoreKnownPreset}
-                title="Restaura el flujo oficial de agendamiento Clínica WM"
-              >
-                <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
-                Restaurar flujo WM
-              </Button>
-            )}
-            {suggestedSlots.length > 0 && (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="w-full h-8"
-                disabled={missingSuggestedCount === 0}
-                onClick={fillSlotsFromSkills}
-                title="Agrega params de tus skills (omite valores static de la config)"
-              >
-                <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-                {slots.length === 0
-                  ? `Desde skills (${suggestedSlots.length})`
-                  : missingSuggestedCount > 0
-                    ? `Completar skills (${missingSuggestedCount})`
-                    : "Skills al día"}
-              </Button>
-            )}
-            <p className="px-0.5 text-[10px] text-muted-foreground leading-snug">
-              {knownPreset
-                ? "Flujo WM: horas/próxima → crear cita (con consentimiento). Estado es independiente."
-                : "No pongas en Datos lo que ya es static en la skill (IDs fijos, sede…)."}
-            </p>
-          </div>
-
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-2 space-y-2">
-            {creatingSlot && (
-              <div className="rounded-lg border border-primary/30 bg-primary/5 p-2.5 space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-medium">Nuevo dato</p>
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    className="h-6 w-6"
-                    onClick={() => setCreatingSlot(false)}
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-                <Input
-                  value={newSlotAsk}
-                  onChange={(e) => setNewSlotAsk(e.target.value)}
-                  placeholder="Pregunta al usuario"
-                  className="h-8 text-xs"
-                />
-                <Input
-                  value={newSlotId}
-                  onChange={(e) => setNewSlotId(e.target.value)}
-                  placeholder="id (ej. fecha)"
-                  className="h-8 font-mono text-xs"
-                />
-                <div className="flex flex-wrap gap-1">
-                  {SLOT_EXAMPLES.map((ex) => (
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-2 space-y-2">
+              {creatingSlot && (
+                <div className="rounded-lg border border-primary/30 bg-primary/5 p-2.5 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-medium">Nuevo dato</p>
                     <Button
-                      key={ex.id}
                       type="button"
-                      size="sm"
-                      variant="outline"
-                      className="h-6 text-[10px] px-1.5"
-                      disabled={slots.some((s) => slugifySlotId(s.id) === ex.id)}
-                      onClick={() => addSlot(ex)}
+                      size="icon"
+                      variant="ghost"
+                      className="h-6 w-6"
+                      onClick={() => setCreatingSlot(false)}
                     >
-                      {ex.id}
+                      <X className="h-3.5 w-3.5" />
                     </Button>
-                  ))}
-                </div>
-                <Button type="button" size="sm" className="w-full h-7" onClick={() => addSlot()}>
-                  Agregar
-                </Button>
-              </div>
-            )}
-
-            <Collapsible open={datosOpen} onOpenChange={setDatosOpen}>
-              <CollapsibleTrigger className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium hover:bg-muted/40">
-                <ChevronDown
-                  className={cn(
-                    "h-3.5 w-3.5 text-muted-foreground transition-transform",
-                    !datosOpen && "-rotate-90",
-                  )}
-                />
-                <MessageCircleQuestion className="h-3.5 w-3.5 text-amber-400" />
-                Datos
-                <Badge variant="secondary" className="ml-auto h-5 px-1.5 text-[10px] font-normal">
-                  {slots.length}
-                </Badge>
-              </CollapsibleTrigger>
-              <CollapsibleContent className="space-y-2 px-1 pb-2 pt-1">
-                {slots.length === 0 ? (
-                  <div className="space-y-2 px-1 py-2 text-center">
-                    <p className="text-[11px] text-muted-foreground">
-                      Sin datos. Puedes rellenar desde tus skills o crear uno.
-                    </p>
-                    {suggestedSlots.length > 0 && (
+                  </div>
+                  <Input
+                    value={newSlotAsk}
+                    onChange={(e) => setNewSlotAsk(e.target.value)}
+                    placeholder="Pregunta al usuario"
+                    className="h-8 text-xs"
+                    disabled={readOnly}
+                  />
+                  <Input
+                    value={newSlotId}
+                    onChange={(e) => setNewSlotId(e.target.value)}
+                    placeholder="id (ej. fecha)"
+                    className="h-8 font-mono text-xs"
+                    disabled={readOnly}
+                  />
+                  <div className="flex flex-wrap gap-1">
+                    {SLOT_EXAMPLES.map((ex) => (
                       <Button
+                        key={ex.id}
                         type="button"
                         size="sm"
-                        variant="secondary"
-                        className="h-7 text-[11px]"
-                        onClick={fillSlotsFromSkills}
+                        variant="outline"
+                        className="h-6 text-[10px] px-1.5"
+                        disabled={slots.some((s) => slugifySlotId(s.id) === ex.id)}
+                        onClick={() => addSlot(ex)}
                       >
-                        Rellenar desde skills ({suggestedSlots.length})
+                        {ex.id}
                       </Button>
-                    )}
+                    ))}
                   </div>
-                ) : (
-                  slots.map((slot, idx) => (
-                    <div
-                      key={`${slot.id}-${idx}`}
-                      className="rounded-lg bg-muted/30 px-2.5 py-2 space-y-1.5"
-                    >
-                      <div className="flex items-start gap-1">
-                        <Input
-                          value={slot.id}
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="w-full h-7"
+                    onClick={() => addSlot()}
+                    disabled={readOnly}
+                  >
+                    Agregar
+                  </Button>
+                </div>
+              )}
+
+              <Collapsible open={datosOpen} onOpenChange={setDatosOpen}>
+                <CollapsibleTrigger className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium hover:bg-muted/40">
+                  <ChevronDown
+                    className={cn(
+                      "h-3.5 w-3.5 text-muted-foreground transition-transform",
+                      !datosOpen && "-rotate-90",
+                    )}
+                  />
+                  <MessageCircleQuestion className="h-3.5 w-3.5 text-amber-400" />
+                  Datos
+                  <Badge variant="secondary" className="ml-auto h-5 px-1.5 text-[10px] font-normal">
+                    {slots.length}
+                  </Badge>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="space-y-2 px-1 pb-2 pt-1">
+                  {slots.length === 0 ? (
+                    <div className="space-y-2 px-1 py-2 text-center">
+                      <p className="text-[11px] text-muted-foreground">
+                        Sin datos. Puedes rellenar desde tus skills o crear uno.
+                      </p>
+                      {!readOnly && suggestedSlots.length > 0 && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          className="h-7 text-[11px]"
+                          onClick={fillSlotsFromSkills}
+                        >
+                          Rellenar desde skills ({suggestedSlots.length})
+                        </Button>
+                      )}
+                    </div>
+                  ) : (
+                    slots.map((slot, idx) => (
+                      <div
+                        key={`${slot.id}-${idx}`}
+                        className="rounded-lg bg-muted/30 px-2.5 py-2 space-y-1.5"
+                      >
+                        <div className="flex items-start gap-1">
+                          <Input
+                            value={slot.id}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setSlots((prev) =>
+                                prev.map((s, i) => (i === idx ? { ...s, id: v } : s)),
+                              );
+                              markDirty();
+                            }}
+                            placeholder="id"
+                            className="h-7 font-mono text-[11px] flex-1"
+                            title="Identificador"
+                            disabled={readOnly}
+                          />
+                          {!readOnly && (
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+                              onClick={() => removeSlot(idx)}
+                              aria-label="Quitar dato"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                        <Textarea
+                          value={slot.ask}
                           onChange={(e) => {
                             const v = e.target.value;
                             setSlots((prev) =>
-                              prev.map((s, i) => (i === idx ? { ...s, id: v } : s)),
+                              prev.map((s, i) => (i === idx ? { ...s, ask: v } : s)),
                             );
                             markDirty();
                           }}
-                          placeholder="id"
-                          className="h-7 font-mono text-[11px] flex-1"
-                          title="Identificador"
+                          rows={2}
+                          className="text-[11px] min-h-[52px] resize-none"
+                          placeholder="Pregunta al usuario"
+                          disabled={readOnly}
                         />
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
-                          onClick={() => removeSlot(idx)}
-                          aria-label="Quitar dato"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                      <Textarea
-                        value={slot.ask}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          setSlots((prev) =>
-                            prev.map((s, i) => (i === idx ? { ...s, ask: v } : s)),
-                          );
-                          markDirty();
-                        }}
-                        rows={2}
-                        className="text-[11px] min-h-[52px] resize-none"
-                        placeholder="Pregunta al usuario"
-                      />
-                      <Input
-                        value={slot.defaultValue}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          setSlots((prev) =>
-                            prev.map((s, i) => (i === idx ? { ...s, defaultValue: v } : s)),
-                          );
-                          markDirty();
-                        }}
-                        placeholder="Default (opcional)"
-                        className="h-7 text-[11px]"
-                      />
-                    </div>
-                  ))
-                )}
-              </CollapsibleContent>
-            </Collapsible>
-
-            <Collapsible open={skillsOpen} onOpenChange={setSkillsOpen}>
-              <CollapsibleTrigger className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium hover:bg-muted/40">
-                <ChevronDown
-                  className={cn(
-                    "h-3.5 w-3.5 text-muted-foreground transition-transform",
-                    !skillsOpen && "-rotate-90",
-                  )}
-                />
-                <Sparkles className="h-3.5 w-3.5 text-primary" />
-                Skills
-                <Badge variant="secondary" className="ml-auto h-5 px-1.5 text-[10px] font-normal">
-                  {enabledRulesCount}
-                </Badge>
-              </CollapsibleTrigger>
-              <CollapsibleContent className="space-y-2 px-1 pb-2 pt-1">
-                <p className="px-1 text-[10px] text-muted-foreground leading-snug">
-                  Solo skills activas en DataRules. Uní en la pizarra o tocá chips acá.
-                </p>
-                {skills.length === 0 ? (
-                  <p className="px-1 py-3 text-[11px] text-muted-foreground text-center">
-                    Sin skills asignadas. Andá al tab Skills.
-                  </p>
-                ) : enabledSkills.length === 0 ? (
-                  <p className="px-1 py-3 text-[11px] text-muted-foreground text-center">
-                    Ninguna skill activa. Activá una abajo o uní un dato en la pizarra.
-                  </p>
-                ) : (
-                  enabledSkills.map((sk) => (
-                    <div
-                      key={sk.slug}
-                      className="rounded-lg bg-primary/8 px-2.5 py-2 space-y-2 ring-1 ring-primary/20"
-                    >
-                      <div className="flex items-start justify-between gap-1">
-                        <div className="min-w-0">
-                          <p className="text-[12px] font-medium truncate">{sk.name}</p>
-                          <p className="font-mono text-[9px] text-muted-foreground truncate">
-                            {sk.slug}
-                          </p>
-                        </div>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="default"
-                          className="h-6 text-[10px] px-2 shrink-0"
-                          onClick={() => {
-                            setSkills((prev) =>
-                              prev.map((s) =>
-                                s.slug === sk.slug
-                                  ? {
-                                      ...s,
-                                      enabled: false,
-                                      requires: [],
-                                      capture: [],
-                                      prerequisites: [],
-                                      prerequisitesAny: [],
-                                      optionalDefaults: {},
-                                    }
-                                  : s,
-                              ),
+                        <Input
+                          value={slot.defaultValue}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setSlots((prev) =>
+                              prev.map((s, i) => (i === idx ? { ...s, defaultValue: v } : s)),
                             );
                             markDirty();
                           }}
-                        >
-                          On
-                        </Button>
+                          placeholder="Default (opcional)"
+                          className="h-7 text-[11px]"
+                          disabled={readOnly}
+                        />
                       </div>
+                    ))
+                  )}
+                </CollapsibleContent>
+              </Collapsible>
 
-                      <div className="space-y-2">
-                        {slotIds.length === 0 ? (
-                          <p className="text-[10px] text-muted-foreground">Crea datos primero.</p>
-                        ) : (
-                          <>
-                            <div className="space-y-1">
-                              <Label className="text-[10px] text-amber-200/90">Obligatorios</Label>
-                              <div className="flex flex-wrap gap-1">
-                                {slotIds.map((id) => (
-                                  <ToggleChip
-                                    key={`req-${sk.slug}-${id}`}
-                                    label={id}
-                                    tone="amber"
-                                    active={sk.requires.includes(id)}
-                                    onToggle={() => onToggleRequires(sk.slug, id)}
-                                  />
-                                ))}
-                              </div>
-                            </div>
-                            <div className="space-y-1">
-                              <Label className="text-[10px] text-primary/90">Recordar</Label>
-                              <div className="flex flex-wrap gap-1">
-                                {slotIds.map((id) => (
-                                  <ToggleChip
-                                    key={`cap-${sk.slug}-${id}`}
-                                    label={id}
-                                    tone="mint"
-                                    active={sk.capture.includes(id)}
-                                    onToggle={() => onToggleCapture(sk.slug, id)}
-                                  />
-                                ))}
-                              </div>
-                            </div>
-                          </>
-                        )}
-                        {enabledSkills.filter((s) => s.slug !== sk.slug).length > 0 && (
-                          <div className="space-y-1">
-                            <Label className="text-[10px] text-sky-200/90">
-                              Antes
-                              {sk.prerequisitesAny.length > 0 ? " (alguna)" : ""}
-                            </Label>
-                            <div className="flex flex-wrap gap-1">
-                              {enabledSkills
-                                .filter((s) => s.slug !== sk.slug)
-                                .map((other) => {
-                                  const active =
-                                    sk.prerequisitesAny.includes(other.slug) ||
-                                    sk.prerequisites.includes(other.slug);
-                                  return (
-                                    <ToggleChip
-                                      key={`pre-${sk.slug}-${other.slug}`}
-                                      label={other.name}
-                                      tone="sky"
-                                      active={active}
-                                      onToggle={() => onTogglePrerequisite(sk.slug, other.slug)}
-                                    />
-                                  );
-                                })}
-                            </div>
+              <Collapsible open={skillsOpen} onOpenChange={setSkillsOpen}>
+                <CollapsibleTrigger className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium hover:bg-muted/40">
+                  <ChevronDown
+                    className={cn(
+                      "h-3.5 w-3.5 text-muted-foreground transition-transform",
+                      !skillsOpen && "-rotate-90",
+                    )}
+                  />
+                  <Sparkles className="h-3.5 w-3.5 text-primary" />
+                  Skills
+                  <Badge variant="secondary" className="ml-auto h-5 px-1.5 text-[10px] font-normal">
+                    {enabledRulesCount}
+                  </Badge>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="space-y-2 px-1 pb-2 pt-1">
+                  <p className="px-1 text-[10px] text-muted-foreground leading-snug">
+                    Solo skills activas en DataRules. Uní en la pizarra o tocá chips acá.
+                  </p>
+                  {skills.length === 0 ? (
+                    <p className="px-1 py-3 text-[11px] text-muted-foreground text-center">
+                      Sin skills asignadas. Andá al tab Skills.
+                    </p>
+                  ) : enabledSkills.length === 0 ? (
+                    <p className="px-1 py-3 text-[11px] text-muted-foreground text-center">
+                      Ninguna skill activa. Activá una abajo o uní un dato en la pizarra.
+                    </p>
+                  ) : (
+                    enabledSkills.map((sk) => (
+                      <div
+                        key={sk.slug}
+                        className="rounded-lg bg-primary/8 px-2.5 py-2 space-y-2 ring-1 ring-primary/20"
+                      >
+                        <div className="flex items-start justify-between gap-1">
+                          <div className="min-w-0">
+                            <p className="text-[12px] font-medium truncate">{sk.name}</p>
+                            <p className="font-mono text-[9px] text-muted-foreground truncate">
+                              {sk.slug}
+                            </p>
                           </div>
-                        )}
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="default"
+                            className="h-6 text-[10px] px-2 shrink-0"
+                            onClick={() => {
+                              setSkills((prev) =>
+                                prev.map((s) =>
+                                  s.slug === sk.slug
+                                    ? {
+                                        ...s,
+                                        enabled: false,
+                                        requires: [],
+                                        capture: [],
+                                        prerequisites: [],
+                                        prerequisitesAny: [],
+                                        optionalDefaults: {},
+                                      }
+                                    : s,
+                                ),
+                              );
+                              markDirty();
+                            }}
+                          >
+                            On
+                          </Button>
+                        </div>
+
+                        <div className="space-y-2">
+                          {slotIds.length === 0 ? (
+                            <p className="text-[10px] text-muted-foreground">Crea datos primero.</p>
+                          ) : (
+                            <>
+                              <div className="space-y-1">
+                                <Label className="text-[10px] text-amber-200/90">
+                                  Obligatorios
+                                </Label>
+                                <div className="flex flex-wrap gap-1">
+                                  {slotIds.map((id) => (
+                                    <ToggleChip
+                                      key={`req-${sk.slug}-${id}`}
+                                      label={id}
+                                      tone="amber"
+                                      active={sk.requires.includes(id)}
+                                      onToggle={() => onToggleRequires(sk.slug, id)}
+                                    />
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-[10px] text-primary/90">Recordar</Label>
+                                <div className="flex flex-wrap gap-1">
+                                  {slotIds.map((id) => (
+                                    <ToggleChip
+                                      key={`cap-${sk.slug}-${id}`}
+                                      label={id}
+                                      tone="mint"
+                                      active={sk.capture.includes(id)}
+                                      onToggle={() => onToggleCapture(sk.slug, id)}
+                                    />
+                                  ))}
+                                </div>
+                              </div>
+                            </>
+                          )}
+                          {enabledSkills.filter((s) => s.slug !== sk.slug).length > 0 && (
+                            <div className="space-y-1">
+                              <Label className="text-[10px] text-sky-200/90">
+                                Antes
+                                {sk.prerequisitesAny.length > 0 ? " (alguna)" : ""}
+                              </Label>
+                              <div className="flex flex-wrap gap-1">
+                                {enabledSkills
+                                  .filter((s) => s.slug !== sk.slug)
+                                  .map((other) => {
+                                    const active =
+                                      sk.prerequisitesAny.includes(other.slug) ||
+                                      sk.prerequisites.includes(other.slug);
+                                    return (
+                                      <ToggleChip
+                                        key={`pre-${sk.slug}-${other.slug}`}
+                                        label={other.name}
+                                        tone="sky"
+                                        active={active}
+                                        onToggle={() => onTogglePrerequisite(sk.slug, other.slug)}
+                                      />
+                                    );
+                                  })}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                  {offSkills.length > 0 && !readOnly && (
+                    <div className="space-y-1.5 border-t border-border/40 pt-2">
+                      <p className="px-1 text-[10px] text-muted-foreground">
+                        Off · {offSkills.length} (asignadas, sin reglas)
+                      </p>
+                      <div className="flex flex-wrap gap-1 px-1">
+                        {offSkills.map((sk) => (
+                          <Button
+                            key={sk.slug}
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-6 max-w-full truncate text-[10px] px-2"
+                            title={`Activar ${sk.name}`}
+                            onClick={() => enableSkill(sk.slug)}
+                          >
+                            {sk.name}
+                          </Button>
+                        ))}
                       </div>
                     </div>
-                  ))
-                )}
-                {offSkills.length > 0 && (
-                  <div className="space-y-1.5 border-t border-border/40 pt-2">
-                    <p className="px-1 text-[10px] text-muted-foreground">
-                      Off · {offSkills.length} (asignadas, sin reglas)
-                    </p>
-                    <div className="flex flex-wrap gap-1 px-1">
-                      {offSkills.map((sk) => (
-                        <Button
-                          key={sk.slug}
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="h-6 max-w-full truncate text-[10px] px-2"
-                          title={`Activar ${sk.name}`}
-                          onClick={() => enableSkill(sk.slug)}
-                        >
-                          {sk.name}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </CollapsibleContent>
-            </Collapsible>
-          </div>
-        </aside>
+                  )}
+                </CollapsibleContent>
+              </Collapsible>
+            </div>
+          </aside>
+        )}
 
         {/* Pizarra fija: no scrollea con la repisa */}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border/50 bg-muted/10 px-3 py-2">
-            <Link2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-            <span className="text-[11px] text-muted-foreground mr-0.5">Modo al arrastrar:</span>
-            {(
-              [
-                ["requires", "Obligatorio", "amber"],
-                ["capture", "Recordar", "mint"],
-                ["prerequisites", "Antes", "sky"],
-              ] as const
-            ).map(([mode, label, tone]) => (
-              <ToggleChip
-                key={mode}
-                label={label}
-                tone={tone}
-                active={linkMode === mode}
-                onToggle={() => setLinkMode(mode)}
-              />
-            ))}
-            <span className="text-[10px] text-muted-foreground hidden lg:inline max-w-[220px] leading-snug">
-              {linkMode === "prerequisites"
-                ? "Arrastrá skill → skill"
-                : "Arrastrá dato → skill (no alcanza con el chip)"}
-            </span>
-            <div className="ml-auto flex items-center gap-1.5">
-              <span className="text-[10px] text-muted-foreground hidden xl:inline mr-1">
-                Clic en línea para quitar
+          {!readOnly && (
+            <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border/50 bg-muted/10 px-3 py-2">
+              <Link2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <span className="text-[11px] text-muted-foreground mr-0.5">Modo al arrastrar:</span>
+              {(
+                [
+                  ["requires", "Obligatorio", "amber"],
+                  ["capture", "Recordar", "mint"],
+                  ["prerequisites", "Antes", "sky"],
+                ] as const
+              ).map(([mode, label, tone]) => (
+                <ToggleChip
+                  key={mode}
+                  label={label}
+                  tone={tone}
+                  active={linkMode === mode}
+                  onToggle={() => setLinkMode(mode)}
+                />
+              ))}
+              <span className="text-[10px] text-muted-foreground hidden lg:inline max-w-[220px] leading-snug">
+                {linkMode === "prerequisites"
+                  ? "Arrastrá skill → skill"
+                  : "Arrastrá dato → skill (no alcanza con el chip)"}
               </span>
-              <Button
-                type="button"
-                size="sm"
-                variant={zenMode ? "secondary" : "outline"}
-                className="h-7 gap-1.5 text-[11px]"
-                onClick={() => setZenMode((v) => !v)}
-                title={zenMode ? "Salir de pantalla completa (Esc)" : "Pantalla completa"}
-              >
-                {zenMode ? (
-                  <>
-                    <Minimize2 className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Salir</span>
-                  </>
-                ) : (
-                  <>
-                    <Maximize2 className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Zen</span>
-                  </>
-                )}
-              </Button>
+              <div className="ml-auto flex items-center gap-1.5">
+                <span className="text-[10px] text-muted-foreground hidden xl:inline mr-1">
+                  Clic en línea para quitar
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={zenMode ? "secondary" : "outline"}
+                  className="h-7 gap-1.5 text-[11px]"
+                  onClick={() => setZenMode((v) => !v)}
+                  title={zenMode ? "Salir de pantalla completa (Esc)" : "Pantalla completa"}
+                >
+                  {zenMode ? (
+                    <>
+                      <Minimize2 className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">Salir</span>
+                    </>
+                  ) : (
+                    <>
+                      <Maximize2 className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">Zen</span>
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
-          </div>
+          )}
           <div className="min-h-0 flex-1 overflow-hidden p-2">
             <FlowPolicyBoard
               slots={slots}
               skills={skills}
               linkMode={linkMode}
               layout={layout}
-              onLayoutChange={onLayoutChange}
-              onEnableSkill={enableSkill}
-              onToggleRequires={onToggleRequires}
-              onToggleCapture={onToggleCapture}
-              onTogglePrerequisite={onTogglePrerequisite}
+              onLayoutChange={readOnly ? () => {} : onLayoutChange}
+              onEnableSkill={readOnly ? () => {} : enableSkill}
+              onToggleRequires={readOnly ? () => {} : onToggleRequires}
+              onToggleCapture={readOnly ? () => {} : onToggleCapture}
+              onTogglePrerequisite={readOnly ? () => {} : onTogglePrerequisite}
               fillHeight
             />
           </div>
         </div>
       </div>
 
-      <div className="shrink-0 flex flex-wrap items-center gap-2 border-t border-border/60 bg-card/80 px-3 py-2">
-        <Button size="sm" disabled={updateAgent.isPending || !dirty} onClick={handleSave}>
-          {updateAgent.isPending ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-          ) : (
-            <Save className="h-3.5 w-3.5 mr-1.5" />
+      {!readOnly && (
+        <div className="shrink-0 flex flex-wrap items-center gap-2 border-t border-border/60 bg-card/80 px-3 py-2">
+          <Button size="sm" disabled={updateAgent.isPending || !dirty} onClick={handleSave}>
+            {updateAgent.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+            ) : (
+              <Save className="h-3.5 w-3.5 mr-1.5" />
+            )}
+            Guardar
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!dirty || updateAgent.isPending}
+            onClick={handleReset}
+          >
+            <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+            Descartar
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-destructive hover:text-destructive"
+            disabled={updateAgent.isPending}
+            onClick={handleClear}
+          >
+            <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+            Vaciar
+          </Button>
+          {dirty && (
+            <span className="text-[11px] text-muted-foreground ml-auto">Cambios sin guardar</span>
           )}
-          Guardar
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={!dirty || updateAgent.isPending}
-          onClick={handleReset}
-        >
-          <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
-          Descartar
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="text-destructive hover:text-destructive"
-          disabled={updateAgent.isPending}
-          onClick={handleClear}
-        >
-          <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-          Vaciar
-        </Button>
-        {dirty && (
-          <span className="text-[11px] text-muted-foreground ml-auto">Cambios sin guardar</span>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 

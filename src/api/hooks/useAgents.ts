@@ -286,3 +286,25 @@ export function useOpsHealth(options?: { enabled?: boolean }) {
     staleTime: 60_000,
   });
 }
+
+export interface DashboardWidget {
+  key: string;
+  label: string;
+  value: number;
+  source: string;
+  range?: string;
+  revenue?: number;
+}
+
+export function useDashboardStats(options?: { enabled?: boolean }) {
+  const branchId = useActiveBranchId();
+  return useQuery({
+    queryKey: [...QUERY_KEY, "dashboard-stats", branchId],
+    queryFn: () =>
+      GET<DashboardWidget[]>(ENDPOINTS.agents.dashboardStats, {
+        params: branchId ? { branch: branchId } : undefined,
+      }),
+    enabled: options?.enabled !== false && !!branchId,
+    staleTime: 60_000,
+  });
+}

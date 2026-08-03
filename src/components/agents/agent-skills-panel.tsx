@@ -38,6 +38,7 @@ import { cn } from "@/lib/utils";
 
 interface AgentSkillsPanelProps {
   agentId: string;
+  readOnly?: boolean;
 }
 
 function skillId(fn: AgentFunction | string | number): string {
@@ -61,7 +62,7 @@ function isSkillAssignable(fn: AgentFunction, selectedAppIds: Set<string>): bool
   return selectedAppIds.has(String(fn.external_api));
 }
 
-export function AgentSkillsPanel({ agentId }: AgentSkillsPanelProps) {
+export function AgentSkillsPanel({ agentId, readOnly }: AgentSkillsPanelProps) {
   const { data: agent, isLoading: isLoadingAgent, refetch: refetchAgent } = useAgent(agentId);
   const agentBranchId = agent?.branch ?? null;
   const { data: catalog = [], isLoading: isLoadingCatalog } = useAgentFunctions({
@@ -290,21 +291,25 @@ export function AgentSkillsPanel({ agentId }: AgentSkillsPanelProps) {
             </p>
           </div>
           <div className="flex flex-wrap gap-2 shrink-0">
-            <Button
-              size="sm"
-              onClick={() => {
-                setAssignSearch("");
-                setTypeFilter("all");
-                setAssignOpen(true);
-              }}
-            >
-              <Plus className="h-4 w-4 mr-1.5" /> Asignar skill
-            </Button>
-            <Button size="sm" variant="outline" asChild>
-              <Link to="/app/skills">
-                <Sparkles className="h-4 w-4 mr-1.5" /> Catálogo
-              </Link>
-            </Button>
+            {!readOnly && (
+              <>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setAssignSearch("");
+                    setTypeFilter("all");
+                    setAssignOpen(true);
+                  }}
+                >
+                  <Plus className="h-4 w-4 mr-1.5" /> Asignar skill
+                </Button>
+                <Button size="sm" variant="outline" asChild>
+                  <Link to="/app/skills">
+                    <Sparkles className="h-4 w-4 mr-1.5" /> Catálogo
+                  </Link>
+                </Button>
+              </>
+            )}
           </div>
         </div>
 
@@ -328,16 +333,18 @@ export function AgentSkillsPanel({ agentId }: AgentSkillsPanelProps) {
               <div className="flex flex-col items-center gap-3">
                 <Sparkles className="h-8 w-8 opacity-40" />
                 <span>Este agente aún no tiene skills asignadas.</span>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    setAssignSearch("");
-                    setAssignOpen(true);
-                  }}
-                >
-                  <Plus className="h-4 w-4 mr-1.5" /> Asignar skill
-                </Button>
+                {!readOnly && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setAssignSearch("");
+                      setAssignOpen(true);
+                    }}
+                  >
+                    <Plus className="h-4 w-4 mr-1.5" /> Asignar skill
+                  </Button>
+                )}
               </div>
             )}
           </div>
@@ -379,34 +386,38 @@ export function AgentSkillsPanel({ agentId }: AgentSkillsPanelProps) {
                   </div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-8"
-                    title="Configurar uso en este agente"
-                    onClick={() => setOverrideSkill(fn)}
-                  >
-                    <Settings2 className="h-4 w-4" />
-                  </Button>
+                  {!readOnly && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8"
+                      title="Configurar uso en este agente"
+                      onClick={() => setOverrideSkill(fn)}
+                    >
+                      <Settings2 className="h-4 w-4" />
+                    </Button>
+                  )}
                   <Button size="sm" variant="ghost" className="h-8" asChild title="Ver en catálogo">
                     <Link to={`/app/skills/${id}`}>
                       <Eye className="h-4 w-4" />
                     </Link>
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-8 text-destructive"
-                    disabled={isPending}
-                    onClick={() => unassignSkill(id)}
-                    title="Desasignar"
-                  >
-                    {isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Unlink className="h-4 w-4" />
-                    )}
-                  </Button>
+                  {!readOnly && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 text-destructive"
+                      disabled={isPending}
+                      onClick={() => unassignSkill(id)}
+                      title="Desasignar"
+                    >
+                      {isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Unlink className="h-4 w-4" />
+                      )}
+                    </Button>
+                  )}
                 </div>
               </div>
             );

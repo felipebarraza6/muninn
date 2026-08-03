@@ -33,8 +33,8 @@ export function ChatThread({
 }: Props) {
   return (
     <div className={cn("relative flex flex-col flex-1 min-h-0 overflow-hidden", className)}>
-      <ScrollArea className="flex-1 min-h-0" viewportRef={viewportRef} showScrollbar>
-        <div className={cn("px-4 py-4 space-y-3 max-w-3xl mx-auto", contentClassName)}>
+      <ScrollArea className="absolute inset-0 min-h-0" viewportRef={viewportRef} showScrollbar>
+        <div className={cn("px-4 py-4 pb-6 space-y-3 max-w-3xl mx-auto", contentClassName)}>
           {children}
           {footer}
           <div ref={endRef} />
@@ -45,7 +45,7 @@ export function ChatThread({
           type="button"
           size="sm"
           variant="secondary"
-          className="absolute bottom-3 left-1/2 -translate-x-1/2 h-8 gap-1 shadow-md z-10"
+          className="absolute bottom-6 left-1/2 -translate-x-1/2 h-8 gap-1 shadow-md z-10"
           onClick={onJump}
         >
           <ChevronDown className="h-3.5 w-3.5" />

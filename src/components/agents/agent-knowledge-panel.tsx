@@ -34,6 +34,7 @@ import { canAccessKnowledgeCatalog, canViewInactiveStudioResources } from "@/lib
 
 interface AgentKnowledgePanelProps {
   agentId: string;
+  readOnly?: boolean;
 }
 
 function docId(doc: AgentKnowledge | string | number | { id?: string | number }): string {
@@ -41,7 +42,7 @@ function docId(doc: AgentKnowledge | string | number | { id?: string | number })
   return String(doc.id);
 }
 
-export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
+export function AgentKnowledgePanel({ agentId, readOnly }: AgentKnowledgePanelProps) {
   const { data: agent, isLoading: isLoadingAgent, refetch: refetchAgent } = useAgent(agentId);
   const agentBranchId = agent?.branch ?? null;
   // includeInactive: para poder ver/desasignar docs ya inactivos del agente.
@@ -257,25 +258,27 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
           <div className="text-sm text-muted-foreground">
             El RAG está desactivado para este agente. Actívalo para asignar documentos y tablas.
           </div>
-          <Button
-            size="sm"
-            disabled={updateAgent.isPending}
-            onClick={() =>
-              updateAgent.mutate(
-                { id: agentId, data: { use_rag: true, rag_top_k: agent?.rag_top_k ?? 5 } },
-                {
-                  onSuccess: () => {
-                    toast.success("RAG activado");
-                    refetchAgent();
+          {!readOnly && (
+            <Button
+              size="sm"
+              disabled={updateAgent.isPending}
+              onClick={() =>
+                updateAgent.mutate(
+                  { id: agentId, data: { use_rag: true, rag_top_k: agent?.rag_top_k ?? 5 } },
+                  {
+                    onSuccess: () => {
+                      toast.success("RAG activado");
+                      refetchAgent();
+                    },
+                    onError: () => toast.error("No se pudo activar RAG"),
                   },
-                  onError: () => toast.error("No se pudo activar RAG"),
-                },
-              )
-            }
-          >
-            {updateAgent.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Activar conocimiento (RAG)
-          </Button>
+                )
+              }
+            >
+              {updateAgent.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Activar conocimiento (RAG)
+            </Button>
+          )}
         </CardContent>
       </Card>
     );
@@ -400,7 +403,7 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
             </CardDescription>
           </div>
           <div className="flex flex-wrap gap-2 shrink-0">
-            {canManageKnowledge && (
+            {!readOnly && canManageKnowledge && (
               <>
                 <Button
                   size="sm"
@@ -546,7 +549,7 @@ export function AgentKnowledgePanel({ agentId }: AgentKnowledgePanelProps) {
                       context="agent"
                       branchId={agentBranchId}
                     />
-                    {canManageKnowledge && (
+                    {!readOnly && canManageKnowledge && (
                       <>
                         <Button
                           size="sm"

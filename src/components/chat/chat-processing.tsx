@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, Database, Loader2, Shield, Sparkles, Wrench, X } from "lucide-react";
+import { Check, Database, Shield, Sparkles, Wrench, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motionTokens } from "@/lib/motion";
 import { useMotionPrefs } from "@/hooks/useMotionPrefs";
@@ -30,7 +30,7 @@ function StageIcon({ kind, className }: { kind: LiveStreamStep["icon"]; classNam
   const cls = cn("h-3.5 w-3.5 shrink-0", className);
   if (kind === "database") return <Database className={cls} />;
   if (kind === "wrench") return <Wrench className={cls} />;
-  if (kind === "loader") return <Loader2 className={cn(cls, "animate-spin")} />;
+  if (kind === "loader") return <Sparkles className={cls} />;
   return <Sparkles className={cls} />;
 }
 
@@ -61,6 +61,13 @@ export function ChatProcessingIndicator({
   const current =
     stages.find((s) => s.status === "active") || stages[stages.length - 1] || stages[0];
 
+  const activeSkill = stages.find((s) => s.icon === "wrench" && s.status === "active");
+
+  const chipsToShow =
+    !compact && stages.length > 1
+      ? stages.filter((s) => s.key !== "connected" && s !== activeSkill)
+      : [];
+
   return (
     <motion.div
       initial={reduceMotion ? false : { opacity: 0, y: 4 }}
@@ -73,13 +80,19 @@ export function ChatProcessingIndicator({
     >
       <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center relative">
         {!reduceMotion && (
-          <motion.span
-            className="absolute inset-0 rounded-full bg-primary/10"
-            animate={{ opacity: [0.35, 0.12, 0.35], scale: [1, 1.06, 1] }}
-            transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
-          />
+          <>
+            <motion.span
+              className="absolute inset-0 rounded-full bg-primary/10"
+              animate={{ opacity: [0.35, 0.12, 0.35], scale: [1, 1.08, 1] }}
+              transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
+            />
+            <motion.span
+              className="absolute inset-0 rounded-full border border-primary/20"
+              animate={{ opacity: [0.5, 0.15, 0.5], scale: [1, 1.15, 1] }}
+              transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut", delay: 0.4 }}
+            />
+          </>
         )}
-        <Loader2 className="relative h-3.5 w-3.5 text-primary/80 animate-spin" />
       </div>
 
       <div
@@ -97,9 +110,6 @@ export function ChatProcessingIndicator({
             transition={{ duration: motionTokens.base, ease: motionTokens.ease }}
             className="flex items-start gap-2"
           >
-            <span className="mt-0.5 flex h-6 w-6 items-center justify-center rounded-md bg-primary/10 text-primary/80">
-              <StageIcon kind={current?.icon || "loader"} />
-            </span>
             <div className="min-w-0">
               <p className="text-xs font-medium text-foreground/90 leading-tight">
                 {current?.label || "Procesando…"}
@@ -109,54 +119,20 @@ export function ChatProcessingIndicator({
                   {current.detail}
                 </p>
               )}
+              {activeSkill && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-2 py-0.5 text-[10px] text-primary/80"
+                >
+                  <Wrench className="h-3 w-3" />
+                  <span className="truncate max-w-[12rem]">{activeSkill.detail}</span>
+                </motion.div>
+              )}
             </div>
           </motion.div>
         </AnimatePresence>
-
-        {!compact && stages.length > 1 ? (
-          <div className="flex flex-wrap gap-1">
-            {stages.map((stage) => {
-              const done = stage.status === "done";
-              const active = stage.status === "active";
-              const err = stage.status === "error";
-              return (
-                <motion.span
-                  key={stage.key}
-                  layout={!reduceMotion}
-                  initial={reduceMotion ? false : { opacity: 0 }}
-                  animate={{
-                    opacity: active ? 1 : done || err ? 0.9 : 0.55,
-                  }}
-                  transition={{ duration: motionTokens.slow, ease: motionTokens.ease }}
-                  className={cn(
-                    "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium border transition-colors duration-motion-slow",
-                    done && "border-primary/20 bg-primary/8 text-primary/90",
-                    active && "border-primary/30 bg-primary/12 text-primary",
-                    err && "border-destructive/30 bg-destructive/8 text-destructive",
-                    !done &&
-                      !active &&
-                      !err &&
-                      "border-border/50 bg-background/30 text-muted-foreground",
-                  )}
-                  title={stage.detail ? `${stage.label}: ${stage.detail}` : stage.label}
-                >
-                  {done ? (
-                    <Check className="h-2.5 w-2.5 opacity-80" />
-                  ) : err ? (
-                    <X className="h-2.5 w-2.5" />
-                  ) : active ? (
-                    <Loader2 className="h-2.5 w-2.5 animate-spin opacity-80" />
-                  ) : (
-                    <StageIcon kind={stage.icon} className="h-2.5 w-2.5 opacity-50" />
-                  )}
-                  <span className="max-w-[7rem] truncate">
-                    {stage.detail && stage.icon === "wrench" ? stage.detail : stage.label}
-                  </span>
-                </motion.span>
-              );
-            })}
-          </div>
-        ) : null}
       </div>
     </motion.div>
   );

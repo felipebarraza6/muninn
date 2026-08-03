@@ -118,6 +118,7 @@ export const ENDPOINTS = {
     byApp: "/ai-agents/agents/by_app/",
     testLLM: (id: string) => `/ai-agents/agents/${id}/test_llm/`,
     planLimits: "/ai-agents/agents/plan_limits/",
+    dashboardStats: "/ai-agents/agents/dashboard-stats/",
     opsHealth: "/ai-agents/agents/ops-health/",
     onboardingStatus: "/ai-agents/agents/onboarding-status/",
     skillConfigs: (id: string) => `/ai-agents/agents/${id}/skill-configs/`,
