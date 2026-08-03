@@ -31,6 +31,7 @@ export const agentFormSchema = z.object({
   semantic_weight: z.number().min(0).max(1),
   use_semantic_search: z.boolean(),
   is_active: z.boolean(),
+  requests_per_minute: z.number().int().min(1).optional().nullable(),
 });
 
 export type AgentFormValues = z.infer<typeof agentFormSchema>;

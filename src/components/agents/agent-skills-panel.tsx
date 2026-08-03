@@ -89,6 +89,20 @@ export function AgentSkillsPanel({ agentId, readOnly }: AgentSkillsPanelProps) {
     return map;
   }, [skillConfigs]);
 
+  const effectiveBySkill = useMemo(() => {
+    const map = new Map<string, { description?: string; response_instructions?: string }>();
+    for (const cfg of skillConfigs) {
+      const key = String(cfg.agent_function);
+      if (cfg.effective_description || cfg.effective_response_instructions) {
+        map.set(key, {
+          description: cfg.effective_description || undefined,
+          response_instructions: cfg.effective_response_instructions || undefined,
+        });
+      }
+    }
+    return map;
+  }, [skillConfigs]);
+
   const selectedAppIds = useMemo(() => {
     return new Set((agent?.external_apis ?? []).map((id) => String(id)));
   }, [agent?.external_apis]);
@@ -384,6 +398,12 @@ export function AgentSkillsPanel({ agentId, readOnly }: AgentSkillsPanelProps) {
                   <div className="text-[11px] text-muted-foreground truncate">
                     {fn.description || fn.slug || fn.external_api_name || "Sin descripción"}
                   </div>
+                  {effectiveBySkill.get(id)?.response_instructions && (
+                    <div className="mt-1 text-[11px] text-muted-foreground/80 leading-relaxed line-clamp-2">
+                      <span className="font-medium text-muted-foreground/60">Instrucciones: </span>
+                      {effectiveBySkill.get(id)!.response_instructions}
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   {!readOnly && (

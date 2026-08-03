@@ -24,6 +24,7 @@ import {
   FlaskConical,
   Sparkles,
   GitBranch,
+  ListChecks,
   Trash2,
   RotateCcw,
   type LucideIcon,
@@ -32,6 +33,7 @@ import { useAgent, useDeleteAgent, useUpdateAgent, useTestAgentLLM } from "@/api
 import { AgentKnowledgePanel } from "@/components/agents/agent-knowledge-panel";
 import { AgentSkillsPanel } from "@/components/agents/agent-skills-panel";
 import { AgentFlowPolicyPanel } from "@/components/agents/agent-flow-policy-panel";
+import { FlowPolicyInterpreter } from "@/components/agents/flow-policy-interpreter";
 import { AgentForm } from "@/components/agents/agent-form";
 import { AdminPageMotion } from "@/components/admin/AdminPageMotion";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
@@ -45,6 +47,7 @@ const AGENT_SECTIONS = [
   { id: "modelo", label: "Modelo", icon: Settings },
   { id: "rag", label: "RAG", icon: BookOpen },
   { id: "skills", label: "Skills", icon: Sparkles },
+  { id: "reglas", label: "Reglas", icon: ListChecks },
   { id: "flujo", label: "DataRules", icon: GitBranch },
   { id: "test", label: "Test LLM", icon: FlaskConical },
 ] as const;
@@ -441,6 +444,8 @@ export default function AgentDetailPage() {
             {section === "rag" && <AgentKnowledgePanel agentId={id!} readOnly={readOnly} />}
 
             {section === "skills" && <AgentSkillsPanel agentId={id!} readOnly={readOnly} />}
+
+            {section === "reglas" && <FlowPolicyInterpreter flowPolicy={agent.flow_policy} />}
 
             {section === "flujo" && <AgentFlowPolicyPanel agentId={id!} readOnly={readOnly} />}
 

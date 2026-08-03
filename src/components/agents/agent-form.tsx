@@ -79,6 +79,7 @@ function toDefaults(agent?: Agent | null): AgentFormValues {
     semantic_weight: agent?.semantic_weight ?? 0.7,
     use_semantic_search: agent?.use_semantic_search ?? true,
     is_active: agent?.is_active ?? true,
+    requests_per_minute: agent?.requests_per_minute ?? null,
   };
 }
 
@@ -148,6 +149,7 @@ export function AgentForm({ agent, onCancel, onSaved }: AgentFormProps) {
       // Mantener status alineado: el backend antes podía ignorar is_active=true
       // si el agente seguía con status INACTIVE.
       status: values.is_active ? "ACTIVE" : "INACTIVE",
+      requests_per_minute: values.requests_per_minute || null,
     };
 
     if (isEditing && agent) {
@@ -364,6 +366,25 @@ export function AgentForm({ agent, onCancel, onSaved }: AgentFormProps) {
               />
               <p className="text-xs text-muted-foreground">
                 Cuántas veces el agente puede encadenar skills en un turno (1–8).
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="rpm">Requests por minuto</Label>
+              <Input
+                id="rpm"
+                type="number"
+                placeholder="Sin límite"
+                onChange={(e) => {
+                  const v = e.target.value === "" ? null : Number(e.target.value);
+                  form.setValue("requests_per_minute", Number.isFinite(v) ? v : null, {
+                    shouldDirty: true,
+                    shouldValidate: true,
+                  });
+                }}
+                value={form.watch("requests_per_minute") ?? ""}
+              />
+              <p className="text-xs text-muted-foreground">
+                Rate limiting por agente. Vacío = sin límite.
               </p>
             </div>
             <div className="grid grid-cols-2 gap-3">
