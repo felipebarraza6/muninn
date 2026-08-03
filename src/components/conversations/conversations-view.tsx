@@ -177,6 +177,8 @@ export function ConversationsView() {
 
   const idFromUrl = searchParams.get("id");
   const [selectedId, setSelectedId] = useState<string>(idFromUrl ?? "");
+  const selectedIdRef = useRef(selectedId);
+  selectedIdRef.current = selectedId;
   const [bucket, setBucket] = useState<ConversationBucket>("mine");
   const [subFilter, setSubFilter] = useState<string>("all");
   const [query, setQuery] = useState("");
@@ -266,7 +268,7 @@ export function ConversationsView() {
       const inBucket = convos.filter((c) => getConversationBucket(c) === bucket);
       if (!inBucket.length) return;
       e.preventDefault();
-      const idx = inBucket.findIndex((c) => c.id === selectedId);
+      const idx = inBucket.findIndex((c) => c.id === selectedIdRef.current);
       const delta = e.key === "j" ? 1 : -1;
       const nextIdx = Math.max(0, Math.min(inBucket.length - 1, (idx < 0 ? 0 : idx) + delta));
       const next = inBucket[nextIdx];
@@ -274,12 +276,12 @@ export function ConversationsView() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [navigate, mobileView, convos, bucket, selectedId]);
+  }, [navigate, mobileView, convos, bucket]);
 
-  const appendLocalMessage = (msg: ChatMessage) => {
+  const appendLocalMessage = (conversationId: string, msg: ChatMessage) => {
     setLocalMessages((prev) => {
-      const existing = prev[selectedId] ?? [];
-      return { ...prev, [selectedId]: [...existing, msg] };
+      const existing = prev[conversationId] ?? [];
+      return { ...prev, [conversationId]: [...existing, msg] };
     });
   };
 
@@ -287,7 +289,7 @@ export function ConversationsView() {
     if (analysisOnly || !selectedId || selectedSource !== "channel") return;
     takeControlMutation.mutate(selectedId, {
       onSuccess: () => {
-        appendLocalMessage({
+        appendLocalMessage(selectedId, {
           id: `sys-${Date.now()}`,
           sender: "system",
           text: "Tomaste control de la conversación.",
@@ -304,7 +306,7 @@ export function ConversationsView() {
     if (selected?.status === "closed" || !selected?.isWaitingHuman) return;
     releaseMutation.mutate(selectedId, {
       onSuccess: () => {
-        appendLocalMessage({
+        appendLocalMessage(selectedId, {
           id: `sys-${Date.now()}`,
           sender: "system",
           text: "Devolviste el control al agente IA.",
@@ -331,7 +333,7 @@ export function ConversationsView() {
     const trimmed = text.trim();
     const optimisticId = `h-${Date.now()}`;
 
-    appendLocalMessage({
+    appendLocalMessage(selectedId, {
       id: optimisticId,
       sender: "human",
       text: trimmed,
@@ -358,7 +360,7 @@ export function ConversationsView() {
         onSuccess: (data) => {
           clearLocalOutgoing(selectedId, trimmed);
           if (data?.message) {
-            appendLocalMessage({
+            appendLocalMessage(selectedId, {
               id: `ai-${Date.now()}`,
               sender: "ai",
               text: data.message,

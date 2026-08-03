@@ -2278,7 +2278,13 @@ html[data-motion="off"] .login-atmosphere-streak {
   will-change: background-position;
 }
 
-html[data-motion="off"] .skeleton-bone,
+html[data-motion="off"] .skeleton-bone {
+  animation: none !important;
+  background-image: none;
+  background-color: color-mix(in oklab, var(--muted) 90%, var(--primary) 10%);
+  will-change: auto;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .skeleton-bone {
     animation: none !important;
@@ -2496,7 +2502,10 @@ html[data-motion="off"] .skeleton-bone,
   }
 }
 
-html[data-motion="off"] .pixel-nordic-sparkle,
+html[data-motion="off"] .pixel-nordic-sparkle {
+  display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pixel-nordic-sparkle {
     display: none;
@@ -2750,7 +2759,13 @@ html[data-motion="off"] .pixel-nordic-sparkle,
   }
 }
 
-html[data-motion="off"] .pixel-nordic-ripples,
+html[data-motion="off"] .pixel-nordic-moon {
+  animation: none;
+}
+html[data-motion="off"] .pixel-nordic-ripples {
+  animation: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pixel-nordic-moon {
     animation: none;
@@ -3738,7 +3753,10 @@ html[data-motion="off"] .pixel-nordic-bird-flock {
 
 html[data-motion="off"] .pixel-energy-line,
 html[data-motion="off"] .pixel-agent-core,
-html[data-motion="off"] .pixel-node-pulse,
+html[data-motion="off"] .pixel-node-pulse {
+  animation: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pixel-energy-line {
     animation: none;

@@ -129,12 +129,16 @@ export function ConversationList({
   isLoading,
   isFetching,
 }: Props) {
-  const counts = CONVERSATION_BUCKETS.reduce(
-    (acc, b) => {
-      acc[b.id] = conversations.filter((c) => getConversationBucket(c) === b.id).length;
-      return acc;
-    },
-    {} as Record<ConversationBucket, number>,
+  const counts = React.useMemo(
+    () =>
+      CONVERSATION_BUCKETS.reduce(
+        (acc, b) => {
+          acc[b.id] = conversations.filter((c) => getConversationBucket(c) === b.id).length;
+          return acc;
+        },
+        {} as Record<ConversationBucket, number>,
+      ),
+    [conversations],
   );
 
   const inBucket = conversations.filter((c) => getConversationBucket(c) === bucket);

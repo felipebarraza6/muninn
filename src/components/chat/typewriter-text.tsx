@@ -100,7 +100,7 @@ export function markAllTyped(ids: string[]) {
 }
 
 export function clearTypingSeen() {
-  if (typedIds.size > 2000) typedIds.clear();
+  if (listeners.size === 0 || typedIds.size > 500) typedIds.clear();
 }
 
 export function hasActiveTyping() {

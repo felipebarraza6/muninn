@@ -113,7 +113,7 @@ const KEY_PATTERNS: Array<{ pattern: RegExp; style: WidgetStyle }> = [
     },
   },
   {
-    pattern: /venta|sale|order|pedido|compra|purchase/i,
+    pattern: /sale|order|pedido|compra|purchase/i,
     style: {
       icon: ShoppingCart,
       toneClass: "text-primary",

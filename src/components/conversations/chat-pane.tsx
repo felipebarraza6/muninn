@@ -154,7 +154,7 @@ export function ChatPane({
     };
     el.addEventListener("wheel", onWheel, { passive: true });
     return () => el.removeEventListener("wheel", onWheel);
-  }, []);
+  }, [bindViewportCapture]);
 
   useEffect(() => {
     if (!typingActive) {
@@ -174,11 +174,13 @@ export function ChatPane({
 
   const initConvRef = useRef<string | null>(null);
   const initialIdsRef = useRef<Set<string>>(new Set());
-  if (initConvRef.current !== conversation.id && conversation.messages.length > 0) {
-    initConvRef.current = conversation.id;
-    markAllTyped(conversation.messages.filter((m) => m.sender === "ai").map((m) => String(m.id)));
-    initialIdsRef.current = new Set(conversation.messages.map((m) => String(m.id)));
-  }
+  useEffect(() => {
+    if (initConvRef.current !== conversation.id && conversation.messages.length > 0) {
+      initConvRef.current = conversation.id;
+      markAllTyped(conversation.messages.filter((m) => m.sender === "ai").map((m) => String(m.id)));
+      initialIdsRef.current = new Set(conversation.messages.map((m) => String(m.id)));
+    }
+  }, [conversation.id, conversation.messages]);
 
   useEffect(() => {
     clearTypingSeen();
