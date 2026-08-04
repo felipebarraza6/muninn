@@ -304,6 +304,7 @@ export function AppSidebar() {
           appName={showAdmin ? "Agentes" : appName}
           branchLogoUrl={showAdmin ? null : branchLogo}
           pending={!showAdmin && brandPending}
+          tenant={!showAdmin}
           className="px-2 py-2.5 group-data-[collapsible=icon]:!px-0 group-data-[collapsible=icon]:!py-2"
         />
       </SidebarHeader>

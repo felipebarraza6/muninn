@@ -24,6 +24,12 @@ interface MuninnBrandProps {
    * Muestra skeleton en lugar del cuervo Muninn — evita flash crow→logo.
    */
   pending?: boolean;
+  /**
+   * Contexto de tenant (org/sucursal): bloquea por completo la marca Muninn.
+   * Aunque falten nombre/logo, nunca se renderiza cuervo ni wordmark MUNINN
+   * (cae a monograma/placeholder neutral). Solo la plataforma Muninn omite esto.
+   */
+  tenant?: boolean;
   /** Si se omite, renderiza sin enlace. */
   to?: string | null;
   onClick?: () => void;
@@ -50,6 +56,7 @@ export function MuninnBrand({
   tagline,
   branchLogoUrl,
   pending = false,
+  tenant = false,
   to,
   onClick,
   compact = false,
@@ -59,19 +66,24 @@ export function MuninnBrand({
 }: MuninnBrandProps) {
   const stacked = layout === "stacked";
   const branchName = branchLabel?.trim() || "";
-  /** Marca plataforma Muninn (superadmin / login default): siempre cuervo, nunca monograma. */
-  const isMuninnPlatformBrand =
-    !branchLogoUrl && (!branchName || branchName.toLowerCase() === "muninn");
-  const inTenant = Boolean(branchName) && !isMuninnPlatformBrand;
-  const title =
-    pending && !inTenant && !isMuninnPlatformBrand ? "" : inTenant ? branchName : "MUNINN";
+  /**
+   * Marca plataforma Muninn (superadmin / login default): siempre cuervo, nunca monograma.
+   * Con `tenant` explícito (cliente org/sucursal) se bloquea la marca por completo:
+   * aunque falten nombre/logo, nunca se renderiza cuervo ni wordmark MUNINN.
+   */
+  const platform =
+    !tenant && !branchLogoUrl && (!branchName || branchName.toLowerCase() === "muninn");
+  const inTenant = Boolean(branchName) && !platform;
+  const title = pending ? "" : platform ? "MUNINN" : inTenant ? branchName : "";
   const subtitle = pending
     ? null
     : stacked
       ? appName?.trim() || null
       : inTenant
         ? appName?.trim() || tagline?.trim() || null
-        : tagline?.trim() || appName?.trim() || LOGIN_BRAND_SUBTITLE;
+        : platform
+          ? tagline?.trim() || appName?.trim() || LOGIN_BRAND_SUBTITLE
+          : tagline?.trim() || appName?.trim() || null;
 
   const [logoFailed, setLogoFailed] = useState(false);
   const [darkInvert, setDarkInvert] = useState(false);
@@ -92,13 +104,16 @@ export function MuninnBrand({
 
   const showBranchLogo = Boolean(branchLogoUrl) && !logoFailed && !pending;
   const hideWordmark = !branchName;
-  const showTenantSkeleton = pending && !isMuninnPlatformBrand;
-  /** Org/sucursal sin logo: inicial. Superadmin / Muninn: cuervo. */
+  const showTenantSkeleton = pending;
   const monogram =
-    inTenant && !showBranchLogo && !pending ? branchName.charAt(0).toUpperCase() || "·" : null;
+    !platform && !showBranchLogo && !pending
+      ? tenant
+        ? branchName.charAt(0).toUpperCase() || "·"
+        : null
+      : null;
 
   const markSize = stacked || hero ? "lg" : compact ? "sm" : "md";
-  const platformHero = isMuninnPlatformBrand && (hero || stacked);
+  const platformHero = platform && (hero || stacked);
 
   const content = (
     <>
@@ -237,7 +252,9 @@ export function MuninnBrand({
       ? subtitle
         ? `${title} — ${subtitle}`
         : title
-      : `Muninn — ${subtitle || LOGIN_BRAND_SUBTITLE}`;
+      : platform
+        ? `Muninn — ${subtitle || LOGIN_BRAND_SUBTITLE}`
+        : subtitle || "Portal";
 
   const shellClass = cn(
     "flex min-w-0 transition-opacity duration-300",

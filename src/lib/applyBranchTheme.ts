@@ -39,6 +39,10 @@ export interface BranchThemeLike {
 type Rgb = { r: number; g: number; b: number };
 
 let lastAppliedTheme: BranchThemeLike | null = null;
+let lastAppliedPlatform = false;
+
+const MUNINN_FAVICON = "/favicon.png";
+const NEUTRAL_FAVICON = "/favicon-neutral.png";
 
 function hexToRgb(hex: string): Rgb | null {
   const cleaned = hex.replace("#", "").trim();
@@ -133,13 +137,17 @@ function resolveDeep(primary: string, secondary?: string | null): string {
 function setFavicon(href: string | null | undefined) {
   if (!href) return;
   const resolved = resolveMediaUrl(href) || href;
+  const isPng = resolved.toLowerCase().endsWith(".png");
   let link = document.querySelector<HTMLLinkElement>("link[rel='icon']");
   if (!link) {
     link = document.createElement("link");
     link.rel = "icon";
     document.head.appendChild(link);
   }
+  if (isPng) link.type = "image/png";
   link.href = resolved;
+  const touch = document.querySelector<HTMLLinkElement>("link[rel='apple-touch-icon']");
+  if (touch) touch.href = isPng ? resolved : NEUTRAL_FAVICON;
 }
 
 function setDocumentTitle(theme: BranchThemeLike | null | undefined) {
@@ -212,17 +220,23 @@ function applyUiPreferences(root: HTMLElement, theme: BranchThemeLike | null | u
 /** Restaura primary mint por defecto (respeta light/dark CSS). */
 export function resetMuninnTheme(): void {
   lastAppliedTheme = null;
+  lastAppliedPlatform = true;
   clearPrimaryOverrides(document.documentElement);
-  applyBranchTheme({ ...MUNINN_DEFAULT_THEME });
+  applyBranchTheme({ ...MUNINN_DEFAULT_THEME }, true);
 }
 
 /**
  * Clava primary (+ soft/accent) y preferencias de UI (radius, font, compact, motion).
  * No toca class `.dark` ni superficies (las define styles.css).
+ * `platform` (true) = marca Muninn (cuervo + favicon raven); false = tenant (favicon neutral).
  */
-export function applyBranchTheme(theme: BranchThemeLike | null | undefined): void {
+export function applyBranchTheme(
+  theme: BranchThemeLike | null | undefined,
+  platform = false,
+): void {
   const root = document.documentElement;
   lastAppliedTheme = theme ? { ...theme } : null;
+  lastAppliedPlatform = platform;
 
   const appearance: ResolvedAppearance = getResolvedAppearance();
   const defaultPrimary = appearance === "dark" ? "#2dd4bf" : "#0d9488";
@@ -257,23 +271,28 @@ export function applyBranchTheme(theme: BranchThemeLike | null | undefined): voi
   root.style.setProperty("--bubble-ai-foreground", bubbleFg);
 
   applyUiPreferences(root, theme);
-  setFavicon(theme?.favicon_url || theme?.favicon || null);
+  setFavicon(
+    theme?.favicon_url?.trim() ||
+      theme?.favicon?.trim() ||
+      (platform ? MUNINN_FAVICON : NEUTRAL_FAVICON),
+  );
   setDocumentTitle(theme);
 }
 
 /** Reaplica primary al cambiar light/dark. */
 export function refreshBranchThemeForAppearance(): void {
   if (lastAppliedTheme) {
-    applyBranchTheme(lastAppliedTheme);
+    applyBranchTheme(lastAppliedTheme, lastAppliedPlatform);
   }
 }
 
 export function applyResolvedBranchTheme(
   apiTheme: BranchThemeLike | null | undefined,
   branchLabel?: string | null,
+  platform = false,
 ): BranchThemeLike {
   const effective = resolveEffectiveTheme(apiTheme, branchLabel);
-  applyBranchTheme(effective);
+  applyBranchTheme(effective, platform);
   return effective;
 }
 

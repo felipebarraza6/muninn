@@ -235,6 +235,14 @@ export function useBranchTheme(branchIdOverride?: string | null) {
       if (orgName) {
         document.title = `${orgName} — Agentes`;
       }
+    } else {
+      // Cliente org/sucursal: nunca dejar la marca Muninn en el título de la pestaña.
+      const tenantName =
+        themeHintLabel ||
+        activeBranch?.fantasy_name?.trim() ||
+        activeBranch?.business_name?.trim() ||
+        null;
+      document.title = tenantName ? `${tenantName} — Agentes` : "Portal — Agentes";
     }
   }, [
     themeWithOrgAssets,
@@ -242,6 +250,8 @@ export function useBranchTheme(branchIdOverride?: string | null) {
     orgThemeQuery.data,
     activeBranch?.logo,
     activeBranch?.organization_name,
+    activeBranch?.fantasy_name,
+    activeBranch?.business_name,
     organizations,
     themeHintLabel,
   ]);
@@ -321,9 +331,11 @@ export function useResolvePublicLoginTheme(slug?: string | null) {
     persistLoginPortalContext(ctx);
 
     if (isAppDefault) {
-      applyResolvedBranchTheme({ ...MUNINN_DEFAULT_THEME }, "Muninn");
+      applyResolvedBranchTheme({ ...MUNINN_DEFAULT_THEME }, "Muninn", true);
     } else if (flat) {
       applyResolvedBranchTheme(flat as BranchThemeLike, flat.app_name || slug);
+      const tenantName = flat.organization_name || flat.fantasy_name || flat.app_name || null;
+      document.title = tenantName ? `${tenantName} — Agentes` : "Portal — Agentes";
     }
 
     document.documentElement.dataset.brandReady = "true";

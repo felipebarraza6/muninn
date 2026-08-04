@@ -240,12 +240,18 @@ export default function Login() {
         >
           <div className="space-y-4 text-center">
             {themeLoading ? (
-              <MuninnBrand pending layout="horizontal" className="justify-center scale-110" />
+              <MuninnBrand
+                pending
+                tenant
+                layout="horizontal"
+                className="justify-center scale-110"
+              />
             ) : (
               <MuninnBrand
                 branchLabel={brandTitle}
                 appName={brandSubtitle}
                 branchLogoUrl={branchLogo}
+                tenant
                 layout="horizontal"
                 className="justify-center scale-110"
               />
@@ -265,21 +271,23 @@ export default function Login() {
                 className="h-7 max-w-[140px] object-contain opacity-80"
               />
             )}
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground/70">
-              Powered by{" "}
-              {showGithubCredit ? (
-                <a
-                  href={GITHUB_CREDIT_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline-offset-2 hover:text-foreground hover:underline"
-                >
-                  {GITHUB_CREDIT_LABEL}
-                </a>
-              ) : (
-                orgName || "Muninn"
-              )}
-            </p>
+            {(showGithubCredit || orgName) && (
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground/70">
+                Powered by{" "}
+                {showGithubCredit ? (
+                  <a
+                    href={GITHUB_CREDIT_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline-offset-2 hover:text-foreground hover:underline"
+                  >
+                    {GITHUB_CREDIT_LABEL}
+                  </a>
+                ) : (
+                  orgName
+                )}
+              </p>
+            )}
           </div>
         </motion.div>
       </div>

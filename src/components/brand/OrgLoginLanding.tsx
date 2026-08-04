@@ -204,6 +204,7 @@ export function OrgLoginLanding({
               {loading ? (
                 <MuninnBrand
                   pending
+                  tenant
                   hero
                   layout="horizontal"
                   className="justify-center lg:justify-start"
@@ -212,6 +213,7 @@ export function OrgLoginLanding({
                 <MuninnBrand
                   branchLabel={orgName || brandTitle}
                   branchLogoUrl={brandLogoUrl}
+                  tenant
                   hero
                   layout="horizontal"
                   className="justify-center lg:justify-start"

@@ -39,10 +39,7 @@ export default function ForgotPasswordPage() {
   const { flat, isAppDefault, isLoading: themeLoading } = useResolvePublicLoginTheme(slug);
   const pixel = isAppDefault;
   const brandTitle =
-    flat?.app_name?.trim() ||
-    flat?.fantasy_name?.trim() ||
-    flat?.organization_name?.trim() ||
-    "Muninn";
+    flat?.app_name?.trim() || flat?.fantasy_name?.trim() || flat?.organization_name?.trim() || null;
   const brandLogo =
     resolveThemeLogo(flat) ||
     resolveMediaUrl(flat?.organization_logo_url) ||
@@ -110,11 +107,17 @@ export default function ForgotPasswordPage() {
           ) : (
             <div className="space-y-3 text-center">
               {themeLoading ? (
-                <MuninnBrand pending layout="horizontal" className="justify-center scale-110" />
+                <MuninnBrand
+                  pending
+                  tenant
+                  layout="horizontal"
+                  className="justify-center scale-110"
+                />
               ) : (
                 <MuninnBrand
                   branchLabel={brandTitle}
                   branchLogoUrl={brandLogo}
+                  tenant
                   layout="horizontal"
                   className="justify-center scale-110"
                 />
