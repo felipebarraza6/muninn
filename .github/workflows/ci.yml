@@ -168,9 +168,9 @@ jobs:
       - name: Deploy via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
-          server: ${{ secrets.FTP_HOST_VOID }}
-          username: ${{ secrets.FTP_USER_VOID }}
-          password: ${{ secrets.FTP_PASS_VOID }}
+          server: ${{ secrets.FTP_HOST_MUNINN }}
+          username: ${{ secrets.FTP_USER_MUNINN }}
+          password: ${{ secrets.FTP_PASS_MUNINN }}
           local-dir: ./dist/
-          server-dir: ./muninn.yggdra.cl/
+          server-dir: ./
           dangerous-clean-slate: false
