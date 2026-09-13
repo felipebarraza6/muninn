@@ -169,8 +169,16 @@ export function BusinessHome() {
   const { data: agents = [], isLoading: agentsLoading, error: agentsError } = useAgents();
   const { data: channels = [], isLoading: channelsLoading, error: channelsError } = useChannels();
   const { data: apis = [], isLoading: apisLoading, error: apisError } = useExternalAPIs();
-  const { data: functions = [], isLoading: functionsLoading, error: functionsError } = useAgentFunctions();
-  const { data: widgets = [], isLoading: widgetsLoading, error: widgetsError } = useDashboardStats();
+  const {
+    data: functions = [],
+    isLoading: functionsLoading,
+    error: functionsError,
+  } = useAgentFunctions();
+  const {
+    data: widgets = [],
+    isLoading: widgetsLoading,
+    error: widgetsError,
+  } = useDashboardStats();
 
   const isLoading =
     agentsLoading ||

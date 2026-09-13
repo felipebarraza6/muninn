@@ -45,11 +45,19 @@ export function OrganizationHome() {
   const ownedIds = useMemo(() => new Set(getOwnedOrganizationIds()), []);
 
   const { data: orgsRaw = [], isLoading: orgsLoading, error: orgsError } = useOrganizations();
-  const { data: branches = [], isLoading: branchesLoading, error: branchesError } = useAdminBranches();
+  const {
+    data: branches = [],
+    isLoading: branchesLoading,
+    error: branchesError,
+  } = useAdminBranches();
   const { data: users = [], isLoading: usersLoading, error: usersError } = useAdminUsers();
   const { data: agents = [], isLoading: agentsLoading, error: agentsError } = useAgents();
   const { data: channels = [], isLoading: channelsLoading, error: channelsError } = useChannels();
-  const { data: apis = [], isLoading: apisLoading, error: apisError } = useExternalAPIs({
+  const {
+    data: apis = [],
+    isLoading: apisLoading,
+    error: apisError,
+  } = useExternalAPIs({
     scope: "store",
     includeInactive: true,
   });
@@ -115,7 +123,8 @@ export function OrganizationHome() {
     },
   ];
 
-  const firstError = orgsError || branchesError || usersError || agentsError || channelsError || apisError;
+  const firstError =
+    orgsError || branchesError || usersError || agentsError || channelsError || apisError;
 
   if (isLoading) {
     return <PageSkeleton variant="dashboard" />;
@@ -125,7 +134,10 @@ export function OrganizationHome() {
     return (
       <div className="p-6">
         <ErrorBanner
-          message={apiErrorMessage(firstError, "No se pudieron cargar los datos de la organización")}
+          message={apiErrorMessage(
+            firstError,
+            "No se pudieron cargar los datos de la organización",
+          )}
           onRetry={() => window.location.reload()}
         />
       </div>

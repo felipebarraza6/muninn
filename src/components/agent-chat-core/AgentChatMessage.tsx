@@ -5,10 +5,7 @@ import { Bot, Database, Loader2, Shield, User, Wrench } from "lucide-react";
 import { TypewriterText } from "@/components/chat/typewriter-text";
 import { ChatMarkdown } from "@/components/chat/chat-markdown";
 import { ChatMessageActions } from "@/components/chat/chat-message-actions";
-import {
-  MessageInspectButton,
-  type InsightMessage,
-} from "@/components/chat/message-insight-sheet";
+import { MessageInspectButton, type InsightMessage } from "@/components/chat/message-insight-sheet";
 import type { LiveStreamStep } from "@/components/chat/chat-processing";
 import {
   extractPolicyTrace,

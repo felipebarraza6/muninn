@@ -7,7 +7,11 @@ import {
   type SkillCommandOption,
 } from "@/components/chat/chat-skill-command";
 import { getSkillRequiredFreeParams } from "@/lib/chatSkillParams";
-import { previewText, type AgentChatMessage as ChatMessage, type AgentChatReplyTarget as ReplyTarget } from "@/lib/agentChatMessages";
+import {
+  previewText,
+  type AgentChatMessage as ChatMessage,
+  type AgentChatReplyTarget as ReplyTarget,
+} from "@/lib/agentChatMessages";
 import type { AgentFunction } from "@/api/hooks/useAgentFunctions";
 
 export type AttachedSkill = {

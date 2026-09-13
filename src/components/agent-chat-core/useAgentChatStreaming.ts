@@ -3,7 +3,11 @@ import type { NavigateFunction } from "react-router-dom";
 import { toast } from "sonner";
 import type { QueryClient } from "@tanstack/react-query";
 import { apiErrorMessage } from "@/lib/apiError";
-import { makeChatId, type AgentChatMessage as ChatMessage, type AgentChatReplyTarget as ReplyTarget } from "@/lib/agentChatMessages";
+import {
+  makeChatId,
+  type AgentChatMessage as ChatMessage,
+  type AgentChatReplyTarget as ReplyTarget,
+} from "@/lib/agentChatMessages";
 import { streamConversationChat } from "@/api/chat-stream";
 import {
   useCreateConversation,
@@ -88,7 +92,13 @@ export function useAgentChatStreaming({
   const newConversationModeRef = useRef(false);
 
   const upsertStep = useCallback(
-    (key: string, label: string, detail: string | undefined, icon: LiveStreamStep["icon"], opts?: { demoteActive?: "all" | "non-tools" | "none" }) => {
+    (
+      key: string,
+      label: string,
+      detail: string | undefined,
+      icon: LiveStreamStep["icon"],
+      opts?: { demoteActive?: "all" | "non-tools" | "none" },
+    ) => {
       const demote = opts?.demoteActive ?? "all";
       setLiveSteps((prev) => {
         const next = prev.map((s) => {
@@ -98,7 +108,9 @@ export function useAgentChatStreaming({
           return { ...s, status: "done" as const };
         });
         if (next.some((s) => s.key === key)) {
-          return next.map((s) => s.key === key ? { ...s, label, detail, icon, status: "active" as const } : s);
+          return next.map((s) =>
+            s.key === key ? { ...s, label, detail, icon, status: "active" as const } : s,
+          );
         }
         return [...next, { key, label, detail, icon, status: "active" as const }];
       });
@@ -208,42 +220,61 @@ export function useAgentChatStreaming({
     mergeSearchParams({ conversation: convId, new: null });
   }, []);
 
-  const changeConversationStatus = useCallback((convId: string | number, nextStatus: "ARCHIVED" | "ACTIVE") => {
-    const isArchiving = nextStatus === "ARCHIVED";
-    updateStatus.mutate({ id: convId, status: nextStatus }, {
-      onSuccess: () => {
-        toast.success(isArchiving ? "Conversación archivada" : "Conversación restaurada");
-        if (String(convId) === conversationId && isArchiving) {
-          skipAutoSelectRef.current = true;
-          conversationIdRef.current = null;
-          lastRemoteMessagesRef.current = "";
-          setIsDraftNew(true);
-          setConversationId(null);
-          setMessages([]);
-          mergeSearchParams({ conversation: null, new: null });
-        }
-      },
-      onError: (err) => {
-        toast.error(apiErrorMessage(err, isArchiving ? "No se pudo archivar la conversación" : "No se pudo restaurar la conversación"));
-      },
-    });
-  }, [conversationId]);
+  const changeConversationStatus = useCallback(
+    (convId: string | number, nextStatus: "ARCHIVED" | "ACTIVE") => {
+      const isArchiving = nextStatus === "ARCHIVED";
+      updateStatus.mutate(
+        { id: convId, status: nextStatus },
+        {
+          onSuccess: () => {
+            toast.success(isArchiving ? "Conversación archivada" : "Conversación restaurada");
+            if (String(convId) === conversationId && isArchiving) {
+              skipAutoSelectRef.current = true;
+              conversationIdRef.current = null;
+              lastRemoteMessagesRef.current = "";
+              setIsDraftNew(true);
+              setConversationId(null);
+              setMessages([]);
+              mergeSearchParams({ conversation: null, new: null });
+            }
+          },
+          onError: (err) => {
+            toast.error(
+              apiErrorMessage(
+                err,
+                isArchiving
+                  ? "No se pudo archivar la conversación"
+                  : "No se pudo restaurar la conversación",
+              ),
+            );
+          },
+        },
+      );
+    },
+    [conversationId],
+  );
 
-  const handleArchiveConversation = useCallback((convId: string | number) => {
-    closeConversation.mutate(String(convId), {
-      onSuccess: () => {
-        toast.success("Conversación archivada");
-        if (String(convId) === conversationId) moveAfterClose(String(convId));
-        void queryClient.invalidateQueries({ queryKey: ["conversations"] });
-        void queryClient.invalidateQueries({ queryKey: ["unified-conversations"] });
-      },
-      onError: (err) => toast.error(apiErrorMessage(err, "No se pudo archivar la conversación")),
-    });
-  }, [conversationId, moveAfterClose]);
+  const handleArchiveConversation = useCallback(
+    (convId: string | number) => {
+      closeConversation.mutate(String(convId), {
+        onSuccess: () => {
+          toast.success("Conversación archivada");
+          if (String(convId) === conversationId) moveAfterClose(String(convId));
+          void queryClient.invalidateQueries({ queryKey: ["conversations"] });
+          void queryClient.invalidateQueries({ queryKey: ["unified-conversations"] });
+        },
+        onError: (err) => toast.error(apiErrorMessage(err, "No se pudo archivar la conversación")),
+      });
+    },
+    [conversationId, moveAfterClose],
+  );
 
-  const handleRestoreConversation = useCallback((convId: string | number) => {
-    changeConversationStatus(convId, "ACTIVE");
-  }, [changeConversationStatus]);
+  const handleRestoreConversation = useCallback(
+    (convId: string | number) => {
+      changeConversationStatus(convId, "ACTIVE");
+    },
+    [changeConversationStatus],
+  );
 
   const handleCloseCurrentConversation = useCallback(() => {
     if (!conversationId) return;
@@ -257,32 +288,38 @@ export function useAgentChatStreaming({
         void queryClient.invalidateQueries({ queryKey: ["unified-conversations"] });
       },
       onError: () => {
-        updateStatus.mutate({ id: conversationId, status: "ARCHIVED" }, {
-          onSuccess: () => {
-            toast.success("No se pudo cerrar — la conversación se archivó en su lugar");
-            setConfirmCloseOpen(false);
-            moveAfterClose(closedId);
+        updateStatus.mutate(
+          { id: conversationId, status: "ARCHIVED" },
+          {
+            onSuccess: () => {
+              toast.success("No se pudo cerrar — la conversación se archivó en su lugar");
+              setConfirmCloseOpen(false);
+              moveAfterClose(closedId);
+            },
+            onError: (e) => {
+              toast.error(apiErrorMessage(e, "No se pudo cerrar"));
+              setConfirmCloseOpen(false);
+            },
           },
-          onError: (e) => {
-            toast.error(apiErrorMessage(e, "No se pudo cerrar"));
-            setConfirmCloseOpen(false);
-          },
-        });
+        );
       },
     });
   }, [conversationId, moveAfterClose]);
 
   const handleEscalateCurrent = useCallback(() => {
     if (!conversationId || !escalateReason.trim()) return;
-    escalateConversation.mutate({ id: conversationId, reason: escalateReason.trim() }, {
-      onSuccess: () => {
-        toast.success("Conversación escalada");
-        setEscalateOpen(false);
-        setEscalateReason("");
-        void queryClient.invalidateQueries({ queryKey: ["conversations"] });
+    escalateConversation.mutate(
+      { id: conversationId, reason: escalateReason.trim() },
+      {
+        onSuccess: () => {
+          toast.success("Conversación escalada");
+          setEscalateOpen(false);
+          setEscalateReason("");
+          void queryClient.invalidateQueries({ queryKey: ["conversations"] });
+        },
+        onError: (e) => toast.error(apiErrorMessage(e, "No se pudo escalar")),
       },
-      onError: (e) => toast.error(apiErrorMessage(e, "No se pudo escalar")),
-    });
+    );
   }, [conversationId, escalateReason]);
 
   // Streaming send
@@ -290,7 +327,10 @@ export function useAgentChatStreaming({
     async (e?: React.FormEvent, overrides?: { text?: string; reply?: ReplyTarget | null }) => {
       e?.preventDefault();
       const freeText = (overrides?.text ?? "").trim();
-      const skillPrefix = overrides?.text != null ? "" : attachedSkills.map((s) => formatSkillInvocation(s.slug, s.params)).join(" ");
+      const skillPrefix =
+        overrides?.text != null
+          ? ""
+          : attachedSkills.map((s) => formatSkillInvocation(s.slug, s.params)).join(" ");
       const text = [skillPrefix, freeText].filter(Boolean).join("\n").trim();
       if (!text) return;
 
@@ -304,19 +344,41 @@ export function useAgentChatStreaming({
       const userMsgId = makeChatId("user");
       const placeholderId = makeChatId("agent-stream");
       const userMsg: ChatMessage = {
-        id: userMsgId, role: "user", content: text, created: new Date().toISOString(),
-        replyToId: activeReply?.id, replyToRole: activeReply?.role, replyToPreview: activeReply?.preview,
+        id: userMsgId,
+        role: "user",
+        content: text,
+        created: new Date().toISOString(),
+        replyToId: activeReply?.id,
+        replyToRole: activeReply?.role,
+        replyToPreview: activeReply?.preview,
         deliveryStatus: "pending",
       };
 
-      setMessages((prev) => [...prev, userMsg, { id: placeholderId, role: "agent" as const, content: "", created: new Date().toISOString() }]);
+      setMessages((prev) => [
+        ...prev,
+        userMsg,
+        {
+          id: placeholderId,
+          role: "agent" as const,
+          content: "",
+          created: new Date().toISOString(),
+        },
+      ]);
       streamingMsgIdRef.current = placeholderId;
       streamedIdsRef.current.add(placeholderId);
       setStreamingMessageId(placeholderId);
       clearComposer();
       clearChatDraft(chatDraftKey("studio", activeId));
       setIsDraftNew(false);
-      setLiveSteps([{ key: "connected", label: "Pensando...", detail: "Iniciando…", icon: "sparkles", status: "active" }]);
+      setLiveSteps([
+        {
+          key: "connected",
+          label: "Pensando...",
+          detail: "Iniciando…",
+          icon: "sparkles",
+          status: "active",
+        },
+      ]);
       setIsStreaming(true);
 
       const abort = new AbortController();
@@ -325,99 +387,170 @@ export function useAgentChatStreaming({
       streamingDraftRef.current = "";
 
       try {
-        const data = await streamConversationChat(activeId, text, {
-          onStatus: (ev) => {
-            const stage = ev.stage || "status";
-            const icon: LiveStreamStep["icon"] = stage === "rag" ? "database" : stage === "writing" ? "loader" : "sparkles";
-            upsertStep(`status-${stage}`, ev.label || stage, ev.detail, icon, { demoteActive: "all" });
-          },
-          onToolStart: (ev) => {
-            upsertStep(`tool-${ev.id || ev.name || makeChatId("tool")}`, "Ejecutando skill", ev.label || ev.name || "skill", "wrench", { demoteActive: "non-tools" });
-          },
-          onToolEnd: (ev) => {
-            const key = `tool-${ev.id || ev.name || ""}`;
-            setLiveSteps((prev) => prev.map((s) => s.key === key || (ev.label && s.detail === ev.label) ? { ...s, status: ev.ok === false ? ("error" as const) : ("done" as const) } : s));
-          },
-          onDelta: (ev) => {
-            const chunk = ev.text || "";
-            if (!chunk) return;
-            streamingDraftRef.current += chunk;
-            if (deltaRafRef.current != null) return;
-            deltaRafRef.current = requestAnimationFrame(() => {
-              deltaRafRef.current = null;
-              if (streamGenerationRef.current !== generation) return;
-              const textDraft = streamingDraftRef.current;
-              setMessages((prev) => {
-                const sid = streamingMsgIdRef.current;
-                if (sid && prev.some((m) => m.id === sid)) return prev.map((m) => (m.id === sid ? { ...m, content: textDraft } : m));
-                const id = makeChatId("agent-stream");
-                streamingMsgIdRef.current = id;
-                streamedIdsRef.current.add(id);
-                setStreamingMessageId(id);
-                return [...prev, { id, role: "agent" as const, content: textDraft, created: new Date().toISOString() }];
+        const data = await streamConversationChat(
+          activeId,
+          text,
+          {
+            onStatus: (ev) => {
+              const stage = ev.stage || "status";
+              const icon: LiveStreamStep["icon"] =
+                stage === "rag" ? "database" : stage === "writing" ? "loader" : "sparkles";
+              upsertStep(`status-${stage}`, ev.label || stage, ev.detail, icon, {
+                demoteActive: "all",
               });
-            });
+            },
+            onToolStart: (ev) => {
+              upsertStep(
+                `tool-${ev.id || ev.name || makeChatId("tool")}`,
+                "Ejecutando skill",
+                ev.label || ev.name || "skill",
+                "wrench",
+                { demoteActive: "non-tools" },
+              );
+            },
+            onToolEnd: (ev) => {
+              const key = `tool-${ev.id || ev.name || ""}`;
+              setLiveSteps((prev) =>
+                prev.map((s) =>
+                  s.key === key || (ev.label && s.detail === ev.label)
+                    ? { ...s, status: ev.ok === false ? ("error" as const) : ("done" as const) }
+                    : s,
+                ),
+              );
+            },
+            onDelta: (ev) => {
+              const chunk = ev.text || "";
+              if (!chunk) return;
+              streamingDraftRef.current += chunk;
+              if (deltaRafRef.current != null) return;
+              deltaRafRef.current = requestAnimationFrame(() => {
+                deltaRafRef.current = null;
+                if (streamGenerationRef.current !== generation) return;
+                const textDraft = streamingDraftRef.current;
+                setMessages((prev) => {
+                  const sid = streamingMsgIdRef.current;
+                  if (sid && prev.some((m) => m.id === sid))
+                    return prev.map((m) => (m.id === sid ? { ...m, content: textDraft } : m));
+                  const id = makeChatId("agent-stream");
+                  streamingMsgIdRef.current = id;
+                  streamedIdsRef.current.add(id);
+                  setStreamingMessageId(id);
+                  return [
+                    ...prev,
+                    {
+                      id,
+                      role: "agent" as const,
+                      content: textDraft,
+                      created: new Date().toISOString(),
+                    },
+                  ];
+                });
+              });
+            },
           },
-        }, { replyToId, signal: abort.signal, branchId: agentBranchId });
+          { replyToId, signal: abort.signal, branchId: agentBranchId },
+        );
 
         const finalContent = data.message ?? data.content ?? data.text ?? streamingDraftRef.current;
         const streamId = streamingMsgIdRef.current;
-        const meta = data.metadata && typeof data.metadata === "object" ? (data.metadata as Record<string, unknown>) : null;
+        const meta =
+          data.metadata && typeof data.metadata === "object"
+            ? (data.metadata as Record<string, unknown>)
+            : null;
         setMessages((prev) => {
           const stableId = streamId ?? data.id ?? makeChatId("agent");
           const finalMsg: ChatMessage = {
-            id: stableId, role: "agent", content: finalContent,
+            id: stableId,
+            role: "agent",
+            content: finalContent,
             created: data.created_at ?? data.created ?? data.timestamp ?? new Date().toISOString(),
-            rag_sources: data.rag_sources ?? data.sources, tool_calls: data.tool_calls, tool_results: data.tool_results,
-            policy_trace: data.policy_trace ?? meta?.policy_trace, flow_policy_trace: data.flow_policy_trace ?? meta?.flow_policy_trace,
-            policies: data.policies ?? meta?.policies, metadata: meta,
+            rag_sources: data.rag_sources ?? data.sources,
+            tool_calls: data.tool_calls,
+            tool_results: data.tool_results,
+            policy_trace: data.policy_trace ?? meta?.policy_trace,
+            flow_policy_trace: data.flow_policy_trace ?? meta?.flow_policy_trace,
+            policies: data.policies ?? meta?.policies,
+            metadata: meta,
           };
-          if (streamId && prev.some((m) => m.id === streamId)) return prev.map((m) => (m.id === streamId ? { ...m, ...finalMsg, id: streamId } : m));
+          if (streamId && prev.some((m) => m.id === streamId))
+            return prev.map((m) => (m.id === streamId ? { ...m, ...finalMsg, id: streamId } : m));
           return [...prev, finalMsg];
         });
-        setMessages((prev) => prev.map((m) => (m.id === userMsgId ? { ...m, deliveryStatus: "sent" as const } : m)));
+        setMessages((prev) =>
+          prev.map((m) => (m.id === userMsgId ? { ...m, deliveryStatus: "sent" as const } : m)),
+        );
         void queryClient.invalidateQueries({ queryKey: ["unified-conversations"] });
       } catch (err) {
         if ((err as Error)?.name === "AbortError") return;
         const msg = (err as Error)?.message || "";
         if (/stream|SSE|event-stream|Failed to fetch|406|Not Acceptable|Accept header/i.test(msg)) {
           try {
-            const data = await sendMessage.mutateAsync({ id: activeId, message: text, replyToId, branchId: agentBranchId });
+            const data = await sendMessage.mutateAsync({
+              id: activeId,
+              message: text,
+              replyToId,
+              branchId: agentBranchId,
+            });
             if (data?.message || data?.content || data?.text) {
-              const fallbackMeta = data.metadata && typeof data.metadata === "object" ? (data.metadata as Record<string, unknown>) : null;
+              const fallbackMeta =
+                data.metadata && typeof data.metadata === "object"
+                  ? (data.metadata as Record<string, unknown>)
+                  : null;
               setMessages((prev) => {
-                const withSent = prev.map((m) => m.id === userMsgId ? { ...m, deliveryStatus: "sent" as const } : m);
+                const withSent = prev.map((m) =>
+                  m.id === userMsgId ? { ...m, deliveryStatus: "sent" as const } : m,
+                );
                 const finalMsg: ChatMessage = {
-                  id: placeholderId, role: data.sender?.toLowerCase() === "user" ? "user" : ("agent" as const),
+                  id: placeholderId,
+                  role: data.sender?.toLowerCase() === "user" ? "user" : ("agent" as const),
                   content: data.message ?? data.content ?? data.text ?? "",
-                  created: data.created_at ?? data.created ?? data.timestamp ?? new Date().toISOString(),
-                  rag_sources: data.rag_sources ?? data.sources, tool_calls: data.tool_calls, tool_results: data.tool_results,
-                  policy_trace: data.policy_trace ?? fallbackMeta?.policy_trace, flow_policy_trace: data.flow_policy_trace ?? fallbackMeta?.flow_policy_trace,
-                  policies: data.policies ?? fallbackMeta?.policies, metadata: fallbackMeta,
+                  created:
+                    data.created_at ?? data.created ?? data.timestamp ?? new Date().toISOString(),
+                  rag_sources: data.rag_sources ?? data.sources,
+                  tool_calls: data.tool_calls,
+                  tool_results: data.tool_results,
+                  policy_trace: data.policy_trace ?? fallbackMeta?.policy_trace,
+                  flow_policy_trace: data.flow_policy_trace ?? fallbackMeta?.flow_policy_trace,
+                  policies: data.policies ?? fallbackMeta?.policies,
+                  metadata: fallbackMeta,
                 };
-                if (withSent.some((m) => m.id === placeholderId)) return withSent.map((m) => (m.id === placeholderId ? finalMsg : m));
+                if (withSent.some((m) => m.id === placeholderId))
+                  return withSent.map((m) => (m.id === placeholderId ? finalMsg : m));
                 return [...withSent, finalMsg];
               });
             }
           } catch (e) {
             toast.error(apiErrorMessage(e, "Error al enviar el mensaje"));
-            setMessages((prev) => prev.filter((m) => m.id !== placeholderId).map((m) => (m.id === userMsgId ? { ...m, deliveryStatus: "failed" as const } : m)));
+            setMessages((prev) =>
+              prev
+                .filter((m) => m.id !== placeholderId)
+                .map((m) => (m.id === userMsgId ? { ...m, deliveryStatus: "failed" as const } : m)),
+            );
             if (activeReply) setReplyTo(activeReply);
           }
         } else {
           toast.error(msg || "Error al enviar el mensaje");
-          setMessages((prev) => prev.filter((m) => m.id !== placeholderId).map((m) => (m.id === userMsgId ? { ...m, deliveryStatus: "failed" as const } : m)));
+          setMessages((prev) =>
+            prev
+              .filter((m) => m.id !== placeholderId)
+              .map((m) => (m.id === userMsgId ? { ...m, deliveryStatus: "failed" as const } : m)),
+          );
           if (activeReply) setReplyTo(activeReply);
         }
       } finally {
         if (streamGenerationRef.current === generation) {
-          if (deltaRafRef.current != null) { cancelAnimationFrame(deltaRafRef.current); deltaRafRef.current = null; }
+          if (deltaRafRef.current != null) {
+            cancelAnimationFrame(deltaRafRef.current);
+            deltaRafRef.current = null;
+          }
           setIsStreaming(false);
           streamingDraftRef.current = "";
           streamingMsgIdRef.current = null;
           setStreamingMessageId(null);
           if (streamAbortRef.current === abort) streamAbortRef.current = null;
-          window.setTimeout(() => { if (streamGenerationRef.current === generation) setLiveSteps([]); }, 280);
+          window.setTimeout(() => {
+            if (streamGenerationRef.current === generation) setLiveSteps([]);
+          }, 280);
         }
       }
     },
@@ -432,7 +565,8 @@ export function useAgentChatStreaming({
     streamAbortRef.current?.abort();
     streamAbortRef.current = null;
     const sid = streamingMsgIdRef.current;
-    if (sid) setMessages((prev) => prev.filter((m) => m.id !== sid || (m.content?.length ?? 0) > 0));
+    if (sid)
+      setMessages((prev) => prev.filter((m) => m.id !== sid || (m.content?.length ?? 0) > 0));
     setIsStreaming(false);
     streamingDraftRef.current = "";
     streamingMsgIdRef.current = null;
@@ -446,22 +580,50 @@ export function useAgentChatStreaming({
 
   return {
     // Streaming state
-    isStreaming, streamingMessageId, liveSteps,
+    isStreaming,
+    streamingMessageId,
+    liveSteps,
     // Refs (exposed for orchestrator effects)
-    streamedIdsRef, historyIdsRef, streamAbortRef, streamGenerationRef,
-    creatingConversationRef, creatingPromiseRef, welcomeOnlyConversationRef,
-    conversationIdRef, lastRemoteMessagesRef, skipAutoSelectRef, newConversationModeRef,
+    streamedIdsRef,
+    historyIdsRef,
+    streamAbortRef,
+    streamGenerationRef,
+    creatingConversationRef,
+    creatingPromiseRef,
+    welcomeOnlyConversationRef,
+    conversationIdRef,
+    lastRemoteMessagesRef,
+    skipAutoSelectRef,
+    newConversationModeRef,
     // Streaming actions
-    handleSend, stopStreaming, resendMessage, ensureConversationId, upsertStep,
+    handleSend,
+    stopStreaming,
+    resendMessage,
+    ensureConversationId,
+    upsertStep,
     // Conversation ops
-    isCreating, setIsCreating, createError, setCreateError,
-    confirmCloseOpen, setConfirmCloseOpen,
-    escalateOpen, setEscalateOpen, escalateReason, setEscalateReason,
-    handleNewConversation, handleSelectConversation,
-    handleArchiveConversation, handleRestoreConversation,
-    handleCloseCurrentConversation, handleEscalateCurrent,
-    moveAfterClose, changeConversationStatus,
+    isCreating,
+    setIsCreating,
+    createError,
+    setCreateError,
+    confirmCloseOpen,
+    setConfirmCloseOpen,
+    escalateOpen,
+    setEscalateOpen,
+    escalateReason,
+    setEscalateReason,
+    handleNewConversation,
+    handleSelectConversation,
+    handleArchiveConversation,
+    handleRestoreConversation,
+    handleCloseCurrentConversation,
+    handleEscalateCurrent,
+    moveAfterClose,
+    changeConversationStatus,
     // Expose mutations for dialog busy states
-    createConversation, closeConversation, updateStatus, escalateConversation,
+    createConversation,
+    closeConversation,
+    updateStatus,
+    escalateConversation,
   };
 }

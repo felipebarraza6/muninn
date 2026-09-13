@@ -35,11 +35,19 @@ const QUICK_LINKS = [
 /** Resumen de plataforma — superadmin. Sin contacto ni conversaciones. */
 export function PlatformHome() {
   const { data: orgs = [], isLoading: orgsLoading, error: orgsError } = useOrganizations();
-  const { data: branches = [], isLoading: branchesLoading, error: branchesError } = useAdminBranches();
+  const {
+    data: branches = [],
+    isLoading: branchesLoading,
+    error: branchesError,
+  } = useAdminBranches();
   const { data: users = [], isLoading: usersLoading, error: usersError } = useAdminUsers();
   const { data: agents = [], isLoading: agentsLoading, error: agentsError } = useAgents();
   const { data: channels = [], isLoading: channelsLoading, error: channelsError } = useChannels();
-  const { data: apis = [], isLoading: apisLoading, error: apisError } = useExternalAPIs({
+  const {
+    data: apis = [],
+    isLoading: apisLoading,
+    error: apisError,
+  } = useExternalAPIs({
     scope: "store",
     includeInactive: true,
   });
@@ -116,7 +124,14 @@ export function PlatformHome() {
     },
   ];
 
-  const firstError = orgsError || branchesError || usersError || agentsError || channelsError || apisError || skillsError;
+  const firstError =
+    orgsError ||
+    branchesError ||
+    usersError ||
+    agentsError ||
+    channelsError ||
+    apisError ||
+    skillsError;
 
   if (isLoading) {
     return <PageSkeleton variant="dashboard" />;
