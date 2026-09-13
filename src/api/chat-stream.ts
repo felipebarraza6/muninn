@@ -1,4 +1,5 @@
 import { getActiveBranchId, getBranchMode } from "@/lib/branchStorage";
+import { getToken } from "@/lib/authSession";
 import { ENDPOINTS } from "@/api/endpoints/index";
 import type { ChatMessageResponse } from "@/api/hooks/useConversations";
 import { resolveApiBaseUrl } from "@/lib/apiBaseUrl";
@@ -76,7 +77,7 @@ export async function streamConversationChat(
 ): Promise<ChatStreamFinalEvent> {
   const opts: StreamChatOptions =
     options instanceof AbortSignal ? { signal: options } : (options ?? {});
-  const token = localStorage.getItem("token");
+  const token = getToken();
   // DRF negocia Accept antes de la vista: no usar solo text/event-stream
   // (provoca 406 Not Acceptable). El body sigue siendo SSE.
   const headers: Record<string, string> = {

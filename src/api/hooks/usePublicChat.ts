@@ -1,85 +1,88 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { GET, POST } from "../client";
+import { apiClient } from "../client";
 
 const QUERY_KEY = ["ai-agents", "public-chat"];
+const EMBED_USER_ID_PREFIX = "embed_user_id_";
+
+function getEmbeddingOrigin(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    if (window.top !== window.self && document.referrer) {
+      return new URL(document.referrer, window.location.href).origin;
+    }
+  } catch {
+    // Acceso cross-origin o referrer inválido; no se puede determinar el origen.
+  }
+  return "";
+}
+
+function getOrCreateEmbedUserId(channelId: string): string {
+  if (typeof window === "undefined") {
+    return `embed-${channelId}`;
+  }
+  const storageKey = `${EMBED_USER_ID_PREFIX}${channelId}`;
+  let userId = localStorage.getItem(storageKey);
+  if (!userId) {
+    userId =
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? `embed-${crypto.randomUUID()}`
+        : `embed-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    localStorage.setItem(storageKey, userId);
+  }
+  return userId;
+}
 
 export interface PublicChannelConfig {
   id: string | number;
   name?: string;
-  title?: string;
-  agent_name?: string | null;
-  agent_icon?: string | null;
+  channel_type?: string;
   agent?: {
     id?: string | number;
     name?: string;
   };
   welcome_message?: string;
-  primary_color?: string;
-  logo_url?: string;
-  launcher_text?: string;
-  position?: string;
-  require_email?: boolean;
-  require_name?: boolean;
-  api_base_url?: string;
   theme?: "light" | "dark";
 }
 
-function guestUserIdKey(channelId: string) {
-  return `yggdra_embed_uid_${channelId}`;
-}
-
-/** ID persistente del visitante para hilar ChatbotSession. */
-export function getOrCreateEmbedUserId(channelId: string): string {
-  try {
-    const key = guestUserIdKey(channelId);
-    const existing = localStorage.getItem(key);
-    if (existing) return existing;
-    const id =
-      typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : `guest_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-    localStorage.setItem(key, id);
-    return id;
-  } catch {
-    return `guest_${Date.now()}`;
-  }
+export interface PublicChatMessageResponse {
+  success?: boolean;
+  response?: string;
+  reply?: string;
+  message?: string;
+  session_id?: string;
+  conversation_id?: string | number;
 }
 
 export function usePublicChannelConfig(channelId: string | undefined) {
-  return useQuery<PublicChannelConfig>({
+  return useQuery({
     queryKey: [...QUERY_KEY, "config", channelId],
     queryFn: () =>
-      GET<PublicChannelConfig>(`/ai-agents/public/channels/${channelId}/config/`, {
-        skipAuth: true,
-        skipBranchHeader: true,
-      }),
+      apiClient
+        .get<PublicChannelConfig>(`/ai-agents/public/channels/${channelId}/config/`, {
+          params: { embed_origin: getEmbeddingOrigin() },
+        })
+        .then((r) => r.data),
     enabled: !!channelId,
     staleTime: 5 * 60 * 1000,
-    retry: 1,
   });
 }
 
 export function useSendPublicMessage(channelId: string | undefined) {
   return useMutation({
-    mutationFn: (payload: { message: string; user_name?: string; email?: string }) => {
-      const userId = channelId ? getOrCreateEmbedUserId(channelId) : "anonymous";
-      return POST<{
-        reply?: string;
-        message?: string;
-        response?: string;
-        session_id?: string;
-        conversation_id?: string | number;
-        success?: boolean;
-      }>(
-        `/ai-agents/public/channels/${channelId}/message/`,
-        {
-          user_id: userId,
-          user_name: payload.user_name || "Visitante",
-          message: payload.message,
-          ...(payload.email ? { email: payload.email } : {}),
-        },
-        { skipAuth: true, skipBranchHeader: true },
-      );
+    mutationFn: (message: string) => {
+      if (!channelId) {
+        return Promise.reject(new Error("Canal no definido"));
+      }
+      return apiClient
+        .post<PublicChatMessageResponse>(
+          `/ai-agents/public/channels/${channelId}/message/`,
+          {
+            user_id: getOrCreateEmbedUserId(channelId),
+            message,
+          },
+          { params: { embed_origin: getEmbeddingOrigin() } },
+        )
+        .then((r) => r.data);
     },
   });
 }

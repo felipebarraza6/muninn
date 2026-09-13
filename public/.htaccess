@@ -59,8 +59,12 @@
 
     # Seguridad básica
     Header always set X-Content-Type-Options "nosniff"
-    Header always set X-Frame-Options "DENY"
     Header always set Referrer-Policy "strict-origin-when-cross-origin"
+
+    # El widget (/embed/) debe poder embeberse en sitios externos vía iframe.
+    SetEnvIf Request_URI "^/embed/" ALLOW_FRAME
+    Header always set X-Frame-Options "DENY" env=!ALLOW_FRAME
+    Header always set Content-Security-Policy "frame-ancestors *" env=ALLOW_FRAME
 
     # HTTPS forzado (HSTS) — activar solo cuando todo funcione con SSL
     # Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"

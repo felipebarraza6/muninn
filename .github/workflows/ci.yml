@@ -139,3 +139,38 @@ jobs:
           local-dir: ./dist/
           server-dir: ./void.smarthydro.app/
           dangerous-clean-slate: false
+
+  deploy-ftp-muninn:
+    if: github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build (Muninn Yggdra)
+        run: bun run build
+        env:
+          VITE_API_URL: https://api.yggdra.cl/api
+          VITE_BASE_PATH: /
+
+      - name: Copy 404.html (SPA fallback)
+        run: cp dist/index.html dist/404.html
+
+      - name: Deploy via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_HOST_VOID }}
+          username: ${{ secrets.FTP_USER_VOID }}
+          password: ${{ secrets.FTP_PASS_VOID }}
+          local-dir: ./dist/
+          server-dir: ./muninn.yggdra.cl/
+          dangerous-clean-slate: false

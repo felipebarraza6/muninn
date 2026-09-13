@@ -6,6 +6,7 @@
 import { GET } from "@/api/client";
 import { ENDPOINTS } from "@/api/endpoints";
 import { getActiveBranchId, getBranchMode } from "@/lib/branchStorage";
+import { getToken } from "@/lib/authSession";
 import { resolveMediaUrl } from "@/lib/mediaUrl";
 
 export type ResultArtifact = {
@@ -585,7 +586,7 @@ async function fetchBlobWithAuth(href: string): Promise<Blob> {
   // No usar apiClient: baseURL `/api` rompería paths `/media/...`.
   const resolved = resolveUrl(href);
   const headers: Record<string, string> = { Accept: "*/*" };
-  const token = localStorage.getItem("token");
+  const token = getToken();
   if (token) headers.Authorization = `Token ${token}`;
   const branchId = getActiveBranchId();
   if (branchId && getBranchMode() === "branch") {

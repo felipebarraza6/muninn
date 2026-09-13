@@ -22,6 +22,8 @@ import { useExternalAPIs } from "@/api/hooks/useExternalAPIs";
 import { useAgentFunctions } from "@/api/hooks/useAgentFunctions";
 import { AdminMotionItem, AdminPageMotion } from "@/components/admin/AdminPageMotion";
 import { SummaryKpiGrid, type SummaryKpi } from "@/components/dashboard/summary-kpi-grid";
+import { ErrorBanner } from "@/components/ui/error-banner";
+import { apiErrorMessage } from "@/lib/apiError";
 
 const QUICK_LINKS = [
   { href: "/app/admin/organizaciones", label: "Organizaciones", icon: Building2 },
@@ -32,16 +34,16 @@ const QUICK_LINKS = [
 
 /** Resumen de plataforma — superadmin. Sin contacto ni conversaciones. */
 export function PlatformHome() {
-  const { data: orgs = [], isLoading: orgsLoading } = useOrganizations();
-  const { data: branches = [], isLoading: branchesLoading } = useAdminBranches();
-  const { data: users = [], isLoading: usersLoading } = useAdminUsers();
-  const { data: agents = [], isLoading: agentsLoading } = useAgents();
-  const { data: channels = [], isLoading: channelsLoading } = useChannels();
-  const { data: apis = [], isLoading: apisLoading } = useExternalAPIs({
+  const { data: orgs = [], isLoading: orgsLoading, error: orgsError } = useOrganizations();
+  const { data: branches = [], isLoading: branchesLoading, error: branchesError } = useAdminBranches();
+  const { data: users = [], isLoading: usersLoading, error: usersError } = useAdminUsers();
+  const { data: agents = [], isLoading: agentsLoading, error: agentsError } = useAgents();
+  const { data: channels = [], isLoading: channelsLoading, error: channelsError } = useChannels();
+  const { data: apis = [], isLoading: apisLoading, error: apisError } = useExternalAPIs({
     scope: "store",
     includeInactive: true,
   });
-  const { data: skills = [], isLoading: skillsLoading } = useAgentFunctions();
+  const { data: skills = [], isLoading: skillsLoading, error: skillsError } = useAgentFunctions();
 
   const isLoading =
     orgsLoading ||
@@ -114,8 +116,21 @@ export function PlatformHome() {
     },
   ];
 
+  const firstError = orgsError || branchesError || usersError || agentsError || channelsError || apisError || skillsError;
+
   if (isLoading) {
     return <PageSkeleton variant="dashboard" />;
+  }
+
+  if (firstError) {
+    return (
+      <div className="p-6">
+        <ErrorBanner
+          message={apiErrorMessage(firstError, "No se pudieron cargar los datos de plataforma")}
+          onRetry={() => window.location.reload()}
+        />
+      </div>
+    );
   }
 
   return (

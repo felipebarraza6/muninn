@@ -35,6 +35,8 @@ import { SummaryKpiGrid, type SummaryKpi } from "@/components/dashboard/summary-
 import { OpsHealthCard } from "@/components/dashboard/ops-health-card";
 import { canAccessSkills } from "@/lib/authGuards";
 import { cn } from "@/lib/utils";
+import { ErrorBanner } from "@/components/ui/error-banner";
+import { apiErrorMessage } from "@/lib/apiError";
 
 type WidgetStyle = {
   icon: LucideIcon;
@@ -164,11 +166,11 @@ function resolveWidgetStyle(source: string, key: string): WidgetStyle {
 export function BusinessHome() {
   const showSkills = canAccessSkills();
 
-  const { data: agents = [], isLoading: agentsLoading } = useAgents();
-  const { data: channels = [], isLoading: channelsLoading } = useChannels();
-  const { data: apis = [], isLoading: apisLoading } = useExternalAPIs();
-  const { data: functions = [], isLoading: functionsLoading } = useAgentFunctions();
-  const { data: widgets = [], isLoading: widgetsLoading } = useDashboardStats();
+  const { data: agents = [], isLoading: agentsLoading, error: agentsError } = useAgents();
+  const { data: channels = [], isLoading: channelsLoading, error: channelsError } = useChannels();
+  const { data: apis = [], isLoading: apisLoading, error: apisError } = useExternalAPIs();
+  const { data: functions = [], isLoading: functionsLoading, error: functionsError } = useAgentFunctions();
+  const { data: widgets = [], isLoading: widgetsLoading, error: widgetsError } = useDashboardStats();
 
   const isLoading =
     agentsLoading ||
@@ -224,8 +226,21 @@ export function BusinessHome() {
   const kpiCols =
     summaryItems.length >= 4 ? "grid-cols-2 md:grid-cols-4" : "grid-cols-2 md:grid-cols-3";
 
+  const firstError = agentsError || channelsError || apisError || functionsError || widgetsError;
+
   if (isLoading) {
     return <PageSkeleton variant="dashboard" />;
+  }
+
+  if (firstError) {
+    return (
+      <div className="p-6">
+        <ErrorBanner
+          message={apiErrorMessage(firstError, "No se pudieron cargar los datos del panel")}
+          onRetry={() => window.location.reload()}
+        />
+      </div>
+    );
   }
 
   return (

@@ -24,6 +24,8 @@ import { RequireConversations } from "./components/auth/RequireConversations";
 import { RequireSkills } from "./components/auth/RequireSkills";
 import { RequireAgents } from "./components/auth/RequireAgents";
 import { RequireSuperAdmin } from "./components/auth/RequireSuperAdmin";
+import { RequireChannels } from "./components/auth/RequireChannels";
+import { RequireApplications } from "./components/auth/RequireApplications";
 import { ThemeProvider } from "./components/theme/ThemeProvider";
 import { PageLoader } from "./components/ui/page-loader";
 import { LoginPixelBootScreen } from "./components/brand/LoginPixelBoot";
@@ -210,8 +212,8 @@ function AnimatedOutlet() {
               </RequireSuperAdmin>
             }
           />
-          <Route path="/canales" element={<Canales />} />
-          <Route path="/canales/:id" element={<CanalesDetail />} />
+          <Route path="/canales" element={<RequireChannels><Canales /></RequireChannels>} />
+          <Route path="/canales/:id" element={<RequireChannels><CanalesDetail /></RequireChannels>} />
           <Route
             path="/conocimiento"
             element={
@@ -244,8 +246,8 @@ function AnimatedOutlet() {
               </RequireKnowledgeCatalog>
             }
           />
-          <Route path="/aplicaciones" element={<APIs />} />
-          <Route path="/aplicaciones/:id" element={<APIDetail />} />
+          <Route path="/aplicaciones" element={<RequireApplications><APIs /></RequireApplications>} />
+          <Route path="/aplicaciones/:id" element={<RequireApplications><APIDetail /></RequireApplications>} />
           <Route path="/apis" element={<Navigate to={APP_STORE_PATH} replace />} />
           <Route path="/apis/:id" element={<ApiDetailRedirect />} />
           <Route

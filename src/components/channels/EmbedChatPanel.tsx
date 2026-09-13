@@ -91,11 +91,7 @@ export function EmbedChatPanel({ channelId, className, compact = false }: EmbedC
     setInput("");
 
     try {
-      const result = await sendMessage.mutateAsync({
-        message: text,
-        user_name: guestName || undefined,
-        email: guestEmail || undefined,
-      });
+      const result = await sendMessage.mutateAsync(text);
       const reply = result.reply ?? result.response ?? result.message ?? "Sin respuesta";
       setMessages((prev) => [
         ...prev.map((m) => (m.id === userMsgId ? { ...m, deliveryStatus: "sent" as const } : m)),
