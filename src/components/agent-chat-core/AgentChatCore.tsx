@@ -154,7 +154,11 @@ export function AgentChatCore({
           const next = new URLSearchParams(prev);
           if (agentIdFromUrl || agentId) next.set("agent", agentIdFromUrl || agentId);
           for (const [k, v] of Object.entries(updates)) {
-            v == null || v === "" ? next.delete(k) : next.set(k, v);
+            if (v == null || v === "") {
+              next.delete(k);
+            } else {
+              next.set(k, v);
+            }
           }
           return next;
         },
