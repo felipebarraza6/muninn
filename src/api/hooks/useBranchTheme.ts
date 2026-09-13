@@ -293,16 +293,22 @@ export function useBranchTheme(branchIdOverride?: string | null) {
 }
 
 /**
+ * Dominio propio de Muninn — siempre muestra el landing, nunca branded login.
+ */
+const MUNINN_DEFAULT_HOST = "muninn.yggdra.cl";
+
+/**
  * Resuelve branding de login: slug → by-host (sin slug) → Muninn.
  * Persiste contexto portal para post-login (X-Branch-ID).
  */
 export function useResolvePublicLoginTheme(slug?: string | null) {
   const host = typeof window !== "undefined" ? window.location.host : "";
+  const isDefaultHost = host === MUNINN_DEFAULT_HOST;
 
   const query = useQuery({
     queryKey: ["branches", "public-login-theme", "resolve", host, slug ?? ""],
     queryFn: () => resolvePublicLoginTheme(slug),
-    enabled: typeof window !== "undefined",
+    enabled: typeof window !== "undefined" && !(isDefaultHost && !slug),
     staleTime: 10 * 60 * 1000,
     retry: false,
   });
@@ -311,7 +317,9 @@ export function useResolvePublicLoginTheme(slug?: string | null) {
   const flat = useMemo(() => (raw ? flattenPublicLoginTheme(raw) : null), [raw]);
   // isAppDefault en false durante loading: by-host nunca debe mostrar Muninn
   // ni siquiera como flash. LoginPage maneja su propio loading state.
-  const isAppDefault = query.isLoading ? false : !raw || !hasUsablePublicBranding(raw);
+  // En el dominio propio de Muninn siempre es default (landing).
+  const isAppDefault =
+    isDefaultHost && !slug ? true : query.isLoading ? false : !raw || !hasUsablePublicBranding(raw);
 
   const effectiveTheme = useMemo(() => {
     if (isAppDefault) {
