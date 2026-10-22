@@ -30,7 +30,7 @@ export function SalesLanding() {
         <title>Muninn — Agentes de IA con memoria de tu operación</title>
         <meta
           name="description"
-          content="Muninn diseña y opera agentes de IA con reglas visibles, en WhatsApp, Telegram o un widget web. Sin checkout: pide una demo o una cotización."
+          content="Cuenta gratis. Cada agente activo cuesta 0,5 UF al mes y el uso de IA se paga con runas prepagadas, el costo real más un 20 %."
         />
       </Helmet>
       <div
@@ -74,10 +74,13 @@ function Header() {
         </nav>
         <div className="ml-auto flex items-center gap-2">
           <Button asChild variant="ghost" size="sm">
-            <a href={salesMail("Cotización Muninn")}>Cotizar</a>
+            <Link to="/entrar">Entrar</Link>
           </Button>
           <Button asChild size="sm">
-            <Link to="/entrar">Entrar</Link>
+            <Link to="/registro">
+              <span className="sm:hidden">Cuenta gratis</span>
+              <span className="hidden sm:inline">Crear cuenta gratis</span>
+            </Link>
           </Button>
         </div>
       </div>
@@ -97,12 +100,12 @@ function Hero() {
         </h1>
         <p className="max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">
           Muninn es la plataforma donde diseñas un agente de IA, le das reglas y documentos, y lo
-          conectas a un canal. Ves lo que responde. No hay magia ni pago en línea: si te sirve,
-          cotizamos.
+          conectas a un canal. La cuenta es gratis. Cada agente activo cuesta 0,5 UF al mes, y el
+          uso de IA se paga con runas prepagadas.
         </p>
         <div className="flex flex-wrap gap-3">
           <Button asChild>
-            <a href={salesMail("Demo Muninn")}>Pedir demo</a>
+            <Link to="/registro">Crear cuenta gratis</Link>
           </Button>
           <Button asChild variant="outline">
             <a href="#como">Cómo funciona</a>
@@ -202,7 +205,15 @@ function Integrations() {
         title="Canales y aplicaciones que la plataforma ya sabe conectar."
       />
       <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">
-        Conectarlas exige configuración en tu cuenta. Esta página no las activa solas.
+        Conectarlas exige configuración en tu cuenta. Esta página no las activa solas. Una
+        integración a medida se cotiza aparte:{" "}
+        <a
+          href={salesMail("Cotización de integración Muninn")}
+          className="underline underline-offset-2"
+        >
+          escribir
+        </a>
+        .
       </p>
       <ul className="grid gap-4 sm:grid-cols-2">
         {SALES_INTEGRATIONS.map((item) => (
@@ -263,9 +274,12 @@ function Catalog() {
 function Plans() {
   return (
     <section id="planes" className="space-y-6">
-      <SectionTitle kicker="Planes" title="Sin precios de escaparate y sin checkout." />
-      <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">
-        El alcance se conversa. Estos nombres ordenan la demo; no son un contrato ni una tarifa.
+      <SectionTitle kicker="Precios" title="Cuenta gratis. El agente y la IA se pagan aparte." />
+      <p id="runas" className="max-w-3xl text-sm leading-relaxed text-muted-foreground">
+        0,5 UF al mes por cada agente que dejas activo. El valor en pesos usa la UF del día y se ve
+        en facturación, no lo inventamos aquí. Las runas (ᚱ) son un saldo prepago para el modelo:
+        cada llamada descuenta el costo real más un 20 %. Los packs se compran en Flow. En cero, la
+        IA se detiene. No hay cobro automático de runas ni suscripción escondida.
       </p>
       <ul className="grid gap-4 md:grid-cols-3">
         {SALES_PLANS.map((plan) => (
@@ -274,13 +288,14 @@ function Plans() {
             className="flex flex-col rounded-2xl border border-border/70 bg-card p-5"
           >
             <h3 className="font-display text-lg font-semibold">{plan.name}</h3>
+            <p className="mt-2 font-display text-sm text-primary">{plan.price}</p>
             <p className="mt-2 flex-1 text-sm leading-relaxed text-muted-foreground">{plan.line}</p>
-            <Button
-              asChild
-              className="mt-5"
-              variant={plan.cta === "Pedir demo" ? "default" : "outline"}
-            >
-              <a href={salesMail(plan.subject)}>{plan.cta}</a>
+            <Button asChild className="mt-5" variant={plan.to === "#runas" ? "outline" : "default"}>
+              {plan.to.startsWith("/") ? (
+                <Link to={plan.to}>{plan.cta}</Link>
+              ) : (
+                <a href={plan.to}>{plan.cta}</a>
+              )}
             </Button>
           </li>
         ))}
@@ -324,6 +339,9 @@ function Footer() {
           <a href={salesMail("Contacto Muninn")} className={linkClass}>
             Contacto
           </a>
+          <Link to="/registro" className={linkClass}>
+            Crear cuenta
+          </Link>
           <Link to="/entrar" className={linkClass}>
             Entrar
           </Link>

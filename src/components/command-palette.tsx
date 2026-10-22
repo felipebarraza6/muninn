@@ -13,6 +13,7 @@ import {
   Bot,
   Building2,
   ClipboardList,
+  Coins,
   Cpu,
   GitBranch,
   LayoutDashboard,
@@ -45,6 +46,7 @@ import {
   canAccessLlmAdmin,
   canAccessSkills,
   canAccessUsersAdmin,
+  canSeeBilling,
   getBranchesAdminNavLabel,
   getOrganizationsAdminNavLabel,
   isOrganizationOwner,
@@ -226,10 +228,21 @@ function buildPaletteGroups(): PaletteGroup[] {
     if (gestion.length) groups.push({ heading: "Gestión", items: gestion });
   }
 
+  const cuenta: PaletteItem[] = [];
+  if (canSeeBilling()) {
+    cuenta.push({
+      id: "facturacion",
+      label: "Facturación",
+      to: "/app/facturacion",
+      icon: Coins,
+      keywords: "runas saldo uf flow",
+    });
+  }
+  cuenta.push({ id: "perfil", label: "Mi perfil", to: "/app/perfil", icon: User });
   groups.push({
     heading: "Cuenta",
     items: [
-      { id: "perfil", label: "Mi perfil", to: "/app/perfil", icon: User },
+      ...cuenta,
       {
         id: "logout",
         label: "Cerrar sesión",

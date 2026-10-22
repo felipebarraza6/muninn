@@ -15,7 +15,7 @@ export function LegalDraftPage({
   return (
     <div className="min-h-dvh bg-background text-foreground">
       <Helmet>
-        <title>{title} — Muninn</title>
+        <title>{`${title} — Muninn`}</title>
         <meta name="description" content={description} />
       </Helmet>
       <header className="border-b border-border/70">

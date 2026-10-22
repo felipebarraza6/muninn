@@ -28,8 +28,9 @@ export default function TerminosPage() {
       <p>
         Un agente puede equivocarse. Las reglas y los documentos reducen ese riesgo; no lo eliminan.
         Integraciones como Nubox o APIs de organismos del Estado solo funcionan si están instaladas
-        y con credenciales válidas. No hay checkout ni precios publicados en el sitio: el alcance se
-        cotiza aparte.
+        y con credenciales válidas. La cuenta es gratis. Cada agente activo cuesta 0,5 UF al mes. El
+        uso de IA se paga con runas prepagadas (el costo real más un 20 %), en packs procesados por
+        Flow. Muninn no guarda la tarjeta. Una integración a medida se cotiza aparte.
       </p>
       <h2 className="pt-2 font-display text-lg font-semibold">Uso aceptable</h2>
       <p>

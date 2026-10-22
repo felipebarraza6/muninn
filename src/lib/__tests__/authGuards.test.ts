@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import {
   canAccessAgents,
   canAccessChannels,
+  canSeeBilling,
   isSuperAdmin,
   isOrganizationOwner,
 } from "../authGuards";
@@ -93,6 +94,18 @@ describe("authGuards", () => {
       localStorage.clear();
       setUser({ is_organization_owner: true });
       expect(canAccessChannels()).toBe(true);
+    });
+  });
+
+  describe("canSeeBilling", () => {
+    it("shows billing to an OWNER and hides it from a staff role", () => {
+      setUser({});
+      setBranches([{ branch_id: 1, role: "OWNER", is_active: true }]);
+      expect(canSeeBilling()).toBe(true);
+      localStorage.clear();
+      setUser({});
+      setBranches([{ branch_id: 1, role: "EMPLOYEE", is_active: true }]);
+      expect(canSeeBilling()).toBe(false);
     });
   });
 });
