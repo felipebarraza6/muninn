@@ -11,7 +11,7 @@
 ## Reglas de Oro
 
 1. **UI**: Radix UI + Tailwind CSS, tema dark con acento mint `#2dd4bf`.
-2. **API**: Axios con `withCredentials: true`. Auth vía `Authorization: Token …` (token en `localStorage`).
+2. **API**: Axios con `withCredentials: true`. `VITE_AUTH_MODE=token` (default) manda `Authorization: Token …` con el token solo en memoria. `VITE_AUTH_MODE=cookie` no manda ese header: la sesión es cookie HttpOnly y las mutaciones llevan `X-CSRFToken`.
 3. **Login**: Endpoint `POST /accounts/users/login_complete/`.
 4. **Branch**: Enviar header `x-branch-id` desde `branchStorage`.
 5. **Formularios**: React Hook Form + Zod.

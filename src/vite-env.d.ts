@@ -8,6 +8,8 @@ interface ImportMetaEnv {
   readonly VITE_WIDGET_BASE_URL?: string;
   readonly VITE_REALTIME_URL?: string;
   readonly VITE_DEV_API_PROXY?: string;
+  /** `cookie` (HttpOnly + CSRF) o `token` (memoria, default). */
+  readonly VITE_AUTH_MODE?: "cookie" | "token" | string;
   readonly VITE_PWA_NAME?: string;
   readonly VITE_PWA_THEME_COLOR?: string;
 }

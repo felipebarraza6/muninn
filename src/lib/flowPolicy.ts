@@ -79,8 +79,9 @@ export const SLOT_EXAMPLES: Array<{
 ];
 
 /**
- * Preset oficial Clínica WM / DentyDesk (mismo JSON que backend
- * `catalog/flow_policies.WM_RESERVAS_POLICY`).
+ * Preset de agendamiento con consentimiento antes de escribir.
+ * El JSON coincide con el catálogo del backend para los agentes que ya lo usan.
+ * La UI no lo presenta como plantilla de un cliente.
  */
 export const WM_RESERVAS_POLICY: FlowPolicy = {
   version: 1,

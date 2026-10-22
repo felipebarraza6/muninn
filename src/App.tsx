@@ -39,6 +39,8 @@ import { RealtimeProvider } from "./lib/realtime";
 import { motionTokens } from "@/lib/motion";
 import Login from "./routes/login";
 import Entrar from "./routes/entrar";
+import Terminos from "./routes/terminos";
+import Privacidad from "./routes/privacidad";
 
 const Dashboard = lazy(() => import("./routes/index"));
 const Conversaciones = lazy(() => import("./routes/conversaciones"));
@@ -448,6 +450,8 @@ function AppRoutes() {
           }
         />
         <Route path="/embed/chat/:id" element={<EmbedChat />} />
+        <Route path="/terminos" element={<Terminos />} />
+        <Route path="/privacidad" element={<Privacidad />} />
         <Route element={<RequireAuth />}>
           <Route element={<RootLayout />}>
             <Route path="/app/*" element={<AnimatedOutlet />} />

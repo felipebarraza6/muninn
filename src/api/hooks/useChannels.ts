@@ -84,14 +84,24 @@ export interface ChannelTestResult {
   is_verified?: boolean;
 }
 
-export function useChannels(filters?: { is_active?: boolean; channel_type?: string }) {
+export function useChannels(filters?: {
+  is_active?: boolean;
+  channel_type?: string;
+  enabled?: boolean;
+}) {
   const branchId = useActiveBranchId();
+  const enabled = filters?.enabled !== false;
+  const params = {
+    ...(filters?.is_active != null ? { is_active: filters.is_active } : {}),
+    ...(filters?.channel_type ? { channel_type: filters.channel_type } : {}),
+  };
   return useQuery({
-    queryKey: [...QUERY_KEY, branchId ?? "all", filters],
+    queryKey: [...QUERY_KEY, branchId ?? "all", params],
+    enabled,
     queryFn: () =>
       GET<Channel[] | { count: number; results: Channel[] }>(ENDPOINTS.channels.list, {
         params: {
-          ...filters,
+          ...params,
           include_inactive: "true",
           ...(branchId ? { branch: branchId } : {}),
         },

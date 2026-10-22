@@ -46,6 +46,7 @@ import {
   getOrganizationsAdminNavLabel,
   canAccessKnowledgeCatalog,
   canAccessConversations,
+  canAccessChannels,
   canAccessSkills,
 } from "@/lib/authGuards";
 
@@ -80,7 +81,7 @@ const conversacionesItem: MenuItem = {
 function buildComunicacionItems(): MenuItem[] {
   const items: MenuItem[] = [];
   if (canAccessConversations()) items.push(conversacionesItem);
-  items.push(canalesItem);
+  if (canAccessChannels()) items.push(canalesItem);
   return items;
 }
 
@@ -325,23 +326,25 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-[10.5px] font-semibold tracking-wider uppercase text-muted-foreground/80">
-            Comunicación
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <motion.div
-                className="flex w-full min-w-0 flex-col gap-1"
-                variants={listVariants}
-                initial={reduceMotion ? false : "hidden"}
-                animate="show"
-              >
-                {renderItems(comunicacionItems, "comunicacion")}
-              </motion.div>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {comunicacionItems.length > 0 && (
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-[10.5px] font-semibold tracking-wider uppercase text-muted-foreground/80">
+              Comunicación
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <motion.div
+                  className="flex w-full min-w-0 flex-col gap-1"
+                  variants={listVariants}
+                  initial={reduceMotion ? false : "hidden"}
+                  animate="show"
+                >
+                  {renderItems(comunicacionItems, "comunicacion")}
+                </motion.div>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
         <SidebarGroup>
           <SidebarGroupLabel className="text-[10.5px] font-semibold tracking-wider uppercase text-muted-foreground/80">

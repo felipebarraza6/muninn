@@ -166,8 +166,7 @@ export function CreatePlanDialog({
               </SelectContent>
             </Select>
             <p className="text-[11px] text-muted-foreground">
-              Ejemplos reales: Agenda Clínica WM (Dentidesk) o Ops SmartHydro. Si no ves el tuyo,
-              cambia de sucursal.
+              Plantillas de ejemplo para cualquier sucursal. Si no aplica, parte en blanco.
             </p>
           </div>
 

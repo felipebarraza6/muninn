@@ -108,6 +108,16 @@ export function LoginForm({
           "Entrar"
         )}
       </Button>
+      <p className="text-center text-[11px] leading-relaxed text-muted-foreground">
+        <Link to="/terminos" className="underline underline-offset-2">
+          Términos
+        </Link>
+        {" · "}
+        <Link to="/privacidad" className="underline underline-offset-2">
+          Privacidad
+        </Link>
+        <span className="block pt-1">Borrador para revisión legal.</span>
+      </p>
     </form>
   );
 }

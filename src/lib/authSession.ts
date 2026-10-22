@@ -1,16 +1,38 @@
 import type { BranchAssignment, User } from "@/api/hooks/useAuth";
+import { getAuthMode } from "@/lib/authMode";
 
 const TOKEN_KEY = "token";
 const USER_KEY = "user";
 const BRANCHES_KEY = "branches";
 const PERMISSIONS_KEY = "permissions";
 
+/** El token de DRF no se persiste. En modo token vive solo en esta pestaña. */
+let memoryToken: string | null = null;
+let legacyChecked = false;
+
+function consumeLegacyToken(): void {
+  if (legacyChecked || typeof window === "undefined") return;
+  legacyChecked = true;
+  try {
+    const legacy = localStorage.getItem(TOKEN_KEY);
+    // Una sola vez: si había un token viejo, sigue esta pestaña y se borra del disco.
+    if (getAuthMode() === "token" && legacy && !memoryToken) {
+      memoryToken = legacy;
+    }
+    localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    memoryToken = getAuthMode() === "token" ? memoryToken : null;
+  }
+}
+
 export function getToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem(TOKEN_KEY);
+  consumeLegacyToken();
+  if (getAuthMode() !== "token") return null;
+  return memoryToken;
 }
 
 export function isAuthenticated(): boolean {
+  if (getAuthMode() === "cookie") return Boolean(getStoredUser());
   return Boolean(getToken());
 }
 
@@ -54,12 +76,19 @@ export function getStoredPermissions(): Record<string, unknown> | null {
 }
 
 export function persistSession(payload: {
-  token: string;
+  token?: string | null;
   user: User;
   branches?: BranchAssignment[];
   permissions?: Record<string, unknown>;
 }): void {
-  localStorage.setItem(TOKEN_KEY, payload.token);
+  consumeLegacyToken();
+  const token = typeof payload.token === "string" ? payload.token.trim() : "";
+  memoryToken = getAuthMode() === "token" && token ? token : null;
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* storage bloqueado */
+  }
   localStorage.setItem(USER_KEY, JSON.stringify(payload.user));
   const branches = payload.branches ?? payload.user.branch_assignments ?? [];
   localStorage.setItem(BRANCHES_KEY, JSON.stringify(branches));
@@ -69,8 +98,19 @@ export function persistSession(payload: {
 }
 
 export function clearSession(): void {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(USER_KEY);
-  localStorage.removeItem(BRANCHES_KEY);
-  localStorage.removeItem(PERMISSIONS_KEY);
+  memoryToken = null;
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
+    localStorage.removeItem(BRANCHES_KEY);
+    localStorage.removeItem(PERMISSIONS_KEY);
+  } catch {
+    /* storage bloqueado */
+  }
+}
+
+/** Solo tests: vuelve a leer un token legado. */
+export function resetAuthSessionStateForTests(): void {
+  memoryToken = null;
+  legacyChecked = false;
 }

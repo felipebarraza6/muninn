@@ -2,7 +2,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { POST, GET, PATCH, apiClient } from "../client";
 import { ENDPOINTS } from "../endpoints/index";
 import { setActiveBranchId, syncBranchId } from "@/lib/branchStorage";
+import { getAuthMode } from "@/lib/authMode";
 import { clearSession, persistSession, updateStoredUser } from "@/lib/authSession";
+import { rememberCsrfToken } from "@/lib/csrf";
 import {
   clearLoginPortalContext,
   getLoginPortalContext,
@@ -77,6 +79,8 @@ export interface LoginCompleteResponse {
   owned_organizations?: OwnedOrganization[];
   permissions: AuthPermissions;
   token: string;
+  /** Presente cuando el backend entrega el CSRF para la cookie de sesión. */
+  csrf_token?: string;
   message?: string;
 }
 
@@ -152,10 +156,15 @@ export function selectDefaultBranch(user: User, branches: BranchAssignment[]) {
 
 export function useLogin() {
   return useMutation({
-    mutationFn: (credentials: LoginCredentials) => {
+    mutationFn: async (credentials: LoginCredentials) => {
       // Limpiar sesión local antes del login para no reutilizar token viejo.
       clearSession();
-      return POST<LoginCompleteResponse>(ENDPOINTS.auth.login, credentials);
+      const data = await POST<LoginCompleteResponse>(ENDPOINTS.auth.login, credentials);
+      // En modo cookie el secreto vive en la cookie HttpOnly. No lo dejes en la caché de react-query.
+      if (getAuthMode() === "cookie") {
+        return { ...data, token: "" };
+      }
+      return data;
     },
     onSuccess: (data) => {
       const raw = data.branches ?? data.user.branch_assignments ?? [];
@@ -169,6 +178,7 @@ export function useLogin() {
           role_name: anyB.role_name || b.role_display,
         };
       });
+      rememberCsrfToken(data.csrf_token);
       persistSession({
         token: data.token,
         user: {

@@ -33,7 +33,7 @@ import { AdminMotionItem, AdminPageMotion } from "@/components/admin/AdminPageMo
 import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
 import { SummaryKpiGrid, type SummaryKpi } from "@/components/dashboard/summary-kpi-grid";
 import { OpsHealthCard } from "@/components/dashboard/ops-health-card";
-import { canAccessSkills } from "@/lib/authGuards";
+import { canAccessChannels, canAccessSkills } from "@/lib/authGuards";
 import { cn } from "@/lib/utils";
 import { ErrorBanner } from "@/components/ui/error-banner";
 import { apiErrorMessage } from "@/lib/apiError";
@@ -165,9 +165,14 @@ function resolveWidgetStyle(source: string, key: string): WidgetStyle {
 /** Resumen operativo de negocio/sucursal — config-driven por flow_policy. */
 export function BusinessHome() {
   const showSkills = canAccessSkills();
+  const showChannels = canAccessChannels();
 
   const { data: agents = [], isLoading: agentsLoading, error: agentsError } = useAgents();
-  const { data: channels = [], isLoading: channelsLoading, error: channelsError } = useChannels();
+  const {
+    data: channels = [],
+    isLoading: channelsLoading,
+    error: channelsError,
+  } = useChannels({ enabled: showChannels });
   const { data: apis = [], isLoading: apisLoading, error: apisError } = useExternalAPIs();
   const {
     data: functions = [],
@@ -182,7 +187,7 @@ export function BusinessHome() {
 
   const isLoading =
     agentsLoading ||
-    channelsLoading ||
+    (showChannels && channelsLoading) ||
     apisLoading ||
     (showSkills && functionsLoading) ||
     widgetsLoading;
@@ -201,14 +206,18 @@ export function BusinessHome() {
       href: "/agentes",
       tone: "primary",
     },
-    {
-      key: "channels",
-      label: "Canales",
-      count: activeChannels,
-      icon: Share2,
-      href: "/canales",
-      tone: "success",
-    },
+    ...(showChannels
+      ? [
+          {
+            key: "channels",
+            label: "Canales",
+            count: activeChannels,
+            icon: Share2,
+            href: "/canales",
+            tone: "success" as const,
+          },
+        ]
+      : []),
     {
       key: "apis",
       label: "Aplicaciones",
@@ -234,7 +243,12 @@ export function BusinessHome() {
   const kpiCols =
     summaryItems.length >= 4 ? "grid-cols-2 md:grid-cols-4" : "grid-cols-2 md:grid-cols-3";
 
-  const firstError = agentsError || channelsError || apisError || functionsError || widgetsError;
+  const firstError =
+    agentsError ||
+    (showChannels ? channelsError : null) ||
+    apisError ||
+    functionsError ||
+    widgetsError;
 
   if (isLoading) {
     return <PageSkeleton variant="dashboard" />;
@@ -315,7 +329,9 @@ export function BusinessHome() {
                   tone="primary"
                 />
                 <QuickLink href="/app/agentes" icon={Bot} label="Agentes" tone="success" />
-                <QuickLink href="/app/canales" icon={Share2} label="Canales" tone="info" />
+                {showChannels && (
+                  <QuickLink href="/app/canales" icon={Share2} label="Canales" tone="info" />
+                )}
                 {showSkills && (
                   <QuickLink href="/app/skills" icon={Sparkles} label="Skills" tone="warning" />
                 )}
