@@ -166,7 +166,7 @@ export default defineConfig(({ mode }) => {
       globals: true,
       environment: "jsdom",
       setupFiles: "./src/test-setup.ts",
-      include: ["src/**/*.test.{ts,tsx}"],
+      include: ["src/**/*.test.{ts,tsx}", ".github/scripts/**/*.test.ts"],
     },
   };
 });

@@ -54,6 +54,7 @@ src/
 
 - `main`: trabajo diario. PR/push corren lint, typecheck, tests y build. El push despliega **staging** a GitHub Pages (environment `staging`).
 - `production`: releases. Push (o tag `v*`) despliega los tres FTP (environment `production`).
+- Si el CI o un deploy falla en `main`/`production`, `CI status issues` abre (o comenta) un issue `ci-failure` + label de entorno; lo cierra cuando vuelve a verde.
 
 Promover:
 

@@ -165,6 +165,16 @@ El build de staging usa `VITE_BASE_PATH=/muninn/` (nombre del repo), copia `404.
 
 Dependabot actualiza `npm` y `github-actions` semanalmente.
 
+### Issues automáticos si falla el CI o un deploy
+
+El workflow `CI status issues` (`.github/workflows/ci-status-issues.yml`) escucha `workflow_run` del workflow `CI` en pushes a `main` y `production` (permiso `issues: write`, `actions/github-script`).
+
+- **Fallo:** abre un issue con labels `ci-failure` y el entorno (`staging` en `main`, `production` en `production`). El cuerpo incluye el link a la ejecución, el commit y los jobs fallidos.
+- **Mismo workflow + rama con un issue ya abierto:** comenta en ese issue (no duplica).
+- **Vuelve a verde:** comenta y cierra el issue.
+
+Los labels se crean solos si no existen. Este workflow corre desde la rama por defecto (`main`); hay que mergear este cambio para que empiece a actuar.
+
 ## Deploy local
 
 ```bash
