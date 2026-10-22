@@ -391,6 +391,17 @@ function enabledAppCodes(): string[] | null {
   return raw.map((item) => String(item));
 }
 
+/** Facturación de la organización: superadmin, organizador o OWNER de sucursal. */
+export function canSeeBilling(): boolean {
+  if (!getStoredUser()) return false;
+  return isSuperAdmin() || isOrganizationOwner() || isBranchOwner();
+}
+
+/** Comprar packs de runas: quien administra la facturación. */
+export function canPurchaseRunes(): boolean {
+  return canSeeBilling();
+}
+
 /**
  * Ver la sección Canales.
  * - Superadmin y organizador: sí

@@ -41,6 +41,8 @@ import Login from "./routes/login";
 import Entrar from "./routes/entrar";
 import Terminos from "./routes/terminos";
 import Privacidad from "./routes/privacidad";
+import Registro from "./routes/registro";
+import RegistroVerificar from "./routes/registro.verificar";
 
 const Dashboard = lazy(() => import("./routes/index"));
 const Conversaciones = lazy(() => import("./routes/conversaciones"));
@@ -71,6 +73,7 @@ const AdminOrganizacionesPage = lazy(() => import("./routes/admin.organizaciones
 const AdminSucursalesPage = lazy(() => import("./routes/admin.sucursales"));
 const AdminUsuariosPage = lazy(() => import("./routes/admin.usuarios"));
 const PerfilPage = lazy(() => import("./routes/perfil"));
+const FacturacionPage = lazy(() => import("./routes/facturacion"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -310,6 +313,7 @@ function AnimatedOutlet() {
           <Route path="/funciones/:id" element={<FunctionDetailRedirect />} />
           <Route path="/configuracion" element={<Navigate to="/app/perfil" replace />} />
           <Route path="/perfil" element={<PerfilPage />} />
+          <Route path="/facturacion" element={<FacturacionPage />} />
           <Route
             path="/admin/organizaciones"
             element={
@@ -452,6 +456,15 @@ function AppRoutes() {
         <Route path="/embed/chat/:id" element={<EmbedChat />} />
         <Route path="/terminos" element={<Terminos />} />
         <Route path="/privacidad" element={<Privacidad />} />
+        <Route
+          path="/registro"
+          element={
+            <RedirectIfAuthenticated>
+              <Registro />
+            </RedirectIfAuthenticated>
+          }
+        />
+        <Route path="/registro/verificar" element={<RegistroVerificar />} />
         <Route element={<RequireAuth />}>
           <Route element={<RootLayout />}>
             <Route path="/app/*" element={<AnimatedOutlet />} />

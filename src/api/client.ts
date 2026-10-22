@@ -28,6 +28,8 @@ function isPublicApiUrl(url: string): boolean {
     url.includes("/accounts/users/login_complete") ||
     url.includes("/accounts/users/forgot_password") ||
     url.includes("/accounts/users/reset_password_confirm") ||
+    url.includes("/accounts/users/muninn_signup") ||
+    url.includes("/accounts/users/muninn_verify_email") ||
     url.includes("/ai-agents/public/") ||
     url.includes("/branches/public-login-theme") ||
     url.includes("/branches/public-org-login-theme")
@@ -39,6 +41,8 @@ function isPublicAppPath(pathname: string): boolean {
   if (pathname === "/login" || pathname.startsWith("/login/")) return true;
   if (pathname === "/entrar") return true;
   if (pathname.startsWith("/forgot-password")) return true;
+  if (pathname === "/registro" || pathname.startsWith("/registro/")) return true;
+  if (pathname === "/" || pathname === "/terminos" || pathname === "/privacidad") return true;
   if (pathname.startsWith("/reset-password")) return true;
   if (pathname.startsWith("/embed/")) return true;
   return false;

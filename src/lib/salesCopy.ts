@@ -78,22 +78,25 @@ export const SALES_INTEGRATIONS = [
 
 export const SALES_PLANS = [
   {
-    name: "Piloto",
-    line: "Un agente y un canal para probar con tu equipo, con reglas y documentos acotados.",
-    cta: "Pedir demo" as const,
-    subject: "Demo Muninn",
+    name: "Cuenta",
+    price: "Gratis",
+    line: "Creas la organización y verificas el correo. No pedimos tarjeta para entrar.",
+    cta: "Crear cuenta gratis",
+    to: "/registro",
   },
   {
-    name: "Operación",
-    line: "Varios agentes y canales, conocimiento y bandeja para el equipo que atiende.",
-    cta: "Cotizar" as const,
-    subject: "Cotización Muninn",
+    name: "Agente activo",
+    price: "0,5 UF / mes",
+    line: "Cada agente que dejas encendido. Si lo pausas, ese mes no entra en la cuenta.",
+    cta: "Crear cuenta gratis",
+    to: "/registro",
   },
   {
-    name: "A medida",
-    line: "El alcance anterior más las aplicaciones que sí necesitas (Nubox, una API de gobierno u otra API tuya).",
-    cta: "Cotizar" as const,
-    subject: "Cotización Muninn a medida",
+    name: "Runas ᚱ",
+    price: "Prepago",
+    line: "El uso de IA se descuenta del saldo: el costo real de cada llamada más un 20 %. Los packs se pagan en Flow. En cero, la IA se detiene.",
+    cta: "Cómo se cobran",
+    to: "#runas",
   },
 ] as const;
 
@@ -104,11 +107,15 @@ export const SALES_FAQ = [
   },
   {
     q: "¿Puedo probar un agente en esta página?",
-    a: "No. El ejemplo de conversación de más abajo es ilustrativo. Para ver un agente real, pide una demo.",
+    a: "No. El ejemplo de conversación es ilustrativo. Crea una cuenta para configurar el tuyo.",
   },
   {
-    q: "¿Hay precios públicos o pago en línea?",
-    a: "No. Los planes se cotizan. Todavía no hay checkout.",
+    q: "¿Cuánto cuesta?",
+    a: "La cuenta es gratis. Cada agente activo cuesta 0,5 UF al mes. El uso de IA se paga aparte, con runas prepagadas: el costo real de la llamada más un 20 %. No hay cobro automático de runas.",
+  },
+  {
+    q: "¿Qué es una runa?",
+    a: "Es el saldo con el que pagas el modelo de IA. Compras un pack por Flow y Muninn descuenta runas según el consumo. Si el saldo llega a cero, el agente deja de llamar al modelo hasta que compres otro pack.",
   },
   {
     q: "¿WhatsApp, Nubox o las APIs de gobierno vienen incluidas?",

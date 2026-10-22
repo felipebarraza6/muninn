@@ -35,8 +35,8 @@ export default function PrivacidadPage() {
       <h2 className="pt-2 font-display text-lg font-semibold">Para qué</h2>
       <p>
         Para prestar el servicio, autenticar a quien entra, operar los agentes, dar soporte y
-        proteger la plataforma. No vendemos bases de datos. No hay pago en línea en este sitio, así
-        que no pedimos tarjetas aquí.
+        proteger la plataforma. No vendemos bases de datos. La compra de runas se procesa en Flow:
+        Muninn guarda el saldo y el historial, no el número de tarjeta.
       </p>
       <h2 className="pt-2 font-display text-lg font-semibold">Encargados y transferencias</h2>
       <p>

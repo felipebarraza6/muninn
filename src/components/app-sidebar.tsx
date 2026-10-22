@@ -14,6 +14,7 @@ import {
   Network,
   Users,
   ClipboardList,
+  Coins,
   GitBranch,
   SquareArrowOutUpRight,
 } from "lucide-react";
@@ -48,6 +49,7 @@ import {
   canAccessConversations,
   canAccessChannels,
   canAccessSkills,
+  canSeeBilling,
 } from "@/lib/authGuards";
 
 type IconComponent = React.ComponentType<{ className?: string; strokeWidth?: number }>;
@@ -206,6 +208,7 @@ export function AppSidebar() {
   const studioItems = buildStudioItems();
   const opsItems = buildOpsItems();
   const comunicacionItems = buildComunicacionItems();
+  const showBilling = canSeeBilling();
   const reduceMotion = useReducedMotion();
 
   const isActive = (url: string, exact?: boolean) =>
@@ -363,6 +366,29 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {showBilling && (
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-[10.5px] font-semibold tracking-wider uppercase text-muted-foreground/80">
+              Cuenta
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <motion.div
+                  className="flex w-full min-w-0 flex-col gap-1"
+                  variants={listVariants}
+                  initial={reduceMotion ? false : "hidden"}
+                  animate="show"
+                >
+                  {renderItems(
+                    [{ title: "Facturación", url: `${APP}/facturacion`, icon: Coins }],
+                    "cuenta",
+                  )}
+                </motion.div>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
         {opsItems.length > 0 && (
           <SidebarGroup>
