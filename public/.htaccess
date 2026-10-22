@@ -65,6 +65,10 @@
     SetEnvIf Request_URI "^/embed/" ALLOW_FRAME
     Header always set X-Frame-Options "DENY" env=!ALLOW_FRAME
     Header always set Content-Security-Policy "frame-ancestors *" env=ALLOW_FRAME
+    # Tras el rewrite SPA a index.html la variable pasa a llamarse REDIRECT_ALLOW_FRAME
+    # y el DENY se volvía a aplicar (iframe bloqueado). Quitarlo también en ese caso.
+    Header always unset X-Frame-Options env=REDIRECT_ALLOW_FRAME
+    Header always set Content-Security-Policy "frame-ancestors *" env=REDIRECT_ALLOW_FRAME
 
     # HTTPS forzado (HSTS) — activar solo cuando todo funcione con SSL
     # Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
