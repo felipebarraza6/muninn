@@ -54,7 +54,7 @@ export function OpsHealthCard() {
 
   const checks: CheckItem[] = [
     {
-      ok: Boolean(onboarding.has_llm_provider),
+      ok: Boolean(onboarding.has_llm_provider ?? onboarding.has_provider),
       label: "IA conectada",
       doneLabel: "IA conectada",
       icon: Sparkles,

@@ -1,2 +1,13 @@
 /// <reference types="vite/client" />
 /// <reference types="vite-plugin-pwa/client" />
+
+interface ImportMetaEnv {
+  readonly VITE_API_URL?: string;
+  readonly VITE_APP_ENV?: string;
+  readonly VITE_BASE_PATH?: string;
+  readonly VITE_WIDGET_BASE_URL?: string;
+  readonly VITE_REALTIME_URL?: string;
+  readonly VITE_DEV_API_PROXY?: string;
+  readonly VITE_PWA_NAME?: string;
+  readonly VITE_PWA_THEME_COLOR?: string;
+}

@@ -996,44 +996,40 @@ export default function ConocimientoDatos() {
                         : `Celda ${ctxTargetRef.current.r + 1}, ${columns[ctxTargetRef.current.c] || "…"}`}
                     </ContextMenuLabel>
                     <ContextMenuItem
-                      onClick={() =>
+                      onClick={() => {
+                        const t = ctxTargetRef.current;
+                        if (t?.kind !== "cell") return;
                         void copyRange(
-                          cellRange &&
-                            isInRange(ctxTargetRef.current.r, ctxTargetRef.current.c, cellRange)
+                          cellRange && isInRange(t.r, t.c, cellRange)
                             ? cellRange
-                            : {
-                                r0: ctxTargetRef.current.r,
-                                c0: ctxTargetRef.current.c,
-                                r1: ctxTargetRef.current.r,
-                                c1: ctxTargetRef.current.c,
-                              },
-                        )
-                      }
+                            : { r0: t.r, c0: t.c, r1: t.r, c1: t.c },
+                        );
+                      }}
                     >
                       <Copy className="h-3.5 w-3.5 mr-2" />
                       Copiar
                       <ContextMenuShortcut>⌘C</ContextMenuShortcut>
                     </ContextMenuItem>
                     <ContextMenuItem
-                      onClick={() => pasteCell(ctxTargetRef.current.r, ctxTargetRef.current.c)}
+                      onClick={() => {
+                        const t = ctxTargetRef.current;
+                        if (t?.kind !== "cell") return;
+                        pasteCell(t.r, t.c);
+                      }}
                     >
                       <ClipboardPaste className="h-3.5 w-3.5 mr-2" />
                       Pegar
                     </ContextMenuItem>
                     <ContextMenuItem
-                      onClick={() =>
+                      onClick={() => {
+                        const t = ctxTargetRef.current;
+                        if (t?.kind !== "cell") return;
                         clearRange(
-                          cellRange &&
-                            isInRange(ctxTargetRef.current.r, ctxTargetRef.current.c, cellRange)
+                          cellRange && isInRange(t.r, t.c, cellRange)
                             ? cellRange
-                            : {
-                                r0: ctxTargetRef.current.r,
-                                c0: ctxTargetRef.current.c,
-                                r1: ctxTargetRef.current.r,
-                                c1: ctxTargetRef.current.c,
-                              },
-                        )
-                      }
+                            : { r0: t.r, c0: t.c, r1: t.r, c1: t.c },
+                        );
+                      }}
                     >
                       Limpiar
                     </ContextMenuItem>
@@ -1046,20 +1042,32 @@ export default function ConocimientoDatos() {
                   <>
                     <ContextMenuLabel className="text-xs">Fila</ContextMenuLabel>
                     <ContextMenuItem
-                      onClick={() => insertRowRelative(ctxTargetRef.current.r, "above")}
+                      onClick={() => {
+                        const t = ctxTargetRef.current;
+                        if (t?.kind !== "cell" && t?.kind !== "row") return;
+                        insertRowRelative(t.r, "above");
+                      }}
                     >
                       <Rows3 className="h-3.5 w-3.5 mr-2" />
                       Insertar fila arriba
                     </ContextMenuItem>
                     <ContextMenuItem
-                      onClick={() => insertRowRelative(ctxTargetRef.current.r, "below")}
+                      onClick={() => {
+                        const t = ctxTargetRef.current;
+                        if (t?.kind !== "cell" && t?.kind !== "row") return;
+                        insertRowRelative(t.r, "below");
+                      }}
                     >
                       <Rows3 className="h-3.5 w-3.5 mr-2" />
                       Insertar fila abajo
                     </ContextMenuItem>
                     <ContextMenuItem
                       className="text-destructive focus:text-destructive"
-                      onClick={() => deleteRow(ctxTargetRef.current.r)}
+                      onClick={() => {
+                        const t = ctxTargetRef.current;
+                        if (t?.kind !== "cell" && t?.kind !== "row") return;
+                        deleteRow(t.r);
+                      }}
                     >
                       <Trash2 className="h-3.5 w-3.5 mr-2" />
                       Eliminar fila
@@ -1073,20 +1081,32 @@ export default function ConocimientoDatos() {
                   <>
                     <ContextMenuLabel className="text-xs">Columna</ContextMenuLabel>
                     <ContextMenuItem
-                      onClick={() => insertColumnRelative(ctxTargetRef.current.c, "left")}
+                      onClick={() => {
+                        const t = ctxTargetRef.current;
+                        if (t?.kind !== "cell" && t?.kind !== "header") return;
+                        insertColumnRelative(t.c, "left");
+                      }}
                     >
                       <Columns3 className="h-3.5 w-3.5 mr-2" />
                       Insertar columna a la izquierda
                     </ContextMenuItem>
                     <ContextMenuItem
-                      onClick={() => insertColumnRelative(ctxTargetRef.current.c, "right")}
+                      onClick={() => {
+                        const t = ctxTargetRef.current;
+                        if (t?.kind !== "cell" && t?.kind !== "header") return;
+                        insertColumnRelative(t.c, "right");
+                      }}
                     >
                       <Columns3 className="h-3.5 w-3.5 mr-2" />
                       Insertar columna a la derecha
                     </ContextMenuItem>
                     <ContextMenuItem
                       className="text-destructive focus:text-destructive"
-                      onClick={() => removeColumnAt(ctxTargetRef.current.c)}
+                      onClick={() => {
+                        const t = ctxTargetRef.current;
+                        if (t?.kind !== "cell" && t?.kind !== "header") return;
+                        removeColumnAt(t.c);
+                      }}
                     >
                       <Trash2 className="h-3.5 w-3.5 mr-2" />
                       Eliminar columna
@@ -1095,7 +1115,13 @@ export default function ConocimientoDatos() {
                 )}
 
                 {ctxTargetRef.current?.kind === "row" && (
-                  <ContextMenuItem onClick={() => toggleRow(ctxTargetRef.current.r)}>
+                  <ContextMenuItem
+                    onClick={() => {
+                      const t = ctxTargetRef.current;
+                      if (t?.kind !== "row") return;
+                      toggleRow(t.r);
+                    }}
+                  >
                     {selected.has(ctxTargetRef.current.r)
                       ? "Quitar de selección"
                       : "Incluir en selección"}
