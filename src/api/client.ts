@@ -2,6 +2,7 @@ import axios, { AxiosError, type AxiosRequestConfig, type InternalAxiosRequestCo
 import { getActiveBranchId, getBranchMode } from "@/lib/branchStorage";
 import { resolveApiBaseUrl } from "@/lib/apiBaseUrl";
 import { getAuthMode } from "@/lib/authMode";
+import { isPublicAppPath, resolveEntrarHref } from "@/lib/authRedirect";
 import { clearSession, getToken } from "@/lib/authSession";
 import { csrfHeaderRecord, rememberCsrfFromHeaders, rememberCsrfToken } from "@/lib/csrf";
 
@@ -34,18 +35,6 @@ function isPublicApiUrl(url: string): boolean {
     url.includes("/branches/public-login-theme") ||
     url.includes("/branches/public-org-login-theme")
   );
-}
-
-/** Páginas del frontend donde un 401 no debe forzar redirect a /entrar. */
-function isPublicAppPath(pathname: string): boolean {
-  if (pathname === "/login" || pathname.startsWith("/login/")) return true;
-  if (pathname === "/entrar") return true;
-  if (pathname.startsWith("/forgot-password")) return true;
-  if (pathname === "/registro" || pathname.startsWith("/registro/")) return true;
-  if (pathname === "/" || pathname === "/terminos" || pathname === "/privacidad") return true;
-  if (pathname.startsWith("/reset-password")) return true;
-  if (pathname.startsWith("/embed/")) return true;
-  return false;
 }
 
 function extractValidationErrors(data: unknown): string[] {
@@ -151,11 +140,12 @@ apiClient.interceptors.response.use(
     rememberCsrfFromHeaders(error.response?.headers);
 
     if (status === 401 && !isPublicApi) {
+      // Sesión inválida: no dejar user en localStorage sin credencial (UI a medias).
       clearSession();
       localStorage.removeItem("activeBranchId");
       sessionStorage.removeItem("activeBranchId");
       if (!isPublicAppPath(window.location.pathname)) {
-        window.location.href = "/entrar";
+        window.location.href = resolveEntrarHref();
       }
     }
 

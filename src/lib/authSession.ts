@@ -6,29 +6,22 @@ const USER_KEY = "user";
 const BRANCHES_KEY = "branches";
 const PERMISSIONS_KEY = "permissions";
 
-/** El token de DRF no se persiste. En modo token vive solo en esta pestaña. */
-let memoryToken: string | null = null;
-let legacyChecked = false;
-
-function consumeLegacyToken(): void {
-  if (legacyChecked || typeof window === "undefined") return;
-  legacyChecked = true;
-  try {
-    const legacy = localStorage.getItem(TOKEN_KEY);
-    // Una sola vez: si había un token viejo, sigue esta pestaña y se borra del disco.
-    if (getAuthMode() === "token" && legacy && !memoryToken) {
-      memoryToken = legacy;
-    }
-    localStorage.removeItem(TOKEN_KEY);
-  } catch {
-    memoryToken = getAuthMode() === "token" ? memoryToken : null;
-  }
-}
-
+/**
+ * En modo token el DRF token se guarda en localStorage (como antes) para que
+ * recargar o abrir otra pestaña no deje al usuario en localStorage sin credencial.
+ *
+ * TODO: cuando VITE_AUTH_MODE=cookie sea el default en staging/prod (cookie HttpOnly
+ * del backend desplegada), eliminar por completo la persistencia de TOKEN_KEY y
+ * dejar solo user/branches/permissions en disco.
+ */
 export function getToken(): string | null {
-  consumeLegacyToken();
+  if (typeof window === "undefined") return null;
   if (getAuthMode() !== "token") return null;
-  return memoryToken;
+  try {
+    return localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
 }
 
 export function isAuthenticated(): boolean {
@@ -81,11 +74,14 @@ export function persistSession(payload: {
   branches?: BranchAssignment[];
   permissions?: Record<string, unknown>;
 }): void {
-  consumeLegacyToken();
   const token = typeof payload.token === "string" ? payload.token.trim() : "";
-  memoryToken = getAuthMode() === "token" && token ? token : null;
   try {
-    localStorage.removeItem(TOKEN_KEY);
+    // TODO: al pasar a cookie-only, no escribir TOKEN_KEY (solo clear).
+    if (getAuthMode() === "token" && token) {
+      localStorage.setItem(TOKEN_KEY, token);
+    } else {
+      localStorage.removeItem(TOKEN_KEY);
+    }
   } catch {
     /* storage bloqueado */
   }
@@ -98,7 +94,6 @@ export function persistSession(payload: {
 }
 
 export function clearSession(): void {
-  memoryToken = null;
   try {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
@@ -109,8 +104,7 @@ export function clearSession(): void {
   }
 }
 
-/** Solo tests: vuelve a leer un token legado. */
+/** Solo tests: no hay estado en memoria que resetear; se mantiene por compat. */
 export function resetAuthSessionStateForTests(): void {
-  memoryToken = null;
-  legacyChecked = false;
+  /* token mode: fuente de verdad es localStorage (limpiar en beforeEach). */
 }

@@ -27,7 +27,7 @@ Desplegado como aplicación estática. Compila a `dist/` listo para FTP u otro h
 - Historial de conversaciones internas con archivado/restauración.
 - Dashboard de agentes, conversaciones y canales.
 - Sidebar responsive y experiencia mobile cuidada.
-- Login con `Authorization: Token …` en memoria (`VITE_AUTH_MODE=token`, default) o cookie HttpOnly + CSRF (`VITE_AUTH_MODE=cookie`). El token no se guarda en `localStorage`.
+- Login con `Authorization: Token …` en localStorage (`VITE_AUTH_MODE=token`, default) o cookie HttpOnly + CSRF (`VITE_AUTH_MODE=cookie`). Al activar cookie se elimina la persistencia del token.
 
 ## Requisitos
 

@@ -1,6 +1,7 @@
 import { getActiveBranchId, getBranchMode } from "@/lib/branchStorage";
 import { getAuthMode } from "@/lib/authMode";
-import { getToken } from "@/lib/authSession";
+import { isPublicAppPath, resolveEntrarHref } from "@/lib/authRedirect";
+import { clearSession, getToken } from "@/lib/authSession";
 import { csrfHeaderRecord } from "@/lib/csrf";
 import { ENDPOINTS } from "@/api/endpoints/index";
 import type { ChatMessageResponse } from "@/api/hooks/useConversations";
@@ -112,6 +113,14 @@ export async function streamConversationChat(
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      clearSession();
+      localStorage.removeItem("activeBranchId");
+      sessionStorage.removeItem("activeBranchId");
+      if (typeof window !== "undefined" && !isPublicAppPath(window.location.pathname)) {
+        window.location.href = resolveEntrarHref();
+      }
+    }
     let detail = `HTTP ${response.status}`;
     try {
       const errJson = (await response.json()) as { error?: string; detail?: string };

@@ -2,8 +2,8 @@ export type AuthMode = "cookie" | "token";
 
 /**
  * `cookie`: sesión HttpOnly + CSRF (cuando el backend ya está desplegado).
- * `token`: Authorization Token solo en memoria. Default, para no romper
- * producción antes de ese deploy.
+ * `token`: Authorization Token en localStorage. Default hasta que el backend
+ * de cookie esté en staging/prod (entonces se deja de persistir el token).
  */
 export function resolveAuthMode(raw: string | undefined | null): AuthMode {
   return String(raw ?? "")

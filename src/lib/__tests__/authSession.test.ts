@@ -32,33 +32,40 @@ describe("resolveAuthMode", () => {
   });
 });
 
-describe("auth session token memory", () => {
+describe("auth session token persistence (token mode)", () => {
   beforeEach(() => {
     localStorage.clear();
     resetAuthSessionStateForTests();
     resetCsrfForTests();
   });
 
-  it("keeps the token in memory and removes it from localStorage", () => {
+  it("persists the token in localStorage so reload keeps the session", () => {
     persistSession({ token: "secreto", user });
     expect(getToken()).toBe("secreto");
-    expect(localStorage.getItem("token")).toBeNull();
+    expect(localStorage.getItem("token")).toBe("secreto");
     expect(isAuthenticated()).toBe(true);
     expect(JSON.parse(localStorage.getItem("user") || "{}").email).toBe("ada@example.com");
   });
 
-  it("adopts a legacy localStorage token once and then deletes it", () => {
-    localStorage.setItem("token", "legado");
-    expect(getToken()).toBe("legado");
-    expect(localStorage.getItem("token")).toBeNull();
+  it("still authenticates after resetting in-memory state (simulates reload)", () => {
+    persistSession({ token: "sobrevive-reload", user });
     resetAuthSessionStateForTests();
-    expect(getToken()).toBeNull();
+    expect(getToken()).toBe("sobrevive-reload");
+    expect(isAuthenticated()).toBe(true);
   });
 
-  it("clears the memory token", () => {
+  it("reads an existing localStorage token without wiping it", () => {
+    localStorage.setItem("token", "legado");
+    expect(getToken()).toBe("legado");
+    expect(localStorage.getItem("token")).toBe("legado");
+  });
+
+  it("clears token and user from localStorage", () => {
     persistSession({ token: "secreto", user });
     clearSession();
     expect(getToken()).toBeNull();
+    expect(localStorage.getItem("token")).toBeNull();
+    expect(localStorage.getItem("user")).toBeNull();
     expect(isAuthenticated()).toBe(false);
   });
 });

@@ -107,5 +107,10 @@ describe("authGuards", () => {
       setBranches([{ branch_id: 1, role: "EMPLOYEE", is_active: true }]);
       expect(canSeeBilling()).toBe(false);
     });
+
+    it("shows billing to superadmin without branch ownership", () => {
+      setUser({ is_superuser: true });
+      expect(canSeeBilling()).toBe(true);
+    });
   });
 });
