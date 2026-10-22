@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { isMuninnOwnHost } from "@/lib/muninnHosts";
 import { motion } from "framer-motion";
 import { useLogin } from "@/api/hooks/useAuth";
 import { useResolvePublicLoginTheme } from "@/api/hooks/useBranchTheme";
@@ -113,6 +114,13 @@ export default function Login() {
       ease: motionTokens.easeOut,
     },
   };
+
+  // "/" en un host de Muninn es la landing comercial, aunque by-host
+  // responda una org para ese host. El login vive en /entrar.
+  const ownMuninnHost = typeof window !== "undefined" && isMuninnOwnHost(window.location.hostname);
+  if (!slug && ownMuninnHost) {
+    return <SalesLanding />;
+  }
 
   // Loading: nunca mostrar Muninn ni flash mientras se resuelve el tema.
   if (themeLoading) {

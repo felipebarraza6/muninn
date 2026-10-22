@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useLogin } from "@/api/hooks/useAuth";
+import { applyResolvedBranchTheme } from "@/lib/applyBranchTheme";
+import { MUNINN_DEFAULT_THEME } from "@/lib/branchThemeDefaults";
+import { clearLoginPortalContext } from "@/lib/loginContext";
 import { LoginAtmosphere } from "@/components/brand/LoginAtmosphere";
 import { PitchSwap } from "@/components/brand/LoginLandingPanel";
 import { LoginForm } from "@/components/auth/LoginForm";
@@ -26,6 +29,11 @@ export default function EntrarPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const login = useLogin();
+
+  useEffect(() => {
+    clearLoginPortalContext();
+    applyResolvedBranchTheme({ ...MUNINN_DEFAULT_THEME }, "Muninn", true);
+  }, []);
 
   useEffect(() => {
     if (reduceMotion) {

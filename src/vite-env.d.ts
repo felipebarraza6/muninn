@@ -12,6 +12,8 @@ interface ImportMetaEnv {
   readonly VITE_AUTH_MODE?: "cookie" | "token" | string;
   /** `mock` usa cifras de ejemplo. Vacío o `live` llama a la API. */
   readonly VITE_COMMERCIAL_API?: "mock" | "live" | string;
+  /** Hosts extra (coma) que usan la marca Muninn y no consultan by-host. */
+  readonly VITE_MUNINN_HOSTS?: string;
   readonly VITE_PWA_NAME?: string;
   readonly VITE_PWA_THEME_COLOR?: string;
 }
