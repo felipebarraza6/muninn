@@ -371,7 +371,8 @@ export function BusinessHome() {
                         ? "Mes"
                         : w.range;
                 const hasRevenue = w.revenue != null && w.revenue > 0;
-                const formattedRevenue = hasRevenue ? `$${formatNumber(w.revenue)}` : null;
+                const formattedRevenue =
+                  hasRevenue && w.revenue != null ? `$${formatNumber(w.revenue)}` : null;
                 return (
                   <div key={w.key} className="group relative">
                     <Card

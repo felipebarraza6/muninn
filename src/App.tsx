@@ -33,6 +33,7 @@ import { Button } from "./components/ui/button";
 import { EmptyState } from "./components/ui/empty-state";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { PwaUpdatePrompt } from "./components/PwaUpdatePrompt";
+import { StagingBanner } from "./components/StagingBanner";
 import { Toaster } from "./components/ui/sonner";
 import { RealtimeProvider } from "./lib/realtime";
 import { motionTokens } from "@/lib/motion";
@@ -478,6 +479,7 @@ export default function App() {
                 <AppRoutes />
                 <Toaster position="top-right" />
                 <PwaUpdatePrompt />
+                <StagingBanner />
               </RealtimeProvider>
             </BrowserRouter>
           </ErrorBoundary>

@@ -220,6 +220,7 @@ export interface AgentOpsOnboarding {
   has_api_key?: boolean;
   has_agents?: boolean;
   has_provider?: boolean;
+  has_llm_provider?: boolean;
   missing?: Record<string, unknown>;
   next_steps?: Array<{ code?: string; message?: string; path?: string }>;
 }

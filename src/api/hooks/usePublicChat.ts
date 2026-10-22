@@ -40,6 +40,12 @@ export interface PublicChannelConfig {
     id?: string | number;
     name?: string;
   };
+  agent_name?: string;
+  title?: string;
+  primary_color?: string;
+  logo_url?: string;
+  require_name?: boolean;
+  require_email?: boolean;
   welcome_message?: string;
   theme?: "light" | "dark";
 }
