@@ -1,6 +1,9 @@
 import axios, { AxiosError, type AxiosRequestConfig, type InternalAxiosRequestConfig } from "axios";
 import { getActiveBranchId, getBranchMode } from "@/lib/branchStorage";
 import { resolveApiBaseUrl } from "@/lib/apiBaseUrl";
+import { getAuthMode } from "@/lib/authMode";
+import { clearSession, getToken } from "@/lib/authSession";
+import { csrfHeaderRecord, rememberCsrfFromHeaders, rememberCsrfToken } from "@/lib/csrf";
 
 const API_BASE_URL = resolveApiBaseUrl();
 
@@ -91,13 +94,21 @@ apiClient.interceptors.request.use(
     const skipAuth = Boolean((config as ApiRequestConfig).skipAuth) || isPublicApiUrl(url);
 
     // No mandar Authorization en login/públicos: token viejo no debe interferir.
-    if (!skipAuth) {
-      const token = localStorage.getItem("token");
+    // Modo cookie: la sesión va en cookie HttpOnly (withCredentials). El token no se adjunta.
+    if (!skipAuth && getAuthMode() === "token") {
+      const token = getToken();
       if (token) {
         config.headers.Authorization = `Token ${token}`;
       }
     } else {
       delete config.headers.Authorization;
+    }
+
+    if (!skipAuth) {
+      const csrf = csrfHeaderRecord(config.method);
+      for (const [key, value] of Object.entries(csrf)) {
+        config.headers[key] = value;
+      }
     }
 
     const activeBranchId = getActiveBranchId();
@@ -119,17 +130,24 @@ apiClient.interceptors.request.use(
 );
 
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    rememberCsrfFromHeaders(response.headers);
+    const data = response.data;
+    if (data && typeof data === "object") {
+      const bag = data as { csrf_token?: unknown; csrfToken?: unknown };
+      if (typeof bag.csrf_token === "string") rememberCsrfToken(bag.csrf_token);
+      else if (typeof bag.csrfToken === "string") rememberCsrfToken(bag.csrfToken);
+    }
+    return response;
+  },
   async (error: AxiosError) => {
     const url = String(error.config?.url ?? "");
     const status = error.response?.status;
     const isPublicApi = isPublicApiUrl(url);
+    rememberCsrfFromHeaders(error.response?.headers);
 
     if (status === 401 && !isPublicApi) {
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
-      localStorage.removeItem("branches");
-      localStorage.removeItem("permissions");
+      clearSession();
       localStorage.removeItem("activeBranchId");
       sessionStorage.removeItem("activeBranchId");
       if (!isPublicAppPath(window.location.pathname)) {

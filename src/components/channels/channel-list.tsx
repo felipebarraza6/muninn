@@ -141,7 +141,9 @@ export function ChannelList() {
             <p className="text-sm text-muted-foreground">
               {q.trim()
                 ? "Sin canales para esa búsqueda."
-                : "No hay canales aún. Crea el primero para conectar un agente."}
+                : canManage
+                  ? "No hay canales aún. Crea el primero para conectar un agente."
+                  : "No hay canales visibles en esta sucursal."}
             </p>
             {!q.trim() && canManage && (
               <Button size="sm" className="mt-4" onClick={() => setCreating(true)}>

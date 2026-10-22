@@ -1034,8 +1034,8 @@ export default function FunctionDetailPage() {
                   {editingParamKey ? `Editar «${editingParamKey}»` : "Nuevo parámetro"}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Fecha se guarda como texto con el formato que elijas (útil para apps como
-                  Dentidesk).
+                  Fecha se guarda como texto con el formato que elijas (el que pida la app
+                  conectada).
                 </p>
                 <div className="grid gap-2 sm:grid-cols-2">
                   <div className="space-y-1">

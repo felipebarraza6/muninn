@@ -15,6 +15,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useOpsHealth } from "@/api/hooks/useAgents";
+import { canAccessChannels } from "@/lib/authGuards";
 import { cn } from "@/lib/utils";
 
 const CHANNEL_ICONS: Record<string, typeof Globe> = {
@@ -37,6 +38,7 @@ type CheckItem = {
 /** Resumen de salud operativa — enfoque en lo que el usuario necesita saber. */
 export function OpsHealthCard() {
   const { data, isLoading, isError } = useOpsHealth();
+  const showChannels = canAccessChannels();
 
   if (isLoading) {
     return (
@@ -136,7 +138,7 @@ export function OpsHealthCard() {
           ))}
         </ul>
 
-        {channels.length > 0 && (
+        {showChannels && channels.length > 0 && (
           <div className="rounded-xl border border-border/60 bg-muted/20 p-3 space-y-2.5">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               Canales conectados
@@ -169,9 +171,11 @@ export function OpsHealthCard() {
               Agentes <ArrowRight className="h-3.5 w-3.5 ml-1" />
             </Link>
           </Button>
-          <Button asChild size="sm" variant="ghost" className="h-8">
-            <Link to="/app/canales">Canales</Link>
-          </Button>
+          {showChannels && (
+            <Button asChild size="sm" variant="ghost" className="h-8">
+              <Link to="/app/canales">Canales</Link>
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>

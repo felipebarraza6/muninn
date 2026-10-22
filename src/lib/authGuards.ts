@@ -384,10 +384,31 @@ export function isAgentReadOnly(): boolean {
   return true;
 }
 
+function enabledAppCodes(): string[] | null {
+  const perms = getStoredPermissions();
+  const raw = perms?.enabled_apps;
+  if (!Array.isArray(raw)) return null;
+  return raw.map((item) => String(item));
+}
+
+/**
+ * Ver la sección Canales.
+ * - Superadmin y organizador: sí
+ * - OWNER y el resto: solo si el login trajo el módulo `ai_agents` en enabled_apps
+ * Sin esa lista, un OWNER no ve el ítem (no se asume acceso).
+ */
+export function canAccessChannels(): boolean {
+  if (!getStoredUser()) return false;
+  if (isSuperAdmin() || isOrganizationOwner()) return true;
+  const apps = enabledAppCodes();
+  if (!apps) return false;
+  return apps.includes("ai_agents");
+}
+
 /**
  * Crear / editar / desactivar canales.
  * - Superadmin y organizador: sí
- * - OWNER y ADMIN_LOCAL: solo lectura
+ * - OWNER y ADMIN_LOCAL: solo lectura (no gestionan)
  * - Empleado y roles operativos: solo lectura
  */
 export function canManageChannels(branchId?: string | number | null): boolean {

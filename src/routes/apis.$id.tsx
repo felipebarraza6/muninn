@@ -634,7 +634,7 @@ export default function APIDetailPage() {
                   <strong className="text-foreground font-medium">
                     Instalación → Conectar cuenta de servicio
                   </strong>{" "}
-                  en la sucursal instalada (ej. Smart Hydro).
+                  en la sucursal donde está instalada.
                 </span>
                 <Button size="sm" variant="outline" onClick={() => setTab("instalacion")}>
                   Ir a Instalación

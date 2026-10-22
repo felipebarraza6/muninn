@@ -567,8 +567,8 @@ export function ExternalApiTestPanel({ api, onExit }: ExternalApiTestPanelProps)
                     <div className="space-y-2">
                       <p className="text-[11px] text-muted-foreground">
                         Credenciales del login (obligatorias para endpoints protegidos). Se
-                        recuerdan en este navegador. Dentidesk: el token es de un solo uso — cada
-                        test hace login fresco.
+                        recuerdan en este navegador. Si el token es de un solo uso, cada test hace
+                        login fresco.
                       </p>
                       <div className="grid gap-2 sm:grid-cols-2">
                         {loginCredentialKeys.map((key) => (

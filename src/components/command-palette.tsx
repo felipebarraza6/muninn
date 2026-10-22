@@ -40,6 +40,7 @@ import { logout } from "@/api/hooks/useAuth";
 import {
   canAccessBranchesAdmin,
   canAccessConversations,
+  canAccessChannels,
   canAccessKnowledgeCatalog,
   canAccessLlmAdmin,
   canAccessSkills,
@@ -128,18 +129,20 @@ function buildPaletteGroups(): PaletteGroup[] {
       keywords: "inbox bandeja",
     });
   }
-  comunicacion.push({
-    id: "canales",
-    label: "Canales",
-    to: "/app/canales",
-    icon: Share2,
-    keywords: "whatsapp telegram",
-  });
+  if (canAccessChannels()) {
+    comunicacion.push({
+      id: "canales",
+      label: "Canales",
+      to: "/app/canales",
+      icon: Share2,
+      keywords: "whatsapp telegram",
+    });
+  }
 
-  const groups: PaletteGroup[] = [
-    { heading: "Studio", items: studio },
-    { heading: "Comunicación", items: comunicacion },
-  ];
+  const groups: PaletteGroup[] = [{ heading: "Studio", items: studio }];
+  if (comunicacion.length > 0) {
+    groups.push({ heading: "Comunicación", items: comunicacion });
+  }
 
   if (showAdmin) {
     groups.push({
