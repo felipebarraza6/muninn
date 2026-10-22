@@ -74,6 +74,9 @@ const AdminSucursalesPage = lazy(() => import("./routes/admin.sucursales"));
 const AdminUsuariosPage = lazy(() => import("./routes/admin.usuarios"));
 const PerfilPage = lazy(() => import("./routes/perfil"));
 const FacturacionPage = lazy(() => import("./routes/facturacion"));
+const TiendaAgentesPage = lazy(() => import("./routes/tienda.agentes"));
+const TiendaAgenteDetallePage = lazy(() => import("./routes/tienda.agentes.$slug"));
+const AdminTiendaPage = lazy(() => import("./routes/admin.tienda"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -347,6 +350,14 @@ function AnimatedOutlet() {
             }
           />
           <Route
+            path="/admin/tienda"
+            element={
+              <RequireSuperAdmin>
+                <AdminTiendaPage />
+              </RequireSuperAdmin>
+            }
+          />
+          <Route
             path="/conversaciones"
             element={
               <RequireConversations>
@@ -456,6 +467,9 @@ function AppRoutes() {
         <Route path="/embed/chat/:id" element={<EmbedChat />} />
         <Route path="/terminos" element={<Terminos />} />
         <Route path="/privacidad" element={<Privacidad />} />
+        {/* Tienda pública (antes de /:slug para no capturar "agentes" como org). */}
+        <Route path="/agentes" element={<TiendaAgentesPage />} />
+        <Route path="/agentes/:slug" element={<TiendaAgenteDetallePage />} />
         <Route
           path="/registro"
           element={

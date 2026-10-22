@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { useSignupAccount } from "@/api/hooks/useCommercial";
 import { CommercialAuthShell } from "@/components/auth/CommercialAuthShell";
@@ -9,8 +9,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiErrorMessage, apiErrorStatus } from "@/lib/apiError";
 import { isCommercialUnavailable } from "@/lib/commercial";
+import { resolveSafeNextPath, withNextParam } from "@/lib/safeNextPath";
 
 export default function RegistroPage() {
+  const [params] = useSearchParams();
+  const nextPath = resolveSafeNextPath(params.get("next"));
   const signup = useSignupAccount();
   const [organizationName, setOrganizationName] = useState("");
   const [firstName, setFirstName] = useState("");
@@ -88,8 +91,13 @@ export default function RegistroPage() {
             </p>
           )}
           <Button asChild variant="outline">
-            <Link to="/entrar">Ir a entrar</Link>
+            <Link to={withNextParam("/entrar", nextPath)}>Ir a entrar</Link>
           </Button>
+          {nextPath ? (
+            <p className="text-xs text-muted-foreground">
+              Después de verificar y entrar, te llevamos de vuelta a la ficha del agente.
+            </p>
+          ) : null}
         </div>
       </CommercialAuthShell>
     );
@@ -190,6 +198,12 @@ export default function RegistroPage() {
             "Crear cuenta gratis"
           )}
         </Button>
+        <p className="text-center text-sm text-muted-foreground">
+          ¿Ya tienes cuenta?{" "}
+          <Link to={withNextParam("/entrar", nextPath)} className="underline underline-offset-2">
+            Entrar
+          </Link>
+        </p>
       </form>
     </CommercialAuthShell>
   );

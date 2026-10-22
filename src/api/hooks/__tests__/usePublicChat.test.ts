@@ -49,11 +49,30 @@ describe("parsePublicAgentCatalog", () => {
     expect(
       parsePublicAgentCatalog({
         results: [
-          { id: "a1", name: "Recepción", description: "Saluda", channels: ["whatsapp"] },
+          {
+            id: "a1",
+            slug: "recepcion",
+            name: "Recepción",
+            tagline: "Saluda",
+            description: "Saluda en recepción",
+            category: "atencion_cliente",
+            category_label: "Atención al cliente",
+            ambito: "trabajo",
+            icon: "🎧",
+            version: "1",
+            visibility: "public",
+            author: "Muninn",
+            author_type: "platform",
+            clone_count: 2,
+            requires_professional_disclaimer: false,
+            recommended_channels: ["whatsapp"],
+            required_integrations: [],
+            suggested_skills: [],
+          },
           { id: "", name: "Sin id" },
         ],
       }),
-    ).toEqual([{ id: "a1", name: "Recepción", summary: "Saluda", channels: ["whatsapp"] }]);
+    ).toEqual([{ id: "recepcion", name: "Recepción", summary: "Saluda", channels: ["whatsapp"] }]);
   });
 });
 

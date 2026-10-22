@@ -27,6 +27,7 @@ export function isPublicAppPath(
   if (p.startsWith("/forgot-password")) return true;
   if (p === "/registro" || p.startsWith("/registro/")) return true;
   if (p === "/" || p === "/terminos" || p === "/privacidad") return true;
+  if (p === "/agentes" || p.startsWith("/agentes/")) return true;
   if (p.startsWith("/reset-password")) return true;
   if (p.startsWith("/embed/")) return true;
   return false;
