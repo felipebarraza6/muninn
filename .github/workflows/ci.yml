@@ -105,7 +105,7 @@ jobs:
         run: cp dist/index.html dist/404.html
 
       - name: Deploy via FTP
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
         with:
           server: ${{ secrets.FTP_HOST_AGENCIA }}
           username: ${{ secrets.FTP_USER_AGENCIA }}
@@ -140,7 +140,7 @@ jobs:
         run: cp dist/index.html dist/404.html
 
       - name: Deploy via FTP
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
         with:
           server: ${{ secrets.FTP_HOST_VOID }}
           username: ${{ secrets.FTP_USER_VOID }}
@@ -175,7 +175,7 @@ jobs:
         run: cp dist/index.html dist/404.html
 
       - name: Deploy via FTP
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
         with:
           server: ${{ secrets.FTP_HOST_MUNINN }}
           username: ${{ secrets.FTP_USER_MUNINN }}
