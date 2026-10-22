@@ -17,6 +17,7 @@ describe("API Endpoints", () => {
       expect(ENDPOINTS.agents.opsHealth).toBe(`${AGENT_BASE}/agents/ops-health/`);
       expect(ENDPOINTS.agents.dashboardStats).toBe(`${AGENT_BASE}/agents/dashboard-stats/`);
       expect(ENDPOINTS.agents.onboardingStatus).toBe(`${AGENT_BASE}/agents/onboarding-status/`);
+      expect(ENDPOINTS.agents.platformSummary).toBe(`${AGENT_BASE}/summary/`);
     });
 
     it("agents parameterized endpoints generate correct URLs", () => {
