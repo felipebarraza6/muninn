@@ -193,6 +193,11 @@ function getPageMeta(pathname: string, search = ""): PageMeta {
     else if (view === "editar") crumbs.push({ label: "Editar usuario" });
     return { breadcrumb: crumbs };
   }
+  if (p.startsWith("/admin/tienda")) {
+    return {
+      breadcrumb: [{ label: "Resumen", to: "/app" }, { label: "Admin" }, { label: "Tienda" }],
+    };
+  }
   if (p.startsWith("/configuracion")) {
     return { breadcrumb: [{ label: "Resumen", to: "/app" }, { label: "Configuración" }] };
   }

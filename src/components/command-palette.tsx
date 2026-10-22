@@ -24,6 +24,7 @@ import {
   Network,
   Share2,
   Sparkles,
+  Store,
   User,
   Users,
 } from "lucide-react";
@@ -183,6 +184,13 @@ function buildPaletteGroups(): PaletteGroup[] {
         },
         { id: "admin-users", label: "Usuarios", to: "/app/admin/usuarios", icon: Users },
         { id: "admin-llm", label: "LLM", to: "/app/admin/llm", icon: Cpu, keywords: "modelos" },
+        {
+          id: "admin-tienda",
+          label: "Revisión tienda",
+          to: "/app/admin/tienda",
+          icon: Store,
+          keywords: "catálogo aprobar agentes",
+        },
       ],
     });
   } else if (isOrgOwner) {

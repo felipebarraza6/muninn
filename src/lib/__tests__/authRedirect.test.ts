@@ -12,6 +12,9 @@ describe("authRedirect", () => {
     expect(isPublicAppPath("/muninn/entrar", "/muninn/")).toBe(true);
     expect(isPublicAppPath("/muninn/app/agentes", "/muninn/")).toBe(false);
     expect(isPublicAppPath("/entrar", "/")).toBe(true);
+    expect(isPublicAppPath("/agentes", "/")).toBe(true);
+    expect(isPublicAppPath("/agentes/huginn", "/")).toBe(true);
+    expect(isPublicAppPath("/muninn/agentes/huginn", "/muninn/")).toBe(true);
   });
 
   it("builds /entrar respecting the app base path (staging Pages)", () => {

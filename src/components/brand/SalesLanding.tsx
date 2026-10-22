@@ -9,6 +9,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { catalogUnavailable, usePublicAgentCatalog } from "@/api/hooks/usePublicAgentCatalog";
+import { AgentCatalogCard } from "@/components/agent-store/AgentCatalogCard";
 import {
   SALES_EXAMPLE,
   SALES_FAQ,
@@ -19,6 +20,7 @@ import {
   SALES_USE_CASES,
   salesMail,
 } from "@/lib/salesCopy";
+import { pickFeaturedCatalogAgents } from "@/lib/agentCatalog";
 
 const linkClass =
   "text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm";
@@ -66,11 +68,17 @@ function Header() {
           Muninn
         </Link>
         <nav className="hidden items-center gap-4 lg:flex" aria-label="Secciones">
-          {SALES_NAV.map((item) => (
-            <a key={item.href} href={item.href} className={linkClass}>
-              {item.label}
-            </a>
-          ))}
+          {SALES_NAV.map((item) =>
+            item.href.startsWith("/") ? (
+              <Link key={item.href} to={item.href} className={linkClass}>
+                {item.label}
+              </Link>
+            ) : (
+              <a key={item.href} href={item.href} className={linkClass}>
+                {item.label}
+              </a>
+            ),
+          )}
         </nav>
         <div className="ml-auto flex items-center gap-2">
           <Button asChild variant="ghost" size="sm">
@@ -229,32 +237,29 @@ function Integrations() {
 
 function Catalog() {
   const catalog = usePublicAgentCatalog();
-  const agents = catalog.data ?? [];
+  const featured = pickFeaturedCatalogAgents(catalog.catalog ?? [], 6);
   const waiting = catalog.isPending;
   const missing = catalog.isError && catalogUnavailable(catalog.error);
 
   return (
     <section id="catalogo" className="space-y-6">
-      <SectionTitle kicker="Catálogo de agentes" title="Lo que se pueda publicar, se lista aquí." />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <SectionTitle kicker="Catálogo de agentes" title="Destacados reales de la tienda." />
+        <Button asChild variant="outline" size="sm" className="self-start sm:self-auto">
+          <Link to="/agentes">Ver tienda completa</Link>
+        </Button>
+      </div>
       <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">
-        Esta sección lee <code className="text-foreground">GET /ai-agents/public/agents/</code>. Si
-        el listado no existe o viene vacío, no inventamos agentes.
+        Leemos <code className="text-foreground">GET /api/public/agent-catalog/</code>. Si el
+        listado no existe o viene vacío, no inventamos agentes.
       </p>
       {waiting ? (
         <p className="text-sm text-muted-foreground">Buscando el catálogo…</p>
-      ) : agents.length > 0 ? (
+      ) : featured.length > 0 ? (
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {agents.map((agent) => (
-            <li key={agent.id} className="rounded-2xl border border-border/70 bg-card p-5">
-              <h3 className="font-display text-base font-semibold">{agent.name}</h3>
-              {agent.summary ? (
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                  {agent.summary}
-                </p>
-              ) : null}
-              {agent.channels.length > 0 ? (
-                <p className="mt-3 text-xs text-muted-foreground">{agent.channels.join(" · ")}</p>
-              ) : null}
+          {featured.map((agent) => (
+            <li key={agent.id}>
+              <AgentCatalogCard agent={agent} />
             </li>
           ))}
         </ul>
@@ -265,6 +270,9 @@ function Catalog() {
               ? "El catálogo público todavía no responde. Cuando la API entregue agentes, aparecen en esta grilla."
               : "No hay agentes publicados en el catálogo."}
           </p>
+          <Button asChild variant="link" className="mt-2 h-auto px-0">
+            <Link to="/agentes">Abrir la tienda</Link>
+          </Button>
         </div>
       )}
     </section>

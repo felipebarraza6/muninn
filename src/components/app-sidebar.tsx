@@ -17,6 +17,7 @@ import {
   Coins,
   GitBranch,
   SquareArrowOutUpRight,
+  Store,
 } from "lucide-react";
 import {
   Sidebar,
@@ -127,6 +128,7 @@ const adminItems: MenuItem[] = [
   { title: "Sucursales", url: `${APP}/admin/sucursales`, icon: Building2 },
   { title: "Usuarios", url: `${APP}/admin/usuarios`, icon: Users },
   { title: "LLM", url: `${APP}/admin/llm`, icon: Cpu },
+  { title: "Tienda", url: `${APP}/admin/tienda`, icon: Store },
 ];
 
 const usersOnlyItems: MenuItem[] = [

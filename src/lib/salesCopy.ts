@@ -12,6 +12,7 @@ export const SALES_NAV = [
   { href: "#como", label: "Cómo funciona" },
   { href: "#integraciones", label: "Integraciones" },
   { href: "#catalogo", label: "Catálogo" },
+  { href: "/agentes", label: "Tienda" },
   { href: "#planes", label: "Planes" },
   { href: "#faq", label: "Preguntas" },
 ] as const;

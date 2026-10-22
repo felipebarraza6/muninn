@@ -35,6 +35,7 @@ import { AgentSkillsPanel } from "@/components/agents/agent-skills-panel";
 import { AgentFlowPolicyPanel } from "@/components/agents/agent-flow-policy-panel";
 import { FlowPolicyInterpreter } from "@/components/agents/flow-policy-interpreter";
 import { AgentForm } from "@/components/agents/agent-form";
+import { PublishToStoreDialog } from "@/components/agent-store/PublishToStoreDialog";
 import { AdminPageMotion } from "@/components/admin/AdminPageMotion";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { isSuperAdmin, isAgentReadOnly } from "@/lib/authGuards";
@@ -236,7 +237,14 @@ export default function AgentDetailPage() {
               : "RAG off"}
           </p>
         </div>
-        <div className="flex items-center gap-2 self-start">
+        <div className="flex flex-wrap items-center gap-2 self-start">
+          {!readOnly && agent.is_active !== false ? (
+            <PublishToStoreDialog
+              agentId={String(agent.id)}
+              agentName={agent.name}
+              agentIcon={agent.icon}
+            />
+          ) : null}
           {!readOnly && (
             <Button
               variant="outline"
