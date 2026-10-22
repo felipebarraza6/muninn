@@ -10,7 +10,8 @@ export type SummaryTone = "primary" | "success" | "info" | "warning";
 export type SummaryKpi = {
   key: string;
   label: string;
-  count: number;
+  /** `null` = aún sin dato (mostrar —; evita 0 engañosos). */
+  count: number | null;
   icon: LucideIcon;
   href: string;
   tone: SummaryTone;
@@ -77,7 +78,7 @@ export function SummaryKpiGrid({
                 </div>
                 <div>
                   <div className="text-2xl font-semibold tracking-tight tabular-nums">
-                    {formatNumber(item.count)}
+                    {item.count == null ? "—" : formatNumber(item.count)}
                   </div>
                   <div className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
                     {item.label}

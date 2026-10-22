@@ -1,9 +1,11 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
-import { isAuthenticated } from "@/lib/authSession";
+import { clearSession, getStoredUser, isAuthenticated } from "@/lib/authSession";
 
 export function RequireAuth() {
   const location = useLocation();
   if (!isAuthenticated()) {
+    // Modo token: user en localStorage sin credencial → UI a medias; limpiar.
+    if (getStoredUser()) clearSession();
     return <Navigate to="/entrar" replace state={{ from: location.pathname }} />;
   }
   return <Outlet />;
