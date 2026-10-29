@@ -1,188 +1,106 @@
 # Muninn
 
-Frontend de agentes especializados con estilo dark premium. Inspirado en dashboards modernos, con acento mint y foco en claridad visual.
+## Qué es
 
-## Demo
+Muninn es el cliente de agentes de IA de Ginnung: catálogo, estudio, chat, canales, flujos y la operación comercial de la sucursal. Se compila a un sitio estático y consume la API Yggdra (agentes, workflows, cuentas y sucursales).
 
-Desplegado como aplicación estática. Compila a `dist/` listo para FTP u otro hosting estático.
+## A quién sirve
 
-- **Staging:** GitHub Pages en cada push a `main` (`https://<user>.github.io/muninn/`).
-- **Producción:** sitios FTP al pushear `production` o un tag `v*`.
+Equipos que diseñan y operan agentes (estudio y canales) y las organizaciones que los publican en sus dominios. Staging en GitHub Pages (`https://<owner>.github.io/muninn/`). Producción por FTP, según el workflow: agents.agenciapatagoniachile.com, void.smarthydro.app y muninn.yggdra.cl.
 
 ## Stack
 
-- **React 19** + **TypeScript**
-- **Vite**
-- **Tailwind CSS 4**
-- **Radix UI** + **shadcn/ui**
-- **React Router 6**
-- **TanStack Query**
-- **Axios**
-- **Bun** `1.3.14` (fijado en `.bun-version`)
+React 19, TypeScript, Vite 7, Tailwind CSS 4, Radix, TanStack Query, React Router, Axios. El gestor del repo es Bun 1.3.14 (`.bun-version` y `bun.lockb`). El CI usa la acción `.github/actions/setup-bun`.
 
-## Características
-
-- Tema visual dark premium: fondo negro `#000000`, superficies elevadas `#05080f`, acento mint `#2dd4bf`.
-- Chat global con selector de agente (estilo cambio de modelo IA).
-- Historial de conversaciones internas con archivado/restauración.
-- Dashboard de agentes, conversaciones y canales.
-- Sidebar responsive y experiencia mobile cuidada.
-- Login con `Authorization: Token …` en localStorage (`VITE_AUTH_MODE=token`, default) o cookie HttpOnly + CSRF (`VITE_AUTH_MODE=cookie`). Al activar cookie se elimina la persistencia del token.
-
-## Requisitos
-
-- [Bun](https://bun.sh/) **1.3.14** (recomendado; ver `.bun-version`) o Node.js 20+
-
-## Cómo empezar
+## Cómo correr en local
 
 ```bash
-# Clonar el repo
-git clone https://github.com/felipebarraza6/muninn.git
-cd muninn
-
-# Instalar dependencias
 bun install
-
-# Opcional: copiar variables de ejemplo
 cp .env.example .env.local
-
-# Levantar en desarrollo (API local vía proxy /api → localhost:8000)
 bun run dev
 ```
 
-El servidor Vite levanta por defecto en `http://localhost:3001`.
+El servidor queda en http://localhost:3001. En desarrollo el proxy de Vite manda `/api` a `http://localhost:8000` (se cambia con `VITE_DEV_API_PROXY`). Hace falta la API Ginnung para datos reales.
+
+
+## Variables de entorno
+
+Solo nombres. Copia el ejemplo a un archivo local y completa los valores ahí. No los commitees ni los pegues en un issue.
+
+Nombres que declara `.env.example` y el código. Los comentarios del ejemplo explican el modo. Acá no van valores.
+
+| Nombre | Uso |
+|--------|-----|
+| `VITE_API_URL` | API del build de preview o producción. Obligatoria en el build de producción |
+| `VITE_APP_ENV` | `staging` muestra el indicador. El CD de Pages lo inyecta |
+| `VITE_WIDGET_BASE_URL` | Base del widget embebido |
+| `VITE_REALTIME_URL` | WebSocket del estudio. Vacío deja solo polling |
+| `VITE_DEV_API_PROXY` | Target del proxy de Vite en local |
+| `VITE_AUTH_MODE` | `token` (default, token en localStorage) o `cookie` (HttpOnly + CSRF) |
+| `VITE_COMMERCIAL_API` | Vacío usa la API real. `mock` muestra cifras de ejemplo y no abre Flow |
+| `VITE_AGENT_CATALOG_MOCK` | Plantillas locales si la API aún no responde. Solo desarrollo |
+| `VITE_MUNINN_HOSTS` | Hosts extra que deben verse como Muninn |
+| `VITE_PWA_NAME` | Nombre PWA del build |
+| `VITE_PWA_THEME_COLOR` | Color de tema PWA |
+| `VITE_BASE_PATH` | Prefijo del build. Pages usa `/muninn/` |
+
+En Actions, la variable de repositorio `VITE_API_URL_STAGING` alimenta el build de Pages. Los secretos de FTP y la URL del tenant Void están nombrados en el workflow: `FTP_HOST_AGENCIA`, `FTP_USER_AGENCIA`, `FTP_PASS_AGENCIA`, `FTP_HOST_VOID`, `FTP_USER_VOID`, `FTP_PASS_VOID`, `VITE_API_URL_VOID`, `FTP_HOST_MUNINN`, `FTP_USER_MUNINN`, `FTP_PASS_MUNINN`.
+
+El propio workflow documenta dos bases fijas de API para los builds de Agencia Patagonia y de muninn.yggdra.cl. El inventario de consumidores advierte que `api.agenciapatagoniachile.com` no está verificado como la misma instancia que `yggdra_infra`.
+
 
 ## Scripts
 
-| Comando             | Descripción                           |
-| ------------------- | ------------------------------------- |
-| `bun run dev`       | Servidor de desarrollo con hot reload |
-| `bun run build`     | Build de producción en `dist/`        |
-| `bun run lint`      | Revisar código con ESLint             |
-| `bun run typecheck` | TypeScript (`tsc --noEmit`)           |
-| `bun run test`      | Tests con Vitest                      |
-| `bun run format`    | Formatear con Prettier                |
+| Comando | Qué hace |
+|---------|----------|
+| `bun run dev` | Vite |
+| `bun run build` | Build de producción y copia `dist/404.html` |
+| `bun run build:dev` | Build en mode development |
+| `bun run preview` | Previsualiza `dist/` |
+| `bun run lint` | ESLint |
+| `bun run typecheck` | `tsc --noEmit` |
+| `bun run test` | Vitest |
+| `bun run test:watch` | Vitest en watch |
+| `bun run format` | Prettier |
+| `bun run generate:api-types` | Baja OpenAPI de la API local y regenera `src/api/generated/schema.ts` |
 
-## Estructura
 
-```
-src/
-├── api/           # Cliente HTTP, endpoints y hooks
-├── components/    # Componentes reutilizables y UI
-│   └── ui/        # Componentes shadcn/ui
-├── hooks/         # Hooks custom
-├── lib/           # Utilidades y storage
-├── routes/        # Rutas de React Router
-└── styles.css     # Variables de tema Muninn
-```
+## Deploy (como está hoy)
 
-## Sistema de diseño
+Todo el deploy está en `.github/workflows/ci.yml`.
 
-- **Fondo:** `#000000`
-- **Superficies:** `rgba(255, 255, 255, 0.03)`
-- **Superficies elevadas:** `#05080f`
-- **Bordes:** `rgba(255, 255, 255, 0.06)`
-- **Acento:** `#2dd4bf`
-- **Texto principal:** `#f0f0f0`
-- **Tipografía:** Inter
+| Evento | Qué corre | Destino |
+|--------|-----------|---------|
+| PR o push a `main` y `production`, y tags `v*` | Job `validate`: lint, typecheck, tests, build | — |
+| Push a `main` | `deploy-staging` | GitHub Pages, environment `staging` |
+| Push a `production` o tag `v*` | tres jobs FTP | Agencia, Void y muninn.yggdra.cl, environment `production` |
 
-## API
+Pages tiene que estar en Source = GitHub Actions. Un fallo del workflow `CI` en `main` o `production` abre o actualiza un issue (`ci-status-issues.yml`) y lo cierra cuando vuelve a verde.
 
-La app consume una API Django/DRF.
+`docs/CONSUMERS.yaml` registra deploy `github-pages` desde `main`. Los FTP de producción están en el workflow y no en ese YAML.
 
-- **Desarrollo:** proxy Vite `/api` → `http://localhost:8000` (configurable con `VITE_DEV_API_PROXY`).
-- **Staging / producción:** `VITE_API_URL` (inyectada en build; en CD varía por destino).
 
-Ver `.env.example`.
+Este PR de documentación no cambia workflows, secretos ni el destino del deploy.
 
-## Ramas y CI/CD
+## Relación con la API Ginnung
 
-| Rama / evento                         | Qué corre                                         | Destino                          |
-| ------------------------------------- | ------------------------------------------------- | -------------------------------- |
-| PR o push a `main`                    | lint, typecheck, tests, build                     | —                                |
-| Push a `main`                         | deploy **staging**                                | GitHub Pages (`/<repo>/`)        |
-| Push a `production` o tag `v*`        | lint, typecheck, tests, build + deploy **prod**   | 3 sitios FTP                     |
+Auth por token o por cookie, según `VITE_AUTH_MODE`. Sucursal con `X-Branch-ID` en el cliente (`useActiveBranchId`).
 
-`main` es el trabajo diario y el origen de staging. `production` es la rama de releases.
+Módulos del inventario: accounts, branches, ai-agents, workflows, scheduling, analytics, unified-config.
 
-### Promover `main` a `production`
+`bun run generate:api-types` hace `curl` a `$VITE_DEV_API_PROXY/api/schema/` (default `http://localhost:8000`) y corre `openapi-typescript`. No usa el freeze del VPS ni el sha de `/api/schema/contract/`. No hay `contract.yml` que llame al chequeo reutilizable. El estilo en el inventario es `openapi-typescript`.
 
-Cuando staging en Pages está bien y el CI de `main` está verde:
+Id de consumidor y etiqueta de issues de backend: `front:muninn`.
 
-```bash
-git checkout production
-git pull origin production
-git merge origin/main
-git push origin production
-```
 
-O abre un PR `main` → `production` en GitHub. El push a `production` dispara el deploy FTP.
+El chequeo reutilizable está en [docs/CONTRACT_CHECK.md](https://github.com/felipebarraza6/yggdra_infra/blob/main/docs/CONTRACT_CHECK.md) y en `.github/workflows/contract-check.yml` de `yggdra_infra`. Corre en el runner del VPS, compara el `schema_sha256` de `https://api.yggdra.cl/api/schema/contract/` con el sha commiteado en el front, regenera tipos desde el freeze de `api/schema/openapi.yaml` y exige `tsc --noEmit`.
 
-También vale crear un tag `v1.2.3` (anotado o liviano) y hacer push del tag; corre el mismo deploy de producción.
+En la rama por defecto de este repo **no hay** un workflow `contract.yml` que llame ese chequeo. El inventario `docs/CONSUMERS.yaml` del backend describe el estilo de consumo de cada app.
 
-### Environments
+## Enlaces
 
-| Environment  | Uso                                      |
-| ------------ | ---------------------------------------- |
-| `staging`    | Deploy de GitHub Pages desde `main`      |
-| `production` | Deploys FTP desde `production` o tags `v*` |
-
-GitHub Pages exige Source = **GitHub Actions** (Settings → Pages). El environment `staging` se usa para el job de Pages; `production` para los tres FTP.
-
-Opcional: en `production` activa required reviewers para aprobar cada release.
-
-### Variables y secretos
-
-**Variable de repositorio (Settings → Secrets and variables → Actions → Variables):**
-
-| Variable              | Default                         | Uso                                      |
-| --------------------- | ------------------------------- | ---------------------------------------- |
-| `VITE_API_URL_STAGING` | `https://api.yggdra.cl/api`    | API del build de GitHub Pages (staging)  |
-
-**Secretos (mismos nombres que ya usa el repo; no hace falta renombrarlos):**
-
-| Secreto             | Destino                         |
-| ------------------- | ------------------------------- |
-| `FTP_HOST_AGENCIA`  | agents.agenciapatagoniachile.com |
-| `FTP_USER_AGENCIA`  | ídem                            |
-| `FTP_PASS_AGENCIA`  | ídem                            |
-| `FTP_HOST_VOID`     | void.smarthydro.app             |
-| `FTP_USER_VOID`     | ídem                            |
-| `FTP_PASS_VOID`     | ídem                            |
-| `VITE_API_URL_VOID` | API del tenant Void             |
-| `FTP_HOST_MUNINN`   | muninn.yggdra.cl                |
-| `FTP_USER_MUNINN`   | ídem                            |
-| `FTP_PASS_MUNINN`   | ídem                            |
-
-Los secretos pueden vivir a nivel de repo (como ahora) o moverse al environment `production` con los mismos nombres.
-
-APIs fijas en el workflow:
-
-- Agencia Patagonia: `https://api.agenciapatagoniachile.com/api`
-- Muninn Yggdra: `https://api.yggdra.cl/api`
-
-El build de staging usa `VITE_BASE_PATH=/muninn/` (nombre del repo), copia `404.html` para el fallback SPA de Pages y `VITE_APP_ENV=staging` (badge visible “Staging”).
-
-Dependabot actualiza `npm` y `github-actions` semanalmente.
-
-### Issues automáticos si falla el CI o un deploy
-
-El workflow `CI status issues` (`.github/workflows/ci-status-issues.yml`) escucha `workflow_run` del workflow `CI` en pushes a `main` y `production` (permiso `issues: write`, `actions/github-script`).
-
-- **Fallo:** abre un issue con labels `ci-failure` y el entorno (`staging` en `main`, `production` en `production`). El cuerpo incluye el link a la ejecución, el commit y los jobs fallidos.
-- **Mismo workflow + rama con un issue ya abierto:** comenta en ese issue (no duplica).
-- **Vuelve a verde:** comenta y cierra el issue.
-
-Los labels se crean solos si no existen. Este workflow corre desde la rama por defecto (`main`); hay que mergear este cambio para que empiece a actuar.
-
-## Deploy local
-
-```bash
-bun run build
-```
-
-Sube el contenido de `dist/` a tu hosting estático. El CD de staging y producción está en `.github/workflows/ci.yml`.
-
-## Licencia
-
-Proyecto privado — Uso interno.
+- Arquitectura: [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md)
+- Ejemplo de entorno: [.env.example](.env.example)
+- API Ginnung: https://github.com/felipebarraza6/yggdra_infra
+- Chequeo de contrato: https://github.com/felipebarraza6/yggdra_infra/blob/main/docs/CONTRACT_CHECK.md
+- Auditoría del motor de agentes (en el backend): https://github.com/felipebarraza6/yggdra_infra/blob/main/docs/muninn-agent-engine-audit.md
