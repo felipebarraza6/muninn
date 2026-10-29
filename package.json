@@ -18,7 +18,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "format": "prettier --write .",
-    "generate:api-types": "bash scripts/generate-api-types.sh"
+    "generate:api-types": "bash scripts/generate-api-types.sh",
+    "sync-contract": "node scripts/sync-contract.mjs"
   },
   "dependencies": {
     "@codemirror/lang-markdown": "^6.5.0",
