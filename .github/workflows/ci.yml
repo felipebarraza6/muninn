@@ -63,7 +63,7 @@ jobs:
       - name: Build (GitHub Pages / staging)
         run: bun run build
         env:
-          VITE_API_URL: ${{ vars.VITE_API_URL_STAGING || 'https://api.yggdra.cl/api' }}
+          VITE_API_URL: ${{ vars.VITE_API_URL_STAGING || 'https://api-staging.yggdra.cl/api' }}
           VITE_BASE_PATH: /${{ github.event.repository.name }}/
           VITE_APP_ENV: staging
 
