@@ -2,9 +2,9 @@ name: CI
 
 on:
   pull_request:
-    branches: [main, production]
+    branches: [dev, main, production]
   push:
-    branches: [main, production]
+    branches: [dev, main, production]
     tags: ["v*"]
 
 concurrency:
@@ -40,7 +40,7 @@ jobs:
           VITE_BASE_PATH: /
 
   deploy-staging:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
     needs: validate
     runs-on: ubuntu-latest
     permissions:
