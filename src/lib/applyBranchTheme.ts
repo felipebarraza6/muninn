@@ -151,6 +151,19 @@ function setFavicon(href: string | null | undefined) {
 }
 
 function setDocumentTitle(theme: BranchThemeLike | null | undefined) {
+  // La landing y los textos legales fijan su propio <title>. No lo pises con el de la app.
+  if (typeof window !== "undefined") {
+    const path = window.location.pathname;
+    if (
+      path === "/" ||
+      path === "/terminos" ||
+      path === "/privacidad" ||
+      path === "/registro" ||
+      path.startsWith("/registro/")
+    ) {
+      return;
+    }
+  }
   const raw = theme?.app_name?.trim();
   const brandingName =
     typeof theme?.branding?.app_name === "string" ? theme.branding.app_name.trim() : "";

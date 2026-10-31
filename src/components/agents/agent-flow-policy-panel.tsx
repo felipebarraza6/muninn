@@ -340,8 +340,8 @@ export function AgentFlowPolicyPanel({ agentId, readOnly }: Props) {
     markDirty();
     setDatosOpen(true);
     setSkillsOpen(true);
-    toast.message("Preset WM cargado", {
-      description: "Revisá la pizarra y guardá si está bien.",
+    toast.message("Flujo de agendamiento cargado", {
+      description: "Revisa la pizarra y guarda si está bien.",
     });
   };
 
@@ -460,10 +460,10 @@ export function AgentFlowPolicyPanel({ agentId, readOnly }: Props) {
                   variant="secondary"
                   className="w-full h-8"
                   onClick={restoreKnownPreset}
-                  title="Restaura el flujo oficial de agendamiento Clínica WM"
+                  title="Restaura el flujo de agendamiento guardado para este agente"
                 >
                   <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
-                  Restaurar flujo WM
+                  Restaurar flujo de agendamiento
                 </Button>
               )}
               {suggestedSlots.length > 0 && (
@@ -486,7 +486,7 @@ export function AgentFlowPolicyPanel({ agentId, readOnly }: Props) {
               )}
               <p className="px-0.5 text-[10px] text-muted-foreground leading-snug">
                 {knownPreset
-                  ? "Flujo WM: horas/próxima → crear cita (con consentimiento). Estado es independiente."
+                  ? "Flujo de agendamiento: consultar horas y recién entonces crear, con consentimiento."
                   : "No pongas en Datos lo que ya es static en la skill (IDs fijos, sede…)."}
               </p>
             </div>

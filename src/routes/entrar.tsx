@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { resolveSafeNextPath } from "@/lib/safeNextPath";
 import { motion } from "framer-motion";
 import { useLogin } from "@/api/hooks/useAuth";
+import { applyResolvedBranchTheme } from "@/lib/applyBranchTheme";
+import { MUNINN_DEFAULT_THEME } from "@/lib/branchThemeDefaults";
+import { clearLoginPortalContext } from "@/lib/loginContext";
 import { LoginAtmosphere } from "@/components/brand/LoginAtmosphere";
 import { PitchSwap } from "@/components/brand/LoginLandingPanel";
 import { LoginForm } from "@/components/auth/LoginForm";
@@ -21,11 +25,21 @@ const GITHUB_CREDIT_LABEL = "felipebarraza6";
  */
 export default function EntrarPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const reduceMotion = useMotionPrefs();
   const [pixelReady, setPixelReady] = useState(() => Boolean(reduceMotion));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const login = useLogin();
+  const nextPath =
+    resolveSafeNextPath(searchParams.get("next")) ||
+    resolveSafeNextPath((location.state as { from?: string } | null)?.from);
+
+  useEffect(() => {
+    clearLoginPortalContext();
+    applyResolvedBranchTheme({ ...MUNINN_DEFAULT_THEME }, "Muninn", true);
+  }, []);
 
   useEffect(() => {
     if (reduceMotion) {
@@ -42,7 +56,7 @@ export default function EntrarPage() {
     login.mutate(
       { email, password },
       {
-        onSuccess: () => navigate("/app"),
+        onSuccess: () => navigate(nextPath || "/app"),
       },
     );
   };

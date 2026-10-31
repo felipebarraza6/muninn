@@ -121,6 +121,8 @@ export const ENDPOINTS = {
     dashboardStats: "/ai-agents/agents/dashboard-stats/",
     opsHealth: "/ai-agents/agents/ops-health/",
     onboardingStatus: "/ai-agents/agents/onboarding-status/",
+    /** Superadmin: totales globales + desglose por sucursal (AgentSummaryViewSet). */
+    platformSummary: "/ai-agents/summary/",
     skillConfigs: (id: string) => `/ai-agents/agents/${id}/skill-configs/`,
     skillConfig: (id: string, skillId: string) =>
       `/ai-agents/agents/${id}/skill-config/${skillId}/`,

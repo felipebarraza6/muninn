@@ -2,7 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { Bot, Loader2, Send, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { usePublicChannelConfig, useSendPublicMessage } from "@/api/hooks/usePublicChat";
+import {
+  publicChatUsageLimitMessage,
+  usePublicChannelConfig,
+  useSendPublicMessage,
+} from "@/api/hooks/usePublicChat";
 import { cn } from "@/lib/utils";
 import { apiErrorMessage, apiErrorStatus } from "@/lib/apiError";
 import type { ChatDeliveryStatus } from "@/lib/chatPhase";
@@ -10,6 +14,7 @@ import { toast } from "sonner";
 import { ChatMarkdown } from "@/components/chat/chat-markdown";
 import { ChatCopyButton } from "@/components/chat/chat-copy-button";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
+import { Link } from "react-router-dom";
 
 interface ChatMessage {
   id: string;
@@ -42,6 +47,7 @@ export function EmbedChatPanel({ channelId, className, compact = false }: EmbedC
   const [guestName, setGuestName] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
   const [identityReady, setIdentityReady] = useState(false);
+  const [limitMessage, setLimitMessage] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const requireName = Boolean(config?.require_name);
@@ -91,7 +97,12 @@ export function EmbedChatPanel({ channelId, className, compact = false }: EmbedC
     setInput("");
 
     try {
-      const result = await sendMessage.mutateAsync(text);
+      const result = await sendMessage.mutateAsync({
+        message: text,
+        user_name: requireName ? guestName.trim() : undefined,
+        email: requireEmail ? guestEmail.trim() : undefined,
+      });
+      setLimitMessage(null);
       const reply = result.reply ?? result.response ?? result.message ?? "Sin respuesta";
       setMessages((prev) => [
         ...prev.map((m) => (m.id === userMsgId ? { ...m, deliveryStatus: "sent" as const } : m)),
@@ -107,6 +118,11 @@ export function EmbedChatPanel({ channelId, className, compact = false }: EmbedC
         prev.map((m) => (m.id === userMsgId ? { ...m, deliveryStatus: "failed" as const } : m)),
       );
       setInput(text);
+      const limited = publicChatUsageLimitMessage(err);
+      if (limited) {
+        setLimitMessage(limited);
+        return;
+      }
       toast.error(apiErrorMessage(err, "Error al enviar el mensaje"));
     }
   };
@@ -205,6 +221,7 @@ export function EmbedChatPanel({ channelId, className, compact = false }: EmbedC
           <Button type="submit" style={{ background: primary, color: "#041016" }}>
             Empezar chat
           </Button>
+          <LegalLinks />
         </form>
       </div>
     );
@@ -310,22 +327,61 @@ export function EmbedChatPanel({ channelId, className, compact = false }: EmbedC
         <div ref={bottomRef} />
       </div>
 
+      {limitMessage ? (
+        <p
+          className="border-t border-warning/30 bg-warning/10 px-3 py-2 text-xs text-foreground"
+          role="status"
+        >
+          {limitMessage}
+        </p>
+      ) : null}
+
       <form onSubmit={handleSend} className="border-t p-3 flex gap-2 bg-card shrink-0">
         <Input
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Escribe un mensaje..."
           className="flex-1"
+          disabled={Boolean(limitMessage)}
         />
         <Button
           type="submit"
           size="icon"
-          disabled={sendMessage.isPending || !input.trim()}
+          disabled={sendMessage.isPending || !input.trim() || Boolean(limitMessage)}
           style={{ background: primary, color: "#041016" }}
         >
           <Send className="h-4 w-4" />
         </Button>
       </form>
+      <div className="border-t bg-card px-3 py-1.5">
+        <LegalLinks />
+      </div>
     </div>
+  );
+}
+
+function LegalLinks() {
+  return (
+    <p className="text-[11px] leading-relaxed text-muted-foreground">
+      Revisa los{" "}
+      <Link
+        to="/terminos"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="underline underline-offset-2"
+      >
+        términos
+      </Link>{" "}
+      y la{" "}
+      <Link
+        to="/privacidad"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="underline underline-offset-2"
+      >
+        privacidad
+      </Link>{" "}
+      (borrador para revisión legal).
+    </p>
   );
 }

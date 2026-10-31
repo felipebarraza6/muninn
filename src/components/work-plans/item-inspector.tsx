@@ -639,7 +639,7 @@ export function KindFields({
           <Input
             value={fields.functionSlug}
             onChange={(e) => onChange({ functionSlug: e.target.value })}
-            placeholder="ej. dentidesk-horas-disponibles"
+            placeholder="ej. consultar-disponibilidad"
             className="h-8"
           />
         </div>

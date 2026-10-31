@@ -33,11 +33,16 @@ import { Button } from "./components/ui/button";
 import { EmptyState } from "./components/ui/empty-state";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { PwaUpdatePrompt } from "./components/PwaUpdatePrompt";
+import { StagingBanner } from "./components/StagingBanner";
 import { Toaster } from "./components/ui/sonner";
 import { RealtimeProvider } from "./lib/realtime";
 import { motionTokens } from "@/lib/motion";
 import Login from "./routes/login";
 import Entrar from "./routes/entrar";
+import Terminos from "./routes/terminos";
+import Privacidad from "./routes/privacidad";
+import Registro from "./routes/registro";
+import RegistroVerificar from "./routes/registro.verificar";
 
 const Dashboard = lazy(() => import("./routes/index"));
 const Conversaciones = lazy(() => import("./routes/conversaciones"));
@@ -68,6 +73,10 @@ const AdminOrganizacionesPage = lazy(() => import("./routes/admin.organizaciones
 const AdminSucursalesPage = lazy(() => import("./routes/admin.sucursales"));
 const AdminUsuariosPage = lazy(() => import("./routes/admin.usuarios"));
 const PerfilPage = lazy(() => import("./routes/perfil"));
+const FacturacionPage = lazy(() => import("./routes/facturacion"));
+const TiendaAgentesPage = lazy(() => import("./routes/tienda.agentes"));
+const TiendaAgenteDetallePage = lazy(() => import("./routes/tienda.agentes.$slug"));
+const AdminTiendaPage = lazy(() => import("./routes/admin.tienda"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -307,6 +316,7 @@ function AnimatedOutlet() {
           <Route path="/funciones/:id" element={<FunctionDetailRedirect />} />
           <Route path="/configuracion" element={<Navigate to="/app/perfil" replace />} />
           <Route path="/perfil" element={<PerfilPage />} />
+          <Route path="/facturacion" element={<FacturacionPage />} />
           <Route
             path="/admin/organizaciones"
             element={
@@ -337,6 +347,14 @@ function AnimatedOutlet() {
               <RequireUsersAdmin>
                 <AdminUsuariosPage />
               </RequireUsersAdmin>
+            }
+          />
+          <Route
+            path="/admin/tienda"
+            element={
+              <RequireSuperAdmin>
+                <AdminTiendaPage />
+              </RequireSuperAdmin>
             }
           />
           <Route
@@ -447,6 +465,20 @@ function AppRoutes() {
           }
         />
         <Route path="/embed/chat/:id" element={<EmbedChat />} />
+        <Route path="/terminos" element={<Terminos />} />
+        <Route path="/privacidad" element={<Privacidad />} />
+        {/* Tienda pública (antes de /:slug para no capturar "agentes" como org). */}
+        <Route path="/agentes" element={<TiendaAgentesPage />} />
+        <Route path="/agentes/:slug" element={<TiendaAgenteDetallePage />} />
+        <Route
+          path="/registro"
+          element={
+            <RedirectIfAuthenticated>
+              <Registro />
+            </RedirectIfAuthenticated>
+          }
+        />
+        <Route path="/registro/verificar" element={<RegistroVerificar />} />
         <Route element={<RequireAuth />}>
           <Route element={<RootLayout />}>
             <Route path="/app/*" element={<AnimatedOutlet />} />
@@ -478,6 +510,7 @@ export default function App() {
                 <AppRoutes />
                 <Toaster position="top-right" />
                 <PwaUpdatePrompt />
+                <StagingBanner />
               </RealtimeProvider>
             </BrowserRouter>
           </ErrorBoundary>

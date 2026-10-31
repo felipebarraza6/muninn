@@ -1,6 +1,6 @@
 import type { CreateWorkPlanPayload, WorkItemKind } from "@/api/hooks/useWorkPlans";
 
-export type WorkPlanTemplateId = "wm-dentidesk" | "sh-dga-soporte" | "sh-digest";
+export type WorkPlanTemplateId = "availability" | "ops-checklist" | "daily-digest";
 
 export type WorkPlanTemplateDraftItem = {
   title: string;
@@ -16,7 +16,10 @@ export type WorkPlanTemplate = {
   description: string;
   /** Hint cuando no aplica a la sucursal activa. */
   requiresHint: string;
-  /** Slugs de agentes que habilitan la plantilla (cualquiera). */
+  /**
+   * Slugs que habilitan la plantilla (cualquiera).
+   * Vacío = cualquier agente de la sucursal.
+   */
   agentSlugs: string[];
   /** Nombre (o substring) de workflow opcional. */
   workflowNameIncludes?: string;
@@ -26,52 +29,71 @@ export type WorkPlanTemplate = {
   }) => CreateWorkPlanPayload | null;
 };
 
-function agentPk(map: Record<string, number | string>, slug: string): number | string | null {
-  const v = map[slug];
-  return v != null ? v : null;
+function firstAgent(map: Record<string, number | string>): number | string | null {
+  for (const value of Object.values(map)) {
+    if (value != null && value !== "") return value;
+  }
+  return null;
 }
 
+function agentPk(map: Record<string, number | string>, slug: string): number | string | null {
+  const value = map[slug];
+  return value != null ? value : null;
+}
+
+function pickAgent(map: Record<string, number | string>, slugs: string[]): number | string | null {
+  for (const slug of slugs) {
+    const hit = agentPk(map, slug);
+    if (hit != null) return hit;
+  }
+  return firstAgent(map);
+}
+
+/**
+ * Plantillas genéricas. No dependen de un cliente ni de un slug de producción.
+ * Sirven como punto de partida en cualquier sucursal que ya tenga un agente.
+ */
 export const WORK_PLAN_TEMPLATES: WorkPlanTemplate[] = [
   {
-    id: "wm-dentidesk",
-    label: "Agenda Clínica WM (Dentidesk)",
-    description: "Demo segura: nota + horas disponibles + próxima hora. No crea citas reales.",
-    requiresHint: "Necesitas el agente agendamiento-clinica-wm en esta sucursal.",
-    agentSlugs: ["agendamiento-clinica-wm"],
+    id: "availability",
+    label: "Consulta de disponibilidad",
+    description: "Nota de seguridad y dos preguntas. No reserva ni escribe en sistemas externos.",
+    requiresHint: "Necesitas al menos un agente en esta sucursal.",
+    agentSlugs: [],
     build: ({ agentIdBySlug }) => {
-      const agent = agentPk(agentIdBySlug, "agendamiento-clinica-wm");
+      const agent = firstAgent(agentIdBySlug);
       if (agent == null) return null;
       return {
-        name: "Demo Agenda Clínica WM",
+        name: "Consulta de disponibilidad",
         description:
-          "Consulta de disponibilidad Dentidesk. No agendar sin consentimiento del paciente.",
+          "Revisa horarios o capacidad con el agente. No crees reservas ni escrituras sin confirmación.",
         assigned_agent: agent,
-        context: { demo: true, branch_label: "Clinica WM" },
+        context: { example: true },
         items: [
           {
-            title: "Aviso demo",
+            title: "Aviso",
             kind: "note",
             sort_order: 0,
             payload: {
-              text: "Demo: no crear cita real sin consentimiento explícito del paciente.",
+              text: "Ejemplo: solo informar disponibilidad. No reserves ni modifiques datos reales.",
             },
           },
           {
-            title: "Horas disponibles",
+            title: "Ventanas libres",
             kind: "agent_turn",
             sort_order: 1,
             payload: {
               message:
-                "Usa la skill dentidesk-horas-disponibles y resume las próximas horas libres de hoy o mañana. No reserves nada.",
+                "Resume las próximas ventanas libres de hoy o mañana usando las herramientas de esta sucursal. No reserves nada.",
             },
           },
           {
-            title: "Próxima hora",
+            title: "Próxima opción",
             kind: "agent_turn",
             sort_order: 2,
             payload: {
               message:
-                "Usa dentidesk-buscar-proxima-hora y dime la próxima hora disponible. Solo informa, no crees la cita.",
+                "Indica la próxima opción disponible. Solo informa. No crees la reserva ni confirmes una escritura.",
             },
           },
         ],
@@ -79,122 +101,118 @@ export const WORK_PLAN_TEMPLATES: WorkPlanTemplate[] = [
     },
   },
   {
-    id: "sh-dga-soporte",
-    label: "Ops SmartHydro: DGA + soporte",
-    description: "Checklist normativa DGA + triage de soporte. Evita Nubox e IoT ensure.",
-    requiresHint: "Necesitas experto-dga-smarthydro y/o soporte-smarthydro en esta sucursal.",
-    agentSlugs: ["experto-dga-smarthydro", "soporte-smarthydro"],
-    workflowNameIncludes: "Checklist normativa DGA",
+    id: "ops-checklist",
+    label: "Checklist operativo",
+    description: "Nota, un resumen del agente y, si existe, un workflow de checklist.",
+    requiresHint: "Necesitas al menos un agente en esta sucursal.",
+    agentSlugs: [],
+    workflowNameIncludes: "checklist",
     build: ({ agentIdBySlug, workflowIdByName }) => {
-      const dga = agentPk(agentIdBySlug, "experto-dga-smarthydro");
-      const soporte = agentPk(agentIdBySlug, "soporte-smarthydro");
-      const primary = dga ?? soporte;
+      const primary = pickAgent(agentIdBySlug, []);
       if (primary == null) return null;
-      const wfId = workflowIdByName("Checklist normativa DGA");
+      const wfId = workflowIdByName("checklist");
       const items: NonNullable<CreateWorkPlanPayload["items"]> = [
         {
-          title: "Checklist demo",
+          title: "Aviso",
           kind: "note",
           sort_order: 0,
           payload: {
-            text: "Demo SH: revisar normativa DGA y triage de soporte. No abrir tickets reales ni tocar Nubox.",
+            text: "Ejemplo operativo: resume y clasifica. No abras tickets reales ni ejecutes escrituras.",
+          },
+        },
+        {
+          title: "Resumen de la semana",
+          kind: "agent_turn",
+          sort_order: 1,
+          assigned_agent: primary,
+          payload: {
+            message:
+              "Resume en 5 puntos lo que esta sucursal debería revisar esta semana, usando solo el conocimiento y las herramientas disponibles. No inventes normativa ni datos.",
           },
         },
       ];
-      if (dga != null) {
-        items.push({
-          title: "Consulta normativa DGA",
-          kind: "agent_turn",
-          sort_order: 1,
-          assigned_agent: dga,
-          payload: {
-            message:
-              "Resume en 5 bullets los puntos clave de cumplimiento DGA para un cliente SmartHydro esta semana. Sin inventar normativa.",
-          },
-        });
-      }
       if (wfId) {
         items.push({
-          title: "Workflow checklist DGA",
+          title: "Workflow de checklist",
           kind: "workflow",
           sort_order: items.length,
           payload: {
             workflow_id: wfId,
-            workflow_name: "[DEMO SH] Checklist normativa DGA",
+            workflow_name: "Checklist operativo",
           },
         });
       }
-      if (soporte != null) {
-        items.push({
-          title: "Triage soporte",
-          kind: "agent_turn",
-          sort_order: items.length,
-          assigned_agent: soporte,
-          payload: {
-            message:
-              "Haz un triage de soporte de ejemplo: cliente reporta alerta de caudal. Clasifica prioridad y sugiere pasos. No crees ticket real.",
-          },
-        });
-      }
+      items.push({
+        title: "Triage de ejemplo",
+        kind: "agent_turn",
+        sort_order: items.length,
+        assigned_agent: primary,
+        payload: {
+          message:
+            "Haz un triage de ejemplo: alguien reporta una alerta operativa. Clasifica prioridad y sugiere pasos. No crees un ticket real.",
+        },
+      });
       return {
-        name: "[DEMO SH] Semana DGA + soporte",
-        description: "Plan demo: normativa DGA + workflow checklist + triage soporte.",
+        name: "Checklist operativo",
+        description:
+          "Plan de ejemplo: resumen, checklist si hay workflow, y un triage sin escrituras.",
         assigned_agent: primary,
         workflow: wfId,
-        context: { demo: true, branch_label: "SmartHydro", avoid: ["nubox", "iot_ensure"] },
+        context: { example: true },
         items,
       };
     },
   },
   {
-    id: "sh-digest",
-    label: "Digest telemetría diario",
-    description: "Atajo al workflow de digest con telemetria-smarthydro.",
-    requiresHint: "Necesitas telemetria-smarthydro o el workflow Digest telemetría.",
-    agentSlugs: ["telemetria-smarthydro"],
-    workflowNameIncludes: "Digest telemetría",
+    id: "daily-digest",
+    label: "Resumen del día",
+    description:
+      "Nota y un digest. Usa un workflow cuyo nombre incluya “digest”, o el agente de la sucursal.",
+    requiresHint: "Necesitas un agente o un workflow de digest en esta sucursal.",
+    agentSlugs: [],
+    workflowNameIncludes: "digest",
     build: ({ agentIdBySlug, workflowIdByName }) => {
-      const agent = agentPk(agentIdBySlug, "telemetria-smarthydro");
-      const wfId = workflowIdByName("Digest telemetría");
+      const agent = firstAgent(agentIdBySlug);
+      const wfId = workflowIdByName("digest");
       if (agent == null && !wfId) return null;
       const items: NonNullable<CreateWorkPlanPayload["items"]> = [
         {
-          title: "Nota digest",
+          title: "Nota",
           kind: "note",
           sort_order: 0,
           payload: {
-            text: "Demo: digest diario de telemetría. Solo resumen, sin acciones destructivas.",
+            text: "Ejemplo: resumen del día. Solo lectura, sin acciones destructivas.",
           },
         },
       ];
       if (wfId) {
         items.push({
-          title: "Ejecutar digest telemetría",
+          title: "Ejecutar resumen",
           kind: "workflow",
           sort_order: 1,
           payload: {
             workflow_id: wfId,
-            workflow_name: "[DEMO SH] Digest telemetría diario",
+            workflow_name: "Resumen del día",
           },
         });
       } else if (agent != null) {
         items.push({
-          title: "Resumen telemetría",
+          title: "Resumen del día",
           kind: "agent_turn",
           sort_order: 1,
           assigned_agent: agent,
           payload: {
             message:
-              "Genera un digest corto de telemetría del día: anomalías, caudales relevantes y recomendaciones.",
+              "Genera un resumen corto del día: lo relevante, lo que se desvió y qué conviene mirar. No ejecutes cambios.",
           },
         });
       }
       return {
-        name: "[DEMO SH] Digest telemetría diario",
-        description: "Ejecuta el digest de telemetría (workflow o turno de agente).",
+        name: "Resumen del día",
+        description: "Ejecuta un resumen diario (workflow o turno de agente).",
         assigned_agent: agent,
         workflow: wfId,
-        context: { demo: true, branch_label: "SmartHydro" },
+        context: { example: true },
         items,
       };
     },
@@ -206,13 +224,17 @@ export function templateAvailability(
   agentSlugsPresent: Set<string>,
   workflowNames: string[],
 ): { available: boolean; reason?: string } {
-  const hasAgent = template.agentSlugs.some((s) => agentSlugsPresent.has(s));
+  const hasNamedAgent =
+    template.agentSlugs.length > 0 &&
+    template.agentSlugs.some((slug) => agentSlugsPresent.has(slug));
+  const hasAnyAgent = agentSlugsPresent.size > 0;
+  const hasAgent = template.agentSlugs.length === 0 ? hasAnyAgent : hasNamedAgent;
   const hasWf =
     !!template.workflowNameIncludes &&
-    workflowNames.some((n) =>
-      n.toLowerCase().includes(template.workflowNameIncludes!.toLowerCase()),
+    workflowNames.some((name) =>
+      name.toLowerCase().includes(template.workflowNameIncludes!.toLowerCase()),
     );
-  if (template.id === "sh-digest") {
+  if (template.id === "daily-digest") {
     if (hasAgent || hasWf) return { available: true };
     return { available: false, reason: template.requiresHint };
   }

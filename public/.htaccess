@@ -61,10 +61,17 @@
     Header always set X-Content-Type-Options "nosniff"
     Header always set Referrer-Policy "strict-origin-when-cross-origin"
 
-    # El widget (/embed/) debe poder embeberse en sitios externos vía iframe.
-    SetEnvIf Request_URI "^/embed/" ALLOW_FRAME
-    Header always set X-Frame-Options "DENY" env=!ALLOW_FRAME
+    # Anti-clickjacking vía CSP (sin X-Frame-Options, que no permite excepciones fiables tras el rewrite SPA).
+    # THE_REQUEST no cambia con rewrites internos, así que la excepción /embed/ sobrevive al rewrite a index.html.
+    SetEnvIf THE_REQUEST "^[A-Z]+\s+/(embed/|widget)" ALLOW_FRAME
+    # LiteSpeed no evalúa THE_REQUEST en SetEnvIf; Request_URI sí (antes del rewrite).
+    SetEnvIf Request_URI "^/(embed/|widget)" ALLOW_FRAME
+    Header always unset X-Frame-Options
+    Header unset X-Frame-Options
+    Header always set Content-Security-Policy "frame-ancestors 'self'"
+    # "set" reemplaza el anterior: nunca quedan dos CSP en /embed/
     Header always set Content-Security-Policy "frame-ancestors *" env=ALLOW_FRAME
+    Header always set Content-Security-Policy "frame-ancestors *" env=REDIRECT_ALLOW_FRAME
 
     # HTTPS forzado (HSTS) — activar solo cuando todo funcione con SSL
     # Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"

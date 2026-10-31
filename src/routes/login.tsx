@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { isMuninnOwnHost } from "@/lib/muninnHosts";
 import { motion } from "framer-motion";
 import { useLogin } from "@/api/hooks/useAuth";
 import { useResolvePublicLoginTheme } from "@/api/hooks/useBranchTheme";
@@ -7,12 +8,8 @@ import { resolveThemeLogo } from "@/lib/applyBranchTheme";
 import { resolveMediaUrl } from "@/lib/mediaUrl";
 import { MuninnBrand } from "@/components/brand/MuninnBrand";
 import { LoginSocialLinks } from "@/components/brand/LoginSocialLinks";
-import { cn } from "@/lib/utils";
 import { LoginAtmosphere } from "@/components/brand/LoginAtmosphere";
-import type { NordicZone } from "@/components/brand/PixelNordicScene";
-import { MuninnLoginLanding } from "@/components/brand/MuninnLoginLanding";
-import { PixelBoot } from "@/components/brand/LoginPixelBoot";
-import { MUNINN_LIVE_DEMO_EVENT } from "@/lib/muninnLiveDemo";
+import { SalesLanding } from "@/components/brand/SalesLanding";
 import { OrgLoginLanding } from "@/components/brand/OrgLoginLanding";
 import { LoginForm } from "@/components/auth/LoginForm";
 import { useMotionPrefs } from "@/hooks/useMotionPrefs";
@@ -22,8 +19,6 @@ import type { PublicAvailableApp } from "@/lib/publicLoginTheme";
 
 const GITHUB_CREDIT_URL = "https://github.com/felipebarraza6";
 const GITHUB_CREDIT_LABEL = "felipebarraza6";
-/** Debe coincidir con el boot del landing pixel. */
-const PIXEL_BOOT_MS = 900;
 
 export default function Login() {
   const navigate = useNavigate();
@@ -33,40 +28,6 @@ export default function Login() {
   const reduceMotion = useMotionPrefs();
 
   const { flat, scope, isAppDefault, isLoading: themeLoading } = useResolvePublicLoginTheme(slug);
-  const [pixelReady, setPixelReady] = useState(() => Boolean(reduceMotion));
-  const [liveNonce, setLiveNonce] = useState(0);
-  const [nordicZone, setNordicZone] = useState<NordicZone>("fjord");
-
-  useEffect(() => {
-    if (!isAppDefault) {
-      setPixelReady(true);
-      return;
-    }
-    if (reduceMotion) {
-      setPixelReady(true);
-      return;
-    }
-    setPixelReady(false);
-    const t = window.setTimeout(() => setPixelReady(true), PIXEL_BOOT_MS);
-    return () => window.clearTimeout(t);
-  }, [isAppDefault, reduceMotion]);
-
-  useEffect(() => {
-    if (!isAppDefault) return;
-    const onEgg = () => setLiveNonce((n) => n + 1);
-    window.addEventListener(MUNINN_LIVE_DEMO_EVENT, onEgg);
-    return () => window.removeEventListener(MUNINN_LIVE_DEMO_EVENT, onEgg);
-  }, [isAppDefault]);
-
-  useEffect(() => {
-    if (!isAppDefault) return;
-    const onZoneChange = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (detail?.zone) setNordicZone(detail.zone);
-    };
-    window.addEventListener("muninn-zone-change", onZoneChange);
-    return () => window.removeEventListener("muninn-zone-change", onZoneChange);
-  }, [isAppDefault]);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -154,6 +115,13 @@ export default function Login() {
     },
   };
 
+  // "/" en un host de Muninn es la landing comercial, aunque by-host
+  // responda una org para ese host. El login vive en /entrar.
+  const ownMuninnHost = typeof window !== "undefined" && isMuninnOwnHost(window.location.hostname);
+  if (!slug && ownMuninnHost) {
+    return <SalesLanding />;
+  }
+
   // Loading: nunca mostrar Muninn ni flash mientras se resuelve el tema.
   if (themeLoading) {
     return (
@@ -187,44 +155,7 @@ export default function Login() {
   }
 
   if (showMuninnLanding) {
-    return (
-      <div className="login-pixel relative min-h-dvh overflow-x-hidden bg-background">
-        <LoginAtmosphere
-          intensity="full"
-          variant="pixel"
-          mood="nordic"
-          zone={nordicZone}
-          parallax
-          className="pointer-events-none fixed inset-0 z-0"
-        />
-        <div className="fixed top-3 right-3 z-30 flex items-center gap-2 sm:top-4 sm:right-4">
-          <a
-            href="mailto:felipe.barraza.vega@gmail.com"
-            className="pixel-font pixel-jules-sm inline-flex items-center gap-1 border-2 border-primary/50 bg-card px-2.5 py-1 text-[8px] uppercase text-primary hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:px-3 sm:text-[9px]"
-          >
-            Cotizar
-          </a>
-          <Link
-            to="/entrar"
-            className="pixel-font pixel-jules-sm inline-flex items-center gap-1 border-2 border-primary bg-primary px-2.5 py-1 text-[8px] uppercase text-primary-foreground hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:px-3 sm:text-[9px]"
-          >
-            Ingresar
-          </Link>
-        </div>
-
-        {/* Contenido centrado; ciudad full-bleed detrás. Desktop más ancho para no “flotar” en el vacío */}
-        <div
-          className={cn(
-            "relative z-10 mx-auto w-full",
-            pixelReady
-              ? "max-w-[56rem] xl:max-w-[68rem]"
-              : "flex min-h-dvh items-center justify-center",
-          )}
-        >
-          {pixelReady ? <MuninnLoginLanding liveNonce={liveNonce} /> : <PixelBoot centered />}
-        </div>
-      </div>
-    );
+    return <SalesLanding />;
   }
 
   return (

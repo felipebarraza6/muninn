@@ -16,14 +16,14 @@ import { PageHeader } from "@/components/ui/page-header";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { useOrganizations, useAdminBranches } from "@/api/hooks/useBranches";
 import { useAdminUsers } from "@/api/hooks/useUsers";
-import { useAgents } from "@/api/hooks/useAgents";
-import { useChannels } from "@/api/hooks/useChannels";
-import { useExternalAPIs } from "@/api/hooks/useExternalAPIs";
-import { useAgentFunctions } from "@/api/hooks/useAgentFunctions";
+import { usePlatformStudioSummary } from "@/api/hooks/useAgents";
 import { AdminMotionItem, AdminPageMotion } from "@/components/admin/AdminPageMotion";
+import { StudioBranchFilter } from "@/components/branch/StudioBranchFilter";
 import { SummaryKpiGrid, type SummaryKpi } from "@/components/dashboard/summary-kpi-grid";
 import { ErrorBanner } from "@/components/ui/error-banner";
 import { apiErrorMessage } from "@/lib/apiError";
+import { useActiveBranchId } from "@/hooks/useActiveBranchId";
+import { selectStudioSummaryCounts } from "@/lib/platformStudioSummary";
 
 const QUICK_LINKS = [
   { href: "/app/admin/organizaciones", label: "Organizaciones", icon: Building2 },
@@ -41,26 +41,15 @@ export function PlatformHome() {
     error: branchesError,
   } = useAdminBranches();
   const { data: users = [], isLoading: usersLoading, error: usersError } = useAdminUsers();
-  const { data: agents = [], isLoading: agentsLoading, error: agentsError } = useAgents();
-  const { data: channels = [], isLoading: channelsLoading, error: channelsError } = useChannels();
   const {
-    data: apis = [],
-    isLoading: apisLoading,
-    error: apisError,
-  } = useExternalAPIs({
-    scope: "store",
-    includeInactive: true,
-  });
-  const { data: skills = [], isLoading: skillsLoading, error: skillsError } = useAgentFunctions();
+    data: studioSummary,
+    isLoading: studioLoading,
+    error: studioError,
+  } = usePlatformStudioSummary();
+  const studioBranchId = useActiveBranchId();
+  const studioCounts = selectStudioSummaryCounts(studioSummary, studioBranchId);
 
-  const isLoading =
-    orgsLoading ||
-    branchesLoading ||
-    usersLoading ||
-    agentsLoading ||
-    channelsLoading ||
-    apisLoading ||
-    skillsLoading;
+  const isLoading = orgsLoading || branchesLoading || usersLoading;
 
   const platformKpis: SummaryKpi[] = [
     {
@@ -92,46 +81,39 @@ export function PlatformHome() {
   const studioKpis: SummaryKpi[] = [
     {
       key: "agents",
-      label: "Agentes activos",
-      count: agents.filter((a) => a.is_active).length,
+      label: studioBranchId ? "Agentes activos (sucursal)" : "Agentes activos (todas)",
+      count: studioCounts?.agents ?? null,
       icon: Bot,
       href: "/app/agentes",
       tone: "primary",
     },
     {
       key: "channels",
-      label: "Canales activos",
-      count: channels.filter((c) => c.is_active).length,
+      label: studioBranchId ? "Canales activos (sucursal)" : "Canales activos (todas)",
+      count: studioCounts?.channels ?? null,
       icon: Share2,
       href: "/app/canales",
       tone: "success",
     },
     {
       key: "apis",
-      label: "Aplicaciones",
-      count: apis.filter((a) => a.is_active).length,
+      label: studioBranchId ? "Aplicaciones (sucursal)" : "Aplicaciones (todas)",
+      count: studioCounts?.applications ?? null,
       icon: LayoutGrid,
       href: "/app/aplicaciones",
       tone: "info",
     },
     {
       key: "skills",
-      label: "Skills",
-      count: skills.filter((f) => f.is_active).length,
+      label: studioBranchId ? "Skills (sucursal)" : "Skills (todas)",
+      count: studioCounts?.skills ?? null,
       icon: Sparkles,
       href: "/app/skills",
       tone: "warning",
     },
   ];
 
-  const firstError =
-    orgsError ||
-    branchesError ||
-    usersError ||
-    agentsError ||
-    channelsError ||
-    apisError ||
-    skillsError;
+  const firstError = orgsError || branchesError || usersError;
 
   if (isLoading) {
     return <PageSkeleton variant="dashboard" />;
@@ -187,12 +169,38 @@ export function PlatformHome() {
 
       <AdminMotionItem>
         <section className="mt-6 space-y-3">
-          <div className="flex items-end justify-between gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
               Studio (filtro de sucursal)
             </h2>
+            <StudioBranchFilter />
           </div>
-          <SummaryKpiGrid items={studioKpis} />
+          {studioError ? (
+            <ErrorBanner
+              message={apiErrorMessage(
+                studioError,
+                "No se pudo cargar el resumen Studio. Requiere GET /ai-agents/summary/ (superadmin).",
+              )}
+              onRetry={() => window.location.reload()}
+            />
+          ) : studioLoading && !studioSummary ? (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="h-[108px] rounded-xl border border-border/60 bg-muted/30 animate-pulse"
+                />
+              ))}
+            </div>
+          ) : (
+            <SummaryKpiGrid items={studioKpis} />
+          )}
+          {!studioError && !studioLoading && studioBranchId && studioCounts == null ? (
+            <p className="text-xs text-muted-foreground">
+              Esta sucursal no aparece en el resumen todavía (sin recursos activos). Elige «Todas
+              las sucursales» para ver los totales globales.
+            </p>
+          ) : null}
         </section>
       </AdminMotionItem>
 

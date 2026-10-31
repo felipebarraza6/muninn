@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tansta
 import { GET, POST, PUT, PATCH, DELETE, GET_ALL_PAGES } from "../client";
 import { ENDPOINTS } from "../endpoints/index";
 import { useActiveBranchId } from "@/hooks/useActiveBranchId";
+import type { PlatformStudioSummary } from "@/lib/platformStudioSummary";
 import type { ParameterSource } from "./useAgentFunctions";
 
 const QUERY_KEY = ["ai-agents", "agents"];
@@ -220,6 +221,7 @@ export interface AgentOpsOnboarding {
   has_api_key?: boolean;
   has_agents?: boolean;
   has_provider?: boolean;
+  has_llm_provider?: boolean;
   missing?: Record<string, unknown>;
   next_steps?: Array<{ code?: string; message?: string; path?: string }>;
 }
@@ -305,6 +307,21 @@ export function useDashboardStats(options?: { enabled?: boolean }) {
         params: branchId ? { branch: branchId } : undefined,
       }),
     enabled: options?.enabled !== false && !!branchId,
+    staleTime: 60_000,
+  });
+}
+
+export type { PlatformStudioSummary };
+
+/** Totales globales + desglose por sucursal (solo superadmin). Sin x-branch-id. */
+export function usePlatformStudioSummary(options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: [...QUERY_KEY, "platform-summary"],
+    queryFn: () =>
+      GET<PlatformStudioSummary>(ENDPOINTS.agents.platformSummary, {
+        skipBranchHeader: true,
+      }),
+    enabled: options?.enabled !== false,
     staleTime: 60_000,
   });
 }

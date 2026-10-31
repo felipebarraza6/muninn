@@ -24,6 +24,7 @@ import {
 } from "@/lib/authGuards";
 import { getActiveBranchId, getBranchMode, setActiveBranchId } from "@/lib/branchStorage";
 import { isImmersiveWorkspacePath } from "@/lib/immersiveWorkspace";
+import { RuneBalanceBanner, RuneBalanceChip } from "@/components/billing/rune-balance";
 import { cn } from "@/lib/utils";
 
 type PageMeta = {
@@ -192,11 +193,19 @@ function getPageMeta(pathname: string, search = ""): PageMeta {
     else if (view === "editar") crumbs.push({ label: "Editar usuario" });
     return { breadcrumb: crumbs };
   }
+  if (p.startsWith("/admin/tienda")) {
+    return {
+      breadcrumb: [{ label: "Resumen", to: "/app" }, { label: "Admin" }, { label: "Tienda" }],
+    };
+  }
   if (p.startsWith("/configuracion")) {
     return { breadcrumb: [{ label: "Resumen", to: "/app" }, { label: "Configuración" }] };
   }
   if (p.startsWith("/perfil")) {
     return { breadcrumb: [{ label: "Resumen", to: "/app" }, { label: "Mi perfil" }] };
+  }
+  if (p.startsWith("/facturacion")) {
+    return { breadcrumb: [{ label: "Resumen", to: "/app" }, { label: "Facturación" }] };
   }
   return { breadcrumb: [] };
 }
@@ -287,6 +296,7 @@ function PageHeader() {
           </div>
         )}
 
+        <RuneBalanceChip />
         <CommandPaletteTrigger />
 
         <DropdownMenu>
@@ -336,8 +346,11 @@ export default function RootLayout() {
             brandPending && "opacity-[0.97]",
           )}
         >
-          <main className="relative flex-1 min-w-0 min-h-0 overflow-hidden">
-            <Outlet />
+          <main className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            <RuneBalanceBanner />
+            <div className="min-h-0 flex-1 overflow-hidden">
+              <Outlet />
+            </div>
           </main>
         </div>
       </CommandPaletteProvider>
@@ -357,6 +370,7 @@ export default function RootLayout() {
           <AppSidebar />
           <SidebarInset className="relative flex flex-1 flex-col min-w-0">
             <PageHeader />
+            <RuneBalanceBanner />
             <main className="flex-1 min-w-0">
               <Outlet />
             </main>

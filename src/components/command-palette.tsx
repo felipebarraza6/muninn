@@ -13,6 +13,7 @@ import {
   Bot,
   Building2,
   ClipboardList,
+  Coins,
   Cpu,
   GitBranch,
   LayoutDashboard,
@@ -23,6 +24,7 @@ import {
   Network,
   Share2,
   Sparkles,
+  Store,
   User,
   Users,
 } from "lucide-react";
@@ -40,10 +42,12 @@ import { logout } from "@/api/hooks/useAuth";
 import {
   canAccessBranchesAdmin,
   canAccessConversations,
+  canAccessChannels,
   canAccessKnowledgeCatalog,
   canAccessLlmAdmin,
   canAccessSkills,
   canAccessUsersAdmin,
+  canSeeBilling,
   getBranchesAdminNavLabel,
   getOrganizationsAdminNavLabel,
   isOrganizationOwner,
@@ -128,18 +132,20 @@ function buildPaletteGroups(): PaletteGroup[] {
       keywords: "inbox bandeja",
     });
   }
-  comunicacion.push({
-    id: "canales",
-    label: "Canales",
-    to: "/app/canales",
-    icon: Share2,
-    keywords: "whatsapp telegram",
-  });
+  if (canAccessChannels()) {
+    comunicacion.push({
+      id: "canales",
+      label: "Canales",
+      to: "/app/canales",
+      icon: Share2,
+      keywords: "whatsapp telegram",
+    });
+  }
 
-  const groups: PaletteGroup[] = [
-    { heading: "Studio", items: studio },
-    { heading: "Comunicación", items: comunicacion },
-  ];
+  const groups: PaletteGroup[] = [{ heading: "Studio", items: studio }];
+  if (comunicacion.length > 0) {
+    groups.push({ heading: "Comunicación", items: comunicacion });
+  }
 
   if (showAdmin) {
     groups.push({
@@ -178,6 +184,13 @@ function buildPaletteGroups(): PaletteGroup[] {
         },
         { id: "admin-users", label: "Usuarios", to: "/app/admin/usuarios", icon: Users },
         { id: "admin-llm", label: "LLM", to: "/app/admin/llm", icon: Cpu, keywords: "modelos" },
+        {
+          id: "admin-tienda",
+          label: "Revisión tienda",
+          to: "/app/admin/tienda",
+          icon: Store,
+          keywords: "catálogo aprobar agentes",
+        },
       ],
     });
   } else if (isOrgOwner) {
@@ -223,10 +236,21 @@ function buildPaletteGroups(): PaletteGroup[] {
     if (gestion.length) groups.push({ heading: "Gestión", items: gestion });
   }
 
+  const cuenta: PaletteItem[] = [];
+  if (canSeeBilling()) {
+    cuenta.push({
+      id: "facturacion",
+      label: "Facturación",
+      to: "/app/facturacion",
+      icon: Coins,
+      keywords: "runas saldo uf flow",
+    });
+  }
+  cuenta.push({ id: "perfil", label: "Mi perfil", to: "/app/perfil", icon: User });
   groups.push({
     heading: "Cuenta",
     items: [
-      { id: "perfil", label: "Mi perfil", to: "/app/perfil", icon: User },
+      ...cuenta,
       {
         id: "logout",
         label: "Cerrar sesión",

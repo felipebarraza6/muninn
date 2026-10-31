@@ -1,5 +1,8 @@
 import { getActiveBranchId, getBranchMode } from "@/lib/branchStorage";
-import { getToken } from "@/lib/authSession";
+import { getAuthMode } from "@/lib/authMode";
+import { isPublicAppPath, resolveEntrarHref } from "@/lib/authRedirect";
+import { clearSession, getToken } from "@/lib/authSession";
+import { csrfHeaderRecord } from "@/lib/csrf";
 import { ENDPOINTS } from "@/api/endpoints/index";
 import type { ChatMessageResponse } from "@/api/hooks/useConversations";
 import { resolveApiBaseUrl } from "@/lib/apiBaseUrl";
@@ -77,12 +80,13 @@ export async function streamConversationChat(
 ): Promise<ChatStreamFinalEvent> {
   const opts: StreamChatOptions =
     options instanceof AbortSignal ? { signal: options } : (options ?? {});
-  const token = getToken();
+  const token = getAuthMode() === "token" ? getToken() : null;
   // DRF negocia Accept antes de la vista: no usar solo text/event-stream
   // (provoca 406 Not Acceptable). El body sigue siendo SSE.
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     Accept: "application/json, text/event-stream",
+    ...csrfHeaderRecord("POST"),
   };
   if (token) headers.Authorization = `Token ${token}`;
 
@@ -109,6 +113,14 @@ export async function streamConversationChat(
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      clearSession();
+      localStorage.removeItem("activeBranchId");
+      sessionStorage.removeItem("activeBranchId");
+      if (typeof window !== "undefined" && !isPublicAppPath(window.location.pathname)) {
+        window.location.href = resolveEntrarHref();
+      }
+    }
     let detail = `HTTP ${response.status}`;
     try {
       const errJson = (await response.json()) as { error?: string; detail?: string };

@@ -14,8 +14,10 @@ import {
   Network,
   Users,
   ClipboardList,
+  Coins,
   GitBranch,
   SquareArrowOutUpRight,
+  Store,
 } from "lucide-react";
 import {
   Sidebar,
@@ -46,7 +48,9 @@ import {
   getOrganizationsAdminNavLabel,
   canAccessKnowledgeCatalog,
   canAccessConversations,
+  canAccessChannels,
   canAccessSkills,
+  canSeeBilling,
 } from "@/lib/authGuards";
 
 type IconComponent = React.ComponentType<{ className?: string; strokeWidth?: number }>;
@@ -80,7 +84,7 @@ const conversacionesItem: MenuItem = {
 function buildComunicacionItems(): MenuItem[] {
   const items: MenuItem[] = [];
   if (canAccessConversations()) items.push(conversacionesItem);
-  items.push(canalesItem);
+  if (canAccessChannels()) items.push(canalesItem);
   return items;
 }
 
@@ -124,6 +128,7 @@ const adminItems: MenuItem[] = [
   { title: "Sucursales", url: `${APP}/admin/sucursales`, icon: Building2 },
   { title: "Usuarios", url: `${APP}/admin/usuarios`, icon: Users },
   { title: "LLM", url: `${APP}/admin/llm`, icon: Cpu },
+  { title: "Tienda", url: `${APP}/admin/tienda`, icon: Store },
 ];
 
 const usersOnlyItems: MenuItem[] = [
@@ -205,6 +210,7 @@ export function AppSidebar() {
   const studioItems = buildStudioItems();
   const opsItems = buildOpsItems();
   const comunicacionItems = buildComunicacionItems();
+  const showBilling = canSeeBilling();
   const reduceMotion = useReducedMotion();
 
   const isActive = (url: string, exact?: boolean) =>
@@ -325,23 +331,25 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-[10.5px] font-semibold tracking-wider uppercase text-muted-foreground/80">
-            Comunicación
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <motion.div
-                className="flex w-full min-w-0 flex-col gap-1"
-                variants={listVariants}
-                initial={reduceMotion ? false : "hidden"}
-                animate="show"
-              >
-                {renderItems(comunicacionItems, "comunicacion")}
-              </motion.div>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {comunicacionItems.length > 0 && (
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-[10.5px] font-semibold tracking-wider uppercase text-muted-foreground/80">
+              Comunicación
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <motion.div
+                  className="flex w-full min-w-0 flex-col gap-1"
+                  variants={listVariants}
+                  initial={reduceMotion ? false : "hidden"}
+                  animate="show"
+                >
+                  {renderItems(comunicacionItems, "comunicacion")}
+                </motion.div>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
         <SidebarGroup>
           <SidebarGroupLabel className="text-[10.5px] font-semibold tracking-wider uppercase text-muted-foreground/80">
@@ -360,6 +368,29 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {showBilling && (
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-[10.5px] font-semibold tracking-wider uppercase text-muted-foreground/80">
+              Cuenta
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <motion.div
+                  className="flex w-full min-w-0 flex-col gap-1"
+                  variants={listVariants}
+                  initial={reduceMotion ? false : "hidden"}
+                  animate="show"
+                >
+                  {renderItems(
+                    [{ title: "Facturación", url: `${APP}/facturacion`, icon: Coins }],
+                    "cuenta",
+                  )}
+                </motion.div>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
         {opsItems.length > 0 && (
           <SidebarGroup>
